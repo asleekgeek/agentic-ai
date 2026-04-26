@@ -1,0 +1,26 @@
+{
+  "name": "@agentic/memory",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Session memory: extraction, narrative arc construction, and narrative generation.",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.0",
+    "typescript": "^5.6.0"
+  }
+}
