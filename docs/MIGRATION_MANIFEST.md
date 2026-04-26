@@ -1,5 +1,11 @@
 # Migration Manifest
 
+> **Updated 2026-04-26 from `port/inventory-*` worktrees**: source paths
+> verified against actual repo layouts. Three new Phase-4 worktrees added
+> (wiki, workflow-graph, codebase-analysis); paths in the original draft
+> for `automation/`, `methodology/`, `decay.py`, and `import/` corrected;
+> hook count corrected from 5 to 9. See `docs/ADR/` for resolved decisions.
+
 **Purpose:** Inventory every artifact across the four source repos with an
 explicit disposition. Anything not in this manifest = data loss risk.
 
@@ -24,32 +30,22 @@ explicit disposition. Anything not in this manifest = data loss risk.
 
 | Source path | Target path | Disposition | Worktree | Status |
 |---|---|---|---|---|
-| `mcp_server/handlers/recall.py` | `packages/memory/src/recall/recall.ts` | port-language | `port/cortex-recall` | ☐ |
-| `mcp_server/handlers/recall_hierarchical.py` | `packages/memory/src/recall/hierarchical.ts` | port-language | `port/cortex-recall` | ☐ |
-| `mcp_server/handlers/remember.py` | `packages/memory/src/remember/remember.ts` | port-language | `port/cortex-remember` | ☐ |
-| `mcp_server/handlers/remember_global.py` | `packages/memory/src/remember/global.ts` | port-language | `port/cortex-remember` | ☐ |
-| `mcp_server/handlers/ingest_codebase*.py` | `packages/memory/src/import/ingest-codebase.ts` | port-language | `port/cortex-import` | ☐ |
-| `mcp_server/handlers/wiki_*.py` | `packages/memory/src/wiki/` | port-language | `port/cortex-remember` | ☐ |
-| `mcp_server/handlers/navigate*.py` | `packages/memory/src/graph/navigate.ts` | port-language | `port/cortex-graph-navigation` | ☐ |
-| `mcp_server/handlers/narrative.py` | `packages/memory/src/narrative/narrative.ts` | port-language | `port/cortex-narrative` | ☐ |
-| `mcp_server/handlers/automate.py` | `packages/memory/src/automation/automate.ts` | port-language | `port/cortex-automation` | ☐ |
-| `mcp_server/consolidation/` | `packages/memory/src/consolidation/` | port-language | `port/cortex-consolidation` | ☐ |
-| `mcp_server/methodology/` | `packages/memory/src/methodology/` | port-language | `port/cortex-methodology` | ☐ |
-| `mcp_server/profile/` | `packages/memory/src/methodology/profile.ts` | port-language | `port/cortex-methodology` | ☐ |
-| `mcp_server/hooks/session_start.py` | `packages/memory/src/hooks/session-start.ts` | port-language | `port/cortex-hooks` | ☐ |
-| `mcp_server/hooks/auto_recall.py` | `packages/memory/src/hooks/auto-recall.ts` | port-language | `port/cortex-hooks` | ☐ |
-| `mcp_server/hooks/post_tool_use.py` | `packages/memory/src/hooks/post-tool-use.ts` | port-language | `port/cortex-hooks` | ☐ |
-| `mcp_server/hooks/session_end.py` | `packages/memory/src/hooks/session-end.ts` | port-language | `port/cortex-hooks` | ☐ |
-| `mcp_server/hooks/notification.py` | `packages/memory/src/hooks/notification.ts` | port-language | `port/cortex-hooks` | ☐ |
-| `mcp_server/import/claude_mem.py` | `packages/memory/src/import/claude-mem.ts` | port-language | `port/cortex-import` | ☐ |
-| `mcp_server/import/chatgpt.py` | `packages/memory/src/import/chatgpt.ts` | port-language | `port/cortex-import` | ☐ |
-| `mcp_server/import/gemini.py` | `packages/memory/src/import/gemini.ts` | port-language | `port/cortex-import` | ☐ |
-| `mcp_server/import/cursor.py` | `packages/memory/src/import/cursor.ts` | port-language | `port/cortex-import` | ☐ |
-| `mcp_server/import/claude_code.py` | `packages/memory/src/import/claude-code.ts` | port-language | `port/cortex-import` | ☐ |
+| `mcp_server/__init__.py`, `mcp_server/__main__.py`, `mcp_server/tool_error_handler.py`, `mcp_server/observability/`, `mcp_server/validation/`, `mcp_server/errors/`, `mcp_server/shared/` | `packages/memory/src/shared/` + `packages/memory/src/index.ts` | port-language | `port/cortex-shared` | ☐ |
+| `mcp_server/handlers/recall.py`, `recall_hierarchical.py`, `mcp_server/core/multi_signal_fusion.py` | `packages/memory/src/recall/` | port-language | `port/cortex-recall` | ☐ |
+| `mcp_server/handlers/{remember,remember_global,anchor,forget,rate_memory}.py`, `mcp_server/core/{write_gate,write_gate_calibration,write_post_store,memory_ingest,predictive_coding_*,abstention_gate}*.py`, `mcp_server/infrastructure/{pg_store*,sqlite_store*,memory_store}.py` | `packages/memory/src/remember/` | port-language | `port/cortex-remember` | ☐ |
+| `mcp_server/handlers/consolidate.py`, `mcp_server/handlers/consolidation/` (12 files), `mcp_server/core/{decay_cycle,consolidation_engine,cascade*,two_stage_*,homeostatic_*,reconsolidation,replay*,sleep_compute,oscillatory_*,thermodynamics,microglial_pruning,neurogenesis}*.py` | `packages/memory/src/consolidation/` | port-language | `port/cortex-consolidation` | ☐ |
+| `mcp_server/hooks/` — **9 files**: `session_start`, `auto_recall`, `post_tool_capture`, `agent_briefing`, `compaction_checkpoint`, `session_lifecycle`, `preemptive_context`, `pipeline_impact_bump`, `ingest_codebase_background` | `packages/memory/src/hooks/` | port-language | `port/cortex-hooks` | ☐ |
+| `mcp_server/handlers/{methodology,detect_domain,explore_features,query_methodology,rebuild_profiles,update_profiles}.py`, `mcp_server/core/{cognitive_profile,methodology_engine,domain_detector,attribution_pipeline}*.py`, `mcp_server/shared/types_profiles.py` | `packages/memory/src/methodology/` | port-language | `port/cortex-methodology` | ☐ |
+| `mcp_server/handlers/{navigate_memory,explore_features}.py`, `mcp_server/core/{graph,navigation,heat_propagation}*.py` | `packages/memory/src/graph/` | port-language | `port/cortex-graph-navigation` | ☐ |
+| `mcp_server/handlers/narrative.py`, `mcp_server/core/{narrative_*,session_extractor}*.py` | `packages/memory/src/narrative/` | port-language | `port/cortex-narrative` | ☐ |
+| `mcp_server/handlers/{automate,prospective,trigger_engine,sync_to_claude_md}*.py`, `mcp_server/core/{rule_engine,trigger_matcher}*.py` | `packages/memory/src/automation/` | port-language | `port/cortex-automation` | ☐ |
+| `mcp_server/handlers/{import_claude_code,import_chatgpt,import_gemini,import_cursor,import_claude_mem}*.py` | `packages/memory/src/import/` | port-language | `port/cortex-import` | ☐ |
+| **NEW** `mcp_server/handlers/wiki_*.py` (21), `mcp_server/core/{wiki_*,concept_emerger,concept_vocabulary,claim_extractor,claim_resolver,enrichment}*.py` (15), `mcp_server/infrastructure/{pg_store_wiki,wiki_store}.py` (2) | `packages/memory/src/wiki/` | port-language | `port/cortex-wiki` | ☐ |
+| **NEW** `mcp_server/handlers/{workflow_graph,query_workflow_graph}.py`, `mcp_server/core/workflow_graph_*.py` (6), `mcp_server/infrastructure/workflow_graph_source*.py` (4) | `packages/memory/src/workflow-graph/` | port-language | `port/cortex-workflow-graph` | ☐ |
+| **NEW** `mcp_server/handlers/{codebase_analyze*,ingest_codebase*,ingest_prd,ingest_helpers}.py` (9), `mcp_server/core/{ast_*,codebase_*,schema_engine,schema_extraction}*.py`, `mcp_server/infrastructure/scanner*.py` | `packages/memory/src/codebase-analysis/` | port-language | `port/cortex-codebase-analysis` | ☐ |
 | `mcp_server/tool_registry*.py` | `packages/mcp-servers/memory/src/registry.ts` | port-language | (post-merge integration) | ☐ |
-| `mcp_server/server/` | `packages/mcp-servers/memory/src/server.ts` | port-language | (post-merge integration) | ☐ |
 | `mcp_server/doctor.py` | `packages/mcp-servers/memory/src/doctor.ts` | port-language | (post-merge integration) | ☐ |
-| `mcp_server/__init__.py` | `packages/mcp-servers/memory/src/index.ts` | port-language | (post-merge integration) | ☐ |
+| `mcp_server/server/` (15 HTTP-dashboard files, 3 668 LOC) | DEFER per ADR-0011 | defer | (none — Phase 7) | ☐ |
 | `scripts/launcher.py` | drop — not needed in TS (Node entry-point is the binary) | discard | — | ☐ |
 
 ### Schema + data

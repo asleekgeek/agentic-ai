@@ -12,7 +12,17 @@ set -euo pipefail
 
 if [[ $# -ne 1 ]]; then
   echo "usage: $0 <module>" >&2
-  echo "  e.g. $0 cortex-recall" >&2
+  echo "" >&2
+  echo "Phase-4 cortex worktrees (per docs/PHASE_PLAN.md §4):" >&2
+  echo "  cortex-shared              cortex-recall              cortex-remember" >&2
+  echo "  cortex-consolidation       cortex-codebase-analysis   cortex-wiki" >&2
+  echo "  cortex-graph-navigation    cortex-methodology         cortex-narrative" >&2
+  echo "  cortex-import              cortex-workflow-graph      cortex-automation" >&2
+  echo "  cortex-hooks" >&2
+  echo "" >&2
+  echo "Other:" >&2
+  echo "  inventory-* / migrate-* / parity-baseline / tooling-ci /" >&2
+  echo "  plugin-manifest-design / core-types" >&2
   exit 64
 fi
 

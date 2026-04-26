@@ -51,3 +51,18 @@ jobs:
         run: pnpm parity
         # source: parity tests are mandatory; any divergence between a TS
         # port and its source-language baseline fails CI.
+
+      - name: Plugin manifest lint (no shell-fallback expansion)
+        # source: ADR-0010. Claude Code's ${CLAUDE_PLUGIN_ROOT} substitution
+        # does NOT support compound parameter expansion like ${VAR:-fallback}.
+        # We discovered the hard way (2026-04-25) that the fallback form is
+        # passed unsubstituted to the spawned binary, which then fails to
+        # resolve paths. Forbid the pattern in every .claude-plugin/ JSON.
+        run: |
+          set -euo pipefail
+          if grep -rEn '\$\{[A-Z_]+:-' .claude-plugin/ 2>/dev/null; then
+            echo "::error::Found shell parameter-expansion fallback pattern in a Claude plugin manifest." >&2
+            echo "::error::Claude Code does NOT support \${VAR:-fallback}. Use bare \${CLAUDE_PLUGIN_ROOT}, wrap shell logic in 'bash -c'." >&2
+            echo "::error::See docs/ADR/0010-claude-plugin-root-expansion.md for the canonical pattern." >&2
+            exit 1
+          fi

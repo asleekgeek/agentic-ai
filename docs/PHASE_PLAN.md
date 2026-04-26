@@ -14,16 +14,18 @@ Authoritative plan for the four-repo unification. Updated as phases complete.
 - [x] `.gitignore`
 - [x] `docs/WORKTREE_MISSION_TEMPLATE.md`
 - [x] `docs/PHASE_PLAN.md` (this file)
-- [ ] `docs/MIGRATION_MANIFEST.md` — every artifact from every source repo, tagged
-- [ ] `pnpm-workspace.yaml`
-- [ ] Root `package.json`
-- [ ] `tsconfig.base.json`
-- [ ] `packages/core/` — domain types + ports + Zod schemas
-- [ ] `packages/shared-contracts/` — cross-MCP-server schemas
-- [ ] `parity-oracle/` — fixture corpus + harness for cross-language parity tests
-- [ ] `scripts/spawn-worktree.sh` — creates worktree + pre-populated MISSION.md
-- [ ] `.github/workflows/ci.yml` — pnpm install + build + test + parity gate
-- [ ] First commit pushed to `origin/main`
+- [x] `docs/MIGRATION_MANIFEST.md` — every artifact from every source repo, tagged (updated per inventory worktrees 2026-04-26)
+- [x] `pnpm-workspace.yaml`
+- [x] Root `package.json`
+- [x] `tsconfig.base.json`
+- [x] `scripts/spawn-worktree.sh` — creates worktree + pre-populated MISSION.md
+- [x] `.github/workflows/ci.yml` — pnpm install + build + test + parity gate + manifest lint
+- [x] First commit pushed to `origin/main`
+- [x] 8 inventory + design worktrees executed in parallel (`port/inventory-*`, `port/migrate-prd-spec`, `port/core-types`, `port/parity-baseline`, `port/tooling-ci`, `port/plugin-manifest-design`)
+- [x] 11 ADRs landed under `docs/ADR/` resolving open questions from the inventory worktrees
+- [ ] `packages/core/` — domain types + ports + Zod schemas (designed in `port/core-types`; awaits merge)
+- [ ] `packages/shared-contracts/` — cross-MCP-server schemas (designed in `port/core-types`; awaits merge)
+- [ ] `parity-oracle/` — fixture corpus seeded (in `port/parity-baseline`; 22 inputs awaiting Phase-0-Day-1 baseline capture against live source repos)
 
 ### Genius gate at exit
 - `architect` — package boundaries are correct, no leakage
@@ -93,29 +95,61 @@ Authoritative plan for the four-repo unification. Updated as phases complete.
 
 | Worktree branch | Source paths | TS target | Genius panel |
 |---|---|---|---|
-| `port/cortex-recall` | `mcp_server/handlers/recall.py`, `recall_hierarchical.py` | `packages/memory/src/recall/` | cochrane + feynman + pearl + liskov + lamport |
-| `port/cortex-remember` | `mcp_server/handlers/remember*.py` | `packages/memory/src/remember/` | dijkstra + liskov + noether |
-| `port/cortex-consolidation` | `mcp_server/consolidation/`, `mcp_server/decay.py` | `packages/memory/src/consolidation/` | darwin + margulis + meadows + popper |
-| `port/cortex-hooks` | `mcp_server/hooks/` (5 files) | `packages/memory/src/hooks/` | lamport + hamilton + dijkstra |
-| `port/cortex-methodology` | `mcp_server/methodology/`, `mcp_server/profile/` | `packages/memory/src/methodology/` | bateson + kahneman + feinstein |
-| `port/cortex-graph-navigation` | `mcp_server/handlers/navigate*.py`, `graph/` | `packages/memory/src/graph/` | kekule + mandelbrot + euler |
-| `port/cortex-narrative` | `mcp_server/handlers/narrative.py` | `packages/memory/src/narrative/` | propp + bruner + eco |
-| `port/cortex-automation` | `mcp_server/automation/`, `mcp_server/handlers/automate.py` | `packages/memory/src/automation/` | kay + boyd + simon |
-| `port/cortex-import` | `mcp_server/import/` (claude-mem, ChatGPT, Gemini, Cursor, Claude Code) | `packages/memory/src/import/` | champollion + ventris + rejewski |
+> **Updated 2026-04-26 from `port/inventory-cortex` findings**: source paths
+> in the original draft did not match Cortex's actual layout. The roster
+> below uses paths verified against `/Users/cdeust/Developments/Cortex/mcp_server/`
+> in commit `5c80850` of `port/inventory-cortex`. Three new worktrees were
+> added (wiki, workflow-graph, codebase-analysis, server-decision); the
+> `import` worktree was narrowed; `methodology`, `consolidation`, and `hooks`
+> source paths corrected.
+
+### Worktree roster (12 parallel ports + 1 follow-up decision)
+
+| Worktree branch | Source paths (verified) | TS target | Genius panel |
+|---|---|---|---|
+| `port/cortex-shared` | `mcp_server/shared/`, `mcp_server/__init__.py`, `mcp_server/__main__.py`, `mcp_server/tool_error_handler.py`, `mcp_server/observability/`, `mcp_server/validation/`, `mcp_server/errors/` | `packages/memory/src/shared/` + `packages/memory/src/index.ts` | liskov + panini + noether |
+| `port/cortex-recall` | `mcp_server/handlers/recall.py`, `recall_hierarchical.py`, `mcp_server/core/multi_signal_fusion.py` | `packages/memory/src/recall/` | cochrane + feynman + pearl + liskov + lamport |
+| `port/cortex-remember` | `mcp_server/handlers/remember.py`, `remember_global.py`, `anchor.py`, `forget.py`, `rate_memory.py`, `mcp_server/core/{write_gate,write_post_store,memory_ingest,predictive_coding_*,abstention_gate}*.py`, `mcp_server/infrastructure/{pg_store,sqlite_store,memory_store}*.py` | `packages/memory/src/remember/` | dijkstra + liskov + noether |
+| `port/cortex-consolidation` | `mcp_server/handlers/consolidate.py`, `mcp_server/handlers/consolidation/`, `mcp_server/core/{decay_cycle,consolidation_engine,cascade*,two_stage_*,homeostatic_*,reconsolidation,replay*,sleep_compute,oscillatory_*,thermodynamics,microglial_pruning,neurogenesis}.py` (NOTE: `decay.py` is at `handlers/consolidation/decay.py`, not `mcp_server/decay.py`) | `packages/memory/src/consolidation/` | darwin + margulis + meadows + popper |
+| `port/cortex-hooks` | `mcp_server/hooks/` — **9 files** (not 5): `session_start`, `auto_recall`, `post_tool_capture`, `agent_briefing`, `compaction_checkpoint`, `session_lifecycle`, `preemptive_context`, `pipeline_impact_bump`, `ingest_codebase_background` | `packages/memory/src/hooks/` | lamport + hamilton + dijkstra |
+| `port/cortex-methodology` | NO `mcp_server/methodology/` or `mcp_server/profile/` directory — actual sources: `mcp_server/handlers/{methodology,detect_domain,explore_features,query_methodology,rebuild_profiles,update_profiles}.py`, `mcp_server/core/{cognitive_profile,methodology_engine,domain_detector,attribution_pipeline}*.py`, `mcp_server/shared/types_profiles.py` | `packages/memory/src/methodology/` | bateson + kahneman + feinstein |
+| `port/cortex-graph-navigation` | `mcp_server/handlers/{navigate_memory,explore_features}.py`, `mcp_server/core/{graph,navigation,heat_propagation}*.py` | `packages/memory/src/graph/` | kekule + mandelbrot + euler |
+| `port/cortex-narrative` | `mcp_server/handlers/narrative.py`, `mcp_server/core/{narrative_*,session_extractor}*.py` | `packages/memory/src/narrative/` | propp + bruner + eco |
+| `port/cortex-automation` | NO `mcp_server/automation/` directory — actual sources: `mcp_server/handlers/{automate,prospective,trigger_engine}*.py`, `mcp_server/core/{rule_engine,trigger_matcher}*.py`, `mcp_server/handlers/sync_to_claude_md.py` | `packages/memory/src/automation/` | kay + boyd + simon |
+| `port/cortex-import` | NO `mcp_server/import/` directory — actual sources: `mcp_server/handlers/{import_claude_code,import_chatgpt,import_gemini,import_cursor,import_claude_mem}*.py` (each is a single handler file, not a sub-package) | `packages/memory/src/import/` | champollion + ventris + rejewski |
+| `port/cortex-wiki` (NEW) | `mcp_server/handlers/wiki_*.py` (21 files), `mcp_server/core/{wiki_*,concept_emerger,concept_vocabulary,claim_extractor,claim_resolver,enrichment}*.py` (15 files), `mcp_server/infrastructure/{pg_store_wiki,wiki_store}.py` (2 files) | `packages/memory/src/wiki/` | propp + ranganathan + ginzburg |
+| `port/cortex-workflow-graph` (NEW) | `mcp_server/handlers/{workflow_graph,query_workflow_graph}.py`, `mcp_server/core/workflow_graph_*.py` (6 files), `mcp_server/infrastructure/workflow_graph_source*.py` (4 files) | `packages/memory/src/workflow-graph/` | kekule + lamport + thompson |
+| `port/cortex-codebase-analysis` (NEW) | `mcp_server/handlers/{codebase_analyze,ingest_codebase*,ingest_prd,ingest_helpers}.py` (9 files), `mcp_server/core/{ast_*,codebase_*,schema_engine,schema_extraction}*.py`, `mcp_server/infrastructure/scanner*.py` | `packages/memory/src/codebase-analysis/` | champollion + kekule + euler |
+| `port/cortex-server` (DECISION REQUIRED) | `mcp_server/server/` — 15 HTTP-server / dashboard files (3 668 LOC) | DEFER pending ADR-0011 | (none — defer) |
 
 ### Merge order (fixed; do NOT merge out of order)
 
-1. `port/cortex-remember`        (foundation — others write to the same persistence layer)
-2. `port/cortex-recall`          (depends on remember's persistence)
-3. `port/cortex-consolidation`   (operates on remember + recall outputs)
-4. `port/cortex-graph-navigation` (operates on persisted graph)
-5. `port/cortex-methodology`     (writes profile via remember)
-6. `port/cortex-narrative`       (reads recall + methodology)
-7. `port/cortex-import`          (writes via remember; isolated)
-8. `port/cortex-automation`      (orchestrates all above)
-9. `port/cortex-hooks`           (last — wires the orchestrator into Claude Code lifecycle)
+The dependency graph from `port/inventory-cortex` field analysis (which modules
+write to which schema tables, which modules read from which others' outputs):
+
+1.  `port/cortex-shared`           — types + error handler + observability (every other worktree imports these)
+2.  `port/cortex-remember`         — write path + persistence (foundation)
+3.  `port/cortex-recall`           — read path (depends on remember's schema)
+4.  `port/cortex-consolidation`    — operates on remember + recall outputs
+5.  `port/cortex-codebase-analysis`— writes via remember; ingests external graphs
+6.  `port/cortex-wiki`              — writes via remember; depends on codebase-analysis for symbol verification
+7.  `port/cortex-graph-navigation` — operates on persisted graph
+8.  `port/cortex-methodology`      — writes profile via remember
+9.  `port/cortex-narrative`         — reads recall + methodology
+10. `port/cortex-import`            — writes via remember; isolated
+11. `port/cortex-workflow-graph`    — depends on session data + ingestion outputs
+12. `port/cortex-automation`        — orchestrates all above
+13. `port/cortex-hooks`             — last — wires the orchestrator into Claude Code lifecycle
 
 After each merge: full parity-oracle suite must pass. Any regression blocks the next merge.
+
+### Open follow-up: `port/cortex-server` decision (ADR-0011)
+
+The HTTP server / 3D graph visualisation dashboard (15 files, 3 668 LOC under
+`mcp_server/server/`) is NOT in the merge order above. It is decided in
+`docs/ADR/0011-cortex-http-server.md` whether to (a) defer to a post-cutover
+phase, (b) discard with explicit justification, or (c) add as worktree #14.
+Default per ADR-0011: **defer** to post-Phase-6 hardening.
 
 ---
 
