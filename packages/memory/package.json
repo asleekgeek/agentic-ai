@@ -1,0 +1,32 @@
+{
+  "name": "@agentic/memory",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cortex memory subsystem — consolidation, decay, homeostatic plasticity, replay, neurogenesis",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./consolidation": {
+      "import": "./dist/consolidation/index.js",
+      "types": "./dist/consolidation/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.23.0"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.0",
+    "@types/node": "^20.0.0",
+    "typescript": "^5.6.0"
+  }
+}
