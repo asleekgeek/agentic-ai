@@ -1,0 +1,34 @@
+{
+  "name": "@agentic/memory",
+  "version": "0.0.1",
+  "private": true,
+  "description": "Cortex memory persistence layer: write-gate, predictive coding, MemoryStore (PG + SQLite) and CRUD handlers.",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^3.23.0",
+    "better-sqlite3": "^12.0.0",
+    "pg": "^8.11.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.8",
+    "@types/pg": "^8.11.0",
+    "vitest": "^4.1.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3"
+    ]
+  }
+}
