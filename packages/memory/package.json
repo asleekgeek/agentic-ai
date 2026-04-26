@@ -1,0 +1,30 @@
+{
+  "name": "@agentic/memory",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "./dist/codebase-analysis/index.js",
+  "types": "./dist/codebase-analysis/index.d.ts",
+  "exports": {
+    "./codebase-analysis": {
+      "import": "./dist/codebase-analysis/index.js",
+      "types": "./dist/codebase-analysis/index.d.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.0"
+  },
+  "optionalDependencies": {
+    "tree-sitter": "^0.21.0",
+    "tree-sitter-go": "^0.21.0",
+    "tree-sitter-javascript": "^0.21.0",
+    "tree-sitter-python": "^0.21.0",
+    "tree-sitter-rust": "^0.21.0",
+    "tree-sitter-swift": "^0.5.0",
+    "tree-sitter-typescript": "^0.21.0"
+  }
+}
