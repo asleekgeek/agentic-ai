@@ -1,0 +1,29 @@
+{
+  "name": "@agentic/memory",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Cortex memory subsystem: recall, remember, consolidation. Pure TS port of mcp_server/.",
+  "type": "module",
+  "exports": {
+    "./recall": {
+      "types": "./dist/recall/index.d.ts",
+      "import": "./dist/recall/index.js"
+    },
+    "./shared": {
+      "types": "./dist/shared/index.d.ts",
+      "import": "./dist/shared/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc --project tsconfig.json",
+    "typecheck": "tsc --noEmit --project tsconfig.json",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "zod": "^3.22.4"
+  },
+  "devDependencies": {
+    "vitest": "^4.1.0",
+    "typescript": "^5.6.0"
+  }
+}
