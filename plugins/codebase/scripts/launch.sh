@@ -4,17 +4,25 @@
 # Args:
 #   $1 — CLAUDE_PLUGIN_ROOT. Required.
 #
-# Resolution order (first that succeeds wins; never falls through silently):
-#   1. ${PLUGIN_ROOT}/bin/ai-architect-mcp
-#        Pre-built artifact shipped with the plugin (override slot for power
-#        users / CI). Empty by default.
-#   2. ${PLUGIN_ROOT}/src-rust/target/release/ai-architect-mcp
-#        Already built from this plugin's vendored Cargo source — guaranteed
-#        protocol/version match. This is the steady-state path after the
-#        first-run cargo build below.
-#   3. cargo build --release in ${PLUGIN_ROOT}/src-rust/ then exec.
-#        Triggered on first launch after install. Requires Rust toolchain
-#        (rustup) on the host. Compilation typically takes 2–5 minutes.
+# Resolution order (first existing wins; never falls through silently):
+#   1. ${PLUGIN_ROOT}/bin/ai-architect-mcp-<os>-<arch>
+#        Per-platform pre-built artifact shipped with the plugin. <os>-<arch>
+#        is computed from `uname -sm` (e.g. darwin-arm64, darwin-x86_64,
+#        linux-x86_64, linux-aarch64). This is the zero-build steady state:
+#        Claude Code's MCP host gets `initialize` reply within milliseconds,
+#        no cargo dependency on the host machine.
+#   2. ${PLUGIN_ROOT}/bin/ai-architect-mcp
+#        Generic fallback for hosts where the per-platform binary is missing
+#        but a manually-placed binary exists (CI / power users / Docker).
+#   3. ${PLUGIN_ROOT}/src-rust/target/release/ai-architect-mcp
+#        Already built from this plugin's vendored Cargo source. This is the
+#        steady-state path after the first-run cargo build below.
+#   4. cargo build --release in ${PLUGIN_ROOT}/src-rust/ then exec.
+#        Last-resort path for unsupported platforms or when the prebuilt
+#        binaries were stripped (e.g. partial release tarball). Requires
+#        Rust toolchain. Compilation typically takes 2–5 minutes — this
+#        WILL exceed Claude Code's MCP connect timeout (30 s) on first run;
+#        the user must restart Claude Code after the build completes.
 #
 # Notes
 # -----
@@ -30,23 +38,34 @@
 set -euo pipefail
 PLUGIN_ROOT="${1:?usage: launch.sh <plugin-root>}"
 
+# ── Stage 1: per-platform prebuilt ────────────────────────────────────────
+# `uname -s` → Darwin/Linux. `uname -m` → arm64/aarch64/x86_64.
+# Normalize to the lowercase-hyphen form we use for binary naming.
+os=$(uname -s | tr '[:upper:]' '[:lower:]')
+arch=$(uname -m)
+platform_bin="${PLUGIN_ROOT}/bin/ai-architect-mcp-${os}-${arch}"
+if [ -x "${platform_bin}" ]; then
+  exec "${platform_bin}"
+fi
+
+# ── Stage 2: generic prebuilt fallback ─────────────────────────────────────
 shipped_bin="${PLUGIN_ROOT}/bin/ai-architect-mcp"
 if [ -x "${shipped_bin}" ]; then
   exec "${shipped_bin}"
 fi
 
+# ── Stage 3: previously-cargo-built binary in src-rust/ ────────────────────
 src_dir="${PLUGIN_ROOT}/src-rust"
 prebuilt_in_src="${src_dir}/target/release/ai-architect-mcp"
 if [ -x "${prebuilt_in_src}" ]; then
   exec "${prebuilt_in_src}"
 fi
 
+# ── Stage 4: last-resort cargo build ───────────────────────────────────────
 if ! command -v cargo >/dev/null 2>&1; then
-  echo "codebase plugin: vendored binary not yet built and cargo is not installed." >&2
-  echo "  Install Rust toolchain: https://rustup.rs" >&2
-  echo "  Then re-launch the plugin (Claude Code will retry on next session)." >&2
-  echo "  Or install manually:    cargo install --path ${src_dir}" >&2
-  echo "                          (then place the binary at ${shipped_bin})" >&2
+  echo "codebase plugin: no prebuilt binary for ${os}-${arch} and cargo is not installed." >&2
+  echo "  Either install Rust:   https://rustup.rs" >&2
+  echo "  Or place a binary at:  ${shipped_bin}" >&2
   exit 1
 fi
 
@@ -55,6 +74,8 @@ if [ ! -f "${src_dir}/Cargo.toml" ]; then
   exit 1
 fi
 
-echo "codebase plugin: building ai-architect-mcp from source (first run, ~2-5 min)..." >&2
+echo "codebase plugin: no prebuilt binary for ${os}-${arch}; building from source (~2-5 min)..." >&2
+echo "  This first launch will likely exceed Claude Code's 30s MCP connect timeout." >&2
+echo "  Restart Claude Code after the build completes." >&2
 ( cd "${src_dir}" && cargo build --release --quiet >&2 )
 exec "${prebuilt_in_src}"
