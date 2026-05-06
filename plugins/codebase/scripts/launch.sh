@@ -11,15 +11,22 @@
 #        linux-x86_64, linux-aarch64). This is the zero-build steady state:
 #        Claude Code's MCP host gets `initialize` reply within milliseconds,
 #        no cargo dependency on the host machine.
-#   2. ${PLUGIN_ROOT}/bin/ai-architect-mcp
+#   2. Download from GitHub Releases on first launch.
+#        If the platform binary is not in bin/ but the host has curl + network,
+#        fetch ai-architect-mcp-<os>-<arch> from the latest release and cache
+#        it under bin/ for future launches. Source of truth is the workflow
+#        .github/workflows/release-codebase-binaries.yml which uploads one
+#        binary per host platform on every codebase-v* tag push.
+#        Total first-launch cost: ~3-10 s (download) + start-up. Within MCP's
+#        30 s connect timeout. After this runs once, stage 1 wins thereafter.
+#   3. ${PLUGIN_ROOT}/bin/ai-architect-mcp
 #        Generic fallback for hosts where the per-platform binary is missing
 #        but a manually-placed binary exists (CI / power users / Docker).
-#   3. ${PLUGIN_ROOT}/src-rust/target/release/ai-architect-mcp
+#   4. ${PLUGIN_ROOT}/src-rust/target/release/ai-architect-mcp
 #        Already built from this plugin's vendored Cargo source. This is the
 #        steady-state path after the first-run cargo build below.
-#   4. cargo build --release in ${PLUGIN_ROOT}/src-rust/ then exec.
-#        Last-resort path for unsupported platforms or when the prebuilt
-#        binaries were stripped (e.g. partial release tarball). Requires
+#   5. cargo build --release in ${PLUGIN_ROOT}/src-rust/ then exec.
+#        Last-resort path for unsupported platforms with no network. Requires
 #        Rust toolchain. Compilation typically takes 2–5 minutes — this
 #        WILL exceed Claude Code's MCP connect timeout (30 s) on first run;
 #        the user must restart Claude Code after the build completes.
@@ -48,20 +55,49 @@ if [ -x "${platform_bin}" ]; then
   exec "${platform_bin}"
 fi
 
-# ── Stage 2: generic prebuilt fallback ─────────────────────────────────────
+# ── Stage 2: download from GitHub Releases ─────────────────────────────────
+# First launch on a host where the binary wasn't shipped in bin/. Fetch from
+# the latest tagged release and cache under bin/ for the rest of this plugin's
+# lifetime. Bypassed if curl is unavailable or the host has no network.
+RELEASE_REPO="cdeust/agentic-ai"
+RELEASE_TAG="${AGENTIC_AI_CODEBASE_RELEASE_TAG:-latest}"
+asset_name="ai-architect-mcp-${os}-${arch}"
+if command -v curl >/dev/null 2>&1; then
+  url=""
+  if [ "${RELEASE_TAG}" = "latest" ]; then
+    url="https://github.com/${RELEASE_REPO}/releases/latest/download/${asset_name}"
+  else
+    url="https://github.com/${RELEASE_REPO}/releases/download/${RELEASE_TAG}/${asset_name}"
+  fi
+  echo "codebase plugin: fetching prebuilt ${asset_name} from ${url} ..." >&2
+  mkdir -p "${PLUGIN_ROOT}/bin"
+  tmp="${PLUGIN_ROOT}/bin/.${asset_name}.tmp.$$"
+  if curl --fail --location --silent --show-error --max-time 30 \
+        --output "${tmp}" "${url}" 2>/dev/null; then
+    chmod +x "${tmp}"
+    mv "${tmp}" "${platform_bin}"
+    echo "codebase plugin: cached ${platform_bin}" >&2
+    exec "${platform_bin}"
+  else
+    rm -f "${tmp}"
+    echo "codebase plugin: release download failed — falling through to local build paths." >&2
+  fi
+fi
+
+# ── Stage 3: generic prebuilt fallback ─────────────────────────────────────
 shipped_bin="${PLUGIN_ROOT}/bin/ai-architect-mcp"
 if [ -x "${shipped_bin}" ]; then
   exec "${shipped_bin}"
 fi
 
-# ── Stage 3: previously-cargo-built binary in src-rust/ ────────────────────
+# ── Stage 4: previously-cargo-built binary in src-rust/ ────────────────────
 src_dir="${PLUGIN_ROOT}/src-rust"
 prebuilt_in_src="${src_dir}/target/release/ai-architect-mcp"
 if [ -x "${prebuilt_in_src}" ]; then
   exec "${prebuilt_in_src}"
 fi
 
-# ── Stage 4: last-resort cargo build ───────────────────────────────────────
+# ── Stage 5: last-resort cargo build ───────────────────────────────────────
 if ! command -v cargo >/dev/null 2>&1; then
   echo "codebase plugin: no prebuilt binary for ${os}-${arch} and cargo is not installed." >&2
   echo "  Either install Rust:   https://rustup.rs" >&2

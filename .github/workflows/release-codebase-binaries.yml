@@ -1,0 +1,113 @@
+name: Release codebase plugin binaries
+
+# Builds the ai-architect-mcp Rust binary for the four host platforms the
+# codebase plugin runs on, and uploads each as an asset to the corresponding
+# GitHub Release. plugins/codebase/scripts/launch.sh downloads the right
+# binary at first launch — see Stage 1.5 of that script.
+#
+# Trigger on:
+#   - tag push of the form `codebase-v<semver>`  (semver-tagged release)
+#   - manual dispatch                            (ad-hoc rebuild)
+#
+# Asset naming convention (must match launch.sh's <os>-<arch> derivation):
+#   ai-architect-mcp-darwin-arm64
+#   ai-architect-mcp-darwin-x86_64
+#   ai-architect-mcp-linux-x86_64
+#   ai-architect-mcp-linux-aarch64
+#
+# source: 2026-05-06 — added after the codebase plugin's first-launch cargo
+# build was overshooting Claude Code's 30 s MCP connect timeout. Prebuilt
+# binaries make first-launch instant on supported platforms.
+
+on:
+  push:
+    tags:
+      - "codebase-v*"
+  workflow_dispatch: {}
+
+permissions:
+  contents: write   # required for `gh release upload`
+
+jobs:
+  build:
+    name: ${{ matrix.target.os }}-${{ matrix.target.arch }}
+    runs-on: ${{ matrix.target.runner }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - os: darwin
+            arch: arm64
+            runner: macos-14            # Apple Silicon
+            rust_target: aarch64-apple-darwin
+          - os: darwin
+            arch: x86_64
+            runner: macos-13            # Intel Mac (last release with x86_64 hosted runner support)
+            rust_target: x86_64-apple-darwin
+          - os: linux
+            arch: x86_64
+            runner: ubuntu-latest
+            rust_target: x86_64-unknown-linux-gnu
+          - os: linux
+            arch: aarch64
+            runner: ubuntu-latest
+            rust_target: aarch64-unknown-linux-gnu
+            # cross-compile from x86_64 host using cross
+            use_cross: true
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target.rust_target }}
+
+      - name: Install cross (for aarch64 linux only)
+        if: matrix.target.use_cross == true
+        run: cargo install --locked cross
+
+      - name: Build (native)
+        if: matrix.target.use_cross != true
+        working-directory: plugins/codebase/src-rust
+        run: cargo build --release --target ${{ matrix.target.rust_target }}
+
+      - name: Build (cross)
+        if: matrix.target.use_cross == true
+        working-directory: plugins/codebase/src-rust
+        run: cross build --release --target ${{ matrix.target.rust_target }}
+
+      - name: Stage binary with platform-suffixed name
+        working-directory: plugins/codebase/src-rust
+        run: |
+          src="target/${{ matrix.target.rust_target }}/release/ai-architect-mcp"
+          dst="ai-architect-mcp-${{ matrix.target.os }}-${{ matrix.target.arch }}"
+          if [[ ! -x "$src" ]]; then
+            echo "::error::expected binary not found at $src" >&2
+            exit 1
+          fi
+          cp "$src" "$dst"
+          chmod +x "$dst"
+          ls -la "$dst"
+          echo "size:" $(du -h "$dst" | cut -f1)
+
+      - name: Upload as release asset (tag push)
+        if: github.event_name == 'push'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        working-directory: plugins/codebase/src-rust
+        run: |
+          # Strip the "codebase-" prefix to get the bare semver tag for `gh
+          # release upload`. Fail if no matching release exists.
+          tag="${GITHUB_REF_NAME}"
+          asset="ai-architect-mcp-${{ matrix.target.os }}-${{ matrix.target.arch }}"
+          gh release upload "$tag" "$asset" --clobber
+
+      - name: Upload as workflow artifact (manual dispatch)
+        if: github.event_name == 'workflow_dispatch'
+        uses: actions/upload-artifact@v4
+        with:
+          name: ai-architect-mcp-${{ matrix.target.os }}-${{ matrix.target.arch }}
+          path: plugins/codebase/src-rust/ai-architect-mcp-${{ matrix.target.os }}-${{ matrix.target.arch }}
+          retention-days: 7
