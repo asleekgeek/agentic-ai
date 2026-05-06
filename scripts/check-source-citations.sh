@@ -17,10 +17,23 @@
 #
 # Detection strategy:
 #   1. Get staged .ts files via `git diff --cached --name-only`.
-#   2. For each file, scan for lines matching NUMERIC_PATTERN.
-#   3. Check if the matching line OR the immediately preceding line contains
-#      a // source: comment.
+#   2. For each file, get only the NEWLY ADDED lines via
+#      `git diff --cached --unified=0`. Pre-existing lines that the same
+#      diff happens to touch around (context) are NOT inspected — old
+#      magic numbers are grandfathered, only new ones are flagged.
+#   3. For each added line, check for numeric literals and a // source:
+#      comment on the same line OR the line immediately above (in the
+#      working file, since multi-line diffs may not include the prev line).
 #   4. If a violation is found, print it and exit 2 (blocks commit).
+#
+# Rationale for diff-scope rather than file-scope:
+#   The repo predates this gate by months — many files have legitimate
+#   pre-existing constants without inline citations. A file-scope check
+#   would block ANY edit to those files, even unrelated lint cleanups,
+#   forcing developers to retroactively cite work they didn't author.
+#   That violates the gate's stated purpose ("every NEW number ≥3 sig-
+#   digits needs an adjacent // source: comment") — citation is a
+#   forward-going contract, not a retroactive enforcement.
 #
 # Exit codes:
 #   0 — no violations
@@ -82,69 +95,88 @@ if [[ -z "$STAGED_TS_FILES" ]]; then
   exit 0
 fi
 
-# ── Scan each file ─────────────────────────────────────────────────────────────
+# ── Scan each file's NEWLY ADDED lines only ────────────────────────────────────
+#
+# We use `git diff --cached --unified=0 -- <file>` to get only the additions,
+# then walk the +<line> entries. Each addition is paired with its target line
+# number in the staged file (parsed from the @@ hunk header). For prev-line
+# lookup we also peek at the line above in the on-disk staged file.
 
 VIOLATIONS=()
 
+# Skip predicate (test files, generated dirs).
+should_skip_file() {
+  local f=$1
+  if echo "$f" | grep -qE '(\.test\.ts$|\.spec\.ts$|__tests__|\.parity\.test\.ts$)'; then return 0; fi
+  if echo "$f" | grep -qE '(^|/)dist/|(^|/)node_modules/'; then return 0; fi
+  return 1
+}
+
+# Check a single (file, line_number, line_text) tuple for a violation.
+check_added_line() {
+  local file=$1
+  local line_number=$2
+  local line=$3
+
+  # Numeric literal of interest?
+  echo "$line" | grep -qE "$NUMERIC_REGEX" || return 0
+
+  # Comment / type annotation line — skip.
+  local trimmed="${line#"${line%%[! ]*}"}"
+  if echo "$trimmed" | grep -qE '^(//|/\*|\*|import type|export type)'; then
+    return 0
+  fi
+
+  # Only exempt numbers on this line — skip.
+  local line_without_exempt
+  line_without_exempt=$(echo "$line" | sed -E "s/\b$EXEMPT_PATTERN\b//g")
+  if ! echo "$line_without_exempt" | grep -qE "$NUMERIC_REGEX"; then
+    return 0
+  fi
+
+  # Same-line // source: comment — skip.
+  if echo "$line" | grep -qE "$SOURCE_COMMENT_PATTERN"; then
+    return 0
+  fi
+
+  # Line-above // source: comment — skip.
+  if [[ -f "$file" ]] && [[ "$line_number" -gt 1 ]]; then
+    local prev_line
+    prev_line=$(sed -n "$((line_number - 1))p" "$file" 2>/dev/null)
+    if echo "$prev_line" | grep -qE "$SOURCE_COMMENT_PATTERN"; then
+      return 0
+    fi
+  fi
+
+  VIOLATIONS+=("$file:$line_number: $line")
+  return 0
+}
+
 while IFS= read -r file; do
-  # Skip files that don't exist (deleted between staging and hook run).
+  [[ -z "$file" ]] && continue
+  should_skip_file "$file" && continue
   [[ -f "$file" ]] || continue
 
-  # Skip test files — magic numbers are permitted in tests.
-  if echo "$file" | grep -qE '(\.test\.ts|\.spec\.ts|__tests__|\.parity\.test\.ts)'; then
-    continue
-  fi
-
-  # Skip generated / dist files.
-  if echo "$file" | grep -qE '(dist/|node_modules/)'; then
-    continue
-  fi
-
-  line_number=0
-  prev_line=""
-
-  while IFS= read -r line; do
-    line_number=$((line_number + 1))
-
-    # Does this line contain a numeric literal matching the pattern?
-    if ! echo "$line" | grep -qE "$NUMERIC_REGEX"; then
-      prev_line="$line"
+  # Walk the diff. Format we expect from `git diff --cached -U0 -- <file>`:
+  #   @@ -<old_start>[,<old_count>] +<new_start>[,<new_count>] @@ ...
+  #   +<added line content>
+  #   ...
+  current_new_line=0
+  while IFS= read -r diff_line; do
+    if [[ "$diff_line" =~ ^@@\ -[0-9]+(,[0-9]+)?\ \+([0-9]+)(,[0-9]+)?\ @@ ]]; then
+      current_new_line="${BASH_REMATCH[2]}"
       continue
     fi
-
-    # Is this line itself a comment or type annotation? Skip.
-    trimmed="${line#"${line%%[! ]*}"}"  # ltrim
-    if echo "$trimmed" | grep -qE '^(//|/\*|\*|import type|export type)'; then
-      prev_line="$line"
+    # Skip diff file headers (+++ / ---).
+    if [[ "$diff_line" =~ ^(\+\+\+|---) ]]; then
       continue
     fi
-
-    # Does the line contain an exempt number only (no non-exempt numeric literal)?
-    # Extract all numeric literals and check each against the exempt list.
-    # Strategy: remove exempt numbers then re-check.
-    line_without_exempt=$(echo "$line" | sed -E "s/\b$EXEMPT_PATTERN\b//g")
-    if ! echo "$line_without_exempt" | grep -qE "$NUMERIC_REGEX"; then
-      prev_line="$line"
-      continue
+    if [[ "${diff_line:0:1}" == "+" ]]; then
+      added="${diff_line:1}"
+      check_added_line "$file" "$current_new_line" "$added"
+      current_new_line=$((current_new_line + 1))
     fi
-
-    # Does the current line already have a source comment?
-    if echo "$line" | grep -qE "$SOURCE_COMMENT_PATTERN"; then
-      prev_line="$line"
-      continue
-    fi
-
-    # Does the previous line have a source comment?
-    if echo "$prev_line" | grep -qE "$SOURCE_COMMENT_PATTERN"; then
-      prev_line="$line"
-      continue
-    fi
-
-    # Violation found.
-    VIOLATIONS+=("$file:$line_number: $line")
-
-    prev_line="$line"
-  done < "$file"
+  done < <(git diff --cached --unified=0 -- "$file" 2>/dev/null)
 
 done <<< "$STAGED_TS_FILES"
 
