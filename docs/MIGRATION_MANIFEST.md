@@ -83,7 +83,7 @@ explicit disposition. Anything not in this manifest = data loss risk.
 | Source path | Target path | Disposition | Status |
 |---|---|---|---|
 | `src/`, `benches/`, `Cargo.toml`, `Cargo.lock` | `packages/codebase-rust/` | move-as-is (cargo workspace under monorepo) | ☐ |
-| `target/release/ai-architect-mcp` | built by CI; not committed | (build artifact) | ☐ |
+| `target/release/ai-architect-mcp` | shipped as `target/release/automatised-pipeline` (binary renamed to match upstream); GitHub Releases asset `automatised-pipeline-<os>-<arch>` produced by `.github/workflows/release-codebase-binaries.yml` on `codebase-v*` tag | rename + CI release pipeline | ✅ |
 | `.mcp.json` | `.claude-plugin/codebase/.mcp.json` (rewritten to reference the in-repo binary) | reformat | ☐ |
 | `.claude-plugin/plugin.json` | `.claude-plugin/codebase/plugin.json` | reformat | ☐ |
 | `assets/` | `packages/codebase-rust/assets/` | move-as-is | ☐ |

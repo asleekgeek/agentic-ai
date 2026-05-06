@@ -52,7 +52,7 @@ Each plugin ships **self-contained** under its install path: an esbuild bundle (
 | Plugin | First launch behavior |
 |---|---|
 | `memory` | `npm install --omit=dev` runs once for native deps (better-sqlite3, onnxruntime-node, @xenova/transformers, pg, sqlite-vec) — then exec `node dist/index.js` |
-| `codebase` | Tries `ai-architect-mcp` from PATH → plugin `bin/` → `src-rust/target/release/` → `cargo build --release` from `src-rust/` (requires Rust toolchain on the host) |
+| `codebase` | Per-platform prebuilt binary `bin/automatised-pipeline-<os>-<arch>` if shipped → otherwise downloads from the latest GitHub Release (`codebase-v*` tag) on first launch and caches under `bin/` → otherwise falls back to vendored `src-rust/` (`cargo build --release`, requires Rust toolchain) |
 | `reasoning` | exec `node dist/index.js` directly — no native deps |
 | `prd` | `npm install --omit=dev` runs once for `ajv`, then exec `node dist/index.js` |
 
@@ -73,7 +73,7 @@ Persistent memory for Claude Code with biological consolidation, intent-aware re
 
 ### `codebase` — codebase intelligence (Rust binary wrapped)
 
-The `ai-architect-mcp` Rust binary indexes Rust / Python / TypeScript codebases into a LadybugDB property graph. Resolves imports + call chains, detects communities via Leiden, traces execution flows from entry points. BM25 + TF-IDF + RRF hybrid search.
+The `automatised-pipeline` Rust binary (crate `ai-architect-mcp`) indexes Rust / Python / TypeScript codebases into a LadybugDB property graph. Resolves imports + call chains, detects communities via Leiden, traces execution flows from entry points. BM25 + TF-IDF + RRF hybrid search.
 
 - **23 MCP tools** (`index_codebase`, `query_graph`, `get_symbol`, `impact_analysis`, `semantic_diff`, …)
 - Strategy: wrap the Rust binary as a subprocess; never re-implement
