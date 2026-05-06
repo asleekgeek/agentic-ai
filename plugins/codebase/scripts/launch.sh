@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# Launch the ai-architect-mcp Rust binary that powers the codebase plugin.
+# Launch the automatised-pipeline Rust binary that powers the codebase plugin.
 #
 # Args:
 #   $1 — CLAUDE_PLUGIN_ROOT. Required.
 #
 # Resolution order (first existing wins; never falls through silently):
-#   1. ${PLUGIN_ROOT}/bin/ai-architect-mcp-<os>-<arch>
+#   1. ${PLUGIN_ROOT}/bin/automatised-pipeline-<os>-<arch>
 #        Per-platform pre-built artifact shipped with the plugin. <os>-<arch>
 #        is computed from `uname -sm` (e.g. darwin-arm64, darwin-x86_64,
 #        linux-x86_64, linux-aarch64). This is the zero-build steady state:
@@ -13,16 +13,16 @@
 #        no cargo dependency on the host machine.
 #   2. Download from GitHub Releases on first launch.
 #        If the platform binary is not in bin/ but the host has curl + network,
-#        fetch ai-architect-mcp-<os>-<arch> from the latest release and cache
+#        fetch automatised-pipeline-<os>-<arch> from the latest release and cache
 #        it under bin/ for future launches. Source of truth is the workflow
 #        .github/workflows/release-codebase-binaries.yml which uploads one
 #        binary per host platform on every codebase-v* tag push.
 #        Total first-launch cost: ~3-10 s (download) + start-up. Within MCP's
 #        30 s connect timeout. After this runs once, stage 1 wins thereafter.
-#   3. ${PLUGIN_ROOT}/bin/ai-architect-mcp
+#   3. ${PLUGIN_ROOT}/bin/automatised-pipeline
 #        Generic fallback for hosts where the per-platform binary is missing
 #        but a manually-placed binary exists (CI / power users / Docker).
-#   4. ${PLUGIN_ROOT}/src-rust/target/release/ai-architect-mcp
+#   4. ${PLUGIN_ROOT}/src-rust/target/release/automatised-pipeline
 #        Already built from this plugin's vendored Cargo source. This is the
 #        steady-state path after the first-run cargo build below.
 #   5. cargo build --release in ${PLUGIN_ROOT}/src-rust/ then exec.
@@ -33,9 +33,9 @@
 #
 # Notes
 # -----
-# - We deliberately do NOT fall back to `command -v ai-architect-mcp` on PATH.
+# - We deliberately do NOT fall back to `command -v automatised-pipeline` on PATH.
 #   The plugin name collides with at least one third-party Python wrapper of
-#   the same name (e.g. /opt/homebrew/bin/ai-architect-mcp from the upstream
+#   the same name (e.g. /opt/homebrew/bin/automatised-pipeline from the upstream
 #   ai-architect Python package), which crashes with ModuleNotFoundError when
 #   Claude Code tries to use it as our MCP server. The vendored Rust source
 #   under src-rust/ is the only authoritative server for THIS plugin.
@@ -50,7 +50,7 @@ PLUGIN_ROOT="${1:?usage: launch.sh <plugin-root>}"
 # Normalize to the lowercase-hyphen form we use for binary naming.
 os=$(uname -s | tr '[:upper:]' '[:lower:]')
 arch=$(uname -m)
-platform_bin="${PLUGIN_ROOT}/bin/ai-architect-mcp-${os}-${arch}"
+platform_bin="${PLUGIN_ROOT}/bin/automatised-pipeline-${os}-${arch}"
 if [ -x "${platform_bin}" ]; then
   exec "${platform_bin}"
 fi
@@ -61,7 +61,7 @@ fi
 # lifetime. Bypassed if curl is unavailable or the host has no network.
 RELEASE_REPO="cdeust/agentic-ai"
 RELEASE_TAG="${AGENTIC_AI_CODEBASE_RELEASE_TAG:-latest}"
-asset_name="ai-architect-mcp-${os}-${arch}"
+asset_name="automatised-pipeline-${os}-${arch}"
 if command -v curl >/dev/null 2>&1; then
   url=""
   if [ "${RELEASE_TAG}" = "latest" ]; then
@@ -85,14 +85,14 @@ if command -v curl >/dev/null 2>&1; then
 fi
 
 # ── Stage 3: generic prebuilt fallback ─────────────────────────────────────
-shipped_bin="${PLUGIN_ROOT}/bin/ai-architect-mcp"
+shipped_bin="${PLUGIN_ROOT}/bin/automatised-pipeline"
 if [ -x "${shipped_bin}" ]; then
   exec "${shipped_bin}"
 fi
 
 # ── Stage 4: previously-cargo-built binary in src-rust/ ────────────────────
 src_dir="${PLUGIN_ROOT}/src-rust"
-prebuilt_in_src="${src_dir}/target/release/ai-architect-mcp"
+prebuilt_in_src="${src_dir}/target/release/automatised-pipeline"
 if [ -x "${prebuilt_in_src}" ]; then
   exec "${prebuilt_in_src}"
 fi

@@ -1,12 +1,12 @@
 # Dependencies
 node_modules/
-.pnpm-store/
-
 # Build outputs
+.pnpm-store/
 dist/
 build/
 *.tsbuildinfo
-target/                    # Rust build dir (codebase-rust)
+# Rust build dir (codebase-rust)
+target/
 
 # Exceptions: plugin distribution bundles MUST be tracked so end-users get a
 # self-contained artifact when they run `claude plugin install <name>`.
@@ -14,37 +14,34 @@ target/                    # Rust build dir (codebase-rust)
 !plugins/*/dist/
 !plugins/*/dist/**
 !packages/reasoning/dist/
-!packages/reasoning/dist/**
-
 # Worktrees — local-only, never committed
-worktrees/
-
+!packages/reasoning/dist/**
 # OS / editor
+worktrees/
 .DS_Store
 *.swp
 .idea/
 .vscode/
-!.vscode/extensions.json   # share recommended extensions
+# share recommended extensions
+!.vscode/extensions.json
 
 # Test artifacts
 coverage/
 .vitest-cache/
-parity-oracle/runs/        # parity test run outputs (large, regenerated)
+# parity test run outputs (large, regenerated)
+parity-oracle/runs/
 
 # Local state
 .env
 .env.local
-*.local
-
 # Claude Code session state (per-developer, not shared)
+*.local
 .claude/session-cache.json
-.claude/scheduled_tasks.lock
-
 # Logs
+.claude/scheduled_tasks.lock
 *.log
 npm-debug.log*
-pnpm-debug.log*
-
 # Cortex local DB (developer-specific)
+pnpm-debug.log*
 .cortex.db
 .prd-gen/

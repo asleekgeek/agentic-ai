@@ -14,7 +14,7 @@ into a LadybugDB property graph and query it with 23 MCP tools.
 ## Dependencies
 
 - **First run**: Rust toolchain (`cargo`) for compilation. Builds once; subsequent starts
-  use the pre-compiled binary at `target/release/ai-architect-mcp`.
+  use the pre-compiled binary at `target/release/automatised-pipeline`.
 - No external database — LadybugDB is embedded.
 
 ## First-run
@@ -29,7 +29,7 @@ instantaneous (binary check → exec).
 If the binary is not present and `cargo` is not installed, the MCP server fails to
 start. Claude Code will show: `MCP server 'ai-architect' failed to start`.
 Diagnosis: install Rust via `rustup` or build the binary separately and place it at
-`${CLAUDE_PLUGIN_ROOT}/target/release/ai-architect-mcp`.
+`${CLAUDE_PLUGIN_ROOT}/target/release/automatised-pipeline`.
 
 ## MCP tool prefix
 

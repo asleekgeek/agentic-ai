@@ -1,6 +1,6 @@
 name: Release codebase plugin binaries
 
-# Builds the ai-architect-mcp Rust binary for the four host platforms the
+# Builds the automatised-pipeline Rust binary for the four host platforms the
 # codebase plugin runs on, and uploads each as an asset to the corresponding
 # GitHub Release. plugins/codebase/scripts/launch.sh downloads the right
 # binary at first launch — see Stage 1.5 of that script.
@@ -10,10 +10,10 @@ name: Release codebase plugin binaries
 #   - manual dispatch                            (ad-hoc rebuild)
 #
 # Asset naming convention (must match launch.sh's <os>-<arch> derivation):
-#   ai-architect-mcp-darwin-arm64
-#   ai-architect-mcp-darwin-x86_64
-#   ai-architect-mcp-linux-x86_64
-#   ai-architect-mcp-linux-aarch64
+#   automatised-pipeline-darwin-arm64
+#   automatised-pipeline-darwin-x86_64
+#   automatised-pipeline-linux-x86_64
+#   automatised-pipeline-linux-aarch64
 #
 # source: 2026-05-06 — added after the codebase plugin's first-launch cargo
 # build was overshooting Claude Code's 30 s MCP connect timeout. Prebuilt
@@ -81,8 +81,8 @@ jobs:
       - name: Stage binary with platform-suffixed name
         working-directory: plugins/codebase/src-rust
         run: |
-          src="target/${{ matrix.target.rust_target }}/release/ai-architect-mcp"
-          dst="ai-architect-mcp-${{ matrix.target.os }}-${{ matrix.target.arch }}"
+          src="target/${{ matrix.target.rust_target }}/release/automatised-pipeline"
+          dst="automatised-pipeline-${{ matrix.target.os }}-${{ matrix.target.arch }}"
           if [[ ! -x "$src" ]]; then
             echo "::error::expected binary not found at $src" >&2
             exit 1
@@ -101,13 +101,13 @@ jobs:
           # Strip the "codebase-" prefix to get the bare semver tag for `gh
           # release upload`. Fail if no matching release exists.
           tag="${GITHUB_REF_NAME}"
-          asset="ai-architect-mcp-${{ matrix.target.os }}-${{ matrix.target.arch }}"
+          asset="automatised-pipeline-${{ matrix.target.os }}-${{ matrix.target.arch }}"
           gh release upload "$tag" "$asset" --clobber
 
       - name: Upload as workflow artifact (manual dispatch)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: ai-architect-mcp-${{ matrix.target.os }}-${{ matrix.target.arch }}
-          path: plugins/codebase/src-rust/ai-architect-mcp-${{ matrix.target.os }}-${{ matrix.target.arch }}
+          name: automatised-pipeline-${{ matrix.target.os }}-${{ matrix.target.arch }}
+          path: plugins/codebase/src-rust/automatised-pipeline-${{ matrix.target.os }}-${{ matrix.target.arch }}
           retention-days: 7
