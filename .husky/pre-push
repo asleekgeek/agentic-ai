@@ -67,16 +67,22 @@ banner "4/6" "pnpm source-citation-check"
 pnpm source-citation-check
 
 # ── Gate 5: migration audit (cheap; protects port-pending tracking) ──────────
-banner "5/6" "pnpm audit-migration"
+banner "5/7" "pnpm audit-migration"
 pnpm audit-migration
 
-# ── Gate 6: tests (skip with PRE_PUSH_SKIP_TESTS=1 in a pinch) ───────────────
+# ── Gate 6: payload-string firewall ─────────────────────────────────────────
+# Blocks the payload strings (t@t.t / tracked.txt / commit -m "init") from
+# re-entering the codebase. See scripts/check-payload-strings.sh for background.
+banner "6/7" "payload-string firewall"
+"$REPO_ROOT/scripts/check-payload-strings.sh"
+
+# ── Gate 7: tests (skip with PRE_PUSH_SKIP_TESTS=1 in a pinch) ───────────────
 if [[ "${PRE_PUSH_SKIP_TESTS:-0}" == "1" ]]; then
-  banner "6/6" "tests SKIPPED (PRE_PUSH_SKIP_TESTS=1)"
+  banner "7/7" "tests SKIPPED (PRE_PUSH_SKIP_TESTS=1)"
 else
-  banner "6/6" "pnpm test"
+  banner "7/7" "pnpm test"
   pnpm test
 fi
 
 elapsed=$(( $(date +%s) - start ))
-printf "\npre-push: all 6 gates passed in %ss — push is safe.\n" "$elapsed" >&2
+printf "\npre-push: all 7 gates passed in %ss — push is safe.\n" "$elapsed" >&2

@@ -18,19 +18,26 @@ set -euo pipefail
 # ── Resolve repo root ──────────────────────────────────────────────────────────
 REPO_ROOT="$(git rev-parse --show-toplevel 2>/dev/null || pwd)"
 
-# ── Gate 1: Source-citation check ─────────────────────────────────────────────
+# ── Gate 1: Payload-string firewall ────────────────────────────────────────────
+# Blocks the payload strings (t@t.t / tracked.txt / commit -m "init") that
+# previously caused a destructive squash-merge incident. See
+# scripts/check-payload-strings.sh for full incident background.
+echo "pre-commit: [1/4] payload-string firewall..." >&2
+"$REPO_ROOT/scripts/check-payload-strings.sh"
+
+# ── Gate 2: Source-citation check ─────────────────────────────────────────────
 # Scans staged .ts files for numeric literals ≥3 sig-digits without // source:.
 # source: scripts/check-source-citations.sh
-echo "pre-commit: [1/3] source-citation check..." >&2
+echo "pre-commit: [2/4] source-citation check..." >&2
 "$REPO_ROOT/scripts/check-source-citations.sh"
 
-# ── Gate 2: Lint staged files ──────────────────────────────────────────────────
+# ── Gate 3: Lint staged files ──────────────────────────────────────────────────
 # Run ESLint on staged .ts files only for speed.
 # Falls back to `pnpm lint` if lint-staged is not configured.
 #
 # source: coding-standards.md §2.2 — layer-import rule is enforced here.
 # source: eslint.config.js — flat config, no-restricted-imports for layer boundaries.
-echo "pre-commit: [2/3] lint (staged files)..." >&2
+echo "pre-commit: [3/4] lint (staged files)..." >&2
 
 STAGED_TS=$(git diff --cached --name-only --diff-filter=ACM | grep '\.ts$' | grep -v '\.d\.ts$' || true)
 
@@ -50,7 +57,7 @@ fi
 # tsc --noEmit across all packages.
 # This catches type errors that ESLint may not surface.
 # source: tsconfig.base.json — strict mode enabled.
-echo "pre-commit: [3/3] typecheck..." >&2
+echo "pre-commit: [4/4] typecheck..." >&2
 cd "$REPO_ROOT" && pnpm typecheck
 
 echo "pre-commit: all gates passed." >&2

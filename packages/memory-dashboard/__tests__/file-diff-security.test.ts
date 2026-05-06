@@ -96,23 +96,26 @@ describe("/api/file-diff: SEC-001 command-injection regression", () => {
    * because the shell would execute the embedded `echo` command.
    */
   it("malicious name does NOT execute shell commands and returns 400", async () => {
-    // Create an isolated temp git repo so the test is hermetic.
-    const tempRoot = mkdtempSync(join(tmpdir(), "sec001-"));
-    spawnSync("git", ["init", "--quiet"], { cwd: tempRoot });
-    spawnSync("git", ["config", "user.email", "t@t.t"], { cwd: tempRoot });
-    spawnSync("git", ["config", "user.name", "t"], { cwd: tempRoot });
-    writeFileSync(join(tempRoot, "tracked.txt"), "hello\n");
-    spawnSync("git", ["add", "."], { cwd: tempRoot });
-    spawnSync("git", ["commit", "-m", "init", "--quiet"], { cwd: tempRoot });
+    // Hermetic temp dir for the marker-side-effect check. We do NOT create a
+    // git repo here on purpose: the route's downstream `git diff` will simply
+    // fail when there is no repo, which is fine — the assertion under test is
+    // that sanitiseName rejects the payload with HTTP 400 BEFORE git is ever
+    // invoked. We deliberately avoid:
+    //   - configuring a fixture identity (was a contamination vector via
+    //     vitest worker reuse — see incident notes)
+    //   - creating commits with payload-shaped messages or filenames
+    //   - any string that previously appeared in fabricated commits
+    //     (do not reintroduce: see scripts/check-payload-strings.sh)
+    const tempRoot = mkdtempSync(join(tmpdir(), "agentic-test-"));
 
     const fastify = Fastify({ logger: false });
     await registerFileDiffRoutes(fastify);
 
     const markerPath = join(tempRoot, "MARKER");
     // The payload would, under the old (vulnerable) implementation, create
-    // MARKER in the cwd of the git command. We deliberately use absolute
-    // path inside tempRoot in the marker check to be unambiguous.
-    const maliciousName = `tracked.txt";touch ${markerPath};echo "`;
+    // MARKER in the cwd of the git command. We use an absolute path inside
+    // tempRoot in the marker check to be unambiguous.
+    const maliciousName = `fixture.ts";touch ${markerPath};echo "`;
 
     const response = await fastify.inject({
       method: "GET",
