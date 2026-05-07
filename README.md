@@ -51,12 +51,14 @@ Restart Claude Code. `/mcp` should show four servers connected:
 
 | MCP server name | Plugin | What it provides |
 |---|---|---|
-| `cortex` | `memory@agentic-ai` | persistent memory across sessions (45+ tools) |
-| `ai-architect` | `codebase@agentic-ai` | codebase graph + semantic search (23 tools) |
+| `memory` | `memory@agentic-ai` | persistent memory across sessions (45+ tools) |
+| `codebase` | `codebase@agentic-ai` | codebase graph + semantic search (23 tools) |
 | `reasoning` | `reasoning@agentic-ai` | 97 reasoning patterns + 19 specialist agents (2 tools + 63 skills) |
-| `prd-gen` | `prd@agentic-ai` | 9-file PRD pipeline with multi-judge verification (17 tools) |
+| `prd` | `prd@agentic-ai` | 9-file PRD pipeline with multi-judge verification (17 tools) |
 
 Install only the plugins you want — they're independent. No monorepo checkout, no extra build, no `pnpm install` on the user's side.
+
+The four MCP server names are deliberately chosen to NOT collide with the standalone source repos' server names (`cortex`, `ai-architect`, `prd-gen`, `reasoning`). If you have any of [`cortex@cortex-plugins`](https://github.com/cdeust/Cortex), [`automatised-pipeline@automatised-pipeline-marketplace`](https://github.com/cdeust/automatised-pipeline), or [`prd-spec-generator@prd-spec-generator-marketplace`](https://github.com/cdeust/prd-spec-generator) installed, both can coexist — Claude Code routes tool calls to the right server because the names differ.
 
 ### What each plugin does on its first launch
 
