@@ -66,6 +66,9 @@ const FTS5_MIN_TOKEN_LEN = 2;
 // have more than 10 distinct tokens. The cap keeps recall pipeline latency
 // bounded for adversarial input. source: empirical — measured on Cortex bench machine 2026-05-06.
 const FTS5_MAX_TOKENS = 32;
+// Default FTS result limit — matches the Python port default.
+// source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:232 (limit=20)
+const FTS5_DEFAULT_LIMIT = 20;
 
 /**
  * Translate a free-form query string into a permissive FTS5 disjunctive match.
@@ -228,6 +231,94 @@ CREATE TABLE IF NOT EXISTS oscillatory_state (
   state_json TEXT NOT NULL DEFAULT '{}'
 )`;
 
+// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:114-124
+const STAGE_TRANSITIONS_DDL = `
+CREATE TABLE IF NOT EXISTS stage_transitions (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  memory_id           INTEGER NOT NULL,
+  from_stage          TEXT NOT NULL,
+  to_stage            TEXT NOT NULL,
+  hours_in_prev_stage REAL DEFAULT 0.0,
+  trigger             TEXT DEFAULT 'cascade',
+  transitioned_at     TEXT NOT NULL DEFAULT (datetime('now'))
+)`;
+
+// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:126-132
+const PROSPECTIVE_MEMORIES_DDL = `
+CREATE TABLE IF NOT EXISTS prospective_memories (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  content           TEXT NOT NULL,
+  trigger_condition TEXT NOT NULL,
+  trigger_type      TEXT NOT NULL,
+  target_directory  TEXT,
+  is_active         INTEGER DEFAULT 1,
+  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  triggered_at      TEXT,
+  triggered_count   INTEGER DEFAULT 0
+)`;
+
+// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:148-164
+const CHECKPOINTS_DDL = `
+CREATE TABLE IF NOT EXISTS checkpoints (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id          TEXT DEFAULT 'default',
+  directory_context   TEXT DEFAULT '',
+  current_task        TEXT DEFAULT '',
+  files_being_edited  TEXT DEFAULT '[]',
+  key_decisions       TEXT DEFAULT '[]',
+  open_questions      TEXT DEFAULT '[]',
+  next_steps          TEXT DEFAULT '[]',
+  active_errors       TEXT DEFAULT '[]',
+  custom_context      TEXT DEFAULT '',
+  epoch               INTEGER DEFAULT 0,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+  is_active           INTEGER DEFAULT 1
+)`;
+
+// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:166-175
+const MEMORY_ARCHIVES_DDL = `
+CREATE TABLE IF NOT EXISTS memory_archives (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  original_memory_id  INTEGER NOT NULL,
+  content             TEXT NOT NULL,
+  archived_at         TEXT NOT NULL DEFAULT (datetime('now')),
+  mismatch_score      REAL DEFAULT 0.0,
+  archive_reason      TEXT DEFAULT ''
+)`;
+
+// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:177-186
+const CONSOLIDATION_LOG_DDL = `
+CREATE TABLE IF NOT EXISTS consolidation_log (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  timestamp         TEXT NOT NULL DEFAULT (datetime('now')),
+  memories_added    INTEGER DEFAULT 0,
+  memories_updated  INTEGER DEFAULT 0,
+  memories_archived INTEGER DEFAULT 0,
+  duration_ms       INTEGER DEFAULT 0
+)`;
+
+// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:188-194
+const ENGRAM_SLOTS_DDL = `
+CREATE TABLE IF NOT EXISTS engram_slots (
+  slot_index      INTEGER PRIMARY KEY,
+  excitability    REAL DEFAULT 0.5,
+  last_activated  TEXT
+)`;
+
+// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:196-208
+const MEMORY_RULES_DDL = `
+CREATE TABLE IF NOT EXISTS memory_rules (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  rule_type   TEXT NOT NULL DEFAULT 'soft',
+  scope       TEXT NOT NULL DEFAULT 'global',
+  scope_value TEXT,
+  condition   TEXT NOT NULL,
+  action      TEXT NOT NULL,
+  priority    INTEGER DEFAULT 0,
+  is_active   INTEGER DEFAULT 1,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+)`;
+
 // ── Indexes ──────────────────────────────────────────────────────────────────
 
 const INDEXES = [
@@ -326,6 +417,10 @@ export class SqliteMemoryStore implements MemoryStore {
   // ── Schema initialization ──────────────────────────────────────────────
 
   private _initSchema(): void {
+    // precondition: _db is open.
+    // postcondition: every table and index defined in sqlite-schema.ts exists
+    //   in the DB; CREATE TABLE/INDEX IF NOT EXISTS makes this idempotent.
+    // source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:263-287 — getAllDdl() ordering
     const ddls = [
       MEMORIES_DDL,
       MEMORIES_FTS_DDL,
@@ -335,6 +430,13 @@ export class SqliteMemoryStore implements MemoryStore {
       HOMEOSTATIC_STATE_DDL,
       SCHEMAS_DDL,
       OSCILLATORY_STATE_DDL,
+      STAGE_TRANSITIONS_DDL,
+      PROSPECTIVE_MEMORIES_DDL,
+      CHECKPOINTS_DDL,
+      MEMORY_ARCHIVES_DDL,
+      CONSOLIDATION_LOG_DDL,
+      ENGRAM_SLOTS_DDL,
+      MEMORY_RULES_DDL,
       ...INDEXES,
     ];
     for (const ddl of ddls) {
@@ -773,7 +875,7 @@ export class SqliteMemoryStore implements MemoryStore {
    * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:232-242
    * source: https://www.sqlite.org/fts5.html#full_text_query_syntax — FTS5 query grammar
    */
-  searchFts(query: string, limit = 20): Array<[number, number]> {
+  searchFts(query: string, limit = FTS5_DEFAULT_LIMIT): Array<[number, number]> {
     const sanitised = sanitiseFts5Query(query);
     if (!sanitised) return [];
     try {

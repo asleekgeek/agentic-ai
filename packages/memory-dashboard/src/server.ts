@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 import fastifyCors from "@fastify/cors";
+import { ensureSchema } from "./db-init.js";
 import { registerGraphRoutes } from "./routes/graph.js";
 import { registerWikiRoutes } from "./routes/wiki.js";
 import { registerSankeyRoutes } from "./routes/sankey.js";
@@ -85,6 +86,16 @@ export async function startDashboard(
     if (existsSync(sibling)) return sibling;
     return path.resolve(__dirname, "..", "src", "static");
   })();
+
+  // Apply the canonical schema DDL before opening read-only route connections.
+  // This ensures stage_transitions, prospective_memories, and all other tables
+  // added after the user's DB was first created are present.
+  // Idempotent: CREATE TABLE/INDEX IF NOT EXISTS; ALTER TABLE fails silently.
+  // source: 2026-05-07 schema reconciliation — dashboard must bootstrap schema
+  //   independently so it works even if the MCP server has never run against this DB.
+  if (dbPath) {
+    ensureSchema(dbPath);
+  }
 
   const fastify = Fastify({ logger: false });
 

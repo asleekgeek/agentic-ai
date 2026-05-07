@@ -229,13 +229,16 @@ async function buildGraph(dbPath: string): Promise<void> {
     interface EntityRow {
       id: string;
       name: string;
-      entity_type: string;
+      entity_type: string; // aliased from entities.type — API contract uses entity_type
       heat: number;
       domain: string | null;
     }
 
+    // entities.type is the canonical column (not entity_type); alias to entity_type
+    // to preserve the API contract without changing the DB schema.
+    // source: 2026-05-07 schema reconciliation — entities table has `type` not `entity_type`
     const entityRows = db.prepare(
-      `SELECT id, name, entity_type, heat, domain FROM entities ORDER BY heat DESC LIMIT ${ENTITY_LIMIT}` // source: cortex@ed33435 mcp_server/server/http_dashboard_data.py:17 — get_all_entities(min_heat=0.0); 500 cap for graph render budget
+      `SELECT id, name, type AS entity_type, heat, domain FROM entities ORDER BY heat DESC LIMIT ${ENTITY_LIMIT}` // source: cortex@ed33435 mcp_server/server/http_dashboard_data.py:17 — get_all_entities(min_heat=0.0); 500 cap for graph render budget
     ).all() as EntityRow[];
 
     for (const e of entityRows) {

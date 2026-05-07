@@ -11,6 +11,10 @@
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
     },
+    "./schema": {
+      "import": "./dist/remember/storage/sqlite-schema.js",
+      "types": "./dist/remember/storage/sqlite-schema.d.ts"
+    },
     "./infrastructure/anthropic-llm-client.js": {
       "import": "./dist/infrastructure/anthropic-llm-client.js",
       "types": "./dist/infrastructure/anthropic-llm-client.d.ts"
