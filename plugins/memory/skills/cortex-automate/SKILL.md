@@ -22,7 +22,7 @@ Create triggers that fire automatically when conditions match:
 
 **Keyword trigger** — fires when a query/context contains specific words:
 ```
-cortex:create_trigger({
+memory:create_trigger({
   "type": "keyword",
   "pattern": "authentication",
   "memory_id": <id>,
@@ -32,7 +32,7 @@ cortex:create_trigger({
 
 **File trigger** — fires when a specific file is being worked on:
 ```
-cortex:create_trigger({
+memory:create_trigger({
   "type": "file",
   "pattern": "pg_store.py",
   "memory_id": <id>,
@@ -42,7 +42,7 @@ cortex:create_trigger({
 
 **Domain trigger** — fires when entering a specific project domain:
 ```
-cortex:create_trigger({
+memory:create_trigger({
   "type": "domain",
   "pattern": "cortex",
   "memory_id": <id>,
@@ -52,7 +52,7 @@ cortex:create_trigger({
 
 **Time trigger** — fires after a time condition:
 ```
-cortex:create_trigger({
+memory:create_trigger({
   "type": "time",
   "pattern": "7d",
   "memory_id": <id>,
@@ -68,7 +68,7 @@ Add rules that modify recall behavior:
 
 **Soft rule** (boost/penalize score):
 ```
-cortex:add_rule({
+memory:add_rule({
   "type": "soft",
   "scope": "domain:cortex",
   "condition": "tag:architecture",
@@ -79,7 +79,7 @@ cortex:add_rule({
 
 **Hard rule** (include/exclude):
 ```
-cortex:add_rule({
+memory:add_rule({
   "type": "hard",
   "scope": "global",
   "condition": "tag:deprecated",
@@ -90,7 +90,7 @@ cortex:add_rule({
 
 **Tag rule** (auto-tag on store):
 ```
-cortex:add_rule({
+memory:add_rule({
   "type": "tag",
   "scope": "domain:cortex",
   "condition": "content_match:refactor",
@@ -101,7 +101,7 @@ cortex:add_rule({
 
 **List active rules:**
 ```
-cortex:get_rules({
+memory:get_rules({
   "scope": "domain:cortex"
 })
 ```
@@ -111,7 +111,7 @@ cortex:get_rules({
 Push top memory insights into project CLAUDE.md for persistent context:
 
 ```
-cortex:sync_instructions({
+memory:sync_instructions({
   "directory": "<project root>",
   "max_insights": 10
 })

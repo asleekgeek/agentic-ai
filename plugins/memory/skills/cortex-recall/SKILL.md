@@ -29,7 +29,7 @@ Write a natural language query. The intent classifier handles routing:
 ### Step 2: Basic Recall
 
 ```
-cortex:recall({
+memory:recall({
   "query": "<natural language question or topic>",
   "limit": 10
 })
@@ -47,20 +47,20 @@ cortex:recall({
 When exploring a large topic area, use fractal hierarchical recall:
 
 ```
-cortex:recall_hierarchical({
+memory:recall_hierarchical({
   "query": "<broad topic>",
   "levels": 3
 })
 ```
 
-This returns memories organized in L0 (broad clusters) > L1 (sub-topics) > L2 (specific memories). Use `cortex:drill_down` to navigate deeper into any cluster.
+This returns memories organized in L0 (broad clusters) > L1 (sub-topics) > L2 (specific memories). Use `memory:drill_down` to navigate deeper into any cluster.
 
 ### Step 4: Navigate Related Knowledge
 
 After finding relevant memories, explore connections:
 
 ```
-cortex:navigate_memory({
+memory:navigate_memory({
   "memory_id": <id>,
   "depth": 2
 })
@@ -73,7 +73,7 @@ This uses Successor Representation (co-access graph) to find memories frequently
 For understanding cause-and-effect relationships:
 
 ```
-cortex:get_causal_chain({
+memory:get_causal_chain({
   "entity": "<entity name>",
   "direction": "both"
 })
@@ -86,4 +86,4 @@ This traverses the knowledge graph to show how entities relate through causal, t
 - **Be specific**: "PostgreSQL index performance on memories table" retrieves better than "database stuff"
 - **Use proactively**: Before making a decision, recall if there's prior context — "have we made decisions about X before?"
 - **Recall at session start**: The SessionStart hook auto-injects hot memories, but explicit recall for your current task adds focused context
-- **Rate results**: After recall, use `cortex:rate_memory` on results that were useful/not-useful to improve future retrieval
+- **Rate results**: After recall, use `memory:rate_memory` on results that were useful/not-useful to improve future retrieval

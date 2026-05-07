@@ -19,12 +19,12 @@ Launch the interactive browser-based unified neural graph combining methodology 
 ### Launch Unified Neural Graph
 
 ```
-cortex:open_visualization({})
+memory:open_visualization({})
 ```
 
 Or filter to a specific domain:
 ```
-cortex:open_visualization({
+memory:open_visualization({
   "domain": "cortex"
 })
 ```
@@ -43,7 +43,7 @@ Opens in the browser at `http://127.0.0.1:3458`. Features:
 For custom visualization or analysis:
 
 ```
-cortex:get_methodology_graph({
+memory:get_methodology_graph({
   "domain": "<optional filter>"
 })
 ```

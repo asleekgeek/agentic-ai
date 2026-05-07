@@ -19,7 +19,7 @@ Cortex builds a cognitive profile from your Claude Code session history — how 
 ### Step 1: Load Current Profile
 
 ```
-cortex:query_methodology({
+memory:query_methodology({
   "cwd": "<current working directory>",
   "first_message": "<what the user is working on>"
 })
@@ -39,7 +39,7 @@ Returns:
 Dive deeper into your behavioral profile:
 
 ```
-cortex:explore_features({ "mode": "persona" })
+memory:explore_features({ "mode": "persona" })
 ```
 
 Returns your 12-dimensional persona vector: exploration depth, tool diversity, session persistence, abstraction level, error recovery, etc.
@@ -52,7 +52,7 @@ Other exploration modes:
 ### Step 3: View All Domains
 
 ```
-cortex:list_domains({})
+memory:list_domains({})
 ```
 
 Shows all detected project domains with session counts, cognitive style per domain, and last activity timestamps.
@@ -62,7 +62,7 @@ Shows all detected project domains with session counts, cognitive style per doma
 When profiles seem stale or after significant new work:
 
 ```
-cortex:rebuild_profiles({})
+memory:rebuild_profiles({})
 ```
 
 Full rescan of `~/.claude/projects/` session history. Rebuilds all domain profiles, re-extracts patterns, re-classifies cognitive styles, and re-learns behavioral features.
@@ -72,7 +72,7 @@ Full rescan of `~/.claude/projects/` session history. Rebuilds all domain profil
 Normally automatic via hook, but can be called manually:
 
 ```
-cortex:record_session_end({
+memory:record_session_end({
   "domain": "<current domain>",
   "summary": "<what was accomplished>"
 })
@@ -85,4 +85,4 @@ Updates profiles incrementally via EMA (Exponential Moving Average) — no full 
 - **Profiles improve over time**: The more sessions you have, the more accurate the cognitive profiling becomes
 - **Cross-domain bridges are powerful**: If Cortex detects you use similar patterns in different projects, it surfaces those connections
 - **Blind spots are actionable**: If Cortex says you under-use certain tools or miss certain categories, consider addressing those gaps
-- **Domain detection is automatic**: `cortex:detect_domain` classifies the current working directory into a known domain — no manual tagging needed
+- **Domain detection is automatic**: `memory:detect_domain` classifies the current working directory into a known domain — no manual tagging needed

@@ -21,7 +21,7 @@ Understand the state of your memory system — what's stored, what's missing, wh
 Get system-level diagnostics:
 
 ```
-cortex:memory_stats({})
+memory:memory_stats({})
 ```
 
 Returns: total memories, heat distribution, store type breakdown (episodic vs semantic), entity count, relationship count, average confidence, and decay statistics.
@@ -31,7 +31,7 @@ Returns: total memories, heat distribution, store type breakdown (episodic vs se
 Score how well a topic or project is covered:
 
 ```
-cortex:assess_coverage({
+memory:assess_coverage({
   "domain": "<project or topic>",
   "query": "<specific area to assess>"
 })
@@ -44,7 +44,7 @@ Returns a 0-100 coverage score with specific recommendations on what to document
 Find isolated entities, sparse domains, and temporal drift:
 
 ```
-cortex:detect_gaps({
+memory:detect_gaps({
   "domain": "<optional domain filter>"
 })
 ```
@@ -60,7 +60,7 @@ Returns:
 Check if memories reference files/paths that still exist:
 
 ```
-cortex:validate_memory({
+memory:validate_memory({
   "directory": "<project root>"
 })
 ```
@@ -72,7 +72,7 @@ Flags stale memories that reference deleted files, moved modules, or renamed fun
 Get a narrative summary of what's stored:
 
 ```
-cortex:narrative({
+memory:narrative({
   "domain": "<project>",
   "style": "diagnostic"
 })
@@ -81,7 +81,7 @@ cortex:narrative({
 Or get a period-based project story:
 
 ```
-cortex:get_project_story({
+memory:get_project_story({
   "domain": "<project>",
   "period": "last_30_days"
 })
@@ -89,6 +89,6 @@ cortex:get_project_story({
 
 ## Tips
 
-- **Run after backfill**: After `cortex:backfill_memories`, run diagnostics to see what was captured and what's still missing
+- **Run after backfill**: After `memory:backfill_memories`, run diagnostics to see what was captured and what's still missing
 - **Coverage before deep work**: Before a major feature or refactor, assess coverage to know if you have enough context stored
 - **Validate periodically**: Run `validate_memory` after major refactors to catch stale references

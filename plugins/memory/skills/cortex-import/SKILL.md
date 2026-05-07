@@ -62,7 +62,7 @@ Report findings, then proceed with each detected source.
 If Claude Code JSONL files exist (always the case):
 
 ```
-cortex:backfill_memories({"max_files": 500, "min_importance": 0.3, "force_reprocess": false})
+memory:backfill_memories({"max_files": 500, "min_importance": 0.3, "force_reprocess": false})
 ```
 
 ## Phase 3: claude-mem Import
@@ -196,8 +196,8 @@ If no Gemini export exists:
 After all imports:
 
 ```
-cortex:consolidate({})
-cortex:memory_stats({})
+memory:consolidate({})
+memory:memory_stats({})
 ```
 
 ## Final Summary

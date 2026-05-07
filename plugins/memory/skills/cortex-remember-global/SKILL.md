@@ -31,7 +31,7 @@ Good candidates for global memory:
 ### Step 2: Store as Global
 
 ```
-cortex:remember({
+memory:remember({
   "content": "<clear, self-contained knowledge that applies across projects>",
   "tags": ["<category>", "<topic>"],
   "is_global": true,
@@ -55,7 +55,7 @@ The response includes:
 Global memories are already high-value, but if they must never decay:
 
 ```
-cortex:anchor({
+memory:anchor({
   "memory_id": <id>,
   "reason": "Core architecture rule — permanent"
 })
@@ -81,4 +81,4 @@ If the weighted score exceeds threshold 3.0, the memory is automatically global 
 - **Be declarative**: "Inner layers never import outer layers" is better than "We should probably avoid importing infrastructure in core"
 - **One rule per memory**: Don't bundle 5 conventions into one memory — store each separately for better retrieval
 - **Tag consistently**: Use `architecture`, `convention`, `infrastructure`, `security`, `policy` tags for easy filtering
-- **Review with visualization**: Use `cortex:open_visualization` and click the "Global" filter to see all cross-project knowledge
+- **Review with visualization**: Use `memory:open_visualization` and click the "Global" filter to see all cross-project knowledge

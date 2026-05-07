@@ -19,7 +19,7 @@ Run the full memory maintenance pipeline — modeled after biological memory con
 ### Step 1: Run Full Consolidation
 
 ```
-cortex:consolidate({})
+memory:consolidate({})
 ```
 
 This runs the complete pipeline:
@@ -45,7 +45,7 @@ For targeted maintenance instead of the full pipeline:
 
 **Forget specific memories:**
 ```
-cortex:forget({
+memory:forget({
   "memory_id": <id>,
   "hard": false
 })
@@ -54,7 +54,7 @@ Soft delete (sets heat to 0) by default. Use `"hard": true` for permanent deleti
 
 **Save checkpoint before risky operations:**
 ```
-cortex:checkpoint({
+memory:checkpoint({
   "action": "save",
   "label": "before-consolidation"
 })
@@ -62,7 +62,7 @@ cortex:checkpoint({
 
 **Restore if something went wrong:**
 ```
-cortex:checkpoint({
+memory:checkpoint({
   "action": "restore",
   "label": "before-consolidation"
 })
@@ -71,6 +71,6 @@ cortex:checkpoint({
 ## Tips
 
 - **Don't over-consolidate**: Running too frequently prevents memories from naturally developing heat signals. Weekly is usually sufficient.
-- **Check stats first**: Run `cortex:memory_stats` before consolidating to understand what needs maintenance
+- **Check stats first**: Run `memory:memory_stats` before consolidating to understand what needs maintenance
 - **Checkpoint before bulk operations**: Always save a checkpoint before consolidation if you have critical memories
-- **After backfill**: Always consolidate after `cortex:backfill_memories` to process the imported memories through the full pipeline
+- **After backfill**: Always consolidate after `memory:backfill_memories` to process the imported memories through the full pipeline

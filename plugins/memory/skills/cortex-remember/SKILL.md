@@ -27,10 +27,10 @@ Determine the content worth storing. Good candidates:
 
 ### Step 2: Store the Memory
 
-Call `cortex:remember` with structured content:
+Call `memory:remember` with structured content:
 
 ```
-cortex:remember({
+memory:remember({
   "content": "<clear, self-contained description of what to remember>",
   "tags": ["<category>", "<project>", "<topic>"],
   "directory": "<current working directory>",
@@ -59,7 +59,7 @@ If `stored: false`, the content was likely redundant. This is normal — the gat
 For memories that must survive context compaction and never decay:
 
 ```
-cortex:anchor({
+memory:anchor({
   "memory_id": <id>,
   "reason": "Critical architecture decision — must persist"
 })
@@ -72,4 +72,4 @@ Anchored memories maintain heat=1.0 permanently and are injected at every sessio
 - **Don't over-remember**: The predictive coding gate filters noise, but storing 50 trivial memories per session degrades retrieval quality
 - **Tags matter**: Use consistent tags across sessions (e.g. `bug-fix`, `architecture`, `user-preference`, `lesson`) for better recall filtering
 - **Force flag**: Pass `"force": true` to bypass the novelty gate when you know something is important despite seeming similar to existing memories
-- **Rate memories later**: Use `cortex:rate_memory` with `useful: true/false` to train the system's metamemory confidence scoring
+- **Rate memories later**: Use `memory:rate_memory` with `useful: true/false` to train the system's metamemory confidence scoring

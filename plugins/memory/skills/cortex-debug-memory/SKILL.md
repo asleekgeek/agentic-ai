@@ -20,7 +20,7 @@ Tools for maintaining memory quality — rate memories as useful or not, protect
 
 **Soft delete** (sets heat to 0, memory still exists but won't surface):
 ```
-cortex:forget({
+memory:forget({
   "memory_id": <id>,
   "hard": false
 })
@@ -28,7 +28,7 @@ cortex:forget({
 
 **Hard delete** (permanent removal):
 ```
-cortex:forget({
+memory:forget({
   "memory_id": <id>,
   "hard": true
 })
@@ -41,7 +41,7 @@ Protected memories require `"force": true` to delete.
 Provide feedback to train the metamemory confidence model:
 
 ```
-cortex:rate_memory({
+memory:rate_memory({
   "memory_id": <id>,
   "useful": true
 })
@@ -49,7 +49,7 @@ cortex:rate_memory({
 
 Or mark as not useful:
 ```
-cortex:rate_memory({
+memory:rate_memory({
   "memory_id": <id>,
   "useful": false,
   "reason": "outdated — we no longer use this approach"
@@ -62,7 +62,7 @@ Ratings adjust the memory's confidence score, which affects future retrieval ran
 
 **Anchor** a memory (heat=1.0 permanently, injected at session start):
 ```
-cortex:anchor({
+memory:anchor({
   "memory_id": <id>,
   "reason": "Core architecture decision — never decay"
 })
@@ -72,7 +72,7 @@ cortex:anchor({
 
 Check if memories reference things that still exist:
 ```
-cortex:validate_memory({
+memory:validate_memory({
   "directory": "<project root>"
 })
 ```
@@ -83,7 +83,7 @@ Returns a list of stale memories (referencing deleted files, moved modules, etc.
 
 **Save a checkpoint** before risky operations:
 ```
-cortex:checkpoint({
+memory:checkpoint({
   "action": "save",
   "label": "before-cleanup"
 })
@@ -91,7 +91,7 @@ cortex:checkpoint({
 
 **Restore** if something went wrong:
 ```
-cortex:checkpoint({
+memory:checkpoint({
   "action": "restore",
   "label": "before-cleanup"
 })
@@ -99,7 +99,7 @@ cortex:checkpoint({
 
 **List available checkpoints:**
 ```
-cortex:checkpoint({
+memory:checkpoint({
   "action": "list"
 })
 ```
@@ -115,7 +115,7 @@ Checkpoints are also created automatically before context compaction (via the co
 4. Run `validate_memory` to find stale content
 
 **Too many memories on the same topic:**
-1. Run `cortex:consolidate` — CLS will merge similar episodic memories into semantic ones
+1. Run `memory:consolidate` — CLS will merge similar episodic memories into semantic ones
 2. Manually `forget` duplicates
 
 **Memory seems wrong/outdated:**
@@ -124,6 +124,6 @@ Checkpoints are also created automatically before context compaction (via the co
 3. The knowledge graph will update automatically
 
 **Lost important context after compaction:**
-1. Check `cortex:checkpoint({ "action": "list" })` for auto-checkpoints
+1. Check `memory:checkpoint({ "action": "list" })` for auto-checkpoints
 2. Restore the most recent pre-compaction checkpoint
 3. Anchored memories survive compaction automatically

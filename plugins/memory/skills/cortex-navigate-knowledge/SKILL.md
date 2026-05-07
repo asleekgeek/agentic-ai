@@ -21,7 +21,7 @@ Cortex maintains a knowledge graph of entities (people, technologies, concepts, 
 Follow entity relationships through the knowledge graph:
 
 ```
-cortex:get_causal_chain({
+memory:get_causal_chain({
   "entity": "PostgreSQL",
   "direction": "both",
   "max_depth": 3
@@ -35,7 +35,7 @@ Returns a chain of entities connected by typed relationships (causes, uses, depe
 Find memories frequently accessed together using Successor Representation:
 
 ```
-cortex:navigate_memory({
+memory:navigate_memory({
   "memory_id": <starting_memory_id>,
   "depth": 2,
   "max_nodes": 20
@@ -49,7 +49,7 @@ Returns a graph of memories connected by co-access frequency — revealing impli
 Browse memories through fractal clusters (L0 = broad, L1 = mid, L2 = specific):
 
 ```
-cortex:recall_hierarchical({
+memory:recall_hierarchical({
   "query": "authentication system",
   "levels": 3
 })
@@ -58,7 +58,7 @@ cortex:recall_hierarchical({
 Then drill into any interesting cluster:
 
 ```
-cortex:drill_down({
+memory:drill_down({
   "cluster_id": "<cluster from hierarchical recall>",
   "level": "L1"
 })
@@ -69,7 +69,7 @@ cortex:drill_down({
 Find disconnected or under-connected areas:
 
 ```
-cortex:detect_gaps({
+memory:detect_gaps({
   "domain": "<optional>"
 })
 ```

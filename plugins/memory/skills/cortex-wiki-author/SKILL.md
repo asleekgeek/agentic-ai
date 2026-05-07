@@ -21,7 +21,7 @@ Cortex's wiki is a Markdown authoring surface for the long-form artifacts that d
 ### Record an architecture decision
 
 ```
-cortex:wiki_adr({
+memory:wiki_adr({
   "title": "Use pgvector for retrieval",
   "context": "We need a searchable memory store with hybrid ranking.",
   "decision": "Adopt PostgreSQL + pgvector + pg_trgm as the single backend.",
@@ -36,7 +36,7 @@ Returns `{ path, number, title, status, ... }`. ADR numbers auto-increment.
 ### Write a spec
 
 ```
-cortex:wiki_write({
+memory:wiki_write({
   "path": "specs/wiki-authoring.md",
   "content": "# Wiki authoring\n\n## Summary\n\nClaude authors ADRs and specs during sessions..."
 })
@@ -47,7 +47,7 @@ Pass the final markdown you want to land. Use `"mode": "append"` to add to an ex
 ### Document a file
 
 ```
-cortex:wiki_write({
+memory:wiki_write({
   "path": "files/mcp_server-handlers-wiki_write.md",
   "content": "# `mcp_server/handlers/wiki_write.py`\n\n## Purpose\n\nComposition root for the wiki authoring tool..."
 })
@@ -56,7 +56,7 @@ cortex:wiki_write({
 ### Link two pages bidirectionally
 
 ```
-cortex:wiki_link({
+memory:wiki_link({
   "from_path": "adr/0001-use-pgvector-for-retrieval.md",
   "to_path": "specs/retrieval-pipeline.md",
   "relation": "implements"
@@ -68,20 +68,20 @@ Adds the forward relation to `from_path` and the inverse (`implemented_by`) to `
 ### Read a page (to update it)
 
 ```
-cortex:wiki_read({ "path": "adr/0001-use-pgvector-for-retrieval.md" })
+memory:wiki_read({ "path": "adr/0001-use-pgvector-for-retrieval.md" })
 ```
 
 ### List pages
 
 ```
-cortex:wiki_list({})                   // all kinds
-cortex:wiki_list({ "kind": "adr" })    // just ADRs
+memory:wiki_list({})                   // all kinds
+memory:wiki_list({ "kind": "adr" })    // just ADRs
 ```
 
 ### Regenerate the table of contents
 
 ```
-cortex:wiki_reindex({})
+memory:wiki_reindex({})
 ```
 
 Writes `.generated/INDEX.md`. This is the only file ever auto-regenerated — authored pages are untouched.

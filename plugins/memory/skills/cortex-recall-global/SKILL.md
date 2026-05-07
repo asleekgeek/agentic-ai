@@ -12,7 +12,7 @@ global, convention, standard, rule, infrastructure, policy, all projects, shared
 
 Retrieve global memories — knowledge stored as cross-project that's visible regardless of which project you're currently working in. Global memories include architecture rules, coding conventions, infrastructure facts, security policies, and team agreements.
 
-**Note:** Regular `cortex:recall` already surfaces global memories automatically. This skill is for when you specifically want to focus on cross-project knowledge.
+**Note:** Regular `memory:recall` already surfaces global memories automatically. This skill is for when you specifically want to focus on cross-project knowledge.
 
 ## Workflow
 
@@ -21,7 +21,7 @@ Retrieve global memories — knowledge stored as cross-project that's visible re
 Query with any domain — global memories appear alongside domain-specific results:
 
 ```
-cortex:recall({
+memory:recall({
   "query": "<topic to search for>",
   "max_results": 10
 })
@@ -34,7 +34,7 @@ Global memories are included in results regardless of the current project domain
 To see only global cross-project knowledge, use the unified neural graph:
 
 ```
-cortex:open_visualization()
+memory:open_visualization()
 ```
 
 Click the **Global** filter button (pink) to isolate all global memories.
@@ -47,22 +47,22 @@ Common global recall patterns:
 
 **Architecture rules:**
 ```
-cortex:recall({ "query": "architecture rules and principles" })
+memory:recall({ "query": "architecture rules and principles" })
 ```
 
 **Infrastructure:**
 ```
-cortex:recall({ "query": "server addresses and database connections" })
+memory:recall({ "query": "server addresses and database connections" })
 ```
 
 **Coding conventions:**
 ```
-cortex:recall({ "query": "coding standards and naming conventions" })
+memory:recall({ "query": "coding standards and naming conventions" })
 ```
 
 **Security policies:**
 ```
-cortex:recall({ "query": "security policies and credential management" })
+memory:recall({ "query": "security policies and credential management" })
 ```
 
 ### Step 4: Navigate Connections
@@ -70,7 +70,7 @@ cortex:recall({ "query": "security policies and credential management" })
 After finding a global memory, explore what it connects to across projects:
 
 ```
-cortex:navigate_memory({
+memory:navigate_memory({
   "memory_id": <id>,
   "depth": 2
 })
@@ -92,5 +92,5 @@ This means global memories compete on relevance alongside domain-specific ones �
 
 - **Global memories compete on merit**: They appear in results only when relevant to the query, not automatically at the top
 - **Use the visualization**: The unified graph shows global memories (pink) with edges to every project — a visual map of shared knowledge
-- **Rate for quality**: Use `cortex:rate_memory` on global memories that were helpful to improve future retrieval confidence
-- **Assess coverage**: Use `cortex:assess_coverage` to see if any project domain is missing shared knowledge
+- **Rate for quality**: Use `memory:rate_memory` on global memories that were helpful to improve future retrieval confidence
+- **Assess coverage**: Use `memory:assess_coverage` to see if any project domain is missing shared knowledge
