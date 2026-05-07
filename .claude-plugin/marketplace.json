@@ -15,7 +15,7 @@
       "name": "memory",
       "source": "./plugins/memory/",
       "description": "Persistent memory for Claude Code — TS port of Cortex. Thermodynamic heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence integration. SQLite by default; PostgreSQL + pgvector when DATABASE_URL is set. 41 published papers as sources.",
-      "version": "0.0.5",
+      "version": "0.0.7",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
@@ -38,8 +38,8 @@
     {
       "name": "codebase",
       "source": "./plugins/codebase/",
-      "description": "Codebase intelligence — Rust binary (ai-architect-mcp) kept as a subprocess, indexes Rust/Python/TypeScript into a LadybugDB property graph. Resolves imports + call chains, detects communities via Leiden, traces execution flows. BM25+TF-IDF+RRF hybrid search.",
-      "version": "0.0.5",
+      "description": "Codebase intelligence — `automatised-pipeline` Rust binary (Cargo crate `ai-architect-mcp`) kept as a subprocess. Indexes Rust/Python/TypeScript into a LadybugDB property graph. Resolves imports + call chains, detects communities via Leiden, traces execution flows. BM25+TF-IDF+RRF hybrid search. Prebuilt binaries for darwin-arm64 / darwin-x86_64 / linux-x86_64 / linux-aarch64 are downloaded from GitHub Releases on first launch.",
+      "version": "0.0.6",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
@@ -88,7 +88,7 @@
       "name": "prd",
       "source": "./plugins/prd/",
       "description": "Stateless reducer that turns a feature description into a 9-file PRD. Multi-judge verification with weighted-average + Bayesian consensus, calibrated against externally-grounded oracles (schema/math/code/spec). Phase 4 closed loop: per-judge Bayesian reliability calibration, Kaplan-Meier retry budgets, Clopper-Pearson KPI gates.",
-      "version": "0.0.5",
+      "version": "0.0.6",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"

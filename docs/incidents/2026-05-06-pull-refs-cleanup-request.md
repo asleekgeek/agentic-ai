@@ -73,8 +73,9 @@ spoofed attribution to stop being reachable.
 For verification: the underlying commits I want unreferenced are the
 pre-rewrite SHAs visible on those PR pages — every commit there with
 author `t <t@t.t>` is a candidate. The post-rewrite `main` is at
-`e446a40` (verified clean: zero `t@t.t` references reachable from any
-ref I can list).
+`4583cf1` (verified clean: zero `t@t.t` references reachable from any
+ref I can list; full Cortex-frontend port and dashboard schema fixes
+have since landed on top of the rewritten history).
 
 Thanks,
 Clement Deust
