@@ -40297,6 +40297,121 @@ import path4 from "node:path";
 import { existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 
+// packages/memory-dashboard/dist/db-guard.js
+var EX_CONFIG = 78;
+var LOOPBACK_HOSTS = /* @__PURE__ */ new Set(["", "localhost", "127.0.0.1", "::1"]);
+var FORBIDDEN_DB_NAME = "cortex";
+function assertNotForbiddenDatabase() {
+  const url = process.env["DATABASE_URL"];
+  if (!url)
+    return;
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return;
+  }
+  const dbName = parsed.pathname.replace(/^\//, "");
+  const host = parsed.hostname ?? "";
+  if (dbName === FORBIDDEN_DB_NAME && LOOPBACK_HOSTS.has(host)) {
+    process.stderr.write(
+      `[memory-dashboard] EX_CONFIG: agentic-ai memory plugin must not connect to standalone Cortex's database.
+  DATABASE_URL targets '${dbName}' on host '${host || "(empty)"}' \u2014 this is the standalone Python Cortex's production DB.
+  Set DATABASE_URL to postgresql://localhost:5432/cortex_agentic (or leave unset for SQLite fallback).
+`
+      // source: ADR-0042 §constraints — default PG URL for the agentic-ai plugin
+    );
+    process.exit(EX_CONFIG);
+  }
+}
+
+// packages/memory-dashboard/dist/db-adapter.js
+var SqliteAdapter = class {
+  dialect = "sqlite";
+  #db;
+  constructor(db) {
+    this.#db = db;
+  }
+  prepare(sql) {
+    const stmt = this.#db.prepare(sql);
+    return {
+      all(...args) {
+        return Promise.resolve(stmt.all(...args));
+      },
+      get(...args) {
+        return Promise.resolve(stmt.get(...args));
+      }
+    };
+  }
+  close() {
+    this.#db.close();
+    return Promise.resolve();
+  }
+};
+function rewritePlaceholders(sql) {
+  let i = 0;
+  return sql.replace(/\?/g, () => `$${++i}`);
+}
+function normalizeRow(row) {
+  const out = {};
+  for (const [k, v] of Object.entries(row)) {
+    out[k] = v instanceof Date ? v.toISOString() : v;
+  }
+  return out;
+}
+var PgAdapter = class _PgAdapter {
+  dialect = "pg";
+  // Dynamically imported at construction to keep `pg` optional (not bundled unless
+  // DATABASE_URL is set). Typed as `any` internally — the public interface is typed.
+  // source: ADR-0042 §adapter-shape
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  #pool;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  constructor(pool) {
+    this.#pool = pool;
+  }
+  /**
+   * Factory: create a PgAdapter from a DATABASE_URL connection string.
+   *
+   * Pool max = 5.
+   * source: packages/memory/src/remember/storage/pg-store.ts — Pool({ max: 5 })
+   */
+  static async create(connectionString) {
+    const pgModule = await import("pg");
+    const Pool = pgModule.Pool ?? pgModule.default?.Pool;
+    const pool = new Pool({ connectionString, max: 5 });
+    return new _PgAdapter(pool);
+  }
+  prepare(sql) {
+    const rewritten = rewritePlaceholders(sql);
+    const pool = this.#pool;
+    return {
+      async all(...args) {
+        const result = await pool.query(rewritten, args.length > 0 ? args : void 0);
+        return result.rows.map(normalizeRow);
+      },
+      async get(...args) {
+        const result = await pool.query(rewritten, args.length > 0 ? args : void 0);
+        const row = result.rows[0];
+        return row !== void 0 ? normalizeRow(row) : void 0;
+      }
+    };
+  }
+  async close() {
+    await this.#pool.end();
+  }
+};
+async function buildDashboardDb(dbPath) {
+  const databaseUrl = process.env["DATABASE_URL"];
+  if (databaseUrl) {
+    return PgAdapter.create(databaseUrl);
+  }
+  const bsModule = await import("better-sqlite3");
+  const BetterSqlite = bsModule.default ?? bsModule;
+  const db = new BetterSqlite(dbPath, { readonly: true, fileMustExist: true });
+  return new SqliteAdapter(db);
+}
+
 // packages/memory-dashboard/dist/db-init.js
 import Database from "better-sqlite3";
 
@@ -40566,7 +40681,6 @@ function ensureSchema(dbPath) {
 }
 
 // packages/memory-dashboard/dist/routes/graph.js
-import Database2 from "better-sqlite3";
 var EPOCH_DIVISOR = 1e3;
 var PROGRESS_STARTING = 0.01;
 var PROGRESS_L0 = 0.05;
@@ -40596,7 +40710,7 @@ var _phasePayloads = {
   L4: { nodes: [], edges: [] },
   L5: { nodes: [], edges: [] }
 };
-async function buildGraph(dbPath) {
+async function buildGraph(db) {
   if (_buildRunning)
     return;
   _buildRunning = true;
@@ -40612,11 +40726,10 @@ async function buildGraph(dbPath) {
   const nodes = [];
   const edges = [];
   try {
-    const db = new Database2(dbPath, { readonly: true, fileMustExist: true });
     _progress.phase = "L0 domains";
     _progress.pct = PROGRESS_L0;
     _progress.message = "building domain nodes\u2026";
-    const domainRows = db.prepare("SELECT DISTINCT domain FROM memories WHERE domain IS NOT NULL AND domain != '' ORDER BY domain").all();
+    const domainRows = await db.prepare("SELECT DISTINCT domain FROM memories WHERE domain IS NOT NULL AND domain != '' ORDER BY domain").all();
     const domainNodeMap = /* @__PURE__ */ new Map();
     for (const row of domainRows) {
       const slug = row.domain.toLowerCase().replace(/[^a-z0-9]+/g, "-");
@@ -40632,7 +40745,7 @@ async function buildGraph(dbPath) {
     _progress.phase = "L5 memories";
     _progress.pct = PROGRESS_L5;
     _progress.message = "loading memories\u2026";
-    const memRows = db.prepare(
+    const memRows = await db.prepare(
       `SELECT id, content, heat_base AS heat, importance, store_type, domain, tags,
               created_at, consolidation_stage, is_protected, is_global
        FROM memories WHERE NOT is_benchmark AND NOT is_stale
@@ -40667,7 +40780,7 @@ async function buildGraph(dbPath) {
           l5m.edges.push(edge);
       }
     }
-    const entityRows = db.prepare(
+    const entityRows = await db.prepare(
       `SELECT id, name, type AS entity_type, heat, domain FROM entities ORDER BY heat DESC LIMIT ${ENTITY_LIMIT}`
       // source: cortex@ed33435 mcp_server/server/http_dashboard_data.py:17 — get_all_entities(min_heat=0.0); 500 cap for graph render budget
     ).all();
@@ -40693,7 +40806,6 @@ async function buildGraph(dbPath) {
         edges.push(edge);
       }
     }
-    db.close();
     _progress.phase_seq++;
     const kindCounts = {};
     for (const n of nodes) {
@@ -40732,7 +40844,7 @@ async function buildGraph(dbPath) {
 async function registerGraphRoutes(fastify, deps) {
   fastify.get("/api/graph", async (_req, reply) => {
     if (!_graphCache) {
-      void buildGraph(deps.dbPath);
+      void buildGraph(deps.db);
     }
     if (_graphCache) {
       return reply.send(_graphCache);
@@ -40896,7 +41008,6 @@ async function registerWikiRoutes(fastify) {
 }
 
 // packages/memory-dashboard/dist/routes/sankey.js
-import Database3 from "better-sqlite3";
 var R1 = 10;
 var R3 = 1e3;
 var HTTP_5002 = 500;
@@ -40925,9 +41036,8 @@ var STAGE_METRICS_SQL = `
 async function registerSankeyRoutes(fastify, deps) {
   fastify.get("/api/sankey", async (_req, reply) => {
     try {
-      const db = new Database3(deps.dbPath, { readonly: true, fileMustExist: true });
-      const transitions = db.prepare("SELECT from_stage, to_stage, COUNT(*) as count FROM stage_transitions GROUP BY from_stage, to_stage ORDER BY from_stage, to_stage").all().map((r) => ({ from_stage: r.from_stage, to_stage: r.to_stage, count: r.count }));
-      const timingRows = db.prepare("SELECT from_stage, to_stage, AVG(hours_in_prev_stage) as avg_hours, MIN(hours_in_prev_stage) as min_hours, MAX(hours_in_prev_stage) as max_hours FROM stage_transitions GROUP BY from_stage, to_stage").all();
+      const transitions = (await deps.db.prepare("SELECT from_stage, to_stage, COUNT(*) as count FROM stage_transitions GROUP BY from_stage, to_stage ORDER BY from_stage, to_stage").all()).map((r) => ({ from_stage: r.from_stage, to_stage: r.to_stage, count: r.count }));
+      const timingRows = await deps.db.prepare("SELECT from_stage, to_stage, AVG(hours_in_prev_stage) as avg_hours, MIN(hours_in_prev_stage) as min_hours, MAX(hours_in_prev_stage) as max_hours FROM stage_transitions GROUP BY from_stage, to_stage").all();
       const timing = {};
       for (const r of timingRows) {
         const key = `${r.from_stage}->${r.to_stage}`;
@@ -40939,7 +41049,7 @@ async function registerSankeyRoutes(fastify, deps) {
       }
       const stage_metrics = {};
       for (const s of STAGES) {
-        const row = db.prepare(STAGE_METRICS_SQL).get(s);
+        const row = await deps.db.prepare(STAGE_METRICS_SQL).get(s);
         if (row) {
           stage_metrics[s] = Object.fromEntries(
             // source: cortex@ed33435 mcp_server/server/http_standalone_endpoints.py:87-91 — round(v, 3) → multiply by 1000
@@ -40947,8 +41057,7 @@ async function registerSankeyRoutes(fastify, deps) {
           );
         }
       }
-      const totalRow = db.prepare("SELECT COUNT(*) as c FROM memories WHERE NOT is_benchmark AND NOT is_stale").get();
-      db.close();
+      const totalRow = await deps.db.prepare("SELECT COUNT(*) as c FROM memories WHERE NOT is_benchmark AND NOT is_stale").get();
       return reply.send({
         transitions,
         timing,
@@ -41223,7 +41332,6 @@ async function registerFileDiffRoutes(fastify) {
 }
 
 // packages/memory-dashboard/dist/routes/memories.js
-import Database4 from "better-sqlite3";
 var PAGE_LIMIT_DEFAULT = 50;
 var PAGE_LIMIT_MAX = 200;
 var HOT_HEAT_THRESHOLD = 0.5;
@@ -41239,7 +41347,9 @@ function rowToNode(m) {
   const parseTags = (t) => {
     if (!t)
       return [];
-    if (t.startsWith("[")) {
+    if (Array.isArray(t))
+      return t;
+    if (typeof t === "string" && t.startsWith("[")) {
       try {
         return JSON.parse(t);
       } catch {
@@ -41378,12 +41488,10 @@ async function registerMemoriesRoutes(fastify, deps) {
       const orderBy = SORT_ORDER[sort] ?? "heat_base DESC, id DESC";
       const fetchLimit = limit + 1;
       params.push(fetchLimit);
-      const db = new Database4(deps.dbPath, { readonly: true, fileMustExist: true });
-      const rows = db.prepare(`SELECT id, content, heat_base AS heat, importance, store_type, domain,
+      const rows = await deps.db.prepare(`SELECT id, content, heat_base AS heat, importance, store_type, domain,
                 tags, created_at, consolidation_stage, emotional_valence,
                 is_protected, is_global, access_count, useful_count
          FROM memories ${where} ORDER BY ${orderBy} LIMIT ?`).all(...params);
-      db.close();
       const hasMore = rows.length > limit;
       const items = rows.slice(0, limit);
       let nextCursor = null;
@@ -41406,26 +41514,24 @@ async function registerMemoriesRoutes(fastify, deps) {
   });
   fastify.get("/api/memories/facets", async (_req, reply) => {
     try {
-      const db = new Database4(deps.dbPath, { readonly: true, fileMustExist: true });
-      const domainRows = db.prepare(`SELECT COALESCE(NULLIF(domain, ''), '__unknown__') AS dom, COUNT(*) AS c
+      const domainRows = await deps.db.prepare(`SELECT COALESCE(NULLIF(domain, ''), '__unknown__') AS dom, COUNT(*) AS c
          FROM memories WHERE NOT is_stale
          GROUP BY dom ORDER BY c DESC LIMIT ${DOMAIN_LIMIT}`).all();
-      const agg = db.prepare(`SELECT
+      const agg = await deps.db.prepare(`SELECT
            COUNT(*) AS total,
            COUNT(*) FILTER (WHERE consolidation_stage = 'labile')          AS s_labile,
            COUNT(*) FILTER (WHERE consolidation_stage = 'early_ltp')       AS s_early,
            COUNT(*) FILTER (WHERE consolidation_stage = 'late_ltp')        AS s_late,
            COUNT(*) FILTER (WHERE consolidation_stage = 'consolidated')    AS s_cons,
            COUNT(*) FILTER (WHERE consolidation_stage = 'reconsolidating') AS s_recon,
-           COUNT(*) FILTER (WHERE is_global = 1)     AS n_global,
-           COUNT(*) FILTER (WHERE is_protected = 1)  AS n_protected,
+           COUNT(*) FILTER (WHERE is_global = TRUE)     AS n_global,
+           COUNT(*) FILTER (WHERE is_protected = TRUE)  AS n_protected,
            COUNT(*) FILTER (WHERE heat_base >= ${HOT_HEAT_THRESHOLD})     AS n_hot,
            COUNT(*) FILTER (WHERE importance >= ${URGENT_IMPORTANCE_THRESHOLD})  AS e_urgent,
            COUNT(*) FILTER (WHERE emotional_valence >= ${VALENCE_POS_THRESHOLD} AND importance < ${URGENT_IMPORTANCE_THRESHOLD}) AS e_pos,
            COUNT(*) FILTER (WHERE emotional_valence <= ${VALENCE_NEG_THRESHOLD} AND importance < ${URGENT_IMPORTANCE_THRESHOLD}) AS e_neg,
            COUNT(*) FILTER (WHERE emotional_valence > ${VALENCE_NEG_THRESHOLD} AND emotional_valence < ${VALENCE_POS_THRESHOLD} AND importance < ${URGENT_IMPORTANCE_THRESHOLD}) AS e_neutral
          FROM memories WHERE NOT is_stale`).get();
-      db.close();
       const a = agg ?? {};
       const n = (k) => Number(a[k] ?? 0);
       return reply.send({
@@ -41466,6 +41572,7 @@ var __dirname2 = path4.dirname(fileURLToPath(import.meta.url));
 var DEFAULT_PORT = 3458;
 var IDLE_TIMEOUT_MS = 6e5;
 async function startDashboard(opts = {}) {
+  assertNotForbiddenDatabase();
   const dbPath = opts.dbPath ?? process.env["DB_PATH"] ?? "";
   const port = opts.port ?? DEFAULT_PORT;
   const host = opts.host ?? "127.0.0.1";
@@ -41480,9 +41587,10 @@ async function startDashboard(opts = {}) {
       return sibling;
     return path4.resolve(__dirname2, "..", "src", "static");
   })();
-  if (dbPath) {
+  if (dbPath && !process.env["DATABASE_URL"]) {
     ensureSchema(dbPath);
   }
+  const db = await buildDashboardDb(dbPath);
   const fastify = (0, import_fastify.default)({ logger: false });
   await fastify.register(import_cors.default, {
     origin: (origin, cb) => {
@@ -41505,13 +41613,16 @@ async function startDashboard(opts = {}) {
     prefix: "/",
     decorateReply: false
   });
+  fastify.addHook("onClose", async () => {
+    await db.close();
+  });
   await registerHealthRoutes(fastify);
-  await registerGraphRoutes(fastify, { dbPath });
+  await registerGraphRoutes(fastify, { db });
   await registerWikiRoutes(fastify);
-  await registerSankeyRoutes(fastify, { dbPath });
+  await registerSankeyRoutes(fastify, { db });
   await registerDiscussionRoutes(fastify);
   await registerFileDiffRoutes(fastify);
-  await registerMemoriesRoutes(fastify, { dbPath });
+  await registerMemoriesRoutes(fastify, { db });
   let idleTimer = null;
   const resetIdle = () => {
     if (idleTimer)
