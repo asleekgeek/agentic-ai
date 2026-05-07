@@ -1,23 +1,29 @@
 name: Release codebase plugin binaries
 
-# Builds the automatised-pipeline Rust binary for the four host platforms the
-# codebase plugin runs on, and uploads each as an asset to the corresponding
-# GitHub Release. plugins/codebase/scripts/launch.sh downloads the right
-# binary at first launch — see Stage 1.5 of that script.
+# Triggered when a `codebase-v<semver>` tag is pushed. Builds the
+# `automatised-pipeline` binary for three host platforms and uploads
+# each as a tarball + sha256 to the GitHub Release.
 #
-# Trigger on:
-#   - tag push of the form `codebase-v<semver>`  (semver-tagged release)
-#   - manual dispatch                            (ad-hoc rebuild)
+# Recipe lifted from cdeust/automatised-pipeline 0.0.9's release.yml — that
+# repo ships the same binary as part of its install fast-path and has
+# spent months ironing out the platform pitfalls (zstd-sys symbol
+# conflicts on Linux, lbug C++20 requirements, cross-compile failures
+# for aarch64). We deliberately replicate that recipe here rather than
+# re-derive it.
 #
-# Asset naming convention (must match launch.sh's <os>-<arch> derivation):
-#   automatised-pipeline-darwin-arm64
-#   automatised-pipeline-darwin-x86_64
-#   automatised-pipeline-linux-x86_64
-#   automatised-pipeline-linux-aarch64
+# Why these three platforms (and not darwin-x86_64):
+#   - macos-aarch64    — Apple Silicon, the dominant Mac target in 2026
+#   - linux-x86_64     — overwhelmingly the standard Linux dev/CI host
+#   - linux-aarch64    — ARM Linux (Graviton, Raspberry Pi, dev boxes)
+#   We intentionally skip darwin-x86_64 (Intel Mac): the runner image is
+#   end-of-lifed, the user share is small enough to not justify the build
+#   matrix cost, and Rosetta 2 transparently runs the arm64 binary on
+#   Intel Macs that haven't migrated yet.
 #
-# source: 2026-05-06 — added after the codebase plugin's first-launch cargo
-# build was overshooting Claude Code's 30 s MCP connect timeout. Prebuilt
-# binaries make first-launch instant on supported platforms.
+# Asset naming (matches plugins/codebase/scripts/launch.sh Stage 2):
+#   automatised-pipeline-{macos,linux}-{aarch64,x86_64}.tar.gz
+#   automatised-pipeline-{macos,linux}-{aarch64,x86_64}.tar.gz.sha256
+# The tar archive root contains a single file: `automatised-pipeline`.
 
 on:
   push:
@@ -26,88 +32,121 @@ on:
   workflow_dispatch: {}
 
 permissions:
-  contents: write   # required for `gh release upload`
+  contents: write   # required to create / upload to a GitHub Release
 
 jobs:
+  # ── Pre-create the Release exactly once before the matrix fans out ─────
+  # Without this, every matrix job races to "create or upload"; the second
+  # writer hits HTTP 422 `already_exists` AND GitHub silently produces a
+  # second untagged-draft release that collects whichever assets the
+  # failing job uploaded — they never appear on the published release.
+  # source: cdeust/automatised-pipeline release.yml comment block (their
+  # v0.0.4 hit this exact race; macOS assets landed on a draft while linux
+  # assets landed on the published release).
+  create_release:
+    name: create release (${{ github.ref_name }})
+    runs-on: ubuntu-latest
+    if: github.event_name == 'push'
+    steps:
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+
   build:
-    name: ${{ matrix.target.os }}-${{ matrix.target.arch }}
-    runs-on: ${{ matrix.target.runner }}
-    timeout-minutes: 30
+    name: build (${{ matrix.target_tag }})
+    needs: [create_release]
+    if: ${{ always() && (needs.create_release.result == 'success' || github.event_name == 'workflow_dispatch') }}
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - os: darwin
-            arch: arm64
-            runner: macos-14            # Apple Silicon
+        include:
+          - target_tag: macos-aarch64
             rust_target: aarch64-apple-darwin
-          - os: darwin
-            arch: x86_64
-            runner: macos-13            # Intel Mac (last release with x86_64 hosted runner support)
-            rust_target: x86_64-apple-darwin
-          - os: linux
-            arch: x86_64
-            runner: ubuntu-latest
+            runner: macos-latest          # Apple Silicon
+          - target_tag: linux-x86_64
             rust_target: x86_64-unknown-linux-gnu
-          - os: linux
-            arch: aarch64
             runner: ubuntu-latest
+          - target_tag: linux-aarch64
             rust_target: aarch64-unknown-linux-gnu
-            # cross-compile from x86_64 host using cross
-            use_cross: true
+            runner: ubuntu-24.04-arm      # native ARM runner — no cross
+    runs-on: ${{ matrix.runner }}
+
+    # zstd-sys + lbug both statically link libzstd, producing duplicate
+    # symbols on Linux (rust-lld is strict; macOS ld64 silently dedupes).
+    # ZSTD_SYS_USE_PKG_CONFIG=1 makes zstd-sys link the system libzstd
+    # dynamically, eliminating the conflict. Harmless on macOS where
+    # zstd-sys ignores it (no pkg-config installed by default).
+    # source: cdeust/automatised-pipeline 0.0.9 release.yml.
+    env:
+      ZSTD_SYS_USE_PKG_CONFIG: "1"
 
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install Linux build deps
+        if: startsWith(matrix.runner, 'ubuntu')
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            libzstd-dev pkg-config cmake
+
       - name: Setup Rust toolchain
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.target.rust_target }}
+          targets: ${{ matrix.rust_target }}
 
-      - name: Install cross (for aarch64 linux only)
-        if: matrix.target.use_cross == true
-        run: cargo install --locked cross
+      - name: Cache cargo registry + target
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            plugins/codebase/src-rust/target
+          key: ${{ matrix.target_tag }}-cargo-${{ hashFiles('plugins/codebase/src-rust/Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.target_tag }}-cargo-
 
-      - name: Build (native)
-        if: matrix.target.use_cross != true
+      - name: Build
         working-directory: plugins/codebase/src-rust
-        run: cargo build --release --target ${{ matrix.target.rust_target }}
+        run: cargo build --release --bin automatised-pipeline --target ${{ matrix.rust_target }}
 
-      - name: Build (cross)
-        if: matrix.target.use_cross == true
-        working-directory: plugins/codebase/src-rust
-        run: cross build --release --target ${{ matrix.target.rust_target }}
-
-      - name: Stage binary with platform-suffixed name
+      - name: Strip binary (best-effort)
         working-directory: plugins/codebase/src-rust
         run: |
-          src="target/${{ matrix.target.rust_target }}/release/automatised-pipeline"
-          dst="automatised-pipeline-${{ matrix.target.os }}-${{ matrix.target.arch }}"
-          if [[ ! -x "$src" ]]; then
-            echo "::error::expected binary not found at $src" >&2
-            exit 1
-          fi
-          cp "$src" "$dst"
-          chmod +x "$dst"
-          ls -la "$dst"
-          echo "size:" $(du -h "$dst" | cut -f1)
+          BIN="target/${{ matrix.rust_target }}/release/automatised-pipeline"
+          # GNU strip on Linux, llvm-strip on macOS — both ignore unknown.
+          strip "$BIN" 2>/dev/null || true
+          ls -la "$BIN"
 
-      - name: Upload as release asset (tag push)
+      - name: Package tarball + sha256
+        working-directory: plugins/codebase/src-rust
+        run: |
+          ASSET="automatised-pipeline-${{ matrix.target_tag }}.tar.gz"
+          BIN="target/${{ matrix.rust_target }}/release/automatised-pipeline"
+          STAGING=$(mktemp -d)
+          cp "$BIN" "$STAGING/automatised-pipeline"
+          tar -C "$STAGING" -czf "$ASSET" automatised-pipeline
+          # shasum is present on every macOS + Linux GitHub runner.
+          shasum -a 256 "$ASSET" | tee "$ASSET.sha256"
+          ls -la "$ASSET" "$ASSET.sha256"
+
+      - name: Upload as release assets (tag push)
         if: github.event_name == 'push'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        working-directory: plugins/codebase/src-rust
-        run: |
-          # Strip the "codebase-" prefix to get the bare semver tag for `gh
-          # release upload`. Fail if no matching release exists.
-          tag="${GITHUB_REF_NAME}"
-          asset="automatised-pipeline-${{ matrix.target.os }}-${{ matrix.target.arch }}"
-          gh release upload "$tag" "$asset" --clobber
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          files: |
+            plugins/codebase/src-rust/automatised-pipeline-${{ matrix.target_tag }}.tar.gz
+            plugins/codebase/src-rust/automatised-pipeline-${{ matrix.target_tag }}.tar.gz.sha256
+          fail_on_unmatched_files: true
 
       - name: Upload as workflow artifact (manual dispatch)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
-          name: automatised-pipeline-${{ matrix.target.os }}-${{ matrix.target.arch }}
-          path: plugins/codebase/src-rust/automatised-pipeline-${{ matrix.target.os }}-${{ matrix.target.arch }}
+          name: automatised-pipeline-${{ matrix.target_tag }}
+          path: |
+            plugins/codebase/src-rust/automatised-pipeline-${{ matrix.target_tag }}.tar.gz
+            plugins/codebase/src-rust/automatised-pipeline-${{ matrix.target_tag }}.tar.gz.sha256
           retention-days: 7

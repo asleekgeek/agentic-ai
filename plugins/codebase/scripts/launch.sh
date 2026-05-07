@@ -5,31 +5,33 @@
 #   $1 — CLAUDE_PLUGIN_ROOT. Required.
 #
 # Resolution order (first existing wins; never falls through silently):
-#   1. ${PLUGIN_ROOT}/bin/automatised-pipeline-<os>-<arch>
-#        Per-platform pre-built artifact shipped with the plugin. <os>-<arch>
-#        is computed from `uname -sm` (e.g. darwin-arm64, darwin-x86_64,
-#        linux-x86_64, linux-aarch64). This is the zero-build steady state:
-#        Claude Code's MCP host gets `initialize` reply within milliseconds,
-#        no cargo dependency on the host machine.
+#   1. ${PLUGIN_ROOT}/bin/automatised-pipeline
+#        Cached prebuilt binary, populated by Stage 2 on first launch (or
+#        manually placed by power users / CI / Docker). Zero-overhead exec.
 #   2. Download from GitHub Releases on first launch.
-#        If the platform binary is not in bin/ but the host has curl + network,
-#        fetch automatised-pipeline-<os>-<arch> from the latest release and cache
-#        it under bin/ for future launches. Source of truth is the workflow
-#        .github/workflows/release-codebase-binaries.yml which uploads one
-#        binary per host platform on every codebase-v* tag push.
-#        Total first-launch cost: ~3-10 s (download) + start-up. Within MCP's
-#        30 s connect timeout. After this runs once, stage 1 wins thereafter.
-#   3. ${PLUGIN_ROOT}/bin/automatised-pipeline
-#        Generic fallback for hosts where the per-platform binary is missing
-#        but a manually-placed binary exists (CI / power users / Docker).
-#   4. ${PLUGIN_ROOT}/src-rust/target/release/automatised-pipeline
+#        If bin/automatised-pipeline is not present, derive the platform tag
+#        from `uname -sm` (Darwin → macos; arm64/aarch64 normalized; etc.),
+#        fetch automatised-pipeline-<platform>.tar.gz + .sha256 from the
+#        latest tagged release, verify, extract, cache under bin/, then exec.
+#        Source of truth: .github/workflows/release-codebase-binaries.yml
+#        which uploads one tarball per supported platform on every
+#        codebase-v* tag push.
+#        Total first-launch cost: ~3-10 s (download + extract) + start-up.
+#        Within MCP's 30 s connect timeout. After this runs once, stage 1
+#        wins thereafter.
+#   3. ${PLUGIN_ROOT}/src-rust/target/release/automatised-pipeline
 #        Already built from this plugin's vendored Cargo source. This is the
 #        steady-state path after the first-run cargo build below.
-#   5. cargo build --release in ${PLUGIN_ROOT}/src-rust/ then exec.
+#   4. cargo build --release in ${PLUGIN_ROOT}/src-rust/ then exec.
 #        Last-resort path for unsupported platforms with no network. Requires
 #        Rust toolchain. Compilation typically takes 2–5 minutes — this
 #        WILL exceed Claude Code's MCP connect timeout (30 s) on first run;
 #        the user must restart Claude Code after the build completes.
+#
+# Asset naming (matches release-codebase-binaries.yml):
+#   automatised-pipeline-{macos,linux}-{aarch64,x86_64}.tar.gz
+#   automatised-pipeline-{macos,linux}-{aarch64,x86_64}.tar.gz.sha256
+# (Tar archive contains a single file: `automatised-pipeline`.)
 #
 # Notes
 # -----
@@ -45,61 +47,78 @@
 set -euo pipefail
 PLUGIN_ROOT="${1:?usage: launch.sh <plugin-root>}"
 
-# ── Stage 1: per-platform prebuilt ────────────────────────────────────────
-# `uname -s` → Darwin/Linux. `uname -m` → arm64/aarch64/x86_64.
-# Normalize to the lowercase-hyphen form we use for binary naming.
-os=$(uname -s | tr '[:upper:]' '[:lower:]')
-arch=$(uname -m)
-platform_bin="${PLUGIN_ROOT}/bin/automatised-pipeline-${os}-${arch}"
-if [ -x "${platform_bin}" ]; then
-  exec "${platform_bin}"
-fi
-
-# ── Stage 2: download from GitHub Releases ─────────────────────────────────
-# First launch on a host where the binary wasn't shipped in bin/. Fetch from
-# the latest tagged release and cache under bin/ for the rest of this plugin's
-# lifetime. Bypassed if curl is unavailable or the host has no network.
-RELEASE_REPO="cdeust/agentic-ai"
-RELEASE_TAG="${AGENTIC_AI_CODEBASE_RELEASE_TAG:-latest}"
-asset_name="automatised-pipeline-${os}-${arch}"
-if command -v curl >/dev/null 2>&1; then
-  url=""
-  if [ "${RELEASE_TAG}" = "latest" ]; then
-    url="https://github.com/${RELEASE_REPO}/releases/latest/download/${asset_name}"
-  else
-    url="https://github.com/${RELEASE_REPO}/releases/download/${RELEASE_TAG}/${asset_name}"
-  fi
-  echo "codebase plugin: fetching prebuilt ${asset_name} from ${url} ..." >&2
-  mkdir -p "${PLUGIN_ROOT}/bin"
-  tmp="${PLUGIN_ROOT}/bin/.${asset_name}.tmp.$$"
-  if curl --fail --location --silent --show-error --max-time 30 \
-        --output "${tmp}" "${url}" 2>/dev/null; then
-    chmod +x "${tmp}"
-    mv "${tmp}" "${platform_bin}"
-    echo "codebase plugin: cached ${platform_bin}" >&2
-    exec "${platform_bin}"
-  else
-    rm -f "${tmp}"
-    echo "codebase plugin: release download failed — falling through to local build paths." >&2
-  fi
-fi
-
-# ── Stage 3: generic prebuilt fallback ─────────────────────────────────────
 shipped_bin="${PLUGIN_ROOT}/bin/automatised-pipeline"
+
+# ── Stage 1: cached prebuilt binary ─────────────────────────────────────────
 if [ -x "${shipped_bin}" ]; then
   exec "${shipped_bin}"
 fi
 
-# ── Stage 4: previously-cargo-built binary in src-rust/ ────────────────────
+# ── Stage 2: download from GitHub Releases ──────────────────────────────────
+# Derive {os}-{arch} for the asset name. Asset format mirrors upstream
+# automatised-pipeline 0.0.9: {macos,linux}-{aarch64,x86_64}.
+os_uname=$(uname -s)
+arch_uname=$(uname -m)
+case "$os_uname" in
+  Darwin) target_os=macos ;;
+  Linux)  target_os=linux ;;
+  *)      target_os="" ;;
+esac
+case "$arch_uname" in
+  arm64|aarch64) target_arch=aarch64 ;;
+  x86_64|amd64)  target_arch=x86_64 ;;
+  *)             target_arch="" ;;
+esac
+
+if [ -n "$target_os" ] && [ -n "$target_arch" ] && command -v curl >/dev/null 2>&1; then
+  RELEASE_REPO="cdeust/agentic-ai"
+  RELEASE_TAG="${AGENTIC_AI_CODEBASE_RELEASE_TAG:-latest}"
+  asset="automatised-pipeline-${target_os}-${target_arch}.tar.gz"
+  if [ "${RELEASE_TAG}" = "latest" ]; then
+    base_url="https://github.com/${RELEASE_REPO}/releases/latest/download"
+  else
+    base_url="https://github.com/${RELEASE_REPO}/releases/download/${RELEASE_TAG}"
+  fi
+  echo "codebase plugin: fetching prebuilt ${asset} from ${base_url}/ ..." >&2
+  mkdir -p "${PLUGIN_ROOT}/bin"
+  tmp_dir=$(mktemp -d)
+  if curl --fail --location --silent --show-error --max-time 60 \
+        --output "${tmp_dir}/${asset}" "${base_url}/${asset}" \
+     && curl --fail --location --silent --show-error --max-time 30 \
+        --output "${tmp_dir}/${asset}.sha256" "${base_url}/${asset}.sha256"; then
+    # Verify sha256 — the .sha256 file is "<hash>  <filename>" (shasum format).
+    expected=$(awk '{print $1}' "${tmp_dir}/${asset}.sha256")
+    actual=$(shasum -a 256 "${tmp_dir}/${asset}" | awk '{print $1}')
+    if [ "$expected" = "$actual" ] && [ -n "$expected" ]; then
+      ( cd "${tmp_dir}" && tar -xzf "${asset}" )
+      if [ -x "${tmp_dir}/automatised-pipeline" ]; then
+        chmod +x "${tmp_dir}/automatised-pipeline"
+        mv "${tmp_dir}/automatised-pipeline" "${shipped_bin}"
+        rm -rf "${tmp_dir}"
+        echo "codebase plugin: cached ${shipped_bin} (sha256 verified)" >&2
+        exec "${shipped_bin}"
+      fi
+      echo "codebase plugin: tarball extracted but binary not found — falling through." >&2
+    else
+      echo "codebase plugin: sha256 mismatch (expected ${expected}, got ${actual}) — falling through." >&2
+    fi
+    rm -rf "${tmp_dir}"
+  else
+    rm -rf "${tmp_dir}"
+    echo "codebase plugin: release download failed — falling through to local build paths." >&2
+  fi
+fi
+
+# ── Stage 3: previously-cargo-built binary in src-rust/ ─────────────────────
 src_dir="${PLUGIN_ROOT}/src-rust"
 prebuilt_in_src="${src_dir}/target/release/automatised-pipeline"
 if [ -x "${prebuilt_in_src}" ]; then
   exec "${prebuilt_in_src}"
 fi
 
-# ── Stage 5: last-resort cargo build ───────────────────────────────────────
+# ── Stage 4: last-resort cargo build ────────────────────────────────────────
 if ! command -v cargo >/dev/null 2>&1; then
-  echo "codebase plugin: no prebuilt binary for ${os}-${arch} and cargo is not installed." >&2
+  echo "codebase plugin: no prebuilt binary for ${target_os:-?}-${target_arch:-?} and cargo is not installed." >&2
   echo "  Either install Rust:   https://rustup.rs" >&2
   echo "  Or place a binary at:  ${shipped_bin}" >&2
   exit 1
@@ -110,7 +129,7 @@ if [ ! -f "${src_dir}/Cargo.toml" ]; then
   exit 1
 fi
 
-echo "codebase plugin: no prebuilt binary for ${os}-${arch}; building from source (~2-5 min)..." >&2
+echo "codebase plugin: building from source (~2-5 min)..." >&2
 echo "  This first launch will likely exceed Claude Code's 30s MCP connect timeout." >&2
 echo "  Restart Claude Code after the build completes." >&2
 ( cd "${src_dir}" && cargo build --release --quiet >&2 )

@@ -37,6 +37,8 @@ Claude Code is powerful in one session and amnesiac the next. It can reason abou
 
 ## Getting Started
 
+Install all four plugins from inside Claude Code:
+
 ```text
 /plugin marketplace add cdeust/agentic-ai
 /plugin install memory@agentic-ai
@@ -45,18 +47,29 @@ Claude Code is powerful in one session and amnesiac the next. It can reason abou
 /plugin install prd@agentic-ai
 ```
 
-That's it. Restart your Claude Code session and the four MCP servers (`cortex`, `ai-architect`, `reasoning`, `prd-gen`) are available. Install one or all four — they work independently.
+Restart Claude Code. `/mcp` should show four servers connected:
 
-Each plugin ships **self-contained** under its install path: an esbuild bundle (`dist/index.js`) for the JS plugins, the Cargo source (`src-rust/`) for the codebase plugin, and a `scripts/launch.sh` that resolves native deps on first launch. No monorepo checkout required client-side.
+| MCP server name | Plugin | What it provides |
+|---|---|---|
+| `cortex` | `memory@agentic-ai` | persistent memory across sessions (45+ tools) |
+| `ai-architect` | `codebase@agentic-ai` | codebase graph + semantic search (23 tools) |
+| `reasoning` | `reasoning@agentic-ai` | 97 reasoning patterns + 19 specialist agents (2 tools + 63 skills) |
+| `prd-gen` | `prd@agentic-ai` | 9-file PRD pipeline with multi-judge verification (17 tools) |
 
-| Plugin | First launch behavior |
-|---|---|
-| `memory` | `npm install --omit=dev` runs once for native deps (better-sqlite3, onnxruntime-node, @xenova/transformers, pg, sqlite-vec) — then exec `node dist/index.js` |
-| `codebase` | Per-platform prebuilt binary `bin/automatised-pipeline-<os>-<arch>` if shipped → otherwise downloads from the latest GitHub Release (`codebase-v*` tag) on first launch and caches under `bin/` → otherwise falls back to vendored `src-rust/` (`cargo build --release`, requires Rust toolchain) |
-| `reasoning` | exec `node dist/index.js` directly — no native deps |
-| `prd` | `npm install --omit=dev` runs once for `ajv`, then exec `node dist/index.js` |
+Install only the plugins you want — they're independent. No monorepo checkout, no extra build, no `pnpm install` on the user's side.
 
-The marketplace's `.claude-plugin/marketplace.json` is at the repo root, so the standard Anthropic plugin protocol resolves the four plugins automatically. `mcpServers` is declared inline in each plugin's `.claude-plugin/plugin.json`; no additional client-side configuration is needed.
+### What each plugin does on its first launch
+
+| Plugin | First-launch path | Subsequent launches |
+|---|---|---|
+| `memory` | runs `npm install --omit=dev` once to fetch native bindings (better-sqlite3, onnxruntime-node, @xenova/transformers, pg, sqlite-vec) | exec `node dist/index.js` immediately |
+| `codebase` | downloads the prebuilt `automatised-pipeline-<os>-<arch>` binary from the latest GitHub Release (`codebase-v*` tag), caches it under `bin/` | exec the cached binary immediately |
+| `reasoning` | exec `node dist/index.js` immediately — no native deps | same |
+| `prd` | runs `npm install --omit=dev` once to fetch `ajv` | exec `node dist/index.js` immediately |
+
+The codebase plugin's Rust binary download targets four platforms: `darwin-arm64`, `darwin-x86_64`, `linux-x86_64`, `linux-aarch64`. On unsupported platforms or when the host is offline, it falls back to building from the vendored Cargo source under `src-rust/` (requires Rust toolchain; one-shot 2-5 min build, then exec).
+
+`.claude-plugin/marketplace.json` at the repo root drives discovery. Each plugin's `.claude-plugin/plugin.json` declares its `mcpServers` inline — no additional client-side configuration is needed.
 
 ---
 
