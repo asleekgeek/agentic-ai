@@ -216,4 +216,31 @@ export interface MemoryStore {
 
   /** Close the underlying connection / pool. */
   close(): void;
+
+  // ── Optional async variants (implemented by PgMemoryStore) ───────────────
+  //
+  // These optional methods exist so that the MCP composition root can call
+  // them when available (PG backend), falling back to the sync equivalents
+  // when absent (SQLite backend). Callers MUST check for their existence
+  // before calling. Do not add them to SqliteMemoryStore — absence is the
+  // signal that the sync path is safe.
+  //
+  // source: ADR-0042 — MCP server must honour DATABASE_URL and route writes
+  //   to PG; PgMemoryStore._runSync() throws; async variants are the only
+  //   safe call path from async MCP tool handlers.
+
+  /** Async insert — present on PgMemoryStore, absent on SqliteMemoryStore. */
+  insertMemoryAsync?(data: MemoryInsertData): Promise<number>;
+
+  /** Async getMemory — present on PgMemoryStore, absent on SqliteMemoryStore. */
+  getMemoryAsync?(memoryId: number): Promise<MemoryItem | null>;
+
+  /** Async deleteMemory — present on PgMemoryStore, absent on SqliteMemoryStore. */
+  deleteMemoryAsync?(memoryId: number): Promise<boolean>;
+
+  /** Async bumpHeatRaw — present on PgMemoryStore, absent on SqliteMemoryStore. */
+  bumpHeatRawAsync?(memoryId: number, heat: number): Promise<void>;
+
+  /** Async searchVectors — present on PgMemoryStore, absent on SqliteMemoryStore. */
+  searchVectorsAsync?(embedding: Buffer, topK: number, minHeat?: number): Promise<VecHit[]>;
 }

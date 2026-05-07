@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import {createRequire as __cjsCreateRequire} from "node:module"; import {fileURLToPath as __cjsFileURL} from "node:url"; import {dirname as __cjsDirname} from "node:path"; const require=__cjsCreateRequire(import.meta.url); const __filename=__cjsFileURL(import.meta.url); const __dirname=__cjsDirname(__filename);
+import {createRequire} from "node:module"; const require=createRequire(import.meta.url);
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -13252,7 +13252,7 @@ var init_layout = __esm({
 });
 
 // packages/memory/dist/wiki/pages.js
-function nowIso2() {
+function nowIso3() {
   return (/* @__PURE__ */ new Date()).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
 function formatFrontmatter(fm) {
@@ -13336,7 +13336,7 @@ function buildAdr(args) {
     number: String(args.number).padStart(4, "0"),
     title: args.title,
     status,
-    created: nowIso2(),
+    created: nowIso3(),
     tags: args.tags ?? ["adr"]
   };
   const body = `# ADR-${String(args.number).padStart(4, "0")}: ${args.title}
@@ -32603,8 +32603,8 @@ var SqliteMemoryStore = class {
    *
    * source: infrastructure/sqlite_store.py:SqliteMemoryStore.__init__
    */
-  constructor(dbPath2 = ":memory:") {
-    this._db = new Database(dbPath2);
+  constructor(dbPath = ":memory:") {
+    this._db = new Database(dbPath);
     this._db.pragma("journal_mode = WAL");
     this._db.pragma("foreign_keys = ON");
     this._initSchema();
@@ -33119,6 +33119,475 @@ var SqliteMemoryStore = class {
     }));
   }
 };
+
+// packages/memory/dist/remember/storage/pg-store.js
+import { Pool } from "pg";
+
+// packages/memory/dist/remember/storage/pg-store-queries.js
+async function callRecallMemories(client, params) {
+  const {
+    queryText,
+    queryEmbedding,
+    intent = "general",
+    domain = null,
+    directory = null,
+    agentTopic = null,
+    // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+    minHeat = 0.01,
+    // source: cortex@82b15b3 mcp_server/core/pg_recall.py:197
+    // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+    maxResults = 10,
+    // eslint-disable-next-line @typescript-eslint/no-magic-numbers
+    wrrfK = 60,
+    // source: cortex@82b15b3 mcp_server/core/pg_recall.py:203
+    weights = {},
+    includeGlobals = true
+  } = params;
+  const wVector = weights.vector ?? 1;
+  const wFts = weights.fts ?? 0.5;
+  const wHeat = weights.heat ?? 0.3;
+  const wNgram = weights.ngram ?? 0.3;
+  const wRecency = weights.recency ?? 0;
+  void wrrfK;
+  let embeddingLiteral = null;
+  if (queryEmbedding !== null && queryEmbedding.byteLength === 384 * Float32Array.BYTES_PER_ELEMENT) {
+    const floats = new Float32Array(queryEmbedding.buffer, queryEmbedding.byteOffset, queryEmbedding.byteLength / Float32Array.BYTES_PER_ELEMENT);
+    embeddingLiteral = `[${Array.from(floats).join(",")}]`;
+  }
+  const result = await client.query(`SELECT memory_id, content, score, heat, domain, created_at::text,
+            store_type, tags, importance, surprise_score, emotional_valence, source
+     FROM recall_memories(
+       $1, $2::vector, $3, $4, $5, $6,
+       $7, $8, $9, $10, $11, $12, $13, $14, $15
+     )`, [
+    queryText,
+    embeddingLiteral,
+    intent,
+    domain,
+    directory,
+    agentTopic,
+    minHeat,
+    maxResults,
+    wrrfK,
+    wVector,
+    wFts,
+    wHeat,
+    wNgram,
+    wRecency,
+    includeGlobals
+  ]);
+  return result.rows;
+}
+
+// packages/memory/dist/remember/storage/pg-store.js
+var FLOAT32_BYTES_PER_ELEMENT = Float32Array.BYTES_PER_ELEMENT;
+function nowIso2() {
+  return (/* @__PURE__ */ new Date()).toISOString();
+}
+function clampHeat2(h2) {
+  return Math.max(0, Math.min(1, h2));
+}
+var PgMemoryStore = class {
+  _pool;
+  constructor(connectionString) {
+    this._pool = new Pool({ connectionString, max: 5 });
+  }
+  // ── Internal: run a query synchronously by acquiring a client ──────────
+  // This is the equivalent of pg_store.py's _execute method.
+  // In Node.js we cannot truly block, but in contexts where this is called
+  // (MCP server, sequential tool handlers) all callers await the returned promise.
+  // We expose a sync-signature interface and handle the async internally.
+  _runSync(fn) {
+    throw new Error("PgMemoryStore requires async execution. Call the *Async sibling or use SqliteMemoryStore for sync tests.");
+    void fn;
+  }
+  /**
+   * Execute fn on a pool client and return the result.
+   *
+   * This is the primary execution method. MCP tool handlers MUST await this.
+   * precondition:  pool is open (not after close()).
+   * postcondition: client is returned to the pool in all code paths
+   *   (including error paths — finally block).
+   */
+  async runAsync(fn) {
+    const client = await this._pool.connect();
+    try {
+      return await fn(client);
+    } finally {
+      client.release();
+    }
+  }
+  // ── Memory CRUD (async wrappers — see note above) ──────────────────────
+  /**
+   * Insert a memory and return its integer ID.
+   *
+   * postcondition: returned id > 0; row exists in memories.
+   * NOTE: Because MemoryStore.insertMemory is sync-signature but PG is async,
+   * this throws. Use insertMemoryAsync from async contexts.
+   * source: infrastructure/pg_store.py:insert_memory
+   */
+  insertMemory(_data) {
+    return this._runSync(async (client) => {
+      return this._insertMemoryOnClient(client, _data);
+    });
+  }
+  async insertMemoryAsync(data) {
+    return this.runAsync((client) => this._insertMemoryOnClient(client, data));
+  }
+  async _insertMemoryOnClient(client, data) {
+    const now = nowIso2();
+    const result = await client.query(
+      `INSERT INTO memories (
+        content, tags, source, domain, directory_context, created_at,
+        last_accessed, heat_base, heat_base_set_at, surprise_score, importance,
+        emotional_valence, confidence, store_type, is_protected,
+        consolidation_stage, theta_phase_at_encoding, encoding_strength,
+        separation_index, interference_score, schema_match_score, schema_id,
+        hippocampal_dependency, is_benchmark, agent_context, is_global,
+        stage_entered_at, arousal, dominant_emotion
+      ) VALUES (
+        $1,$2::jsonb,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
+        $16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29
+      ) RETURNING id`,
+      // $2::jsonb — tags is JSON.stringify(array), must be cast to jsonb
+      // source: cortex@82b15b3 mcp_server/infrastructure/pg_store.py:insert_memory
+      //   json.dumps(tags) stored as JSONB column
+      [
+        data.content,
+        JSON.stringify(data.tags ?? []),
+        data.source ?? "",
+        data.domain ?? "",
+        data.directory_context ?? "",
+        data.created_at ?? now,
+        now,
+        clampHeat2(data.heat ?? 1),
+        now,
+        data.surprise_score ?? 0,
+        data.importance ?? 0.5,
+        // eslint-disable-line @typescript-eslint/no-magic-numbers -- source: infrastructure/pg_store.py default importance
+        data.emotional_valence ?? 0,
+        data.confidence ?? 1,
+        data.store_type ?? "episodic",
+        data.is_protected ?? false,
+        data.consolidation_stage ?? "labile",
+        data.theta_phase_at_encoding ?? 0,
+        data.encoding_strength ?? 1,
+        data.separation_index ?? 0,
+        data.interference_score ?? 0,
+        data.schema_match_score ?? 0,
+        data.schema_id ?? null,
+        data.hippocampal_dependency ?? 1,
+        data.is_benchmark ?? false,
+        data.agent_context ?? "",
+        data.is_global ?? false,
+        data.stage_entered_at ?? data.created_at ?? now,
+        data.arousal ?? 0,
+        data.dominant_emotion ?? "neutral"
+      ]
+    );
+    const row = result.rows[0];
+    if (row == null)
+      throw new Error("insertMemory: no id returned from PG");
+    return row.id;
+  }
+  getMemory(_memoryId) {
+    return this._runSync(async (c2) => this._getMemoryOnClient(c2, _memoryId));
+  }
+  async getMemoryAsync(memoryId) {
+    return this.runAsync((c2) => this._getMemoryOnClient(c2, memoryId));
+  }
+  /**
+   * Call the PostgreSQL recall_memories() stored procedure.
+   *
+   * This is the parity-critical retrieval method. It invokes the same
+   * PL/pgSQL function that Python's bench calls, producing identical
+   * ranking via TMM normalization + weighted-sum fusion.
+   *
+   * precondition: pool is open; recall_memories function is installed in DB.
+   * postcondition: returns rows ordered by descending score.
+   *
+   * source: cortex@82b15b3 mcp_server/infrastructure/pg_store.py:recall_memories
+   * source: cortex@82b15b3 mcp_server/infrastructure/pg_schema.py:RECALL_MEMORIES_LAZY_FN
+   */
+  async recallMemoriesAsync(params) {
+    return this.runAsync((client) => callRecallMemories(client, params));
+  }
+  /**
+   * Delete memories where is_benchmark = TRUE.
+   * Used by the bench harness to clean up between conversations.
+   * source: cortex@82b15b3 benchmarks/lib/bench_db.py:_purge_stale_benchmark_data
+   */
+  async clearBenchmarkMemoriesAsync() {
+    await this.runAsync(async (client) => {
+      await client.query("DELETE FROM memories WHERE is_benchmark = TRUE");
+    });
+  }
+  async _getMemoryOnClient(client, memoryId) {
+    const result = await client.query(`SELECT * FROM memories WHERE id = $1`, [memoryId]);
+    const row = result.rows[0];
+    if (row == null)
+      return null;
+    return this._normalizeRow(row);
+  }
+  deleteMemory(_memoryId) {
+    return this._runSync(async (c2) => this._deleteMemoryOnClient(c2, _memoryId));
+  }
+  async deleteMemoryAsync(memoryId) {
+    return this.runAsync((c2) => this._deleteMemoryOnClient(c2, memoryId));
+  }
+  async _deleteMemoryOnClient(client, memoryId) {
+    const result = await client.query(`DELETE FROM memories WHERE id = $1`, [memoryId]);
+    return (result.rowCount ?? 0) > 0;
+  }
+  /**
+   * Canonical A3 heat writer.
+   * source: phase-3-a3-migration-design.md §3.1
+   * source: infrastructure/pg_store.py:bump_heat_raw
+   */
+  bumpHeatRaw(_id, _heat) {
+    this._runSync(async (c2) => this._bumpHeatOnClient(c2, _id, _heat));
+  }
+  async bumpHeatRawAsync(memoryId, heat) {
+    return this.runAsync((c2) => this._bumpHeatOnClient(c2, memoryId, heat));
+  }
+  async _bumpHeatOnClient(client, memoryId, heat) {
+    await client.query(`UPDATE memories SET heat_base = $1, heat_base_set_at = NOW() WHERE id = $2`, [clampHeat2(heat), memoryId]);
+  }
+  updateMemoryHeat(memoryId, heat) {
+    this.bumpHeatRaw(memoryId, heat);
+  }
+  async updateMemoryHeatAsync(memoryId, heat) {
+    return this.bumpHeatRawAsync(memoryId, heat);
+  }
+  /**
+   * A3 batch heat writer. Single UPDATE ... FROM UNNEST() round-trip.
+   * source: issue #13; phase-3-a3-migration-design.md §3.2
+   * source: infrastructure/pg_store.py:update_memories_heat_batch
+   */
+  updateMemoriesHeatBatch(_updates) {
+    return this._runSync(async (c2) => this._batchHeatOnClient(c2, _updates));
+  }
+  async updateMemoriesHeatBatchAsync(updates) {
+    return this.runAsync((c2) => this._batchHeatOnClient(c2, updates));
+  }
+  async _batchHeatOnClient(client, updates) {
+    if (updates.length === 0)
+      return 0;
+    const ids = updates.map((u2) => u2[0]);
+    const heats = updates.map((u2) => clampHeat2(u2[1]));
+    await client.query(`UPDATE memories AS m
+         SET heat_base = v.new_heat, heat_base_set_at = NOW()
+         FROM (SELECT UNNEST($1::int[]) AS id, UNNEST($2::real[]) AS new_heat) AS v
+         WHERE m.id = v.id`, [ids, heats]);
+    return updates.length;
+  }
+  updateMemoryImportance(memoryId, importance) {
+    void this.runAsync((c2) => c2.query(`UPDATE memories SET importance = $1 WHERE id = $2`, [importance, memoryId]));
+  }
+  updateMemoryAccess(memoryId) {
+    void this.runAsync((c2) => c2.query(`UPDATE memories SET last_accessed = NOW(), access_count = access_count + 1 WHERE id = $1`, [memoryId]));
+  }
+  updateMemoryMetamemory(memoryId, accessCount, usefulCount, confidence) {
+    void this.runAsync((c2) => c2.query(`UPDATE memories SET access_count = $1, useful_count = $2, confidence = $3 WHERE id = $4`, [accessCount, usefulCount, confidence, memoryId]));
+  }
+  setMemoryProtected(memoryId, protected_) {
+    void this.runAsync((c2) => c2.query(`UPDATE memories SET is_protected = $1 WHERE id = $2`, [protected_, memoryId]));
+  }
+  markMemoryStale(memoryId, stale) {
+    void this.runAsync((c2) => c2.query(`UPDATE memories SET is_stale = $1 WHERE id = $2`, [stale, memoryId]));
+  }
+  /**
+   * Update content and tags for a single memory row.
+   *
+   * precondition:  memoryId > 0; content is a non-empty string.
+   * postcondition: memories.content = content AND memories.tags = JSON.stringify(tags)
+   *   for the given id. Single UPDATE — atomic by PostgreSQL autocommit.
+   *
+   * Used by the anchor handler to write the `[ANCHOR: <reason>]` prefix
+   * and the `_anchor` tag set in one round-trip.
+   *
+   * source: cortex@f2b9f99 mcp_server/handlers/anchor.py:143-146
+   *   UPDATE memories SET … tags = %s::jsonb, content = %s … WHERE id = %s
+   */
+  updateMemoryContent(memoryId, content, tags) {
+    void this.runAsync((c2) => c2.query(`UPDATE memories SET content = $1, tags = $2::jsonb WHERE id = $3`, [content, JSON.stringify(tags), memoryId]));
+  }
+  async updateMemoryContentAsync(memoryId, content, tags) {
+    return this.runAsync((c2) => c2.query(`UPDATE memories SET content = $1, tags = $2::jsonb WHERE id = $3`, [content, JSON.stringify(tags), memoryId]).then(() => void 0));
+  }
+  // ── Homeostatic state ──────────────────────────────────────────────────
+  getHomeostaticFactor(_domain) {
+    return this._runSync(async (c2) => {
+      const result = await c2.query(`SELECT COALESCE(MAX(factor), 1.0)::REAL AS factor FROM homeostatic_state WHERE domain = $1`, [_domain || ""]);
+      return result.rows[0]?.factor ?? 1;
+    });
+  }
+  async getHomeostaticFactorAsync(domain) {
+    return this.runAsync(async (c2) => {
+      const result = await c2.query(`SELECT COALESCE(MAX(factor), 1.0)::REAL AS factor FROM homeostatic_state WHERE domain = $1`, [domain || ""]);
+      return result.rows[0]?.factor ?? 1;
+    });
+  }
+  setHomeostaticFactor(_domain, _factor) {
+    const clamped = Math.max(0.01, Math.min(9.99, _factor));
+    void this.runAsync((c2) => c2.query(`INSERT INTO homeostatic_state (domain, factor, updated_at) VALUES ($1,$2,NOW())
+         ON CONFLICT (domain) DO UPDATE SET factor = EXCLUDED.factor, updated_at = NOW()`, [_domain || "", clamped]));
+  }
+  // ── Vector search (pgvector <=> operator) ─────────────────────────────
+  /**
+   * Vector KNN search via pgvector cosine distance (<=> operator).
+   *
+   * NOTE: PgMemoryStore.searchVectors() uses _runSync() which throws at
+   * runtime (see design note on _runSync above). Use searchVectorsAsync()
+   * from async MCP tool handlers.
+   *
+   * source: Cortex mcp_server/infrastructure/pg_store.py:search_vectors
+   * source: https://github.com/pgvector/pgvector — cosine distance <=> operator
+   */
+  searchVectors(_embedding, _topK, _minHeat) {
+    return this._runSync(async (c2) => this._searchVectorsOnClient(c2, _embedding, _topK, _minHeat ?? 0));
+  }
+  /**
+   * Async pgvector KNN search. Use this from MCP tool handlers.
+   *
+   * precondition:  embedding is a valid float32 Buffer (length = dim × 4 bytes).
+   * postcondition: returns up to topK (memory_id, distance) pairs ordered by
+   *   ascending cosine distance. Returns [] if the column is null or extension
+   *   is not installed.
+   *
+   * source: Cortex mcp_server/infrastructure/pg_store.py:search_vectors
+   * source: https://github.com/pgvector/pgvector — <=> is cosine distance
+   * source: https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2 — 384D
+   */
+  async searchVectorsAsync(embedding, topK, minHeat = 0) {
+    return this.runAsync((c2) => this._searchVectorsOnClient(c2, embedding, topK, minHeat));
+  }
+  async _searchVectorsOnClient(client, embedding, topK, minHeat) {
+    const dim = embedding.byteLength / FLOAT32_BYTES_PER_ELEMENT;
+    const floats = new Float32Array(embedding.buffer, embedding.byteOffset, dim);
+    const vecLiteral = `[${Array.from(floats).join(",")}]`;
+    const result = await client.query(`SELECT id, embedding <=> $1::vector AS distance
+       FROM memories
+       WHERE heat_base >= $2 AND NOT is_stale AND embedding IS NOT NULL
+       ORDER BY embedding <=> $1::vector
+       LIMIT $3`, [vecLiteral, minHeat, topK]);
+    return result.rows.map((r2) => [r2.id, r2.distance]);
+  }
+  /**
+   * Upsert an embedding vector for a memory row.
+   *
+   * Called by postStore after memory insert when an EmbeddingEngine is available.
+   * precondition:  memoryId > 0; emb.byteLength = dim × 4.
+   * postcondition: memories.embedding column is updated for the given id.
+   *
+   * source: Cortex mcp_server/infrastructure/pg_store.py — UPDATE memories SET embedding = %s
+   * source: https://github.com/pgvector/pgvector — vector column update via literal
+   */
+  async upsertEmbedding(memoryId, emb) {
+    const dim = emb.byteLength / FLOAT32_BYTES_PER_ELEMENT;
+    const floats = new Float32Array(emb.buffer, emb.byteOffset, dim);
+    const vecLiteral = `[${Array.from(floats).join(",")}]`;
+    return this.runAsync((c2) => c2.query(`UPDATE memories SET embedding = $1::vector WHERE id = $2`, [vecLiteral, memoryId]).then(() => void 0));
+  }
+  // ── Entity graph (deferred: see pg-store-entities.ts) ─────────────────
+  // FAILS_ON: entity operations not yet implemented for PG backend.
+  // The entity graph is fully implemented in SqliteMemoryStore.
+  // PG entity support is tracked in PHASE_7_TRACKING.md Group D.
+  getEntityByName(_name) {
+    return null;
+  }
+  upsertEntity(_name, _type, _domain) {
+    return 0;
+  }
+  linkMemoryEntity(_memoryId, _entityId) {
+  }
+  upsertRelationship(_sourceEntityId, _targetEntityId, _relationshipType, _weight) {
+  }
+  getSchemasForDomain(_domain) {
+    return [];
+  }
+  loadOscillatoryState() {
+    return null;
+  }
+  saveOscillatoryState(_stateJson) {
+  }
+  async close() {
+    await this._pool.end();
+  }
+  // ── Row normalization ──────────────────────────────────────────────────
+  _normalizeRow(row) {
+    const heatBase = row["heat_base"] ?? 1;
+    const tags = row["tags"];
+    const parsedTags = Array.isArray(tags) ? tags : typeof tags === "string" ? JSON.parse(tags) : [];
+    return {
+      id: row["id"],
+      content: row["content"],
+      tags: parsedTags,
+      source: row["source"] ?? "",
+      domain: row["domain"] ?? "",
+      directory_context: row["directory_context"] ?? "",
+      created_at: row["created_at"],
+      last_accessed: row["last_accessed"],
+      heat_base: heatBase,
+      heat: heatBase,
+      heat_base_set_at: row["heat_base_set_at"] ?? "",
+      no_decay: Boolean(row["no_decay"]),
+      surprise_score: row["surprise_score"] ?? 0,
+      importance: row["importance"] ?? 0.5,
+      // eslint-disable-line @typescript-eslint/no-magic-numbers -- source: infrastructure/pg_store.py _normalize_memory_row default importance
+      emotional_valence: row["emotional_valence"] ?? 0,
+      confidence: row["confidence"] ?? 1,
+      access_count: row["access_count"] ?? 0,
+      useful_count: row["useful_count"] ?? 0,
+      plasticity: row["plasticity"] ?? 1,
+      stability: row["stability"] ?? 0,
+      reconsolidation_count: row["reconsolidation_count"] ?? 0,
+      last_reconsolidated: row["last_reconsolidated"] ?? null,
+      store_type: row["store_type"] ?? "episodic",
+      compressed: Boolean(row["compressed"]),
+      compression_level: row["compression_level"] ?? 0,
+      original_content: row["original_content"] ?? null,
+      is_protected: Boolean(row["is_protected"]),
+      is_stale: Boolean(row["is_stale"]),
+      slot_index: row["slot_index"] ?? null,
+      excitability: row["excitability"] ?? 1,
+      consolidation_stage: row["consolidation_stage"] ?? "labile",
+      hours_in_stage: row["hours_in_stage"] ?? 0,
+      stage_entered_at: row["stage_entered_at"] ?? null,
+      replay_count: row["replay_count"] ?? 0,
+      theta_phase_at_encoding: row["theta_phase_at_encoding"] ?? 0,
+      encoding_strength: row["encoding_strength"] ?? 1,
+      separation_index: row["separation_index"] ?? 0,
+      interference_score: row["interference_score"] ?? 0,
+      schema_match_score: row["schema_match_score"] ?? 0,
+      schema_id: row["schema_id"] ?? null,
+      hippocampal_dependency: row["hippocampal_dependency"] ?? 1,
+      is_benchmark: Boolean(row["is_benchmark"]),
+      agent_context: row["agent_context"] ?? "",
+      is_global: Boolean(row["is_global"])
+    };
+  }
+};
+
+// packages/mcp-servers/memory/dist/db-guard.js
+var LOCALHOST_NAMES = /* @__PURE__ */ new Set(["localhost", "127.0.0.1", "::1", "[::1]", ""]);
+var FORBIDDEN_DB_NAME = "cortex";
+var EX_CONFIG = 78;
+function assertNotForbiddenDb(url) {
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch {
+    return;
+  }
+  const host = parsed.hostname.toLowerCase();
+  const dbName = parsed.pathname.replace(/^\//, "");
+  if (LOCALHOST_NAMES.has(host) && dbName === FORBIDDEN_DB_NAME) {
+    process.stderr.write(`[mcp-server-memory] FATAL: DATABASE_URL points to the standalone Python Cortex database (db_name="${FORBIDDEN_DB_NAME}" on localhost). The agentic-ai memory plugin must NEVER write to this database. Set DATABASE_URL to a safe database (e.g. cortex_agentic) or unset DATABASE_URL to use the SQLite fallback.
+`);
+    process.exit(EX_CONFIG);
+  }
+}
 
 // packages/memory/dist/recall/co-activation.js
 var ENTITY_EXTRACTION_CAP = 10;
@@ -35859,6 +36328,114 @@ function remember(rawArgs, store) {
     is_global: isGlobal
   };
 }
+async function rememberAsync(rawArgs, store) {
+  const args = RememberRequestSchema.parse(rawArgs);
+  if (!args.content.trim()) {
+    return { stored: false, reason: "no_content" };
+  }
+  const content = args.content.trim();
+  const tags = args.tags;
+  const force = args.force;
+  const domain = args.domain ?? "";
+  const source = args.source;
+  const agentTopic = args.agent_topic;
+  const isGlobal = args.is_global;
+  const baselineHeat = args.initial_heat !== void 0 ? args.initial_heat : 1;
+  let vecHits = [];
+  try {
+    if (store.searchVectorsAsync) {
+      vecHits = await store.searchVectorsAsync(Buffer.alloc(0), VECTOR_SEARCH_TOP_K, 0);
+    } else {
+      vecHits = store.searchVectors(Buffer.alloc(0), VECTOR_SEARCH_TOP_K, 0);
+    }
+  } catch {
+    vecHits = [];
+  }
+  const similarities = [];
+  let hoursSinceSimilar = null;
+  if (vecHits.length > 0) {
+    for (const [, dist] of vecHits) {
+      similarities.push(Math.max(0, 1 - dist));
+    }
+    const bestId = vecHits[0]?.[0];
+    if (bestId !== void 0) {
+      let bestMem = null;
+      try {
+        bestMem = store.getMemoryAsync ? await store.getMemoryAsync(bestId) : store.getMemory(bestId);
+      } catch {
+        bestMem = null;
+      }
+      if (bestMem?.created_at) {
+        hoursSinceSimilar = parseHoursSince(bestMem.created_at);
+      }
+    }
+  }
+  let newEntityNames = [];
+  let knownEntityNames = /* @__PURE__ */ new Set();
+  try {
+    newEntityNames = extractEntityNamesFromContent(content);
+    knownEntityNames = new Set(newEntityNames.filter((n3) => store.getEntityByName(n3) !== null));
+  } catch {
+  }
+  const recentContents = getRecentContents(store, domain);
+  const threshold = effectiveThreshold(domain);
+  const [bypass] = determineBypass(force, content, tags);
+  const score = scoreCandidate({
+    content,
+    tags,
+    force,
+    similarities,
+    newEntityNames,
+    knownEntityNames,
+    recentContents,
+    hoursSinceSimilar,
+    threshold
+  });
+  record2(domain, score.shouldStore);
+  if (!score.shouldStore && !bypass) {
+    const importance2 = estimateImportance(content, tags);
+    return buildRejectionResponse(score, importance2);
+  }
+  const heat = applySurpriseBoost(baselineHeat, score.combinedNovelty);
+  const importance = estimateImportance(content, tags);
+  const insertData = {
+    content,
+    tags,
+    source,
+    domain,
+    heat,
+    importance,
+    surprise_score: score.combinedNovelty,
+    store_type: "episodic",
+    agent_context: agentTopic,
+    is_global: isGlobal,
+    created_at: args.created_at
+  };
+  let memoryId;
+  if (store.insertMemoryAsync) {
+    memoryId = await store.insertMemoryAsync(insertData);
+  } else {
+    memoryId = store.insertMemory(insertData);
+  }
+  try {
+    for (const entityName of newEntityNames) {
+      if (!knownEntityNames.has(entityName)) {
+        const entityId = store.upsertEntity(entityName, "concept", domain);
+        if (entityId > 0) {
+          store.linkMemoryEntity(memoryId, entityId);
+        }
+      }
+    }
+  } catch {
+  }
+  return {
+    stored: true,
+    action: "stored",
+    memory_id: memoryId,
+    heat,
+    is_global: isGlobal
+  };
+}
 function extractEntityNamesFromContent(content) {
   const names = /* @__PURE__ */ new Set();
   const STOPWORDS3 = /* @__PURE__ */ new Set([
@@ -35891,14 +36468,15 @@ function extractEntityNamesFromContent(content) {
 }
 
 // packages/memory/dist/remember/handlers/forget.js
-function forget(args, store) {
+var FORGET_CONTENT_PREVIEW_CHARS = 80;
+async function forgetAsync(args, store) {
   const memoryId = args.memory_id;
   const soft = args.soft ?? false;
   const force = args.force ?? false;
   if (!memoryId || memoryId < 1) {
     return { deleted: false, reason: "no_memory_id" };
   }
-  const mem = store.getMemory(memoryId);
+  const mem = store.getMemoryAsync ? await store.getMemoryAsync(memoryId) : store.getMemory(memoryId);
   if (mem === null) {
     return { deleted: false, reason: "not_found", memory_id: memoryId };
   }
@@ -35911,20 +36489,24 @@ function forget(args, store) {
   }
   if (soft) {
     store.markMemoryStale(memoryId, true);
-    store.bumpHeatRaw(memoryId, 0);
+    if (store.bumpHeatRawAsync) {
+      await store.bumpHeatRawAsync(memoryId, 0);
+    } else {
+      store.bumpHeatRaw(memoryId, 0);
+    }
     return {
       deleted: true,
       method: "soft",
       memory_id: memoryId,
-      content_preview: mem.content.slice(0, 80)
+      content_preview: mem.content.slice(0, FORGET_CONTENT_PREVIEW_CHARS)
     };
   }
-  const deleted = store.deleteMemory(memoryId);
+  const deleted = store.deleteMemoryAsync ? await store.deleteMemoryAsync(memoryId) : store.deleteMemory(memoryId);
   return {
     deleted,
     method: "hard",
     memory_id: memoryId,
-    content_preview: mem.content.slice(0, 80)
+    content_preview: mem.content.slice(0, FORGET_CONTENT_PREVIEW_CHARS)
   };
 }
 
@@ -35948,20 +36530,24 @@ function buildAnchorContent(content, reason) {
   }
   return content;
 }
-function anchor(args, store) {
+async function anchorAsync(args, store) {
   const memoryId = args.memory_id;
   const reason = (args.reason ?? "").trim();
   const isGlobal = args.is_global ?? false;
   if (!memoryId || memoryId < 1) {
     return { anchored: false, error: "memory_id is required and must be >= 1" };
   }
-  const mem = store.getMemory(memoryId);
+  const mem = store.getMemoryAsync ? await store.getMemoryAsync(memoryId) : store.getMemory(memoryId);
   if (mem === null) {
     return { anchored: false, error: `memory not found: ${memoryId}` };
   }
   const tags = buildAnchorTags(mem.tags, reason);
   const content = buildAnchorContent(mem.content, reason);
-  store.bumpHeatRaw(memoryId, 1);
+  if (store.bumpHeatRawAsync) {
+    await store.bumpHeatRawAsync(memoryId, 1);
+  } else {
+    store.bumpHeatRaw(memoryId, 1);
+  }
   store.setMemoryProtected(memoryId, true);
   store.updateMemoryImportance(memoryId, 1);
   store.updateMemoryContent(memoryId, content, tags);
@@ -35976,23 +36562,29 @@ function anchor(args, store) {
 }
 
 // packages/memory/dist/remember/handlers/rate-memory.js
+var CONFIDENCE_MIN_SAMPLES = 3;
+var CONFIDENCE_ROUNDING_FACTOR = 1e4;
+var RATE_CONTENT_PREVIEW_CHARS = 80;
+var WILSON_Z = 1;
+var WILSON_DENOMINATOR_HALVING = 2;
+var WILSON_VARIANCE_CORRECTION = 4;
 function computeMetamemoryConfidence(accessCount, usefulCount) {
-  if (accessCount < 3)
+  if (accessCount < CONFIDENCE_MIN_SAMPLES)
     return null;
-  const z2 = 1;
+  const z2 = WILSON_Z;
   const p2 = usefulCount / accessCount;
   const n3 = accessCount;
-  const numerator = p2 + z2 ** 2 / (2 * n3) - z2 * Math.sqrt((p2 * (1 - p2) + z2 ** 2 / (4 * n3)) / n3);
+  const numerator = p2 + z2 ** 2 / (WILSON_DENOMINATOR_HALVING * n3) - z2 * Math.sqrt((p2 * (1 - p2) + z2 ** 2 / (WILSON_VARIANCE_CORRECTION * n3)) / n3);
   const denominator = 1 + z2 ** 2 / n3;
   return Math.max(0, Math.min(1, numerator / denominator));
 }
-function rateMemory(args, store) {
+async function rateMemoryAsync(args, store) {
   const memoryId = args.memory_id;
   const useful = args.useful;
   if (!memoryId || memoryId < 1) {
     return { rated: false, reason: "no_memory_id" };
   }
-  const mem = store.getMemory(memoryId);
+  const mem = store.getMemoryAsync ? await store.getMemoryAsync(memoryId) : store.getMemory(memoryId);
   if (mem === null) {
     return { rated: false, reason: "not_found", memory_id: memoryId };
   }
@@ -36007,8 +36599,8 @@ function rateMemory(args, store) {
     useful,
     access_count: accessCount,
     useful_count: usefulCount,
-    confidence: Math.round(confidence * 1e4) / 1e4,
-    content_preview: mem.content.slice(0, 80)
+    confidence: Math.round(confidence * CONFIDENCE_ROUNDING_FACTOR) / CONFIDENCE_ROUNDING_FACTOR,
+    content_preview: mem.content.slice(0, RATE_CONTENT_PREVIEW_CHARS)
   };
 }
 
@@ -36031,7 +36623,7 @@ function registerRememberTools(server2, deps) {
     }
   }, async (args) => {
     try {
-      const response = remember(args, deps.store);
+      const response = await rememberAsync(args, deps.store);
       return { content: [{ type: "text", text: JSON.stringify(response) }] };
     } catch (err) {
       return errorText2("remember", err);
@@ -36046,7 +36638,7 @@ function registerRememberTools(server2, deps) {
     }
   }, async (args) => {
     try {
-      const response = forget(args, deps.store);
+      const response = await forgetAsync(args, deps.store);
       return { content: [{ type: "text", text: JSON.stringify(response) }] };
     } catch (err) {
       return errorText2("forget", err);
@@ -36060,7 +36652,7 @@ function registerRememberTools(server2, deps) {
     }
   }, async (args) => {
     try {
-      const response = anchor(args, deps.store);
+      const response = await anchorAsync(args, deps.store);
       return { content: [{ type: "text", text: JSON.stringify(response) }] };
     } catch (err) {
       return errorText2("anchor", err);
@@ -36074,7 +36666,7 @@ function registerRememberTools(server2, deps) {
     }
   }, async (args) => {
     try {
-      const response = rateMemory(args, deps.store);
+      const response = await rateMemoryAsync(args, deps.store);
       return { content: [{ type: "text", text: JSON.stringify(response) }] };
     } catch (err) {
       return errorText2("rate_memory", err);
@@ -39804,7 +40396,15 @@ function toConsolidationStore(store) {
       return Promise.resolve();
     },
     // ── sleep ────────────────────────────────────────────────────────────────
-    insertMemory: (mem) => Promise.resolve(ext2["insertMemory"]?.(mem) ?? 0),
+    // Use insertMemoryAsync when available (PG path). ext["insertMemory"]?.(mem) would call
+    // PgMemoryStore.insertMemory() which throws via _runSync().
+    // source: ADR-0042 — async path for PG backend
+    insertMemory: async (mem) => {
+      if (store.insertMemoryAsync) {
+        return store.insertMemoryAsync(mem);
+      }
+      return ext2["insertMemory"]?.(mem) ?? 0;
+    },
     // ── cascade ──────────────────────────────────────────────────────────────
     getMemoriesByStage: (s2, l2) => Promise.resolve(ext2["getMemoriesByStage"]?.(s2, l2) ?? []),
     updateMemoryConsolidation: (id2, s2, h2, r2, d2) => {
@@ -39820,7 +40420,15 @@ function toConsolidationStore(store) {
       return Promise.resolve();
     },
     // ── homeostatic ──────────────────────────────────────────────────────────
-    getHomeostaticFactor: (d2) => Promise.resolve(store.getHomeostaticFactor(d2)),
+    // Use getHomeostaticFactorAsync when available (PG path — sync throws via _runSync).
+    // source: ADR-0042 — async path for PG backend
+    getHomeostaticFactor: async (d2) => {
+      const pgStore2 = store;
+      if (pgStore2.getHomeostaticFactorAsync) {
+        return pgStore2.getHomeostaticFactorAsync(d2);
+      }
+      return store.getHomeostaticFactor(d2);
+    },
     setHomeostaticFactor: (d2, f2) => {
       store.setHomeostaticFactor(d2, f2);
       return Promise.resolve();
@@ -40932,7 +41540,7 @@ function buildStageCounts(discoveries) {
     cicd: discoveries.filter((d2) => d2.tags.includes("ci-cd")).length
   };
 }
-function storeDiscoveries(discoveries, root, domain, store) {
+async function storeDiscoveriesAsync(discoveries, root, domain, store) {
   let stored = 0;
   let skipped = 0;
   const memoryIds = [];
@@ -40948,9 +41556,18 @@ function storeDiscoveries(discoveries, root, domain, store) {
         source: "seed_project",
         importance: initialHeat
       };
-      const mid = store.insertMemory(insertData);
+      let mid;
+      if (store.insertMemoryAsync) {
+        mid = await store.insertMemoryAsync(insertData);
+      } else {
+        mid = store.insertMemory(insertData);
+      }
       if (mid > 0) {
-        store.bumpHeatRaw(mid, initialHeat);
+        if (store.bumpHeatRawAsync) {
+          await store.bumpHeatRawAsync(mid, initialHeat);
+        } else {
+          store.bumpHeatRaw(mid, initialHeat);
+        }
         stored++;
         memoryIds.push(mid);
       } else {
@@ -40981,7 +41598,7 @@ async function handler3(args, deps) {
   if (typeof storeExt2.deleteMemoriesByTag === "function") {
     purgedStale = storeExt2.deleteMemoriesByTag("seeded", domain);
   }
-  const { stored, skipped, memoryIds } = storeDiscoveries(allDiscoveries, root, domain, deps.store);
+  const { stored, skipped, memoryIds } = await storeDiscoveriesAsync(allDiscoveries, root, domain, deps.store);
   return {
     seeded: true,
     directory: root,
@@ -41110,9 +41727,9 @@ function registerManagementTools(server2, deps) {
     }
   }, async (args) => {
     try {
-      const rememberFn = (rawArgs) => {
-        const result = remember(rawArgs, deps.store);
-        return Promise.resolve(result.stored ? { stored: true } : null);
+      const rememberFn = async (rawArgs) => {
+        const result = await rememberAsync(rawArgs, deps.store);
+        return result.stored ? { stored: true } : null;
       };
       const response = await importHandler({
         project: args.project,
@@ -46254,455 +46871,6 @@ var CONTENT_MAX_BYTES = 1 * 1024 * 1024;
 var BIDI_OVERRIDES = "\u202A\u202B\u202C\u202D\u202E\u2066\u2067\u2068\u2069";
 var STRIP_RE = new RegExp(`[\0-\b\v\f-\x7F-\x9F\uFEFF${BIDI_OVERRIDES}]`, "g");
 
-// packages/memory/dist/remember/storage/pg-store.js
-import { Pool } from "pg";
-
-// packages/memory/dist/remember/storage/pg-store-queries.js
-async function callRecallMemories(client, params) {
-  const {
-    queryText,
-    queryEmbedding,
-    intent = "general",
-    domain = null,
-    directory = null,
-    agentTopic = null,
-    // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-    minHeat = 0.01,
-    // source: cortex@82b15b3 mcp_server/core/pg_recall.py:197
-    // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-    maxResults = 10,
-    // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-    wrrfK = 60,
-    // source: cortex@82b15b3 mcp_server/core/pg_recall.py:203
-    weights = {},
-    includeGlobals = true
-  } = params;
-  const wVector = weights.vector ?? 1;
-  const wFts = weights.fts ?? 0.5;
-  const wHeat = weights.heat ?? 0.3;
-  const wNgram = weights.ngram ?? 0.3;
-  const wRecency = weights.recency ?? 0;
-  void wrrfK;
-  let embeddingLiteral = null;
-  if (queryEmbedding !== null && queryEmbedding.byteLength === 384 * Float32Array.BYTES_PER_ELEMENT) {
-    const floats = new Float32Array(queryEmbedding.buffer, queryEmbedding.byteOffset, queryEmbedding.byteLength / Float32Array.BYTES_PER_ELEMENT);
-    embeddingLiteral = `[${Array.from(floats).join(",")}]`;
-  }
-  const result = await client.query(`SELECT memory_id, content, score, heat, domain, created_at::text,
-            store_type, tags, importance, surprise_score, emotional_valence, source
-     FROM recall_memories(
-       $1, $2::vector, $3, $4, $5, $6,
-       $7, $8, $9, $10, $11, $12, $13, $14, $15
-     )`, [
-    queryText,
-    embeddingLiteral,
-    intent,
-    domain,
-    directory,
-    agentTopic,
-    minHeat,
-    maxResults,
-    wrrfK,
-    wVector,
-    wFts,
-    wHeat,
-    wNgram,
-    wRecency,
-    includeGlobals
-  ]);
-  return result.rows;
-}
-
-// packages/memory/dist/remember/storage/pg-store.js
-var FLOAT32_BYTES_PER_ELEMENT = Float32Array.BYTES_PER_ELEMENT;
-function nowIso3() {
-  return (/* @__PURE__ */ new Date()).toISOString();
-}
-function clampHeat2(h2) {
-  return Math.max(0, Math.min(1, h2));
-}
-var PgMemoryStore = class {
-  _pool;
-  constructor(connectionString) {
-    this._pool = new Pool({ connectionString, max: 5 });
-  }
-  // ── Internal: run a query synchronously by acquiring a client ──────────
-  // This is the equivalent of pg_store.py's _execute method.
-  // In Node.js we cannot truly block, but in contexts where this is called
-  // (MCP server, sequential tool handlers) all callers await the returned promise.
-  // We expose a sync-signature interface and handle the async internally.
-  _runSync(fn) {
-    throw new Error("PgMemoryStore requires async execution. Call the *Async sibling or use SqliteMemoryStore for sync tests.");
-    void fn;
-  }
-  /**
-   * Execute fn on a pool client and return the result.
-   *
-   * This is the primary execution method. MCP tool handlers MUST await this.
-   * precondition:  pool is open (not after close()).
-   * postcondition: client is returned to the pool in all code paths
-   *   (including error paths — finally block).
-   */
-  async runAsync(fn) {
-    const client = await this._pool.connect();
-    try {
-      return await fn(client);
-    } finally {
-      client.release();
-    }
-  }
-  // ── Memory CRUD (async wrappers — see note above) ──────────────────────
-  /**
-   * Insert a memory and return its integer ID.
-   *
-   * postcondition: returned id > 0; row exists in memories.
-   * NOTE: Because MemoryStore.insertMemory is sync-signature but PG is async,
-   * this throws. Use insertMemoryAsync from async contexts.
-   * source: infrastructure/pg_store.py:insert_memory
-   */
-  insertMemory(_data) {
-    return this._runSync(async (client) => {
-      return this._insertMemoryOnClient(client, _data);
-    });
-  }
-  async insertMemoryAsync(data) {
-    return this.runAsync((client) => this._insertMemoryOnClient(client, data));
-  }
-  async _insertMemoryOnClient(client, data) {
-    const now = nowIso3();
-    const result = await client.query(
-      `INSERT INTO memories (
-        content, tags, source, domain, directory_context, created_at,
-        last_accessed, heat_base, heat_base_set_at, surprise_score, importance,
-        emotional_valence, confidence, store_type, is_protected,
-        consolidation_stage, theta_phase_at_encoding, encoding_strength,
-        separation_index, interference_score, schema_match_score, schema_id,
-        hippocampal_dependency, is_benchmark, agent_context, is_global,
-        stage_entered_at, arousal, dominant_emotion
-      ) VALUES (
-        $1,$2::jsonb,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
-        $16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29
-      ) RETURNING id`,
-      // $2::jsonb — tags is JSON.stringify(array), must be cast to jsonb
-      // source: cortex@82b15b3 mcp_server/infrastructure/pg_store.py:insert_memory
-      //   json.dumps(tags) stored as JSONB column
-      [
-        data.content,
-        JSON.stringify(data.tags ?? []),
-        data.source ?? "",
-        data.domain ?? "",
-        data.directory_context ?? "",
-        data.created_at ?? now,
-        now,
-        clampHeat2(data.heat ?? 1),
-        now,
-        data.surprise_score ?? 0,
-        data.importance ?? 0.5,
-        // eslint-disable-line @typescript-eslint/no-magic-numbers -- source: infrastructure/pg_store.py default importance
-        data.emotional_valence ?? 0,
-        data.confidence ?? 1,
-        data.store_type ?? "episodic",
-        data.is_protected ?? false,
-        data.consolidation_stage ?? "labile",
-        data.theta_phase_at_encoding ?? 0,
-        data.encoding_strength ?? 1,
-        data.separation_index ?? 0,
-        data.interference_score ?? 0,
-        data.schema_match_score ?? 0,
-        data.schema_id ?? null,
-        data.hippocampal_dependency ?? 1,
-        data.is_benchmark ?? false,
-        data.agent_context ?? "",
-        data.is_global ?? false,
-        data.stage_entered_at ?? data.created_at ?? now,
-        data.arousal ?? 0,
-        data.dominant_emotion ?? "neutral"
-      ]
-    );
-    const row = result.rows[0];
-    if (row == null)
-      throw new Error("insertMemory: no id returned from PG");
-    return row.id;
-  }
-  getMemory(_memoryId) {
-    return this._runSync(async (c2) => this._getMemoryOnClient(c2, _memoryId));
-  }
-  async getMemoryAsync(memoryId) {
-    return this.runAsync((c2) => this._getMemoryOnClient(c2, memoryId));
-  }
-  /**
-   * Call the PostgreSQL recall_memories() stored procedure.
-   *
-   * This is the parity-critical retrieval method. It invokes the same
-   * PL/pgSQL function that Python's bench calls, producing identical
-   * ranking via TMM normalization + weighted-sum fusion.
-   *
-   * precondition: pool is open; recall_memories function is installed in DB.
-   * postcondition: returns rows ordered by descending score.
-   *
-   * source: cortex@82b15b3 mcp_server/infrastructure/pg_store.py:recall_memories
-   * source: cortex@82b15b3 mcp_server/infrastructure/pg_schema.py:RECALL_MEMORIES_LAZY_FN
-   */
-  async recallMemoriesAsync(params) {
-    return this.runAsync((client) => callRecallMemories(client, params));
-  }
-  /**
-   * Delete memories where is_benchmark = TRUE.
-   * Used by the bench harness to clean up between conversations.
-   * source: cortex@82b15b3 benchmarks/lib/bench_db.py:_purge_stale_benchmark_data
-   */
-  async clearBenchmarkMemoriesAsync() {
-    await this.runAsync(async (client) => {
-      await client.query("DELETE FROM memories WHERE is_benchmark = TRUE");
-    });
-  }
-  async _getMemoryOnClient(client, memoryId) {
-    const result = await client.query(`SELECT * FROM memories WHERE id = $1`, [memoryId]);
-    const row = result.rows[0];
-    if (row == null)
-      return null;
-    return this._normalizeRow(row);
-  }
-  deleteMemory(_memoryId) {
-    return this._runSync(async (c2) => this._deleteMemoryOnClient(c2, _memoryId));
-  }
-  async deleteMemoryAsync(memoryId) {
-    return this.runAsync((c2) => this._deleteMemoryOnClient(c2, memoryId));
-  }
-  async _deleteMemoryOnClient(client, memoryId) {
-    const result = await client.query(`DELETE FROM memories WHERE id = $1`, [memoryId]);
-    return (result.rowCount ?? 0) > 0;
-  }
-  /**
-   * Canonical A3 heat writer.
-   * source: phase-3-a3-migration-design.md §3.1
-   * source: infrastructure/pg_store.py:bump_heat_raw
-   */
-  bumpHeatRaw(_id, _heat) {
-    this._runSync(async (c2) => this._bumpHeatOnClient(c2, _id, _heat));
-  }
-  async bumpHeatRawAsync(memoryId, heat) {
-    return this.runAsync((c2) => this._bumpHeatOnClient(c2, memoryId, heat));
-  }
-  async _bumpHeatOnClient(client, memoryId, heat) {
-    await client.query(`UPDATE memories SET heat_base = $1, heat_base_set_at = NOW() WHERE id = $2`, [clampHeat2(heat), memoryId]);
-  }
-  updateMemoryHeat(memoryId, heat) {
-    this.bumpHeatRaw(memoryId, heat);
-  }
-  async updateMemoryHeatAsync(memoryId, heat) {
-    return this.bumpHeatRawAsync(memoryId, heat);
-  }
-  /**
-   * A3 batch heat writer. Single UPDATE ... FROM UNNEST() round-trip.
-   * source: issue #13; phase-3-a3-migration-design.md §3.2
-   * source: infrastructure/pg_store.py:update_memories_heat_batch
-   */
-  updateMemoriesHeatBatch(_updates) {
-    return this._runSync(async (c2) => this._batchHeatOnClient(c2, _updates));
-  }
-  async updateMemoriesHeatBatchAsync(updates) {
-    return this.runAsync((c2) => this._batchHeatOnClient(c2, updates));
-  }
-  async _batchHeatOnClient(client, updates) {
-    if (updates.length === 0)
-      return 0;
-    const ids = updates.map((u2) => u2[0]);
-    const heats = updates.map((u2) => clampHeat2(u2[1]));
-    await client.query(`UPDATE memories AS m
-         SET heat_base = v.new_heat, heat_base_set_at = NOW()
-         FROM (SELECT UNNEST($1::int[]) AS id, UNNEST($2::real[]) AS new_heat) AS v
-         WHERE m.id = v.id`, [ids, heats]);
-    return updates.length;
-  }
-  updateMemoryImportance(memoryId, importance) {
-    void this.runAsync((c2) => c2.query(`UPDATE memories SET importance = $1 WHERE id = $2`, [importance, memoryId]));
-  }
-  updateMemoryAccess(memoryId) {
-    void this.runAsync((c2) => c2.query(`UPDATE memories SET last_accessed = NOW(), access_count = access_count + 1 WHERE id = $1`, [memoryId]));
-  }
-  updateMemoryMetamemory(memoryId, accessCount, usefulCount, confidence) {
-    void this.runAsync((c2) => c2.query(`UPDATE memories SET access_count = $1, useful_count = $2, confidence = $3 WHERE id = $4`, [accessCount, usefulCount, confidence, memoryId]));
-  }
-  setMemoryProtected(memoryId, protected_) {
-    void this.runAsync((c2) => c2.query(`UPDATE memories SET is_protected = $1 WHERE id = $2`, [protected_, memoryId]));
-  }
-  markMemoryStale(memoryId, stale) {
-    void this.runAsync((c2) => c2.query(`UPDATE memories SET is_stale = $1 WHERE id = $2`, [stale, memoryId]));
-  }
-  /**
-   * Update content and tags for a single memory row.
-   *
-   * precondition:  memoryId > 0; content is a non-empty string.
-   * postcondition: memories.content = content AND memories.tags = JSON.stringify(tags)
-   *   for the given id. Single UPDATE — atomic by PostgreSQL autocommit.
-   *
-   * Used by the anchor handler to write the `[ANCHOR: <reason>]` prefix
-   * and the `_anchor` tag set in one round-trip.
-   *
-   * source: cortex@f2b9f99 mcp_server/handlers/anchor.py:143-146
-   *   UPDATE memories SET … tags = %s::jsonb, content = %s … WHERE id = %s
-   */
-  updateMemoryContent(memoryId, content, tags) {
-    void this.runAsync((c2) => c2.query(`UPDATE memories SET content = $1, tags = $2::jsonb WHERE id = $3`, [content, JSON.stringify(tags), memoryId]));
-  }
-  async updateMemoryContentAsync(memoryId, content, tags) {
-    return this.runAsync((c2) => c2.query(`UPDATE memories SET content = $1, tags = $2::jsonb WHERE id = $3`, [content, JSON.stringify(tags), memoryId]).then(() => void 0));
-  }
-  // ── Homeostatic state ──────────────────────────────────────────────────
-  getHomeostaticFactor(_domain) {
-    return this._runSync(async (c2) => {
-      const result = await c2.query(`SELECT COALESCE(MAX(factor), 1.0)::REAL AS factor FROM homeostatic_state WHERE domain = $1`, [_domain || ""]);
-      return result.rows[0]?.factor ?? 1;
-    });
-  }
-  async getHomeostaticFactorAsync(domain) {
-    return this.runAsync(async (c2) => {
-      const result = await c2.query(`SELECT COALESCE(MAX(factor), 1.0)::REAL AS factor FROM homeostatic_state WHERE domain = $1`, [domain || ""]);
-      return result.rows[0]?.factor ?? 1;
-    });
-  }
-  setHomeostaticFactor(_domain, _factor) {
-    const clamped = Math.max(0.01, Math.min(9.99, _factor));
-    void this.runAsync((c2) => c2.query(`INSERT INTO homeostatic_state (domain, factor, updated_at) VALUES ($1,$2,NOW())
-         ON CONFLICT (domain) DO UPDATE SET factor = EXCLUDED.factor, updated_at = NOW()`, [_domain || "", clamped]));
-  }
-  // ── Vector search (pgvector <=> operator) ─────────────────────────────
-  /**
-   * Vector KNN search via pgvector cosine distance (<=> operator).
-   *
-   * NOTE: PgMemoryStore.searchVectors() uses _runSync() which throws at
-   * runtime (see design note on _runSync above). Use searchVectorsAsync()
-   * from async MCP tool handlers.
-   *
-   * source: Cortex mcp_server/infrastructure/pg_store.py:search_vectors
-   * source: https://github.com/pgvector/pgvector — cosine distance <=> operator
-   */
-  searchVectors(_embedding, _topK, _minHeat) {
-    return this._runSync(async (c2) => this._searchVectorsOnClient(c2, _embedding, _topK, _minHeat ?? 0));
-  }
-  /**
-   * Async pgvector KNN search. Use this from MCP tool handlers.
-   *
-   * precondition:  embedding is a valid float32 Buffer (length = dim × 4 bytes).
-   * postcondition: returns up to topK (memory_id, distance) pairs ordered by
-   *   ascending cosine distance. Returns [] if the column is null or extension
-   *   is not installed.
-   *
-   * source: Cortex mcp_server/infrastructure/pg_store.py:search_vectors
-   * source: https://github.com/pgvector/pgvector — <=> is cosine distance
-   * source: https://huggingface.co/sentence-transformers/all-MiniLM-L6-v2 — 384D
-   */
-  async searchVectorsAsync(embedding, topK, minHeat = 0) {
-    return this.runAsync((c2) => this._searchVectorsOnClient(c2, embedding, topK, minHeat));
-  }
-  async _searchVectorsOnClient(client, embedding, topK, minHeat) {
-    const dim = embedding.byteLength / FLOAT32_BYTES_PER_ELEMENT;
-    const floats = new Float32Array(embedding.buffer, embedding.byteOffset, dim);
-    const vecLiteral = `[${Array.from(floats).join(",")}]`;
-    const result = await client.query(`SELECT id, embedding <=> $1::vector AS distance
-       FROM memories
-       WHERE heat_base >= $2 AND NOT is_stale AND embedding IS NOT NULL
-       ORDER BY embedding <=> $1::vector
-       LIMIT $3`, [vecLiteral, minHeat, topK]);
-    return result.rows.map((r2) => [r2.id, r2.distance]);
-  }
-  /**
-   * Upsert an embedding vector for a memory row.
-   *
-   * Called by postStore after memory insert when an EmbeddingEngine is available.
-   * precondition:  memoryId > 0; emb.byteLength = dim × 4.
-   * postcondition: memories.embedding column is updated for the given id.
-   *
-   * source: Cortex mcp_server/infrastructure/pg_store.py — UPDATE memories SET embedding = %s
-   * source: https://github.com/pgvector/pgvector — vector column update via literal
-   */
-  async upsertEmbedding(memoryId, emb) {
-    const dim = emb.byteLength / FLOAT32_BYTES_PER_ELEMENT;
-    const floats = new Float32Array(emb.buffer, emb.byteOffset, dim);
-    const vecLiteral = `[${Array.from(floats).join(",")}]`;
-    return this.runAsync((c2) => c2.query(`UPDATE memories SET embedding = $1::vector WHERE id = $2`, [vecLiteral, memoryId]).then(() => void 0));
-  }
-  // ── Entity graph (deferred: see pg-store-entities.ts) ─────────────────
-  // FAILS_ON: entity operations not yet implemented for PG backend.
-  // The entity graph is fully implemented in SqliteMemoryStore.
-  // PG entity support is tracked in PHASE_7_TRACKING.md Group D.
-  getEntityByName(_name) {
-    return null;
-  }
-  upsertEntity(_name, _type, _domain) {
-    return 0;
-  }
-  linkMemoryEntity(_memoryId, _entityId) {
-  }
-  upsertRelationship(_sourceEntityId, _targetEntityId, _relationshipType, _weight) {
-  }
-  getSchemasForDomain(_domain) {
-    return [];
-  }
-  loadOscillatoryState() {
-    return null;
-  }
-  saveOscillatoryState(_stateJson) {
-  }
-  async close() {
-    await this._pool.end();
-  }
-  // ── Row normalization ──────────────────────────────────────────────────
-  _normalizeRow(row) {
-    const heatBase = row["heat_base"] ?? 1;
-    const tags = row["tags"];
-    const parsedTags = Array.isArray(tags) ? tags : typeof tags === "string" ? JSON.parse(tags) : [];
-    return {
-      id: row["id"],
-      content: row["content"],
-      tags: parsedTags,
-      source: row["source"] ?? "",
-      domain: row["domain"] ?? "",
-      directory_context: row["directory_context"] ?? "",
-      created_at: row["created_at"],
-      last_accessed: row["last_accessed"],
-      heat_base: heatBase,
-      heat: heatBase,
-      heat_base_set_at: row["heat_base_set_at"] ?? "",
-      no_decay: Boolean(row["no_decay"]),
-      surprise_score: row["surprise_score"] ?? 0,
-      importance: row["importance"] ?? 0.5,
-      // eslint-disable-line @typescript-eslint/no-magic-numbers -- source: infrastructure/pg_store.py _normalize_memory_row default importance
-      emotional_valence: row["emotional_valence"] ?? 0,
-      confidence: row["confidence"] ?? 1,
-      access_count: row["access_count"] ?? 0,
-      useful_count: row["useful_count"] ?? 0,
-      plasticity: row["plasticity"] ?? 1,
-      stability: row["stability"] ?? 0,
-      reconsolidation_count: row["reconsolidation_count"] ?? 0,
-      last_reconsolidated: row["last_reconsolidated"] ?? null,
-      store_type: row["store_type"] ?? "episodic",
-      compressed: Boolean(row["compressed"]),
-      compression_level: row["compression_level"] ?? 0,
-      original_content: row["original_content"] ?? null,
-      is_protected: Boolean(row["is_protected"]),
-      is_stale: Boolean(row["is_stale"]),
-      slot_index: row["slot_index"] ?? null,
-      excitability: row["excitability"] ?? 1,
-      consolidation_stage: row["consolidation_stage"] ?? "labile",
-      hours_in_stage: row["hours_in_stage"] ?? 0,
-      stage_entered_at: row["stage_entered_at"] ?? null,
-      replay_count: row["replay_count"] ?? 0,
-      theta_phase_at_encoding: row["theta_phase_at_encoding"] ?? 0,
-      encoding_strength: row["encoding_strength"] ?? 1,
-      separation_index: row["separation_index"] ?? 0,
-      interference_score: row["interference_score"] ?? 0,
-      schema_match_score: row["schema_match_score"] ?? 0,
-      schema_id: row["schema_id"] ?? null,
-      hippocampal_dependency: row["hippocampal_dependency"] ?? 1,
-      is_benchmark: Boolean(row["is_benchmark"]),
-      agent_context: row["agent_context"] ?? "",
-      is_global: Boolean(row["is_global"])
-    };
-  }
-};
-
 // packages/memory/dist/recall/reranker.js
 import { tmpdir } from "os";
 var FLASHRANK_CACHE_DIR = process.env["FLASHRANK_CACHE_DIR"] ?? tmpdir();
@@ -49177,16 +49345,21 @@ function _parseOneFile(path6, content) {
 async function _storeFile(root, relPath, analysis, domain, store) {
   const content = buildMemoryContent(analysis);
   const tags = _buildTags(relPath, analysis);
+  const insertData = {
+    content,
+    tags,
+    directory_context: root,
+    domain,
+    source: CODEBASE_SOURCE,
+    agent_context: CODEBASE_AGENT_CONTEXT
+  };
   let memoryId = null;
   try {
-    memoryId = store.insertMemory({
-      content,
-      tags,
-      directory_context: root,
-      domain,
-      source: CODEBASE_SOURCE,
-      agent_context: CODEBASE_AGENT_CONTEXT
-    });
+    if (store.insertMemoryAsync) {
+      memoryId = await store.insertMemoryAsync(insertData);
+    } else {
+      memoryId = store.insertMemory(insertData);
+    }
   } catch {
     return [null, 0, 0];
   }
@@ -50690,10 +50863,10 @@ import { join as join16, basename as basename6 } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 
 // packages/memory/dist/hooks/db.js
-async function openConnection(databaseUrl) {
+async function openConnection(databaseUrl2) {
   try {
     const { default: pg } = await import("pg");
-    const client = new pg.Client({ connectionString: databaseUrl });
+    const client = new pg.Client({ connectionString: databaseUrl2 });
     await client.connect();
     return client;
   } catch {
@@ -50730,8 +50903,8 @@ function parseTags3(val) {
   }
   return [];
 }
-async function fetchAnchors(databaseUrl, limit) {
-  const conn = await openConnection(databaseUrl);
+async function fetchAnchors(databaseUrl2, limit) {
+  const conn = await openConnection(databaseUrl2);
   if (!conn)
     return [];
   try {
@@ -50750,8 +50923,8 @@ async function fetchAnchors(databaseUrl, limit) {
     await conn.end();
   }
 }
-async function fetchTeamDecisions(databaseUrl, excludeIds) {
-  const conn = await openConnection(databaseUrl);
+async function fetchTeamDecisions(databaseUrl2, excludeIds) {
+  const conn = await openConnection(databaseUrl2);
   if (!conn)
     return [];
   try {
@@ -50769,8 +50942,8 @@ async function fetchTeamDecisions(databaseUrl, excludeIds) {
     await conn.end();
   }
 }
-async function fetchHotMemories(databaseUrl, minHeat, limit, excludeIds) {
-  const conn = await openConnection(databaseUrl);
+async function fetchHotMemories(databaseUrl2, minHeat, limit, excludeIds) {
+  const conn = await openConnection(databaseUrl2);
   if (!conn)
     return [];
   try {
@@ -50786,8 +50959,8 @@ async function fetchHotMemories(databaseUrl, minHeat, limit, excludeIds) {
     await conn.end();
   }
 }
-async function fetchCheckpoint(databaseUrl) {
-  const conn = await openConnection(databaseUrl);
+async function fetchCheckpoint(databaseUrl2) {
+  const conn = await openConnection(databaseUrl2);
   if (!conn)
     return null;
   try {
@@ -50814,8 +50987,8 @@ async function fetchCheckpoint(databaseUrl) {
     await conn.end();
   }
 }
-async function countMemories(databaseUrl) {
-  const conn = await openConnection(databaseUrl);
+async function countMemories(databaseUrl2) {
+  const conn = await openConnection(databaseUrl2);
   if (!conn)
     return 0;
   try {
@@ -50828,8 +51001,8 @@ async function countMemories(databaseUrl) {
     await conn.end();
   }
 }
-async function ftsRecall(databaseUrl, query, minHeat, limit) {
-  const conn = await openConnection(databaseUrl);
+async function ftsRecall(databaseUrl2, query, minHeat, limit) {
+  const conn = await openConnection(databaseUrl2);
   if (!conn)
     return [];
   try {
@@ -50849,10 +51022,10 @@ async function ftsRecall(databaseUrl, query, minHeat, limit) {
     await conn.end();
   }
 }
-async function fetchAgentMemories(databaseUrl, agentName, keywords, minHeat, limit) {
+async function fetchAgentMemories(databaseUrl2, agentName, keywords, minHeat, limit) {
   if (!keywords.length)
     return [];
-  const conn = await openConnection(databaseUrl);
+  const conn = await openConnection(databaseUrl2);
   if (!conn)
     return [];
   try {
@@ -50871,8 +51044,8 @@ async function fetchAgentMemories(databaseUrl, agentName, keywords, minHeat, lim
     await conn.end();
   }
 }
-async function fetchTeamDecisionsForAgent(databaseUrl, excludeAgent, limit) {
-  const conn = await openConnection(databaseUrl);
+async function fetchTeamDecisionsForAgent(databaseUrl2, excludeAgent, limit) {
+  const conn = await openConnection(databaseUrl2);
   if (!conn)
     return [];
   try {
@@ -50891,8 +51064,8 @@ async function fetchTeamDecisionsForAgent(databaseUrl, excludeAgent, limit) {
     await conn.end();
   }
 }
-async function bumpHeatByPath(databaseUrl, filePath, boost) {
-  const conn = await openConnection(databaseUrl);
+async function bumpHeatByPath(databaseUrl2, filePath, boost) {
+  const conn = await openConnection(databaseUrl2);
   if (!conn)
     return 0;
   const filename = filePath.split("/").pop() ?? filePath;
@@ -50912,10 +51085,10 @@ async function bumpHeatByPath(databaseUrl, filePath, boost) {
     await conn.end();
   }
 }
-async function bumpHeatBySymbols(databaseUrl, symbolNames, boost, maxBumps) {
+async function bumpHeatBySymbols(databaseUrl2, symbolNames, boost, maxBumps) {
   if (!symbolNames.length)
     return 0;
-  const conn = await openConnection(databaseUrl);
+  const conn = await openConnection(databaseUrl2);
   if (!conn)
     return 0;
   const names = symbolNames.slice(0, maxBumps);
@@ -51077,7 +51250,7 @@ var HOT_LIMIT = parseInt(process.env["CORTEX_SESSION_START_LIMIT"] ?? "8", 10);
 var MIN_HEAT = parseFloat(process.env["CORTEX_SESSION_START_MIN_HEAT"] ?? "0.4");
 var ANCHOR_LIMIT = parseInt(process.env["CORTEX_SESSION_START_ANCHOR_LIMIT"] ?? "5", 10);
 function autoBackfill() {
-  const { pluginRoot, databaseUrl } = loadHookConfig();
+  const { pluginRoot, databaseUrl: databaseUrl2 } = loadHookConfig();
   if (!pluginRoot) {
     log("auto-backfill skipped: no plugin root");
     return 0;
@@ -51097,7 +51270,7 @@ print(json.dumps({"backfilled": r.get("backfilled", 0), "cascade_advanced": r.ge
       // source: cortex@ed33435 mcp_server/hooks/session_start.py — backfill budget; 60s for historical JSONL scan
       env: {
         ...process.env,
-        DATABASE_URL: databaseUrl,
+        DATABASE_URL: databaseUrl2,
         PYTHONPATH: pluginRoot
       }
     });
@@ -51340,9 +51513,9 @@ async function processEvent(event) {
   const query = extractQuery(event);
   if (!query || shouldSkip(query))
     return;
-  const { databaseUrl } = loadHookConfig();
+  const { databaseUrl: databaseUrl2 } = loadHookConfig();
   const memories = await Promise.race([
-    ftsRecall(databaseUrl, query, MIN_HEAT2, MAX_MEMORIES),
+    ftsRecall(databaseUrl2, query, MIN_HEAT2, MAX_MEMORIES),
     new Promise((_2, reject) => setTimeout(() => reject(new Error("recall timeout")), HOOK_TIMEOUTS_MS.USER_PROMPT_SUBMIT - 200))
   ]);
   if (!memories.length)
@@ -51521,8 +51694,8 @@ function buildTags(toolName, output) {
   return tags;
 }
 async function storeMemory2(content, tags, directory, toolName) {
-  const { databaseUrl } = loadHookConfig();
-  const store = new PgMemoryStore(databaseUrl);
+  const { databaseUrl: databaseUrl2 } = loadHookConfig();
+  const store = new PgMemoryStore(databaseUrl2);
   try {
     const memoryId = await store.insertMemoryAsync({
       content,
@@ -51548,8 +51721,8 @@ async function processEvent2(event) {
   toolCallCounter++;
   if (toolCallCounter >= CASCADE_INTERVAL) {
     toolCallCounter = 0;
-    const { databaseUrl } = loadHookConfig();
-    const cascadeStore = new PgMemoryStore(databaseUrl);
+    const { databaseUrl: databaseUrl2 } = loadHookConfig();
+    const cascadeStore = new PgMemoryStore(databaseUrl2);
     try {
       const result = await runCascadeAdvancement({
         getMemoriesByStage: (stage, limit) => cascadeStore.runAsync((c2) => c2.query(`SELECT * FROM memories WHERE consolidation_stage = $1 LIMIT $2`, [stage, limit]).then((r2) => r2.rows)),
@@ -51761,13 +51934,13 @@ async function processEvent3(event) {
     log4("skip: no keywords extracted");
     return;
   }
-  const { databaseUrl } = loadHookConfig();
+  const { databaseUrl: databaseUrl2 } = loadHookConfig();
   const agentMemories = await Promise.race([
-    fetchAgentMemories(databaseUrl, agentName, keywords, MIN_HEAT3, MAX_MEMORIES2),
+    fetchAgentMemories(databaseUrl2, agentName, keywords, MIN_HEAT3, MAX_MEMORIES2),
     new Promise((_2, reject) => setTimeout(() => reject(new Error("agent query timeout")), HOOK_TIMEOUTS_MS.SUBAGENT_START - 500))
   ]);
   const remaining = MAX_MEMORIES2 - agentMemories.length;
-  const teamDecisions = remaining > 0 ? await fetchTeamDecisionsForAgent(databaseUrl, agentName, remaining) : [];
+  const teamDecisions = remaining > 0 ? await fetchTeamDecisionsForAgent(databaseUrl2, agentName, remaining) : [];
   const memories = [
     ...agentMemories.map((m2) => ({
       content: m2.content.slice(0, 300),
@@ -51825,9 +51998,9 @@ function log5(msg) {
 `);
 }
 async function saveCheckpointAndCascade(event) {
-  const { databaseUrl } = loadHookConfig();
+  const { databaseUrl: databaseUrl2 } = loadHookConfig();
   const sessionId = event?.session_id ?? "auto-compaction";
-  const store = new PgMemoryStore(databaseUrl);
+  const store = new PgMemoryStore(databaseUrl2);
   try {
     await store.runAsync(async (client) => {
       await client.query(`UPDATE checkpoints SET is_active = FALSE WHERE session_id = $1`, [sessionId]);
@@ -52002,8 +52175,8 @@ var CONSOLIDATION_LIGHT_THRESHOLD = 5;
 var CONSOLIDATION_STANDARD_THRESHOLD = 20;
 async function runConsolidation(turnCount) {
   const mode = turnCount < CONSOLIDATION_LIGHT_THRESHOLD ? "light" : turnCount < CONSOLIDATION_STANDARD_THRESHOLD ? "standard" : "full";
-  const { databaseUrl } = loadHookConfig();
-  const store = new PgMemoryStore(databaseUrl);
+  const { databaseUrl: databaseUrl2 } = loadHookConfig();
+  const store = new PgMemoryStore(databaseUrl2);
   try {
     const result = await runCascadeAdvancement({
       getMemoriesByStage: (stage, limit) => store.runAsync((c2) => c2.query(`SELECT * FROM memories WHERE consolidation_stage = $1 LIMIT $2`, [stage, limit]).then((r2) => r2.rows)),
@@ -52140,8 +52313,8 @@ async function processEvent6(event) {
     return;
   if (checkCooldown(filePath))
     return;
-  const { databaseUrl } = loadHookConfig();
-  const count = await bumpHeatByPath(databaseUrl, filePath, HEAT_BOOST);
+  const { databaseUrl: databaseUrl2 } = loadHookConfig();
+  const count = await bumpHeatByPath(databaseUrl2, filePath, HEAT_BOOST);
   if (count > 0) {
     updateCooldown(filePath);
     const filename = filePath.split("/").pop() ?? filePath;
@@ -52277,11 +52450,11 @@ async function processEvent7(event) {
     return;
   if (checkCooldown2(filePath))
     return;
-  const { projectRoot, databaseUrl } = loadHookConfig();
+  const { projectRoot, databaseUrl: databaseUrl2 } = loadHookConfig();
   const symbols = await pipelineDetectChanges(projectRoot, filePath).catch(() => []);
   if (!symbols.length)
     return;
-  const count = await bumpHeatBySymbols(databaseUrl, symbols, IMPACT_BOOST2, MAX_BUMPS);
+  const count = await bumpHeatBySymbols(databaseUrl2, symbols, IMPACT_BOOST2, MAX_BUMPS);
   if (count > 0) {
     updateCooldown2(filePath);
     log8(`bumped ${count} memories for ${symbols.length} impacted symbols`);
@@ -52804,17 +52977,35 @@ if (llmClient !== null) {
 } else {
   process.stderr.write("[mcp-server-memory] ANTHROPIC_API_KEY absent \u2014 LLM client disabled (graceful degradation)\n");
 }
-var dbPath = process.env["CORTEX_DB_PATH"] ?? join21(homedir11(), ".cortex", "cortex.db");
-var memoryStore = new SqliteMemoryStore(dbPath);
-var narrativeDb = memoryStore._db;
-var narrativeStore = new SqliteNarrativeAdapter(narrativeDb);
-process.stderr.write(`[mcp-server-memory] SQLite store open: ${dbPath}
+var databaseUrl = process.env["DATABASE_URL"];
+var memoryStore;
+var isPgStore = false;
+if (databaseUrl) {
+  assertNotForbiddenDb(databaseUrl);
+  process.stderr.write(`[mcp-server-memory] DATABASE_URL set \u2014 using PgMemoryStore
 `);
+  memoryStore = new PgMemoryStore(databaseUrl);
+  isPgStore = true;
+} else {
+  const dbPath = process.env["CORTEX_DB_PATH"] ?? join21(homedir11(), ".cortex", "cortex.db");
+  memoryStore = new SqliteMemoryStore(dbPath);
+  process.stderr.write(`[mcp-server-memory] SQLite store open: ${dbPath}
+`);
+}
+var narrativeStore = isPgStore ? null : (() => {
+  const narrativeDb = memoryStore._db;
+  return new SqliteNarrativeAdapter(narrativeDb);
+})();
+var pgStore = isPgStore ? memoryStore : null;
 var storeExt = memoryStore;
 var recallStore = {
   // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py::vec_search
   searchByVector: async (embedding, topK, minHeat) => {
     const buf = Buffer.from(new Float32Array(embedding).buffer);
+    if (pgStore) {
+      const hits2 = await pgStore.searchVectorsAsync(buf, topK, minHeat);
+      return hits2.map(([memory_id, distance]) => ({ memory_id, distance }));
+    }
     const hits = memoryStore.searchVectors(buf, topK, minHeat);
     return hits.map(([memory_id, distance]) => ({ memory_id, distance }));
   },
@@ -52835,10 +53026,16 @@ var recallStore = {
   },
   // source: packages/memory/src/remember/storage/sqlite-store.ts::getMemory
   getMemory: async (id2) => {
+    if (pgStore)
+      return await pgStore.getMemoryAsync(id2);
     return memoryStore.getMemory(id2);
   },
   // source: packages/memory/src/remember/storage/sqlite-store.ts::getByIds (escape hatch)
   getByIds: async (ids) => {
+    if (pgStore) {
+      const results = await Promise.all(ids.map((id2) => pgStore.getMemoryAsync(id2)));
+      return results.filter((r2) => r2 !== null);
+    }
     const raw = storeExt["getByIds"]?.(ids) ?? ids.map((id2) => memoryStore.getMemory(id2)).filter(Boolean);
     return raw.filter(Boolean);
   },
@@ -52891,13 +53088,18 @@ var graphPort = {
     }));
   },
   getMemory: async (memoryId) => {
-    const mem = memoryStore.getMemory(memoryId);
+    let mem;
+    if (pgStore) {
+      mem = await pgStore.getMemoryAsync(memoryId);
+    } else {
+      mem = memoryStore.getMemory(memoryId);
+    }
     if (!mem)
       return void 0;
     return {
       id: mem.id,
       content: mem.content,
-      lastAccessed: mem.last_accessed,
+      lastAccessed: mem.last_accessed ?? mem.lastAccessed,
       heat: mem.heat,
       domain: mem.domain,
       tags: Array.isArray(mem.tags) ? mem.tags : []
@@ -52915,7 +53117,7 @@ registerRememberTools(server, { store: memoryStore });
 registerMethodologyTools(server);
 registerConsolidationTools(server, { store: memoryStore });
 registerManagementTools(server, { store: memoryStore });
-registerNarrativeTools(server, { store: narrativeStore, llmClient });
+registerNarrativeTools(server, narrativeStore ? { store: narrativeStore, llmClient } : null);
 registerAdvancedTools(server, { store: memoryStore });
 registerWikiTools(server);
 registerIngestTools(server, { store: memoryStore, wikiRoot: process.env["CORTEX_WIKI_ROOT"] ?? join21(homedir11(), ".claude", "methodology", "wiki"), mcpClientPool: null });
@@ -52924,6 +53126,9 @@ async function main9() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write("[mcp-server-memory] running on stdio, tools registered\n");
+  if (isPgStore) {
+    process.stderr.write("[mcp-server-memory] backend: PostgreSQL (DATABASE_URL)\n");
+  }
 }
 main9().catch((err) => {
   process.stderr.write(`[mcp-server-memory] fatal: ${String(err)}

@@ -7,10 +7,18 @@
  * This file is the single boundary between the @agentic/memory domain layer
  * and the stdio MCP transport. It:
  *   1. Instantiates an McpServer with identity metadata.
- *   2. Constructs infrastructure adapters (SqliteMemoryStore, AnthropicLlmClient
- *      when ANTHROPIC_API_KEY is set, SqliteNarrativeAdapter, SqliteRecallAdapter).
- *   3. Delegates tool registration to one file per topic in src/tools/.
- *   4. Connects the server to StdioServerTransport.
+ *   2. Constructs infrastructure adapters — PgMemoryStore when DATABASE_URL
+ *      is set, SqliteMemoryStore otherwise (ADR-0042).
+ *   3. Runs the db-guard: refuses to start if DATABASE_URL points to the
+ *      standalone Python Cortex database (exit 78).
+ *   4. Delegates tool registration to one file per topic in src/tools/.
+ *   5. Connects the server to StdioServerTransport.
+ *
+ * ADR-0042 compliance: DATABASE_URL is now honoured at the MCP entry point.
+ * Prior to this fix the MCP server always used SqliteMemoryStore regardless
+ * of DATABASE_URL — write operations silently went to ~/.cortex/cortex.db
+ * while the dashboard (plugins/memory/dist/server.js) correctly used PG.
+ * This fix completes ADR-0042 for the MCP entry point.
  *
  * All tools from MCP_TOOLS.md are registered by the register* functions.
  *
@@ -19,6 +27,7 @@
  * source: modelcontextprotocol.io/quickstart/server §"Logging in MCP Servers"
  *
  * source: @modelcontextprotocol/sdk v1.29.0 API — McpServer + StdioServerTransport
+ * source: ADR-0042 — MCP entry must honour DATABASE_URL
  */
 
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -29,10 +38,13 @@ import type { LlmClient } from "@agentic/core";
 import { AnthropicLlmClient } from "@agentic/memory/infrastructure/anthropic-llm-client.js";
 import { SqliteNarrativeAdapter } from "@agentic/memory/narrative/handlers/sqlite-narrative-adapter.js";
 import { SqliteMemoryStore } from "@agentic/memory/remember/storage/sqlite-store.js";
+import { PgMemoryStore } from "@agentic/memory/remember/storage/pg-store.js";
 import type { GraphPort } from "@agentic/memory/graph/port.js";
 import type { MemoryStore as RecallMemoryStore } from "@agentic/memory/recall/port.js";
 import type { MemoryItem } from "@agentic/memory/recall/types.js";
+import type { MemoryStore } from "@agentic/memory/remember/storage/memory-store.js";
 
+import { assertNotForbiddenDb } from "./db-guard.js";
 import { registerRecallTools } from "./tools/recall.js";
 import { registerRememberTools } from "./tools/remember.js";
 import { registerMethodologyTools } from "./tools/methodology.js";
@@ -65,40 +77,72 @@ if (llmClient !== null) {
   process.stderr.write("[mcp-server-memory] ANTHROPIC_API_KEY absent — LLM client disabled (graceful degradation)\n");
 }
 
-// ── SQLite store ──────────────────────────────────────────────────────────────
-// source: install/MIGRATION_FROM_OLD_PLUGINS.md §"SQLite fallback DB"
-// source: Martin, R. C. (2017). Clean Architecture, Ch. 11 — configuration
-//         is the only acceptable source of global state; frozen after startup.
-
-const dbPath: string = process.env["CORTEX_DB_PATH"] ??
-  join(homedir(), ".cortex", "cortex.db");
-
-// MemoryStore (sync) for remember/management/navigation/consolidation.
-// source: packages/memory/src/remember/storage/sqlite-store.ts::SqliteMemoryStore
-const memoryStore = new SqliteMemoryStore(dbPath);
-
-// Narrative adapter (read-only subset for narrative tools).
-// Access internal DB connection from SqliteMemoryStore. The _db field is a
-// better-sqlite3 Database instance. We cast through unknown to avoid importing
-// better-sqlite3 types in this package (not in its declared deps).
-// source: packages/memory/src/remember/storage/sqlite-store.ts — _db field
-// source: packages/memory/src/narrative/handlers/sqlite-narrative-adapter.ts
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-const narrativeDb = (memoryStore as any)._db as ConstructorParameters<typeof SqliteNarrativeAdapter>[0];
-const narrativeStore = new SqliteNarrativeAdapter(narrativeDb);
-
-process.stderr.write(`[mcp-server-memory] SQLite store open: ${dbPath}\n`);
-
-// ── SqliteRecallAdapter ───────────────────────────────────────────────────────
+// ── Store selection (ADR-0042) ────────────────────────────────────────────────
 //
-// Adapts SqliteMemoryStore (sync, remember port) to RecallMemoryStore (async,
-// recall port). The recall handler depends on async methods; SQLite is sync.
-// This adapter lifts the sync calls with Promise.resolve().
+// precondition:  DATABASE_URL is a valid PostgreSQL connection string, OR
+//   absent/empty (SQLite fallback).
+// postcondition: memoryStore is a live MemoryStore (Pg or SQLite).
+// invariant:     DATABASE_URL pointing to the standalone Python Cortex
+//   database (db_name=cortex on localhost) causes immediate exit(78).
+//
+// source: ADR-0042 — MCP entry must honour DATABASE_URL; guard against
+//   accidentally touching the Python Cortex DB (db_name=cortex on localhost).
+// source: Martin, R. C. (2017). Clean Architecture, Ch. 11 — configuration
+//   is the only acceptable source of global state; frozen after startup.
+
+const databaseUrl: string | undefined = process.env["DATABASE_URL"];
+
+let memoryStore: MemoryStore;
+let isPgStore = false;
+
+if (databaseUrl) {
+  // Guard: refuse to connect to the standalone Python Cortex database.
+  // source: ADR-0042 §guard — exit 78 on db_name=cortex on localhost.
+  assertNotForbiddenDb(databaseUrl);
+
+  process.stderr.write(`[mcp-server-memory] DATABASE_URL set — using PgMemoryStore\n`);
+  memoryStore = new PgMemoryStore(databaseUrl);
+  isPgStore = true;
+} else {
+  // SQLite fallback.
+  // source: install/MIGRATION_FROM_OLD_PLUGINS.md §"SQLite fallback DB"
+  const dbPath: string = process.env["CORTEX_DB_PATH"] ??
+    join(homedir(), ".cortex", "cortex.db");
+
+  memoryStore = new SqliteMemoryStore(dbPath);
+  process.stderr.write(`[mcp-server-memory] SQLite store open: ${dbPath}\n`);
+}
+
+// ── Narrative adapter (SQLite-only) ──────────────────────────────────────────
+//
+// SqliteNarrativeAdapter requires the internal _db field of SqliteMemoryStore.
+// When using PgMemoryStore, narrative tools are disabled (narrativeStore = null).
+// Narrative tools in registry-memory.ts already handle null narrativeStore.
+//
+// source: packages/memory/src/narrative/handlers/sqlite-narrative-adapter.ts
+
+const narrativeStore: SqliteNarrativeAdapter | null = isPgStore
+  ? null
+  : (() => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const narrativeDb = (memoryStore as any)._db as ConstructorParameters<typeof SqliteNarrativeAdapter>[0];
+      return new SqliteNarrativeAdapter(narrativeDb);
+    })();
+
+// Type-narrow: PgMemoryStore for calling *Async methods in adapters.
+const pgStore: PgMemoryStore | null = isPgStore ? (memoryStore as PgMemoryStore) : null;
+
+// ── Recall adapter (SQLite sync-lift / PG async) ──────────────────────────────
+//
+// Adapts MemoryStore to RecallMemoryStore (async, recall port).
+//
+// For SQLite: lifts sync calls with Promise.resolve().
+// For PG: calls the *Async variants directly (sync variants throw via _runSync).
 //
 // source: Martin, R. C. (2017). Clean Architecture, Ch. 11 — adapters
 //   transform incompatible shapes at the composition root.
 // source: packages/memory/src/recall/port.ts::MemoryStore (target interface)
-// source: packages/memory/src/remember/storage/sqlite-store.ts (source store)
+// source: ADR-0042 — async path for PG backend
 
 const storeExt = memoryStore as unknown as Record<string, (...a: unknown[]) => unknown>;
 
@@ -106,6 +150,10 @@ const recallStore: RecallMemoryStore = {
   // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py::vec_search
   searchByVector: async (embedding, topK, minHeat) => {
     const buf = Buffer.from(new Float32Array(embedding).buffer);
+    if (pgStore) {
+      const hits = await pgStore.searchVectorsAsync(buf, topK, minHeat);
+      return hits.map(([memory_id, distance]) => ({ memory_id, distance }));
+    }
     const hits = memoryStore.searchVectors(buf, topK, minHeat);
     return hits.map(([memory_id, distance]) => ({ memory_id, distance }));
   },
@@ -130,11 +178,16 @@ const recallStore: RecallMemoryStore = {
 
   // source: packages/memory/src/remember/storage/sqlite-store.ts::getMemory
   getMemory: async (id) => {
+    if (pgStore) return (await pgStore.getMemoryAsync(id)) as unknown as MemoryItem | null;
     return memoryStore.getMemory(id) as MemoryItem | null;
   },
 
   // source: packages/memory/src/remember/storage/sqlite-store.ts::getByIds (escape hatch)
   getByIds: async (ids) => {
+    if (pgStore) {
+      const results = await Promise.all(ids.map((id) => pgStore.getMemoryAsync(id)));
+      return results.filter((r) => r !== null) as unknown as MemoryItem[];
+    }
     const raw = (storeExt["getByIds"]?.(ids) ??
       ids.map((id) => memoryStore.getMemory(id)).filter(Boolean)) as MemoryItem[];
     return raw.filter(Boolean);
@@ -201,15 +254,21 @@ const graphPort: GraphPort = {
     }));
   },
   getMemory: async (memoryId) => {
-    const mem = memoryStore.getMemory(memoryId);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let mem: any;
+    if (pgStore) {
+      mem = await pgStore.getMemoryAsync(memoryId);
+    } else {
+      mem = memoryStore.getMemory(memoryId);
+    }
     if (!mem) return undefined;
     return {
-      id:           mem.id,
-      content:      mem.content,
-      lastAccessed: mem.last_accessed,
-      heat:         mem.heat,
-      domain:       mem.domain,
-      tags:         Array.isArray(mem.tags) ? mem.tags : [],
+      id:           mem.id as number,
+      content:      mem.content as string,
+      lastAccessed: (mem.last_accessed ?? mem.lastAccessed) as string | undefined,
+      heat:         mem.heat as number | undefined,
+      domain:       mem.domain as string | undefined,
+      tags:         Array.isArray(mem.tags) ? mem.tags as string[] : [],
     };
   },
   updateMemoryAccess: async (memoryId) => {
@@ -228,7 +287,9 @@ registerRememberTools(server, { store: memoryStore });                          
 registerMethodologyTools(server);                                                    // 5 tools
 registerConsolidationTools(server, { store: memoryStore });                         // 4 tools
 registerManagementTools(server, { store: memoryStore });                            // 5 tools
-registerNarrativeTools(server, { store: narrativeStore, llmClient });               // 3 tools
+// narrativeStore is null when using PgMemoryStore (SQLite-only feature).
+// registerNarrativeTools accepts null and degrades gracefully.
+registerNarrativeTools(server, narrativeStore ? { store: narrativeStore, llmClient } : null);  // 3 tools
 registerAdvancedTools(server, { store: memoryStore });                              // 6 tools
 registerWikiTools(server);                                                           // 8 tools
 registerIngestTools(server, { store: memoryStore, wikiRoot: process.env["CORTEX_WIKI_ROOT"] ?? join(homedir(), ".claude", "methodology", "wiki"), mcpClientPool: null }); // 6 tools
@@ -240,6 +301,9 @@ async function main(): Promise<void> {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write("[mcp-server-memory] running on stdio, tools registered\n");
+  if (isPgStore) {
+    process.stderr.write("[mcp-server-memory] backend: PostgreSQL (DATABASE_URL)\n");
+  }
 }
 
 main().catch((err: unknown) => {

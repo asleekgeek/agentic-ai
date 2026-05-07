@@ -100,14 +100,31 @@ function toConsolidationStore(store: MemoryStore): ConsolidationStore {
     updateMemoryImportance:      (id, importance) => { ext["updateMemoryImportance"]?.(id, importance); return Promise.resolve(); },
     insertRelationship:          (rel) => { ext["insertRelationship"]?.(rel); return Promise.resolve(); },
     // ── sleep ────────────────────────────────────────────────────────────────
-    insertMemory:                (mem) => Promise.resolve((ext["insertMemory"]?.(mem) ?? 0) as number),
+    // Use insertMemoryAsync when available (PG path). ext["insertMemory"]?.(mem) would call
+    // PgMemoryStore.insertMemory() which throws via _runSync().
+    // source: ADR-0042 — async path for PG backend
+    insertMemory: async (mem) => {
+      if (store.insertMemoryAsync) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        return store.insertMemoryAsync(mem as any);
+      }
+      return (ext["insertMemory"]?.(mem) ?? 0) as number;
+    },
     // ── cascade ──────────────────────────────────────────────────────────────
     getMemoriesByStage:          (s, l) => Promise.resolve((ext["getMemoriesByStage"]?.(s, l) ?? []) as Record<string, unknown>[]),
     updateMemoryConsolidation:   (id, s, h, r, d) => { ext["updateMemoryConsolidation"]?.(id, s, h, r, d); return Promise.resolve(); },
     insertStageTransitionsBatch: (t) => { ext["insertStageTransitionsBatch"]?.(t); return Promise.resolve(); },
     updateStageEnteredAt:        (memoryId, enteredAt) => { ext["updateStageEnteredAt"]?.(memoryId, enteredAt); return Promise.resolve(); },
     // ── homeostatic ──────────────────────────────────────────────────────────
-    getHomeostaticFactor:        (d) => Promise.resolve(store.getHomeostaticFactor(d)),
+    // Use getHomeostaticFactorAsync when available (PG path — sync throws via _runSync).
+    // source: ADR-0042 — async path for PG backend
+    getHomeostaticFactor: async (d) => {
+      const pgStore = store as unknown as { getHomeostaticFactorAsync?: (domain: string) => Promise<number> };
+      if (pgStore.getHomeostaticFactorAsync) {
+        return pgStore.getHomeostaticFactorAsync(d);
+      }
+      return store.getHomeostaticFactor(d);
+    },
     setHomeostaticFactor:        (d, f) => { store.setHomeostaticFactor(d, f); return Promise.resolve(); },
     bumpHeatRaw:                 (id, heat) => { ext["bumpHeatRaw"]?.(id, heat); return Promise.resolve(); },
     // ── batch connection (memify + homeostatic + sleep) ───────────────────────

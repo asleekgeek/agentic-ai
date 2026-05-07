@@ -18,6 +18,9 @@
 
 import type { MemoryStore } from "../storage/memory-store.js";
 
+// source: cortex@ed33435 mcp_server/handlers/forget.py — content_preview is first 80 chars
+const FORGET_CONTENT_PREVIEW_CHARS = 80;
+
 export interface ForgetRequest {
   memory_id: number;
   soft?: boolean;
@@ -69,7 +72,7 @@ export function forget(
       deleted: true,
       method: "soft",
       memory_id: memoryId,
-      content_preview: mem.content.slice(0, 80),
+      content_preview: mem.content.slice(0, FORGET_CONTENT_PREVIEW_CHARS),
     };
   }
 
@@ -79,6 +82,72 @@ export function forget(
     deleted,
     method: "hard",
     memory_id: memoryId,
-    content_preview: mem.content.slice(0, 80),
+    content_preview: mem.content.slice(0, FORGET_CONTENT_PREVIEW_CHARS),
+  };
+}
+
+/**
+ * forgetAsync — async variant that calls *Async store methods when available.
+ *
+ * MCP tool handlers MUST use this when the store may be PgMemoryStore.
+ * The sync forget() calls store.getMemory/deleteMemory/bumpHeatRaw which
+ * throw at runtime on PgMemoryStore (its _runSync() is intentionally broken).
+ *
+ * precondition:  same as forget().
+ * postcondition: same as forget().
+ * source: ADR-0042 — async path required for PG backend.
+ */
+export async function forgetAsync(
+  args: ForgetRequest,
+  store: MemoryStore,
+): Promise<ForgetResponse> {
+  const memoryId = args.memory_id;
+  const soft = args.soft ?? false;
+  const force = args.force ?? false;
+
+  if (!memoryId || memoryId < 1) {
+    return { deleted: false, reason: "no_memory_id" };
+  }
+
+  const mem = store.getMemoryAsync
+    ? await store.getMemoryAsync(memoryId)
+    : store.getMemory(memoryId);
+
+  if (mem === null) {
+    return { deleted: false, reason: "not_found", memory_id: memoryId };
+  }
+
+  if (mem.is_protected && !force) {
+    return {
+      deleted: false,
+      reason: "protected — use force=true to override",
+      memory_id: memoryId,
+    };
+  }
+
+  if (soft) {
+    store.markMemoryStale(memoryId, true);
+    if (store.bumpHeatRawAsync) {
+      await store.bumpHeatRawAsync(memoryId, 0.0);
+    } else {
+      store.bumpHeatRaw(memoryId, 0.0);
+    }
+    return {
+      deleted: true,
+      method: "soft",
+      memory_id: memoryId,
+      content_preview: mem.content.slice(0, FORGET_CONTENT_PREVIEW_CHARS),
+    };
+  }
+
+  const deleted = store.deleteMemoryAsync
+    ? await store.deleteMemoryAsync(memoryId)
+    : store.deleteMemory(memoryId);
+
+  return {
+    deleted,
+    method: "hard",
+    memory_id: memoryId,
+    content_preview: mem.content.slice(0, FORGET_CONTENT_PREVIEW_CHARS),
   };
 }

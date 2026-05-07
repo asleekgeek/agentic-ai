@@ -27,7 +27,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { MemoryStore } from "@agentic/memory/remember/storage/memory-store.js";
 import { importHandler } from "@agentic/memory/import/handler.js";
-import { remember } from "@agentic/memory/remember/handlers/remember.js";
+import { rememberAsync } from "@agentic/memory/remember/handlers/remember.js";
 import { handler as seedProjectHandlerFn } from "@agentic/memory/codebase-analysis/handlers/seed-project.js";
 
 // ── Named constants ───────────────────────────────────────────────────────────
@@ -199,9 +199,11 @@ export function registerManagementTools(server: McpServer, deps: ManagementDeps)
     async (args) => {
       try {
         // source: packages/memory/src/import/handler.ts::importHandler
-        const rememberFn = (rawArgs: unknown): Promise<{ stored: true } | null> => {
-          const result = remember(rawArgs, deps.store);
-          return Promise.resolve(result.stored ? { stored: true as const } : null);
+        // Use rememberAsync to support both SQLite and PG backends.
+        // source: ADR-0042 — async path required for PG backend
+        const rememberFn = async (rawArgs: unknown): Promise<{ stored: true } | null> => {
+          const result = await rememberAsync(rawArgs, deps.store);
+          return result.stored ? { stored: true as const } : null;
         };
 
         const response = await importHandler(

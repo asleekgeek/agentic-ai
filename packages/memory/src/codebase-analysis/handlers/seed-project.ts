@@ -117,18 +117,22 @@ function buildStageCounts(
  * insertion. We do not use the write gate here because `force=true` is the
  * intent (same as the Python handler's `force=True` on every discovery).
  *
+ * Uses insertMemoryAsync / bumpHeatRawAsync when available (PgMemoryStore),
+ * falling back to sync equivalents (SqliteMemoryStore).
+ *
  * precondition:  store is live; discoveries is non-empty.
  * postcondition: returns (stored, skipped, memoryIds); stored + skipped == discoveries.length.
  *   Each stored ID is guaranteed positive. bumpHeatRaw is called once per ID.
  *
  * source: cortex@ed33435 mcp_server/handlers/seed_project.py::_store_discoveries:122-155
+ * source: ADR-0042 — async path required for PG backend
  */
-function storeDiscoveries(
+async function storeDiscoveriesAsync(
   discoveries: ReadonlyArray<{ title: string; content: string; tags: readonly string[] }>,
   root: string,
   domain: string,
   store: MemoryStore,
-): { stored: number; skipped: number; memoryIds: number[] } {
+): Promise<{ stored: number; skipped: number; memoryIds: number[] }> {
   let stored = 0;
   let skipped = 0;
   const memoryIds: number[] = [];
@@ -146,9 +150,20 @@ function storeDiscoveries(
         source:            "seed_project",
         importance:        initialHeat,
       };
-      const mid = store.insertMemory(insertData);
+
+      let mid: number;
+      if (store.insertMemoryAsync) {
+        mid = await store.insertMemoryAsync(insertData);
+      } else {
+        mid = store.insertMemory(insertData);
+      }
+
       if (mid > 0) {
-        store.bumpHeatRaw(mid, initialHeat);
+        if (store.bumpHeatRawAsync) {
+          await store.bumpHeatRawAsync(mid, initialHeat);
+        } else {
+          store.bumpHeatRaw(mid, initialHeat);
+        }
         stored++;
         memoryIds.push(mid);
       } else {
@@ -212,7 +227,7 @@ export async function handler(
     purgedStale = storeExt.deleteMemoriesByTag("seeded", domain);
   }
 
-  const { stored, skipped, memoryIds } = storeDiscoveries(
+  const { stored, skipped, memoryIds } = await storeDiscoveriesAsync(
     allDiscoveries,
     root,
     domain,

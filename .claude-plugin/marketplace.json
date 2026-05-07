@@ -14,8 +14,8 @@
     {
       "name": "memory",
       "source": "./plugins/memory/",
-      "description": "Persistent memory for Claude Code — TS port of Cortex. Thermodynamic heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence integration. SQLite by default; PostgreSQL + pgvector when DATABASE_URL is set. 41 published papers as sources.",
-      "version": "0.0.10",
+      "description": "Persistent memory for Claude Code — TS port of Cortex. Thermodynamic heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence integration. SQLite by default; PostgreSQL + pgvector when DATABASE_URL is set. 41 published papers as sources. ADR-0042 complete: MCP server now honours DATABASE_URL.",
+      "version": "0.0.11",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"

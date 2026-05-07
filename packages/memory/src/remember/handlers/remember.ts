@@ -191,6 +191,156 @@ export function remember(
   };
 }
 
+// ── Async variant (for PgMemoryStore) ───────────────────────────────────────
+//
+// rememberAsync is identical in logic to remember() but calls the *Async
+// methods on MemoryStore when they are available (i.e. PgMemoryStore).
+// MCP tool handlers MUST use this function when the store may be a
+// PgMemoryStore — the sync remember() will throw at runtime on PG.
+//
+// precondition:  rawArgs satisfies RememberRequestSchema.
+// postcondition: same as remember() — RememberResponse.
+// source: ADR-0042 — MCP entry must route writes to PG via async path.
+
+export async function rememberAsync(
+  rawArgs: unknown,
+  store: MemoryStore,
+): Promise<RememberResponse> {
+  const args: RememberRequest = RememberRequestSchema.parse(rawArgs);
+
+  if (!args.content.trim()) {
+    return { stored: false, reason: "no_content" };
+  }
+
+  const content = args.content.trim();
+  const tags = args.tags;
+  const force = args.force;
+  const domain = args.domain ?? "";
+  const source = args.source;
+  const agentTopic = args.agent_topic;
+  const isGlobal = args.is_global;
+
+  const baselineHeat = args.initial_heat !== undefined ? args.initial_heat : 1.0;
+
+  // Vector search: use async variant when available (PG), sync otherwise (SQLite).
+  // Empty buffer → no real embedding; PG correctly returns [] for an empty vector.
+  // source: PgMemoryStore.searchVectorsAsync — async pgvector KNN search.
+  let vecHits: Array<[number, number]> = [];
+  try {
+    if (store.searchVectorsAsync) {
+      vecHits = await store.searchVectorsAsync(Buffer.alloc(0), VECTOR_SEARCH_TOP_K, 0.0);
+    } else {
+      vecHits = store.searchVectors(Buffer.alloc(0), VECTOR_SEARCH_TOP_K, 0.0);
+    }
+  } catch {
+    // Vector search failure must not block the write path.
+    vecHits = [];
+  }
+
+  const similarities: number[] = [];
+  let hoursSinceSimilar: number | null = null;
+
+  if (vecHits.length > 0) {
+    for (const [, dist] of vecHits) {
+      similarities.push(Math.max(0, 1.0 - dist));
+    }
+    const bestId = vecHits[0]?.[0];
+    if (bestId !== undefined) {
+      let bestMem: ReturnType<MemoryStore["getMemory"]> = null;
+      try {
+        bestMem = store.getMemoryAsync
+          ? await store.getMemoryAsync(bestId)
+          : store.getMemory(bestId);
+      } catch {
+        bestMem = null;
+      }
+      if (bestMem?.created_at) {
+        hoursSinceSimilar = parseHoursSince(bestMem.created_at);
+      }
+    }
+  }
+
+  let newEntityNames: string[] = [];
+  let knownEntityNames = new Set<string>();
+  try {
+    newEntityNames = extractEntityNamesFromContent(content);
+    knownEntityNames = new Set(
+      newEntityNames.filter((n) => store.getEntityByName(n) !== null),
+    );
+  } catch {
+    // Entity extraction failures must not block the write path.
+  }
+
+  const recentContents = getRecentContents(store, domain);
+  const threshold = effectiveThreshold(domain);
+  const [bypass] = determineBypass(force, content, tags);
+
+  const score = scoreCandidate({
+    content,
+    tags,
+    force,
+    similarities,
+    newEntityNames,
+    knownEntityNames,
+    recentContents,
+    hoursSinceSimilar,
+    threshold,
+  });
+
+  calibrationRecord(domain, score.shouldStore);
+
+  if (!score.shouldStore && !bypass) {
+    const importance = estimateImportance(content, tags);
+    return buildRejectionResponse(score, importance);
+  }
+
+  const heat = applySurpriseBoost(baselineHeat, score.combinedNovelty);
+  const importance = estimateImportance(content, tags);
+
+  const insertData = {
+    content,
+    tags,
+    source,
+    domain,
+    heat,
+    importance,
+    surprise_score: score.combinedNovelty,
+    store_type: "episodic" as const,
+    agent_context: agentTopic,
+    is_global: isGlobal,
+    created_at: args.created_at,
+  };
+
+  let memoryId: number;
+  if (store.insertMemoryAsync) {
+    memoryId = await store.insertMemoryAsync(insertData);
+  } else {
+    memoryId = store.insertMemory(insertData);
+  }
+
+  // Best-effort entity upsert and linking (PG entities are deferred — no-ops).
+  try {
+    for (const entityName of newEntityNames) {
+      if (!knownEntityNames.has(entityName)) {
+        const entityId = store.upsertEntity(entityName, "concept", domain);
+        if (entityId > 0) {
+          store.linkMemoryEntity(memoryId, entityId);
+        }
+      }
+    }
+  } catch {
+    // Entity extraction failures do not abort the write (invariant I3).
+  }
+
+  return {
+    stored: true,
+    action: "stored",
+    memory_id: memoryId,
+    heat,
+    is_global: isGlobal,
+  };
+}
+
 // ── Lightweight entity name extraction ──────────────────────────────────────
 // Extracts capitalized tokens as entity candidates, mirroring the regex
 // branch of knowledge_graph.extract_entities. The spaCy NER branch is not

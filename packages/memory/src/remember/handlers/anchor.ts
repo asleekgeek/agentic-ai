@@ -122,3 +122,59 @@ export function anchor(
     content_preview: content.slice(0, ANCHOR_CONTENT_PREVIEW_CHARS),
   };
 }
+
+/**
+ * anchorAsync — async variant that calls *Async store methods when available.
+ *
+ * MCP tool handlers MUST use this when the store may be PgMemoryStore.
+ * anchor() calls store.getMemory / store.bumpHeatRaw which throw at runtime
+ * on PgMemoryStore.
+ *
+ * precondition:  same as anchor().
+ * postcondition: same as anchor().
+ * source: ADR-0042 — async path required for PG backend.
+ */
+export async function anchorAsync(
+  args: AnchorRequest,
+  store: MemoryStore,
+): Promise<AnchorResponse> {
+  const memoryId = args.memory_id;
+  const reason = (args.reason ?? "").trim();
+  const isGlobal = args.is_global ?? false;
+
+  if (!memoryId || memoryId < 1) {
+    return { anchored: false, error: "memory_id is required and must be >= 1" };
+  }
+
+  const mem = store.getMemoryAsync
+    ? await store.getMemoryAsync(memoryId)
+    : store.getMemory(memoryId);
+
+  if (mem === null) {
+    return { anchored: false, error: `memory not found: ${memoryId}` };
+  }
+
+  const tags = buildAnchorTags(mem.tags, reason);
+  const content = buildAnchorContent(mem.content, reason);
+
+  // bumpHeatRaw with async variant when available.
+  if (store.bumpHeatRawAsync) {
+    await store.bumpHeatRawAsync(memoryId, 1.0);
+  } else {
+    store.bumpHeatRaw(memoryId, 1.0);
+  }
+
+  // These fire-and-forget methods work on both SQLite and PG (void this.runAsync(...)).
+  store.setMemoryProtected(memoryId, true);
+  store.updateMemoryImportance(memoryId, 1.0);
+  store.updateMemoryContent(memoryId, content, tags);
+
+  return {
+    anchored: true,
+    memory_id: memoryId,
+    reason: reason || "no reason given",
+    is_global: isGlobal,
+    tags,
+    content_preview: content.slice(0, ANCHOR_CONTENT_PREVIEW_CHARS),
+  };
+}

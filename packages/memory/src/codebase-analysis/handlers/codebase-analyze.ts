@@ -188,17 +188,25 @@ async function _storeFile(
    */
   const content = buildMemoryContent(analysis);
   const tags = _buildTags(relPath, analysis);
+  const insertData = {
+    content,
+    tags,
+    directory_context: root,
+    domain,
+    source: CODEBASE_SOURCE,
+    agent_context: CODEBASE_AGENT_CONTEXT,
+  };
 
+  // Use insertMemoryAsync when available (PgMemoryStore), else sync (SqliteMemoryStore).
+  // PgMemoryStore._runSync() throws at runtime; async is the only safe path on PG.
+  // source: ADR-0042 — async path required for PG backend.
   let memoryId: number | null = null;
   try {
-    memoryId = store.insertMemory({
-      content,
-      tags,
-      directory_context: root,
-      domain,
-      source: CODEBASE_SOURCE,
-      agent_context: CODEBASE_AGENT_CONTEXT,
-    });
+    if (store.insertMemoryAsync) {
+      memoryId = await store.insertMemoryAsync(insertData);
+    } else {
+      memoryId = store.insertMemory(insertData);
+    }
   } catch {
     return [null, 0, 0];
   }
