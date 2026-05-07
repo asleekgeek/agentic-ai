@@ -575,6 +575,14 @@
 <script src="/js/workflow_graph_panel_renderers.js"></script>
 <script src="/js/workflow_graph_render_svg.js"></script>
 <script src="/js/workflow_graph_render_canvas.js"></script>
+<!-- workflow_graph_tilemap.js is loaded but ONLY activates when the URL
+     contains ?viz=tilemap (gated in workflow_graph.js ~line 142).
+     STATUS: /api/quadtree, /api/tile/:z/:x/:y.png, /api/recompute_layout
+     are NOT implemented — ?viz=tilemap will show an informational error from
+     the tilemap module itself and will NOT break default-mode rendering.
+     TODO (if tilemap needed): implement these endpoints.
+       Layout source: cortex@ed33435 mcp_server/server/http_standalone_layout.py
+       Tile source:   cortex@ed33435 mcp_server/server/http_standalone_datashader.py -->
 <script src="/js/workflow_graph_tilemap.js"></script>
 <script src="/js/workflow_graph.js"></script>
 <script src="/js/workflow_graph_bridge.js"></script>
