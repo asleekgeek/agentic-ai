@@ -42,8 +42,15 @@ const URGENT_IMPORTANCE_THRESHOLD = 0.75;
 const VALENCE_POS_THRESHOLD = 0.25; // source: cortex@ed33435 mcp_server/handlers/memories_facets.py:e_pos COUNT(*) FILTER (WHERE emotional_valence >= 0.25)
 const VALENCE_NEG_THRESHOLD = -0.25; // source: cortex@ed33435 mcp_server/handlers/memories_facets.py:e_neg COUNT(*) FILTER (WHERE emotional_valence <= -0.25)
 // source: cortex@ed33435 mcp_server/handlers/memories_facets.py — domain list cap
-const DOMAIN_LIMIT = 200;
+const DOMAIN_LIMIT = 200; // source: cortex@ed33435 mcp_server/handlers/memories_facets.py:Q1 LIMIT 200
 const HTTP_500 = 500; // source: RFC 7231 §6.6 — Internal Server Error
+// Emotion bucket thresholds — strong vs weak valence (0.55 / -0.55).
+// source: cortex@ed33435 mcp_server/handlers/memories_page.py:_row_to_node
+//   val >= 0.55 → "satisfaction"; val <= -0.55 → "frustration"
+const VALENCE_STRONG_POS = 0.55; // source: cortex@ed33435 mcp_server/handlers/memories_page.py:_row_to_node (val >= 0.55 → "satisfaction")
+const VALENCE_STRONG_NEG = -0.55; // source: cortex@ed33435 mcp_server/handlers/memories_page.py:_row_to_node (val <= -0.55 → "frustration")
+// Base64 padding modulus. source: RFC 4648 §4 — base64 groups of 4 characters
+const BASE64_BLOCK = 4;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -90,9 +97,9 @@ function rowToNode(m: MemoryRow): Record<string, unknown> {
   const val = m.emotional_valence ?? 0;
   const imp = m.importance ?? 0;
   let emotion: string | null = null;
-  if (val >= 0.55) emotion = "satisfaction"; // source: cortex@ed33435 mcp_server/handlers/memories_page.py:_row_to_node (val >= 0.55 → "satisfaction")
+  if (val >= VALENCE_STRONG_POS) emotion = "satisfaction";
   else if (val >= VALENCE_POS_THRESHOLD) emotion = "discovery";
-  else if (val <= -0.55) emotion = "frustration"; // source: cortex@ed33435 mcp_server/handlers/memories_page.py:_row_to_node (val <= -0.55 → "frustration")
+  else if (val <= VALENCE_STRONG_NEG) emotion = "frustration";
   else if (val <= VALENCE_NEG_THRESHOLD) emotion = "confusion";
   if (imp >= URGENT_IMPORTANCE_THRESHOLD) emotion = "urgency";
 
@@ -144,7 +151,9 @@ function decodeCursor(s: string | undefined): { k: unknown; id: number } | null 
   if (!s) return null;
   try {
     // Pad to valid base64url before decoding.
-    const padded = s + "==".slice(s.length % 4 === 0 ? 4 : s.length % 4);
+    // source: RFC 4648 §4 — base64 block size is 4; padding fills remainder
+    const mod = s.length % BASE64_BLOCK;
+    const padded = s + "==".slice(mod === 0 ? BASE64_BLOCK : mod);
     const raw = Buffer.from(padded, "base64url").toString("utf8");
     const obj = JSON.parse(raw) as { k: unknown; id: number };
     return obj;

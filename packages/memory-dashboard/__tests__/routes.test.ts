@@ -13,10 +13,14 @@
  *   - /api/wiki/list → 200, has pages array
  *   - /api/wiki/page → 200 or error object when file absent
  *   - /api/discussions → 200, has meta.total
- *   - /api/memories → 200 (with mock DB), has memories array
- *   - /api/memories/facets → 200, has by_domain
+ *   - /api/memories → 200 (with mock DB), has items array (canonical shape)
+ *   - /api/memories/facets → 200, has total/domains/stages/emotions (canonical shape)
  *   - /api/sankey → 200, has transitions
  *   - Static index.html → 200 text/html
+ *
+ * Response shape contracts derived from canonical Python source:
+ *   /api/memories:        source: cortex@ed33435 mcp_server/handlers/memories_page.py
+ *   /api/memories/facets: source: cortex@ed33435 mcp_server/handlers/memories_facets.py
  */
 
 import { describe, it, expect, beforeAll, afterAll } from "vitest";
@@ -50,11 +54,14 @@ function createFixtureDb(): string {
   const dbPath = path.join(tmpDir, "memories.db");
   const db = new Database(dbPath);
 
+  // Fixture schema uses heat_base (canonical column name since A3 migration).
+  // source: packages/memory/src/remember/storage/sqlite-schema.ts
+  // source: 2026-05-07 schema reconciliation — heat column renamed to heat_base
   db.exec(`
     CREATE TABLE memories (
       id TEXT PRIMARY KEY,
       content TEXT,
-      heat REAL DEFAULT 0,
+      heat_base REAL DEFAULT 0,
       importance REAL DEFAULT 0.5,
       store_type TEXT DEFAULT 'episodic',
       tags TEXT,
@@ -67,6 +74,7 @@ function createFixtureDb(): string {
       is_protected INTEGER DEFAULT 0,
       is_global INTEGER DEFAULT 0,
       access_count INTEGER DEFAULT 0,
+      useful_count INTEGER DEFAULT 0,
       consolidation_stage TEXT DEFAULT 'labile',
       source TEXT,
       agent_context TEXT,
@@ -91,7 +99,7 @@ function createFixtureDb(): string {
     CREATE TABLE entities (
       id TEXT PRIMARY KEY,
       name TEXT,
-      entity_type TEXT,
+      type TEXT,
       heat REAL DEFAULT 0,
       domain TEXT
     );
@@ -105,14 +113,16 @@ function createFixtureDb(): string {
   `);
 
   // Insert deterministic fixture rows.
+  // heat_base replaces heat — source: 2026-05-07 schema reconciliation.
   db.prepare(
-    "INSERT INTO memories (id, content, heat, store_type, domain, consolidation_stage) VALUES (?, ?, ?, ?, ?, ?)"
+    "INSERT INTO memories (id, content, heat_base, store_type, domain, consolidation_stage) VALUES (?, ?, ?, ?, ?, ?)"
   ).run("m1", "test memory alpha", 0.8, "episodic", "engineering", "labile");
   db.prepare(
-    "INSERT INTO memories (id, content, heat, store_type, domain, consolidation_stage) VALUES (?, ?, ?, ?, ?, ?)"
+    "INSERT INTO memories (id, content, heat_base, store_type, domain, consolidation_stage) VALUES (?, ?, ?, ?, ?, ?)"
   ).run("m2", "test memory beta", 0.3, "semantic", "research", "consolidated");
+  // entities.type is the canonical column (not entity_type) — source: 2026-05-07 schema reconciliation.
   db.prepare(
-    "INSERT INTO entities (id, name, entity_type, heat, domain) VALUES (?, ?, ?, ?, ?)"
+    "INSERT INTO entities (id, name, type, heat, domain) VALUES (?, ?, ?, ?, ?)"
   ).run("e1", "TestEntity", "concept", 0.5, "engineering");
   db.prepare(
     "INSERT INTO stage_transitions (from_stage, to_stage, count, hours_in_prev_stage) VALUES (?, ?, ?, ?)"
@@ -238,24 +248,55 @@ describe("GET /api/discussions", () => {
 });
 
 describe("GET /api/memories", () => {
-  it("returns 200 with memories array from fixture DB", async () => {
+  // Canonical shape: { items, next_cursor, page_count, sort }
+  // source: cortex@ed33435 mcp_server/handlers/memories_page.py:serve() response dict
+  it("returns 200 with items array matching workflow_graph.v1 shape", async () => {
     const res = await fastify.inject({ method: "GET", url: "/api/memories" });
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ memories: Array<{ id: string; content: string }> }>();
-    expect(Array.isArray(body.memories)).toBe(true);
-    expect(body.memories.length).toBeGreaterThan(0);
-    expect(body.memories[0]?.id).toBe("m1");
+    const body = res.json<{ items: Array<{ id: string; content: string; type: string; kind: string }>; next_cursor: string | null; page_count: number; sort: string }>();
+    expect(Array.isArray(body.items)).toBe(true); // source: cortex@ed33435 mcp_server/handlers/memories_page.py — "items" key
+    expect(body.items.length).toBeGreaterThan(0);
+    // id is prefixed with "memory:" in workflow_graph.v1 node shape.
+    // source: cortex@ed33435 mcp_server/handlers/memories_page.py:_row_to_node — id: "memory:" + str(d.get("id"))
+    expect(body.items[0]?.id).toBe("memory:m1");
+    expect(body.items[0]?.type).toBe("memory"); // source: _row_to_node — type: "memory"
+    expect(body.items[0]?.kind).toBe("memory"); // source: _row_to_node — kind: "memory"
+    expect(typeof body.next_cursor === "string" || body.next_cursor === null).toBe(true);
+    expect(typeof body.page_count).toBe("number");
+    expect(body.sort).toBe("heat"); // source: memories_page.py — default sort="heat"
   });
 });
 
 describe("GET /api/memories/facets", () => {
-  it("returns 200 with by_domain and by_stage", async () => {
+  // Canonical shape: { total, domains, stages, emotions, global, protected, hot }
+  // source: cortex@ed33435 mcp_server/handlers/memories_facets.py:payload dict
+  it("returns 200 with canonical facets shape (total/domains/stages/emotions)", async () => {
     const res = await fastify.inject({ method: "GET", url: "/api/memories/facets" });
     expect(res.statusCode).toBe(200);
-    const body = res.json<{ by_domain: unknown[]; by_stage: unknown[]; totals: { total: number } }>();
-    expect(Array.isArray(body.by_domain)).toBe(true);
-    expect(Array.isArray(body.by_stage)).toBe(true);
-    expect(body.totals.total).toBe(2);
+    const body = res.json<{
+      total: number;
+      domains: Array<{ name: string; count: number }>;
+      stages: Record<string, number>;
+      emotions: Record<string, number>;
+      global: number;
+      protected: number;
+      hot: number;
+    }>();
+    // source: cortex@ed33435 mcp_server/handlers/memories_facets.py — key "total"
+    expect(typeof body.total).toBe("number");
+    expect(body.total).toBe(2); // two fixture rows, neither is_stale
+    // source: cortex@ed33435 mcp_server/handlers/memories_facets.py — key "domains" (array of {name,count})
+    expect(Array.isArray(body.domains)).toBe(true);
+    // source: cortex@ed33435 mcp_server/handlers/memories_facets.py — key "stages" (dict)
+    expect(typeof body.stages).toBe("object");
+    expect("labile" in body.stages).toBe(true); // source: stages dict has "labile" key
+    // source: cortex@ed33435 mcp_server/handlers/memories_facets.py — key "emotions" (dict)
+    expect(typeof body.emotions).toBe("object");
+    expect("neutral" in body.emotions).toBe(true); // source: emotions dict has "neutral" key
+    // source: cortex@ed33435 mcp_server/handlers/memories_facets.py — keys "global", "protected", "hot"
+    expect(typeof body.global).toBe("number");
+    expect(typeof body.protected).toBe("number");
+    expect(typeof body.hot).toBe("number");
   });
 });
 
