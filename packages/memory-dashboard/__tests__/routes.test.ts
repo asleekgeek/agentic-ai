@@ -33,6 +33,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 import fastifyCors from "@fastify/cors";
 
+import { SqliteAdapter } from "../src/db-adapter.js";
 import { registerHealthRoutes } from "../src/routes/health.js";
 import { registerGraphRoutes } from "../src/routes/graph.js";
 import { registerWikiRoutes } from "../src/routes/wiki.js";
@@ -144,12 +145,17 @@ async function buildTestServer(dbPath: string): Promise<FastifyInstance> {
     decorateReply: false,
   });
 
+  // Use SqliteAdapter so tests exercise the same DashboardDb interface as production.
+  // source: ADR-0042 §tests — parametrize via SqliteAdapter for SQLite path
+  const rawDb = new Database(dbPath, { readonly: true, fileMustExist: true });
+  const db = new SqliteAdapter(rawDb);
+
   await registerHealthRoutes(app);
-  await registerGraphRoutes(app, { dbPath });
+  await registerGraphRoutes(app, { db });
   await registerWikiRoutes(app);
   await registerDiscussionRoutes(app);
-  await registerSankeyRoutes(app, { dbPath });
-  await registerMemoriesRoutes(app, { dbPath });
+  await registerSankeyRoutes(app, { db });
+  await registerMemoriesRoutes(app, { db });
   await registerFileDiffRoutes(app);
 
   return app;

@@ -20,6 +20,8 @@ import { fileURLToPath } from "node:url";
 import Fastify, { type FastifyInstance } from "fastify";
 import fastifyStatic from "@fastify/static";
 import fastifyCors from "@fastify/cors";
+import { assertNotForbiddenDatabase } from "./db-guard.js";
+import { buildDashboardDb, type DashboardDb } from "./db-adapter.js";
 import { ensureSchema } from "./db-init.js";
 import { registerGraphRoutes } from "./routes/graph.js";
 import { registerWikiRoutes } from "./routes/wiki.js";
@@ -39,7 +41,7 @@ const DEFAULT_PORT = 3458;
 const IDLE_TIMEOUT_MS = 600_000; // 10 minutes
 
 export interface DashboardOptions {
-  /** SQLite DB file path. Default: DB_PATH env var. */
+  /** SQLite DB file path. Default: DB_PATH env var. Used only when DATABASE_URL is unset. */
   dbPath?: string;
   /** Port to listen on. Default 3458. */
   port?: number;
@@ -58,13 +60,18 @@ export interface DashboardServer {
 /**
  * Build and start the dashboard Fastify server.
  *
- * precondition:  opts.dbPath resolves to a readable SQLite file.
+ * precondition:  assertNotForbiddenDatabase() passes (exits otherwise).
+ *                If DATABASE_URL is unset, opts.dbPath resolves to a readable SQLite file.
  * postcondition: server is bound, all routes registered, URL returned.
  * invariant:     host is always a loopback address.
+ *                db.close() is called on server close via onClose hook.
  */
 export async function startDashboard(
   opts: DashboardOptions = {},
 ): Promise<DashboardServer> {
+  // Guard: must run before any database connection is opened (ADR-0042 §constraints).
+  assertNotForbiddenDatabase();
+
   const dbPath = opts.dbPath ?? process.env["DB_PATH"] ?? "";
   const port = opts.port ?? DEFAULT_PORT;
   // Invariant: only bind to loopback — never to 0.0.0.0 or an external interface.
@@ -88,14 +95,13 @@ export async function startDashboard(
   })();
 
   // Apply the canonical schema DDL before opening read-only route connections.
-  // This ensures stage_transitions, prospective_memories, and all other tables
-  // added after the user's DB was first created are present.
-  // Idempotent: CREATE TABLE/INDEX IF NOT EXISTS; ALTER TABLE fails silently.
-  // source: 2026-05-07 schema reconciliation — dashboard must bootstrap schema
-  //   independently so it works even if the MCP server has never run against this DB.
-  if (dbPath) {
+  // SQLite path only — PG schema is provisioned by init-pg.mjs (ADR-0042).
+  if (dbPath && !process.env["DATABASE_URL"]) {
     ensureSchema(dbPath);
   }
+
+  // Build the database adapter (PG if DATABASE_URL is set, SQLite otherwise).
+  const db: DashboardDb = await buildDashboardDb(dbPath);
 
   const fastify = Fastify({ logger: false });
 
@@ -122,14 +128,20 @@ export async function startDashboard(
     decorateReply: false,
   });
 
+  // Close the DB when the server closes.
+  // source: Fastify docs — onClose hook fires before connections are drained
+  fastify.addHook("onClose", async () => {
+    await db.close();
+  });
+
   // API routes — one concern per file.
   await registerHealthRoutes(fastify);
-  await registerGraphRoutes(fastify, { dbPath });
+  await registerGraphRoutes(fastify, { db });
   await registerWikiRoutes(fastify);
-  await registerSankeyRoutes(fastify, { dbPath });
+  await registerSankeyRoutes(fastify, { db });
   await registerDiscussionRoutes(fastify);
   await registerFileDiffRoutes(fastify);
-  await registerMemoriesRoutes(fastify, { dbPath });
+  await registerMemoriesRoutes(fastify, { db });
 
   // Idle-timeout watchdog: shut down after IDLE_TIMEOUT_MS of no requests.
   // source: cortex@ed33435 mcp_server/server/http_standalone.py:64-74

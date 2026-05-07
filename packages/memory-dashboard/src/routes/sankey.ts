@@ -18,7 +18,7 @@
  */
 
 import type { FastifyInstance } from "fastify";
-import Database from "better-sqlite3";
+import type { DashboardDb } from "../db-adapter.js";
 
 // ── Named constants ───────────────────────────────────────────────────────────
 const R1 = 10;   // source: cortex@ed33435 mcp_server/server/http_standalone_endpoints.py:75 — round(v, 1) → multiply by 10
@@ -69,7 +69,7 @@ interface TimingRow {
 }
 
 export interface SankeyRouteDeps {
-  dbPath: string;
+  db: DashboardDb;
 }
 
 /**
@@ -88,19 +88,17 @@ export async function registerSankeyRoutes(
    */
   fastify.get("/api/sankey", async (_req, reply) => {
     try {
-      const db = new Database(deps.dbPath, { readonly: true, fileMustExist: true });
-
       // source: cortex@ed33435 mcp_server/server/http_standalone_endpoints.py:54-62
       const transitions = (
-        db.prepare(
+        await deps.db.prepare(
           "SELECT from_stage, to_stage, COUNT(*) as count FROM stage_transitions GROUP BY from_stage, to_stage ORDER BY from_stage, to_stage"
-        ).all() as TransitionRow[]
+        ).all<TransitionRow>()
       ).map((r) => ({ from_stage: r.from_stage, to_stage: r.to_stage, count: r.count }));
 
       // source: cortex@ed33435 mcp_server/server/http_standalone_endpoints.py:64-81
-      const timingRows = db.prepare(
+      const timingRows = await deps.db.prepare(
         "SELECT from_stage, to_stage, AVG(hours_in_prev_stage) as avg_hours, MIN(hours_in_prev_stage) as min_hours, MAX(hours_in_prev_stage) as max_hours FROM stage_transitions GROUP BY from_stage, to_stage"
-      ).all() as TimingRow[];
+      ).all<TimingRow>();
       const timing: Record<string, { avg_hours: number; min_hours: number; max_hours: number }> = {};
       for (const r of timingRows) {
         const key = `${r.from_stage}->${r.to_stage}`;
@@ -114,7 +112,7 @@ export async function registerSankeyRoutes(
       // source: cortex@ed33435 mcp_server/server/http_standalone_endpoints.py:83-92
       const stage_metrics: Record<string, Record<string, number>> = {};
       for (const s of STAGES) {
-        const row = db.prepare(STAGE_METRICS_SQL).get(s) as Record<string, number | null> | undefined;
+        const row = await deps.db.prepare(STAGE_METRICS_SQL).get<Record<string, number | null>>(s);
         if (row) {
           stage_metrics[s] = Object.fromEntries(
             // source: cortex@ed33435 mcp_server/server/http_standalone_endpoints.py:87-91 — round(v, 3) → multiply by 1000
@@ -123,11 +121,10 @@ export async function registerSankeyRoutes(
         }
       }
 
-      const totalRow = db.prepare(
+      const totalRow = await deps.db.prepare(
         "SELECT COUNT(*) as c FROM memories WHERE NOT is_benchmark AND NOT is_stale"
-      ).get() as { c: number } | undefined;
+      ).get<{ c: number }>();
 
-      db.close();
       return reply.send({
         transitions,
         timing,

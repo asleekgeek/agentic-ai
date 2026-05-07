@@ -28,7 +28,7 @@
  */
 
 import type { FastifyInstance } from "fastify";
-import Database from "better-sqlite3";
+import type { DashboardDb } from "../db-adapter.js";
 
 // ── Named constants ───────────────────────────────────────────────────────────
 // source: cortex@ed33435 mcp_server/handlers/memories_page.py:_DEFAULT_LIMIT
@@ -61,7 +61,7 @@ interface MemoryRow {
   heat: number;              // aliased from heat_base
   importance: number;
   store_type: string | null;
-  tags: string | null;
+  tags: string | string[] | null;
   created_at: string | null;
   domain: string | null;
   emotional_valence: number;
@@ -86,9 +86,16 @@ interface MemoryRow {
  *   emotion, emotional_valence, store_type, access_count, useful_count.
  */
 function rowToNode(m: MemoryRow): Record<string, unknown> {
-  const parseTags = (t: string | null): string[] => {
+  // parseTags handles both forms:
+  //   - SQLite: JSON-encoded string e.g. '["a","b"]'
+  //   - PG: JSONB already deserialized by node-postgres into an array
+  // source: ADR-0042 §concrete-dialect-drift — tags is JSONB in PG, JSON-string in SQLite
+  const parseTags = (t: string | string[] | null | unknown): string[] => {
     if (!t) return [];
-    if (t.startsWith("[")) { try { return JSON.parse(t) as string[]; } catch { return []; } }
+    if (Array.isArray(t)) return t as string[];
+    if (typeof t === "string" && t.startsWith("[")) {
+      try { return JSON.parse(t) as string[]; } catch { return []; }
+    }
     return [];
   };
 
@@ -163,7 +170,7 @@ function decodeCursor(s: string | undefined): { k: unknown; id: number } | null 
 }
 
 export interface MemoriesRouteDeps {
-  dbPath: string;
+  db: DashboardDb;
 }
 
 /**
@@ -299,18 +306,14 @@ export async function registerMemoriesRoutes(
       const fetchLimit = limit + 1;
       params.push(fetchLimit);
 
-      const db = new Database(deps.dbPath, { readonly: true, fileMustExist: true });
-
-      // heat_base aliased to heat for rowToNode().
+      // heat_base aliased to heat for rowToNode(). Works in both SQLite and PG.
       // source: 2026-05-07 schema reconciliation — heat column renamed to heat_base.
-      const rows = db.prepare(
+      const rows = await deps.db.prepare(
         `SELECT id, content, heat_base AS heat, importance, store_type, domain,
                 tags, created_at, consolidation_stage, emotional_valence,
                 is_protected, is_global, access_count, useful_count
          FROM memories ${where} ORDER BY ${orderBy} LIMIT ?`
-      ).all(...params) as MemoryRow[];
-
-      db.close();
+      ).all<MemoryRow>(...params);
 
       const hasMore = rows.length > limit;
       const items = rows.slice(0, limit);
@@ -354,22 +357,21 @@ export async function registerMemoriesRoutes(
    */
   fastify.get("/api/memories/facets", async (_req, reply) => {
     try {
-      const db = new Database(deps.dbPath, { readonly: true, fileMustExist: true });
-
       // Q1: per-domain counts (sorted desc), capped at DOMAIN_LIMIT.
       // source: cortex@ed33435 mcp_server/handlers/memories_facets.py:Q1
       interface DomainRow { dom: string; c: number; }
-      const domainRows = db.prepare(
+      const domainRows = await deps.db.prepare(
         `SELECT COALESCE(NULLIF(domain, ''), '__unknown__') AS dom, COUNT(*) AS c
          FROM memories WHERE NOT is_stale
          GROUP BY dom ORDER BY c DESC LIMIT ${DOMAIN_LIMIT}`
-      ).all() as DomainRow[];
+      ).all<DomainRow>();
 
       // Q2: all aggregates in a single pass.
       // source: cortex@ed33435 mcp_server/handlers/memories_facets.py:Q2 — single aggregate SELECT
-      // SQLite supports COUNT(*) FILTER (WHERE ...) since 3.25 (2018-09-15).
+      // COUNT(*) FILTER (WHERE ...) is ANSI SQL:2003 — works in SQLite 3.25+ and PostgreSQL 9.4+.
       // source: https://sqlite.org/lang_aggfunc.html#aggfilter — SQLite 3.25.0 release notes
-      const agg = db.prepare(
+      // source: https://www.postgresql.org/docs/current/sql-expressions.html#SYNTAX-AGGREGATES — PG FILTER clause
+      const agg = await deps.db.prepare(
         `SELECT
            COUNT(*) AS total,
            COUNT(*) FILTER (WHERE consolidation_stage = 'labile')          AS s_labile,
@@ -377,17 +379,15 @@ export async function registerMemoriesRoutes(
            COUNT(*) FILTER (WHERE consolidation_stage = 'late_ltp')        AS s_late,
            COUNT(*) FILTER (WHERE consolidation_stage = 'consolidated')    AS s_cons,
            COUNT(*) FILTER (WHERE consolidation_stage = 'reconsolidating') AS s_recon,
-           COUNT(*) FILTER (WHERE is_global = 1)     AS n_global,
-           COUNT(*) FILTER (WHERE is_protected = 1)  AS n_protected,
+           COUNT(*) FILTER (WHERE is_global = TRUE)     AS n_global,
+           COUNT(*) FILTER (WHERE is_protected = TRUE)  AS n_protected,
            COUNT(*) FILTER (WHERE heat_base >= ${HOT_HEAT_THRESHOLD})     AS n_hot,
            COUNT(*) FILTER (WHERE importance >= ${URGENT_IMPORTANCE_THRESHOLD})  AS e_urgent,
            COUNT(*) FILTER (WHERE emotional_valence >= ${VALENCE_POS_THRESHOLD} AND importance < ${URGENT_IMPORTANCE_THRESHOLD}) AS e_pos,
            COUNT(*) FILTER (WHERE emotional_valence <= ${VALENCE_NEG_THRESHOLD} AND importance < ${URGENT_IMPORTANCE_THRESHOLD}) AS e_neg,
            COUNT(*) FILTER (WHERE emotional_valence > ${VALENCE_NEG_THRESHOLD} AND emotional_valence < ${VALENCE_POS_THRESHOLD} AND importance < ${URGENT_IMPORTANCE_THRESHOLD}) AS e_neutral
          FROM memories WHERE NOT is_stale`
-      ).get() as Record<string, number | null> | undefined;
-
-      db.close();
+      ).get<Record<string, number | null>>();
 
       const a = agg ?? {};
       const n = (k: string): number => Number(a[k] ?? 0);

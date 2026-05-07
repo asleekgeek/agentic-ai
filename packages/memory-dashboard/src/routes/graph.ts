@@ -19,7 +19,7 @@
  */
 
 import type { FastifyInstance } from "fastify";
-import Database from "better-sqlite3";
+import type { DashboardDb } from "../db-adapter.js";
 
 // ── Named constants ───────────────────────────────────────────────────────────
 const EPOCH_DIVISOR = 1000; // source: POSIX — convert ms to seconds (Date.now() returns ms)
@@ -125,7 +125,7 @@ const _phasePayloads: Record<string, { nodes: GraphNode[]; edges: GraphEdge[] }>
  * source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:284-972
  *   (simplified: L0 domains, L5 memories, L5 entities — no AP/AST L6 overlay)
  */
-async function buildGraph(dbPath: string): Promise<void> {
+async function buildGraph(db: DashboardDb): Promise<void> {
   if (_buildRunning) return;
   _buildRunning = true;
   _progress.phase = "starting";
@@ -144,17 +144,15 @@ async function buildGraph(dbPath: string): Promise<void> {
   const edges: GraphEdge[] = [];
 
   try {
-    const db = new Database(dbPath, { readonly: true, fileMustExist: true });
-
     // ── L0: domain nodes ──────────────────────────────────────────────────
     // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:495-551
     _progress.phase = "L0 domains";
     _progress.pct = PROGRESS_L0; // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:496 — L0 pct=0.05
     _progress.message = "building domain nodes…";
 
-    const domainRows = db.prepare(
+    const domainRows = await db.prepare(
       "SELECT DISTINCT domain FROM memories WHERE domain IS NOT NULL AND domain != '' ORDER BY domain"
-    ).all() as Array<{ domain: string }>;
+    ).all<{ domain: string }>();
 
     const domainNodeMap = new Map<string, string>();
     for (const row of domainRows) {
@@ -191,12 +189,12 @@ async function buildGraph(dbPath: string): Promise<void> {
     // memories.heat is the legacy column name; current schema uses
     // heat_base (alias to keep TS code unchanged). See note in
     // routes/memories.ts. source: 2026-05-07 schema reconciliation.
-    const memRows = db.prepare(
+    const memRows = await db.prepare(
       `SELECT id, content, heat_base AS heat, importance, store_type, domain, tags,
               created_at, consolidation_stage, is_protected, is_global
        FROM memories WHERE NOT is_benchmark AND NOT is_stale
        ORDER BY heat_base DESC LIMIT ${MEMORY_LIMIT}` // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:161 — get_hot_memories(limit=0) equivalent; 2000 is a practical cap to avoid OOM on large stores
-    ).all() as MemoryRow[];
+    ).all<MemoryRow>();
 
     for (const m of memRows) {
       const id = `memory:${m.id}`;
@@ -237,9 +235,9 @@ async function buildGraph(dbPath: string): Promise<void> {
     // entities.type is the canonical column (not entity_type); alias to entity_type
     // to preserve the API contract without changing the DB schema.
     // source: 2026-05-07 schema reconciliation — entities table has `type` not `entity_type`
-    const entityRows = db.prepare(
+    const entityRows = await db.prepare(
       `SELECT id, name, type AS entity_type, heat, domain FROM entities ORDER BY heat DESC LIMIT ${ENTITY_LIMIT}` // source: cortex@ed33435 mcp_server/server/http_dashboard_data.py:17 — get_all_entities(min_heat=0.0); 500 cap for graph render budget
-    ).all() as EntityRow[];
+    ).all<EntityRow>();
 
     for (const e of entityRows) {
       const id = `entity:${e.id}`;
@@ -262,8 +260,6 @@ async function buildGraph(dbPath: string): Promise<void> {
         edges.push(edge);
       }
     }
-
-    db.close();
 
     _progress.phase_seq++;
 
@@ -307,7 +303,7 @@ async function buildGraph(dbPath: string): Promise<void> {
 // ── Route registration ────────────────────────────────────────────────────────
 
 export interface GraphRouteDeps {
-  dbPath: string;
+  db: DashboardDb;
 }
 
 /**
@@ -330,7 +326,7 @@ export async function registerGraphRoutes(
    */
   fastify.get("/api/graph", async (_req, reply) => {
     if (!_graphCache) {
-      void buildGraph(deps.dbPath);
+      void buildGraph(deps.db);
     }
     if (_graphCache) {
       return reply.send(_graphCache);
