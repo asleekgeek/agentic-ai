@@ -188,11 +188,14 @@ async function buildGraph(dbPath: string): Promise<void> {
       is_global: number;
     }
 
+    // memories.heat is the legacy column name; current schema uses
+    // heat_base (alias to keep TS code unchanged). See note in
+    // routes/memories.ts. source: 2026-05-07 schema reconciliation.
     const memRows = db.prepare(
-      `SELECT id, content, heat, importance, store_type, domain, tags,
+      `SELECT id, content, heat_base AS heat, importance, store_type, domain, tags,
               created_at, consolidation_stage, is_protected, is_global
        FROM memories WHERE NOT is_benchmark AND NOT is_stale
-       ORDER BY heat DESC LIMIT ${MEMORY_LIMIT}` // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:161 — get_hot_memories(limit=0) equivalent; 2000 is a practical cap to avoid OOM on large stores
+       ORDER BY heat_base DESC LIMIT ${MEMORY_LIMIT}` // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:161 — get_hot_memories(limit=0) equivalent; 2000 is a practical cap to avoid OOM on large stores
     ).all() as MemoryRow[];
 
     for (const m of memRows) {

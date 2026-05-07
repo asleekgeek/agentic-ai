@@ -40365,10 +40365,10 @@ async function buildGraph(dbPath) {
     _progress.pct = PROGRESS_L5;
     _progress.message = "loading memories\u2026";
     const memRows = db.prepare(
-      `SELECT id, content, heat, importance, store_type, domain, tags,
+      `SELECT id, content, heat_base AS heat, importance, store_type, domain, tags,
               created_at, consolidation_stage, is_protected, is_global
        FROM memories WHERE NOT is_benchmark AND NOT is_stale
-       ORDER BY heat DESC LIMIT ${MEMORY_LIMIT}`
+       ORDER BY heat_base DESC LIMIT ${MEMORY_LIMIT}`
       // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:161 — get_hot_memories(limit=0) equivalent; 2000 is a practical cap to avoid OOM on large stores
     ).all();
     for (const m of memRows) {
@@ -40613,7 +40613,7 @@ var STAGES = [
 ];
 var STAGE_METRICS_SQL = `
   SELECT COUNT(*) as count,
-    AVG(heat) as avg_heat, AVG(importance) as avg_importance,
+    AVG(heat_base) as avg_heat, AVG(importance) as avg_importance,
     AVG(replay_count) as avg_replay, AVG(access_count) as avg_access,
     AVG(encoding_strength) as avg_encoding,
     AVG(interference_score) as avg_interference,
@@ -41006,7 +41006,7 @@ async function registerMemoriesRoutes(fastify, deps) {
       }
       const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
       params.push(limit);
-      const rows = db.prepare(`SELECT * FROM memories ${where} ORDER BY heat DESC LIMIT ?`).all(...params);
+      const rows = db.prepare(`SELECT *, heat_base AS heat FROM memories ${where} ORDER BY heat_base DESC LIMIT ?`).all(...params);
       const total = db.prepare(`SELECT COUNT(*) as c FROM memories ${where.replace(/LIMIT \?/, "")}`).get(...params.slice(0, -1))?.c ?? 0;
       db.close();
       return reply.send({

@@ -37,9 +37,10 @@ const STAGES = [
 type Stage = (typeof STAGES)[number];
 
 // source: cortex@ed33435 mcp_server/server/http_standalone_endpoints.py:38-51
+// heat → heat_base: 2026-05-07 schema reconciliation. See note in routes/memories.ts.
 const STAGE_METRICS_SQL = `
   SELECT COUNT(*) as count,
-    AVG(heat) as avg_heat, AVG(importance) as avg_importance,
+    AVG(heat_base) as avg_heat, AVG(importance) as avg_importance,
     AVG(replay_count) as avg_replay, AVG(access_count) as avg_access,
     AVG(encoding_strength) as avg_encoding,
     AVG(interference_score) as avg_interference,

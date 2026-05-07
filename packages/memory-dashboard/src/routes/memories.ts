@@ -154,8 +154,17 @@ export async function registerMemoriesRoutes(
       const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
       params.push(limit);
 
+      // memories.heat is the legacy column name; the current schema uses
+      // heat_base (raw base) + computed effective heat at query time. We
+      // alias heat_base AS heat in the SELECT so the downstream TS code
+      // (`m.heat`) and the response shape both stay unchanged. ORDER BY
+      // heat_base produces the same ranking as ORDER BY effective_heat
+      // for dashboard purposes (decay is monotonic in elapsed time).
+      // source: 2026-05-07 schema reconciliation — packages/memory's
+      // sqlite-store schema migrated heat → heat_base months ago; the
+      // dashboard's SQL was missed in that migration.
       const rows = db.prepare(
-        `SELECT * FROM memories ${where} ORDER BY heat DESC LIMIT ?`
+        `SELECT *, heat_base AS heat FROM memories ${where} ORDER BY heat_base DESC LIMIT ?`
       ).all(...params) as MemoryRow[];
 
       const total = (db.prepare(`SELECT COUNT(*) as c FROM memories ${where.replace(/LIMIT \?/, "")}`).get(...params.slice(0, -1)) as { c: number } | undefined)?.c ?? 0;
