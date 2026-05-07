@@ -41224,12 +41224,18 @@ async function registerFileDiffRoutes(fastify) {
 
 // packages/memory-dashboard/dist/routes/memories.js
 import Database4 from "better-sqlite3";
-var IMPORTANCE_DEFAULT = 0.5;
 var PAGE_LIMIT_DEFAULT = 50;
 var PAGE_LIMIT_MAX = 200;
-var CONTENT_LIMIT = 200;
+var HOT_HEAT_THRESHOLD = 0.5;
+var URGENT_IMPORTANCE_THRESHOLD = 0.75;
+var VALENCE_POS_THRESHOLD = 0.25;
+var VALENCE_NEG_THRESHOLD = -0.25;
+var DOMAIN_LIMIT = 200;
 var HTTP_5004 = 500;
-function formatMemory(m, contentLimit) {
+var VALENCE_STRONG_POS = 0.55;
+var VALENCE_STRONG_NEG = -0.55;
+var BASE64_BLOCK = 4;
+function rowToNode(m) {
   const parseTags = (t) => {
     if (!t)
       return [];
@@ -41242,75 +41248,157 @@ function formatMemory(m, contentLimit) {
     }
     return [];
   };
-  const R4 = 1e4;
-  const R2 = 100;
+  const val = m.emotional_valence ?? 0;
+  const imp = m.importance ?? 0;
+  let emotion = null;
+  if (val >= VALENCE_STRONG_POS)
+    emotion = "satisfaction";
+  else if (val >= VALENCE_POS_THRESHOLD)
+    emotion = "discovery";
+  else if (val <= VALENCE_STRONG_NEG)
+    emotion = "frustration";
+  else if (val <= VALENCE_NEG_THRESHOLD)
+    emotion = "confusion";
+  if (imp >= URGENT_IMPORTANCE_THRESHOLD)
+    emotion = "urgency";
+  const domainVal = m.domain ?? "";
+  const domainId = `domain:${domainVal || "__global__"}`;
   return {
-    id: m.id,
-    content: (m.content ?? "").slice(0, contentLimit),
-    heat: Math.round((m.heat ?? 0) * R4) / R4,
-    importance: Math.round((m.importance ?? IMPORTANCE_DEFAULT) * R4) / R4,
-    store_type: m.store_type ?? "episodic",
+    id: `memory:${m.id}`,
+    memory_id: m.id,
+    type: "memory",
+    kind: "memory",
+    label: m.content ?? "",
+    content: m.content ?? "",
+    domain: domainVal,
+    domain_id: domainId,
     tags: parseTags(m.tags),
-    created_at: m.created_at ?? "",
-    domain: m.domain ?? "",
-    surprise_score: Math.round((m.surprise_score ?? 0) * R4) / R4,
-    emotional_valence: Math.round((m.emotional_valence ?? 0) * R4) / R4,
-    compression_level: m.compression_level ?? 0,
-    is_compressed: Boolean(m.is_compressed),
-    is_protected: Boolean(m.is_protected),
-    access_count: m.access_count ?? 0,
+    heat: m.heat ?? 0,
+    importance: m.importance ?? 0,
+    stage: m.consolidation_stage ?? "labile",
+    consolidationStage: m.consolidation_stage ?? "labile",
     consolidation_stage: m.consolidation_stage ?? "labile",
-    source: m.source ?? "",
-    agent_context: m.agent_context ?? "",
+    createdAt: m.created_at ?? null,
+    lastAccessed: null,
+    // not in the paged-listing SELECT for performance
+    isProtected: Boolean(m.is_protected),
+    is_protected: Boolean(m.is_protected),
+    isGlobal: Boolean(m.is_global),
     is_global: Boolean(m.is_global),
-    replay_count: m.replay_count ?? 0,
-    hours_in_stage: Math.round((m.hours_in_stage ?? 0) * R2) / R2,
-    reconsolidation_count: m.reconsolidation_count ?? 0,
-    confidence: Math.round((m.confidence ?? 1) * R4) / R4,
-    encoding_strength: Math.round((m.encoding_strength ?? 1) * R4) / R4,
-    schema_match_score: Math.round((m.schema_match_score ?? 0) * R4) / R4,
-    interference_score: Math.round((m.interference_score ?? 0) * R4) / R4,
-    hippocampal_dependency: Math.round((m.hippocampal_dependency ?? 1) * R4) / R4,
-    plasticity: Math.round((m.plasticity ?? 1) * R4) / R4,
-    stability: Math.round((m.stability ?? 0) * R4) / R4,
-    last_accessed: m.last_accessed ?? "",
-    stage_entered_at: m.stage_entered_at ?? "",
-    theta_phase: Math.round((m.theta_phase_at_encoding ?? 0) * R4) / R4,
-    excitability: Math.round((m.excitability ?? 1) * R4) / R4,
-    separation_index: Math.round((m.separation_index ?? 0) * R4) / R4
+    emotion,
+    emotional_valence: typeof val === "number" ? val : 0,
+    store_type: m.store_type ?? "episodic",
+    access_count: m.access_count ?? 0,
+    useful_count: m.useful_count ?? 0
   };
+}
+function encodeCursor(payload) {
+  return Buffer.from(JSON.stringify(payload)).toString("base64url");
+}
+function decodeCursor(s) {
+  if (!s)
+    return null;
+  try {
+    const mod = s.length % BASE64_BLOCK;
+    const padded = s + "==".slice(mod === 0 ? BASE64_BLOCK : mod);
+    const raw = Buffer.from(padded, "base64url").toString("utf8");
+    const obj = JSON.parse(raw);
+    return obj;
+  } catch {
+    return null;
+  }
 }
 async function registerMemoriesRoutes(fastify, deps) {
   fastify.get("/api/memories", async (req, reply) => {
     try {
-      const { domain, stage, after, limit: limitStr } = req.query;
+      const { cursor: cursorStr, limit: limitStr, domain, stage, sort: sortRaw, emotion, min_heat: minHeatStr, protected: protectedFlag, global: globalFlag, include_global: includeGlobalFlag } = req.query;
+      const SORT_ORDER = {
+        heat: "heat_base DESC, id DESC",
+        recent: "created_at DESC, id DESC",
+        oldest: "created_at ASC, id ASC"
+      };
+      const SORT_KEY_COL = {
+        heat: "heat_base",
+        recent: "created_at",
+        oldest: "created_at"
+      };
+      const SORT_DIR = {
+        heat: "<",
+        recent: "<",
+        oldest: ">"
+      };
+      const sort = sortRaw && SORT_ORDER[sortRaw] ? sortRaw : "heat";
       const limit = Math.min(PAGE_LIMIT_MAX, Math.max(1, parseInt(limitStr ?? String(PAGE_LIMIT_DEFAULT), 10)));
-      const db = new Database4(deps.dbPath, { readonly: true, fileMustExist: true });
-      const conditions = ["NOT is_benchmark", "NOT is_stale"];
+      const cursor = decodeCursor(cursorStr);
+      const minHeat = minHeatStr ? parseFloat(minHeatStr) : null;
+      const protectedOnly = protectedFlag === "1" || protectedFlag === "true";
+      const globalOnly = globalFlag === "1" || globalFlag === "true";
+      const includeGlobal = includeGlobalFlag == null || includeGlobalFlag === "1" || includeGlobalFlag === "true";
+      const validEmotions = /* @__PURE__ */ new Set(["urgent", "positive", "negative", "neutral"]);
+      const emotionFilter = emotion && validEmotions.has(emotion) ? emotion : null;
+      const conditions = ["NOT is_stale"];
       const params = [];
-      if (domain) {
-        conditions.push("domain = ?");
+      if (cursor !== null) {
+        const col = SORT_KEY_COL[sort] ?? "heat_base";
+        const op = SORT_DIR[sort] ?? "<";
+        conditions.push(`(${col}, id) ${op} (?, ?)`);
+        params.push(cursor.k, cursor.id);
+      }
+      if (globalOnly) {
+        conditions.push("is_global = 1");
+      } else if (domain) {
+        if (includeGlobal) {
+          conditions.push("(domain = ? OR is_global = 1)");
+        } else {
+          conditions.push("domain = ?");
+        }
         params.push(domain);
       }
       if (stage) {
         conditions.push("consolidation_stage = ?");
         params.push(stage);
       }
-      if (after) {
-        conditions.push("rowid > (SELECT rowid FROM memories WHERE id = ?)");
-        params.push(after);
+      if (minHeat !== null && !isNaN(minHeat)) {
+        conditions.push("heat_base >= ?");
+        params.push(minHeat);
       }
-      const where = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-      params.push(limit);
-      const rows = db.prepare(`SELECT *, heat_base AS heat FROM memories ${where} ORDER BY heat_base DESC LIMIT ?`).all(...params);
-      const total = db.prepare(`SELECT COUNT(*) as c FROM memories ${where.replace(/LIMIT \?/, "")}`).get(...params.slice(0, -1))?.c ?? 0;
+      if (emotionFilter === "urgent") {
+        conditions.push(`importance >= ${URGENT_IMPORTANCE_THRESHOLD}`);
+      } else if (emotionFilter === "positive") {
+        conditions.push(`emotional_valence >= ${VALENCE_POS_THRESHOLD} AND importance < ${URGENT_IMPORTANCE_THRESHOLD}`);
+      } else if (emotionFilter === "negative") {
+        conditions.push(`emotional_valence <= ${VALENCE_NEG_THRESHOLD} AND importance < ${URGENT_IMPORTANCE_THRESHOLD}`);
+      } else if (emotionFilter === "neutral") {
+        conditions.push(`emotional_valence > ${VALENCE_NEG_THRESHOLD} AND emotional_valence < ${VALENCE_POS_THRESHOLD} AND importance < ${URGENT_IMPORTANCE_THRESHOLD}`);
+      }
+      if (protectedOnly) {
+        conditions.push("is_protected = 1");
+      }
+      const where = `WHERE ${conditions.join(" AND ")}`;
+      const orderBy = SORT_ORDER[sort] ?? "heat_base DESC, id DESC";
+      const fetchLimit = limit + 1;
+      params.push(fetchLimit);
+      const db = new Database4(deps.dbPath, { readonly: true, fileMustExist: true });
+      const rows = db.prepare(`SELECT id, content, heat_base AS heat, importance, store_type, domain,
+                tags, created_at, consolidation_stage, emotional_valence,
+                is_protected, is_global, access_count, useful_count
+         FROM memories ${where} ORDER BY ${orderBy} LIMIT ?`).all(...params);
       db.close();
+      const hasMore = rows.length > limit;
+      const items = rows.slice(0, limit);
+      let nextCursor = null;
+      if (hasMore && items.length > 0) {
+        const last = items[items.length - 1];
+        if (last) {
+          const sortValue = sort === "heat" ? last.heat ?? 0 : last.created_at ?? "";
+          nextCursor = encodeCursor({ k: sortValue, id: last.id });
+        }
+      }
       return reply.send({
-        memories: rows.map((m) => formatMemory(m, CONTENT_LIMIT)),
-        // source: cortex@ed33435 mcp_server/server/http_dashboard_data.py:39 — format_memory(m, 200) for recent_memories
-        total,
-        has_more: rows.length === limit,
-        next_after: rows.length > 0 ? rows[rows.length - 1]?.id ?? null : null
+        items: items.map((m) => rowToNode(m)),
+        next_cursor: nextCursor,
+        page_count: items.length,
+        sort
       });
     } catch (err) {
       return reply.status(HTTP_5004).send({ error: err instanceof Error ? err.constructor.name : "UnknownError" });
@@ -41319,14 +41407,46 @@ async function registerMemoriesRoutes(fastify, deps) {
   fastify.get("/api/memories/facets", async (_req, reply) => {
     try {
       const db = new Database4(deps.dbPath, { readonly: true, fileMustExist: true });
-      const byDomain = db.prepare("SELECT domain, COUNT(*) as count FROM memories WHERE NOT is_benchmark AND NOT is_stale GROUP BY domain ORDER BY count DESC").all();
-      const byStage = db.prepare("SELECT consolidation_stage, COUNT(*) as count FROM memories WHERE NOT is_benchmark AND NOT is_stale GROUP BY consolidation_stage").all();
-      const totals = db.prepare("SELECT COUNT(*) as total, SUM(is_protected) as protected, SUM(is_global) as global FROM memories WHERE NOT is_benchmark AND NOT is_stale").get();
+      const domainRows = db.prepare(`SELECT COALESCE(NULLIF(domain, ''), '__unknown__') AS dom, COUNT(*) AS c
+         FROM memories WHERE NOT is_stale
+         GROUP BY dom ORDER BY c DESC LIMIT ${DOMAIN_LIMIT}`).all();
+      const agg = db.prepare(`SELECT
+           COUNT(*) AS total,
+           COUNT(*) FILTER (WHERE consolidation_stage = 'labile')          AS s_labile,
+           COUNT(*) FILTER (WHERE consolidation_stage = 'early_ltp')       AS s_early,
+           COUNT(*) FILTER (WHERE consolidation_stage = 'late_ltp')        AS s_late,
+           COUNT(*) FILTER (WHERE consolidation_stage = 'consolidated')    AS s_cons,
+           COUNT(*) FILTER (WHERE consolidation_stage = 'reconsolidating') AS s_recon,
+           COUNT(*) FILTER (WHERE is_global = 1)     AS n_global,
+           COUNT(*) FILTER (WHERE is_protected = 1)  AS n_protected,
+           COUNT(*) FILTER (WHERE heat_base >= ${HOT_HEAT_THRESHOLD})     AS n_hot,
+           COUNT(*) FILTER (WHERE importance >= ${URGENT_IMPORTANCE_THRESHOLD})  AS e_urgent,
+           COUNT(*) FILTER (WHERE emotional_valence >= ${VALENCE_POS_THRESHOLD} AND importance < ${URGENT_IMPORTANCE_THRESHOLD}) AS e_pos,
+           COUNT(*) FILTER (WHERE emotional_valence <= ${VALENCE_NEG_THRESHOLD} AND importance < ${URGENT_IMPORTANCE_THRESHOLD}) AS e_neg,
+           COUNT(*) FILTER (WHERE emotional_valence > ${VALENCE_NEG_THRESHOLD} AND emotional_valence < ${VALENCE_POS_THRESHOLD} AND importance < ${URGENT_IMPORTANCE_THRESHOLD}) AS e_neutral
+         FROM memories WHERE NOT is_stale`).get();
       db.close();
+      const a = agg ?? {};
+      const n = (k) => Number(a[k] ?? 0);
       return reply.send({
-        by_domain: byDomain,
-        by_stage: byStage,
-        totals: totals ?? { total: 0, protected: 0, global: 0 }
+        total: n("total"),
+        domains: domainRows.map((r) => ({ name: r.dom, count: Number(r.c) })),
+        stages: {
+          labile: n("s_labile"),
+          early_ltp: n("s_early"),
+          late_ltp: n("s_late"),
+          consolidated: n("s_cons"),
+          reconsolidating: n("s_recon")
+        },
+        emotions: {
+          urgent: n("e_urgent"),
+          positive: n("e_pos"),
+          negative: n("e_neg"),
+          neutral: n("e_neutral")
+        },
+        global: n("n_global"),
+        protected: n("n_protected"),
+        hot: n("n_hot")
       });
     } catch (err) {
       return reply.status(HTTP_5004).send({ error: err instanceof Error ? err.constructor.name : "UnknownError" });
