@@ -1,839 +1,585 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Memory Dashboard — Agentic AI</title>
-  <style>
-    /* Dashboard styles.
-       source: cortex@ed33435 ui/unified-viz.html (theme) */
-    :root {
-      --bg: #0a0a0f;
-      --fg: #e0e0f0;
-      --accent: #6c63ff;
-      --card: #13131f;
-      --border: #2a2a3a;
-      --hot: #ff6b6b;
-      --cool: #48cae4;
-      --tab-active-bg: #1a1a2e;
-    }
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: "Inter", "Segoe UI", system-ui, sans-serif;
-      background: var(--bg);
-      color: var(--fg);
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-    }
-
-    /* ── Header ─────────────────────────────────────────────────────────────── */
-    header {
-      padding: 1rem 1.5rem;
-      border-bottom: 1px solid var(--border);
-      display: flex;
-      align-items: center;
-      gap: 0.75rem;
-    }
-    header h1 { font-size: 1.1rem; font-weight: 600; letter-spacing: 0.02em; }
-    header .status { font-size: 0.75rem; color: var(--cool); margin-left: auto; }
-
-    /* ── Tab navigation ─────────────────────────────────────────────────────── */
-    nav {
-      display: flex;
-      gap: 0;
-      border-bottom: 1px solid var(--border);
-      background: var(--card);
-    }
-    nav button {
-      background: none;
-      border: none;
-      border-bottom: 2px solid transparent;
-      color: #888;
-      cursor: pointer;
-      font: inherit;
-      font-size: 0.85rem;
-      padding: 0.7rem 1.4rem;
-      transition: color 0.15s, border-color 0.15s, background 0.15s;
-      letter-spacing: 0.03em;
-    }
-    nav button:hover { color: var(--fg); background: rgba(255,255,255,0.03); }
-    nav button.active {
-      color: var(--accent);
-      border-bottom-color: var(--accent);
-      background: var(--tab-active-bg);
-    }
-
-    /* ── Tab panels ─────────────────────────────────────────────────────────── */
-    .panel { display: none; flex: 1; flex-direction: column; }
-    .panel.visible { display: flex; }
-
-    /* ── Graph panel ─────────────────────────────────────────────────────────── */
-    #panel-graph {
-      padding: 1rem 1.5rem;
-      gap: 1rem;
-    }
-    #graph-stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1rem;
-    }
-    .card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 1rem;
-    }
-    .card h2 { font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--accent); margin-bottom: 0.75rem; }
-    .stat-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.5rem; }
-    .stat { background: var(--bg); border-radius: 6px; padding: 0.6rem 0.75rem; }
-    .stat .label { font-size: 0.7rem; color: #888; text-transform: uppercase; }
-    .stat .value { font-size: 1.3rem; font-weight: 700; margin-top: 0.2rem; }
-    #graph-canvas {
-      flex: 1;
-      min-height: 400px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      position: relative;
-      overflow: hidden;
-    }
-    #graph-canvas canvas { width: 100%; height: 100%; }
-    #build-progress {
-      display: flex;
-      align-items: center;
-      gap: 0.5rem;
-      font-size: 0.8rem;
-      color: #aaa;
-      padding: 0.5rem 0;
-    }
-    .progress-bar {
-      flex: 1;
-      height: 4px;
-      background: var(--border);
-      border-radius: 2px;
-      overflow: hidden;
-    }
-    .progress-fill {
-      height: 100%;
-      background: linear-gradient(90deg, var(--accent), var(--cool));
-      transition: width 0.3s ease;
-    }
-
-    /* ── Knowledge panel (memories) ─────────────────────────────────────────── */
-    #panel-knowledge {
-      padding: 1rem 1.5rem;
-      gap: 1rem;
-      overflow-y: auto;
-    }
-    #knowledge-filters {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-      align-items: center;
-    }
-    #knowledge-filters label { font-size: 0.8rem; color: #aaa; }
-    #knowledge-filters select {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      color: var(--fg);
-      font: inherit;
-      font-size: 0.8rem;
-      padding: 0.3rem 0.6rem;
-    }
-    #knowledge-facets {
-      display: flex;
-      gap: 0.5rem;
-      flex-wrap: wrap;
-    }
-    .facet-chip {
-      background: var(--border);
-      border-radius: 12px;
-      font-size: 0.72rem;
-      padding: 0.25rem 0.6rem;
-      cursor: pointer;
-      border: 1px solid transparent;
-      transition: border-color 0.15s;
-    }
-    .facet-chip:hover { border-color: var(--accent); }
-    .facet-chip.selected { border-color: var(--accent); color: var(--accent); }
-    #memory-table {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      overflow: hidden;
-    }
-    #memory-table table {
-      width: 100%;
-      border-collapse: collapse;
-      font-size: 0.8rem;
-    }
-    #memory-table th {
-      background: var(--bg);
-      padding: 0.6rem 0.75rem;
-      text-align: left;
-      font-size: 0.7rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: #888;
-      border-bottom: 1px solid var(--border);
-    }
-    #memory-table td {
-      padding: 0.55rem 0.75rem;
-      border-bottom: 1px solid rgba(42,42,58,0.5);
-      vertical-align: top;
-      line-height: 1.4;
-    }
-    #memory-table tr:last-child td { border-bottom: none; }
-    #memory-table tr:hover td { background: rgba(255,255,255,0.02); }
-    .badge {
-      display: inline-block;
-      font-size: 0.65rem;
-      padding: 0.1rem 0.4rem;
-      border-radius: 3px;
-      background: var(--border);
-      color: var(--fg);
-      margin-right: 0.2rem;
-    }
-    .badge.hot { background: rgba(255, 107, 107, 0.2); color: var(--hot); }
-    .badge.protected { background: rgba(108, 99, 255, 0.2); color: var(--accent); }
-    #knowledge-pagination {
-      display: flex;
-      gap: 0.75rem;
-      align-items: center;
-      font-size: 0.8rem;
-      color: #aaa;
-    }
-    #knowledge-pagination button {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 4px;
-      color: var(--fg);
-      cursor: pointer;
-      font: inherit;
-      font-size: 0.8rem;
-      padding: 0.3rem 0.75rem;
-    }
-    #knowledge-pagination button:disabled { opacity: 0.4; cursor: default; }
-
-    /* ── Board panel (Sankey consolidation view) ─────────────────────────────── */
-    #panel-board {
-      padding: 1rem 1.5rem;
-      gap: 1rem;
-    }
-    #board-summary {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      gap: 1rem;
-    }
-    #sankey-canvas {
-      flex: 1;
-      min-height: 380px;
-      background: var(--bg);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      position: relative;
-      overflow: hidden;
-    }
-    #sankey-canvas canvas { width: 100%; height: 100%; }
-    #board-metrics {
-      display: grid;
-      grid-template-columns: repeat(5, 1fr);
-      gap: 0.75rem;
-    }
-    .stage-card {
-      background: var(--card);
-      border: 1px solid var(--border);
-      border-radius: 8px;
-      padding: 0.75rem;
-    }
-    .stage-card h3 {
-      font-size: 0.72rem;
-      text-transform: uppercase;
-      letter-spacing: 0.06em;
-      color: var(--cool);
-      margin-bottom: 0.5rem;
-    }
-    .stage-stat { font-size: 0.75rem; color: #aaa; margin-top: 0.2rem; }
-    .stage-stat .val { color: var(--fg); font-weight: 600; }
-
-    /* ── Footer progress bar ────────────────────────────────────────────────── */
-    footer {
-      padding: 0.4rem 1.5rem;
-      border-top: 1px solid var(--border);
-      font-size: 0.75rem;
-      color: #666;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cortex — Neural Graph</title>
+<link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@300;400;500;600&family=Crimson+Pro:ital,wght@0,400;0,600;0,700;1,400&family=Source+Sans+3:wght@400;600;700&family=EB+Garamond:ital,wght@0,400;0,500;0,600;0,700;1,400;1,500&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/css/theme.css">
+<link rel="stylesheet" href="/css/panels.css">
+<link rel="stylesheet" href="/css/detail.css">
+<link rel="stylesheet" href="/css/timeline.css">
+<link rel="stylesheet" href="/css/sankey.css">
+<link rel="stylesheet" href="/css/knowledge.css">
+<link rel="stylesheet" href="/css/workflow_graph.css">
+<link rel="stylesheet" href="/css/memory_science.css">
+<!-- KaTeX for scientific math rendering (load early; math appears in view mode too) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.css" crossorigin="anonymous">
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/katex.min.js" crossorigin="anonymous"></script>
+<script defer src="https://cdn.jsdelivr.net/npm/katex@0.16.11/dist/contrib/auto-render.min.js" crossorigin="anonymous"></script>
 </head>
 <body>
-  <header>
-    <svg width="20" height="20" viewBox="0 0 20 20" fill="none" aria-hidden="true">
-      <circle cx="10" cy="10" r="3" fill="#6c63ff"/>
-      <circle cx="3" cy="5" r="1.5" fill="#48cae4"/>
-      <circle cx="17" cy="5" r="1.5" fill="#48cae4"/>
-      <circle cx="3" cy="15" r="1.5" fill="#48cae4"/>
-      <circle cx="17" cy="15" r="1.5" fill="#48cae4"/>
-      <line x1="10" y1="10" x2="3" y2="5" stroke="#2a2a3a" stroke-width="1"/>
-      <line x1="10" y1="10" x2="17" y2="5" stroke="#2a2a3a" stroke-width="1"/>
-      <line x1="10" y1="10" x2="3" y2="15" stroke="#2a2a3a" stroke-width="1"/>
-      <line x1="10" y1="10" x2="17" y2="15" stroke="#2a2a3a" stroke-width="1"/>
-    </svg>
-    <h1>Memory Dashboard</h1>
-    <span class="status" id="status-text">connecting…</span>
-  </header>
 
-  <!-- Tab navigation: Graph | Knowledge | Board -->
-  <nav id="tab-nav">
-    <button id="tab-graph" class="active" aria-controls="panel-graph">Graph</button>
-    <button id="tab-knowledge" aria-controls="panel-knowledge">Knowledge</button>
-    <button id="tab-board" aria-controls="panel-board">Board</button>
-  </nav>
+<div id="loading">
+  <div class="loader-ring"></div>
+  <div class="loader-title">CORTEX</div>
+  <div class="loader-sub">Initializing neural map</div>
+</div>
 
-  <!-- ── Graph panel ─────────────────────────────────────────────────────────── -->
-  <div id="panel-graph" class="panel visible" role="tabpanel">
-    <div id="graph-stats">
-      <div class="card">
-        <h2>Memory Stats</h2>
-        <div class="stat-grid" id="stats-grid">
-          <div class="stat"><div class="label">Total</div><div class="value" id="stat-total">—</div></div>
-          <div class="stat"><div class="label">Episodic</div><div class="value" id="stat-episodic">—</div></div>
-          <div class="stat"><div class="label">Semantic</div><div class="value" id="stat-semantic">—</div></div>
-          <div class="stat"><div class="label">Hot (&gt;0.5)</div><div class="value" id="stat-hot">—</div></div>
-          <div class="stat"><div class="label">Protected</div><div class="value" id="stat-protected">—</div></div>
-          <div class="stat"><div class="label">Domains</div><div class="value" id="stat-domains">—</div></div>
-        </div>
-      </div>
-      <div class="card" style="grid-column:2/-1">
-        <h2>Graph progress</h2>
-        <div id="build-progress">
-          <span id="progress-message">loading graph…</span>
-          <div class="progress-bar">
-            <div class="progress-fill" id="progress-fill" style="width:0%"></div>
-          </div>
-          <span id="progress-pct">0%</span>
-        </div>
-      </div>
-    </div>
-    <div id="graph-canvas">
-      <canvas id="graph-canvas-el"></canvas>
-    </div>
+<!-- Non-blocking progress bar wired to /api/graph/progress. Shows
+     the server's layered build status (L0 domains → L1 … L6 AST)
+     without ever taking the graph away from the user. Fades in when
+     the server is mid-build; fades out the instant full_ready=true. -->
+<div id="build-progress" style="position:fixed;bottom:18px;left:50%;transform:translateX(-50%);padding:10px 16px;background:rgba(10,16,28,0.9);border:1px solid rgba(120,200,220,0.24);border-radius:4px;font-size:11px;line-height:1.5;z-index:300;min-width:340px;max-width:540px;display:none;box-shadow:0 0 24px rgba(80,210,235,0.12);font-family:-apple-system,Inter,system-ui,sans-serif;color:#c4d4dc">
+  <div id="bp-phase" style="color:#80d2e0;font-weight:600;letter-spacing:1.5px;margin-bottom:4px;font-size:10px">LOADING</div>
+  <div id="bp-msg" style="color:#a3b4c1;margin-bottom:8px;min-height:1.4em">starting…</div>
+  <div style="position:relative;height:4px;background:rgba(120,200,220,0.1);border-radius:2px;overflow:hidden">
+    <div id="bp-fill" style="position:absolute;left:0;top:0;bottom:0;width:0%;background:linear-gradient(90deg,#50d2eb 0%,#8af5ff 100%);border-radius:2px;transition:width 300ms ease;box-shadow:0 0 10px rgba(80,210,235,0.45)"></div>
   </div>
+  <div style="text-align:right;margin-top:4px;color:#7a8e9c;font-size:10px;font-variant-numeric:tabular-nums"><span id="bp-pct">0%</span><span id="bp-elapsed" style="color:#5a6e7c;margin-left:6px"></span></div>
+</div>
+<script>
+// Phase-driven append-only loader.
+// Polls /api/graph/progress; when a phase flips to `ready`, fetches
+// /api/graph/phase?name=<key> ONCE and appends its nodes+edges to the
+// live scene via JUG.appendGraphDelta. Never re-fetches the whole
+// graph — matches the user's requirement: each phase pops new nodes
+// when the previous one is done.
+(function(){
+  // Phases are now DYNAMIC: L0..L5 are fixed, then one phase per
+  // project (L6:<name>) then L6_CROSS. We discover the full set from
+  // /api/graph/progress's `phases` dict. The server inserts keys in
+  // DAG order so iteration order matches publish order; the client's
+  // appendGraphDelta dedup handles any slack.
+  var applied = {};   // phaseKey → true once appended
+  var inflight = {};  // phaseKey → true while fetching
 
-  <!-- ── Knowledge panel ───────────────────────────────────────────────────────── -->
-  <div id="panel-knowledge" class="panel" role="tabpanel">
-    <div id="knowledge-filters">
-      <label for="domain-filter">Domain:</label>
-      <select id="domain-filter">
-        <option value="">All</option>
-      </select>
-      <label for="stage-filter">Stage:</label>
-      <select id="stage-filter">
-        <option value="">All</option>
-        <option value="labile">labile</option>
-        <option value="early_ltp">early_ltp</option>
-        <option value="late_ltp">late_ltp</option>
-        <option value="consolidated">consolidated</option>
-        <option value="reconsolidating">reconsolidating</option>
-      </select>
-    </div>
-    <div id="knowledge-facets"></div>
-    <div id="memory-table">
-      <table>
-        <thead>
-          <tr>
-            <th>Content</th>
-            <th>Heat</th>
-            <th>Type</th>
-            <th>Stage</th>
-            <th>Domain</th>
-            <th>Flags</th>
-          </tr>
-        </thead>
-        <tbody id="memory-tbody"></tbody>
-      </table>
-    </div>
-    <div id="knowledge-pagination">
-      <button id="page-prev" disabled>← Prev</button>
-      <span id="page-info">—</span>
-      <button id="page-next" disabled>Next →</button>
-    </div>
-  </div>
-
-  <!-- ── Board panel (Sankey consolidation pipeline) ───────────────────────────── -->
-  <div id="panel-board" class="panel" role="tabpanel">
-    <div id="board-summary">
-      <div class="card">
-        <h2>Pipeline summary</h2>
-        <div class="stat-grid">
-          <div class="stat"><div class="label">Total</div><div class="value" id="board-total">—</div></div>
-          <div class="stat"><div class="label">Transitions</div><div class="value" id="board-transitions">—</div></div>
-          <div class="stat"><div class="label">Stages</div><div class="value" id="board-stages">—</div></div>
-        </div>
-      </div>
-      <div class="card" style="grid-column:2/-1">
-        <h2>Consolidation flow</h2>
-        <div style="font-size:0.78rem;color:#aaa;">Nodes = consolidation stages · Flows = transition counts</div>
-      </div>
-    </div>
-    <div id="sankey-canvas">
-      <canvas id="sankey-canvas-el"></canvas>
-    </div>
-    <div id="board-metrics"></div>
-  </div>
-
-  <footer id="footer-bar">Memory Dashboard v0.1.0</footer>
-
-  <script type="module">
-    // Dashboard JS — wires tab navigation to API routes.
-    // Endpoints consumed:
-    //   /api/memories/facets  → stats panel (Graph tab) + facet chips (Knowledge tab)
-    //   /api/memories         → memory table (Knowledge tab)
-    //   /api/graph/progress   → progress bar (Graph tab)
-    //   /api/graph            → canvas render (Graph tab)
-    //   /api/sankey           → sankey canvas + stage metrics (Board tab)
-    //
-    // No external dependencies — vanilla browser JS only.
-
-    const api = (path) => fetch(path).then(r => { if (!r.ok) throw new Error(r.status); return r.json(); });
-
-    // ── Tab switching ────────────────────────────────────────────────────────
-    const tabs = {
-      graph:     { btn: document.getElementById('tab-graph'),     panel: document.getElementById('panel-graph') },
-      knowledge: { btn: document.getElementById('tab-knowledge'), panel: document.getElementById('panel-knowledge') },
-      board:     { btn: document.getElementById('tab-board'),     panel: document.getElementById('panel-board') },
-    };
-
-    let activeTab = 'graph';
-    const tabLoaded = { graph: false, knowledge: false, board: false };
-
-    function switchTab(name) {
-      if (activeTab === name) return;
-      tabs[activeTab].btn.classList.remove('active');
-      tabs[activeTab].panel.classList.remove('visible');
-      activeTab = name;
-      tabs[name].btn.classList.add('active');
-      tabs[name].panel.classList.add('visible');
-      if (!tabLoaded[name]) {
-        tabLoaded[name] = true;
-        if (name === 'knowledge') loadKnowledge();
-        if (name === 'board') loadBoard();
-      }
-    }
-
-    Object.entries(tabs).forEach(([name, {btn}]) => {
-      btn.addEventListener('click', () => switchTab(name));
-    });
-
-    // ── Shared: facets ───────────────────────────────────────────────────────
-    let _facets = null;
-
-    async function loadFacets() {
-      try {
-        _facets = await api('/api/memories/facets');
-        // Graph tab stats
-        document.getElementById('stat-total').textContent = _facets.totals?.total ?? '—';
-        document.getElementById('stat-protected').textContent = _facets.totals?.protected ?? '—';
-        document.getElementById('stat-domains').textContent = _facets.by_domain?.length ?? '—';
-        document.getElementById('status-text').textContent = 'connected';
-
-        // Knowledge tab: populate domain filter
-        const sel = document.getElementById('domain-filter');
-        for (const d of (_facets.by_domain ?? [])) {
-          const o = document.createElement('option');
-          o.value = d.domain;
-          o.textContent = `${d.domain} (${d.count})`;
-          sel.appendChild(o);
-        }
-
-        // Knowledge tab: facet chips
-        const chips = document.getElementById('knowledge-facets');
-        // SEC-005 residual: d.domain is attacker-controllable — escape in
-        // both the attribute and text-content positions.
-        // source: OWASP DOM-based XSS Prevention §"Output encoding".
-        chips.innerHTML = (_facets.by_domain ?? []).map(d =>
-          `<span class="facet-chip" data-domain="${escHtml(d.domain)}">${escHtml(d.domain)} <strong>${escHtml(String(d.count))}</strong></span>`
-        ).join('');
-        chips.querySelectorAll('.facet-chip').forEach(chip => {
-          chip.addEventListener('click', () => {
-            const domain = chip.dataset.domain;
-            document.getElementById('domain-filter').value = domain;
-            _knowledgePage = { after: null, domain, stage: _knowledgePage.stage };
-            loadKnowledge();
-          });
-        });
-      } catch {
-        document.getElementById('status-text').textContent = 'offline';
-      }
-    }
-
-    // ── Graph tab ────────────────────────────────────────────────────────────
-    tabLoaded.graph = true;
-    loadFacets();
-
-    async function loadGraphStats() {
-      try {
-        const data = await api('/api/memories?limit=200');
-        let episodic = 0, semantic = 0, hot = 0;
-        for (const m of (data.memories ?? [])) {
-          if (m.store_type === 'episodic') episodic++;
-          if (m.store_type === 'semantic') semantic++;
-          if (m.heat > 0.5) hot++;
-        }
-        document.getElementById('stat-episodic').textContent = episodic;
-        document.getElementById('stat-semantic').textContent = semantic;
-        document.getElementById('stat-hot').textContent = hot;
-      } catch { /* offline */ }
-    }
-    loadGraphStats();
-
-    async function pollGraph() {
-      try {
-        const prog = await api('/api/graph/progress');
-        const pct = Math.round((prog.pct ?? 0) * 100);
-        document.getElementById('progress-fill').style.width = pct + '%';
-        document.getElementById('progress-pct').textContent = pct + '%';
-        document.getElementById('progress-message').textContent = prog.message || 'loading…';
-        if (!prog.full_ready) {
-          setTimeout(pollGraph, 1500);
-        } else {
-          await loadGraph();
-        }
-      } catch { setTimeout(pollGraph, 3000); }
-    }
-
-    async function loadGraph() {
-      try {
-        const data = await api('/api/graph');
-        renderGraph(data);
-      } catch { /* offline */ }
-    }
-
-    // Cancellation token for the in-flight render so a new poll/render
-    // doesn't double-paint or burn CPU when the user is on another tab.
-    let _renderToken = 0;
-
-    function renderGraph(data) {
-      const myToken = ++_renderToken;
-      const canvas = document.getElementById('graph-canvas-el');
-      const container = document.getElementById('graph-canvas');
-      canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const nodes = data.nodes ?? [];
-      const edges = data.edges ?? [];
-      if (nodes.length === 0) return;
-
-      const cx = canvas.width / 2, cy = canvas.height / 2;
-      const domains = [...new Set(nodes.map(n => n.domain ?? ''))];
-      const positions = new Map();
-
-      const R = Math.min(cx, cy) * 0.7;
-      for (const n of nodes) {
-        if (n.kind === 'domain') {
-          const idx = domains.indexOf(n.domain ?? '');
-          const angle = (2 * Math.PI * idx) / Math.max(domains.length, 1);
-          positions.set(n.id, { x: cx + R * Math.cos(angle), y: cy + R * Math.sin(angle) });
-        }
-      }
-      for (const n of nodes) {
-        if (n.kind !== 'domain' && !positions.has(n.id)) {
-          const domPos = positions.get(n.domain_id) ?? { x: cx, y: cy };
-          const scatter = (Math.random() - 0.5) * 120;
-          positions.set(n.id, { x: domPos.x + scatter, y: domPos.y + scatter });
-        }
-      }
-
-      // Cap the render budget so we never block the main thread for >~2s.
-      // source: 60Hz frame budget = 16ms; we target ≤8ms per frame so the
-      // browser stays interactive. With BATCH_EDGES=400 and ~5µs per
-      // moveTo/lineTo on commodity Canvas2D, each edge batch fits in budget.
-      const BATCH_EDGES = 400;
-      const BATCH_NODES = 250;
-      const limitedEdges = edges.length > 2000 ? edges.slice(0, 2000) : edges;
-      const limitedNodes = nodes.length > 3000 ? nodes.slice(0, 3000) : nodes;
-
-      // Group nodes by colour so we can emit one fillStyle change per group
-      // and a single beginPath/arc/fill loop per colour. This is the largest
-      // speed-up: fewer state changes on the canvas context.
-      const colorMap = { domain: '#6c63ff', memory: '#ff6b6b', entity: '#48cae4' };
-      const nodesByColor = new Map();
-      for (const n of limitedNodes) {
-        const color = colorMap[n.kind] ?? '#888';
-        let bucket = nodesByColor.get(color);
-        if (!bucket) { bucket = []; nodesByColor.set(color, bucket); }
-        bucket.push(n);
-      }
-
-      ctx.strokeStyle = 'rgba(100, 100, 180, 0.2)';
-      ctx.lineWidth = 0.5;
-
-      let edgeIdx = 0;
-      let colorIter = nodesByColor.entries();
-      let currentBucket = null;
-      let currentColor = null;
-      let bucketIdx = 0;
-
-      function drawNextBatch() {
-        if (myToken !== _renderToken) return; // superseded — abandon this render
-
-        // Edges first — one beginPath per BATCH_EDGES so the GPU receives
-        // one stroke call for ~400 segments instead of 400 stroke calls.
-        if (edgeIdx < limitedEdges.length) {
-          const eEnd = Math.min(edgeIdx + BATCH_EDGES, limitedEdges.length);
-          ctx.beginPath();
-          for (let i = edgeIdx; i < eEnd; i++) {
-            const e = limitedEdges[i];
-            const s = positions.get(e.source), t = positions.get(e.target);
-            if (!s || !t) continue;
-            ctx.moveTo(s.x, s.y);
-            ctx.lineTo(t.x, t.y);
+  function applyPhase(key){
+    if(applied[key] || inflight[key]) return Promise.resolve();
+    inflight[key] = true;
+    return fetch('/api/graph/phase?name='+encodeURIComponent(key))
+      .then(function(r){ return r.ok ? r.json() : null; })
+      .then(function(p){
+        if(!p || !p.ready) return;
+        if(typeof JUG.appendGraphDelta === 'function'){
+          // Seed lastData if this is the very first append — the
+          // bridge/graph modules expect it to exist.
+          if(!JUG.state.lastData){
+            JUG.state.lastData = {
+              nodes: [], edges: [], links: [],
+              meta: { schema: 'workflow_graph.v1' }
+            };
           }
-          ctx.stroke();
-          edgeIdx = eEnd;
-          requestAnimationFrame(drawNextBatch);
-          return;
+          JUG.appendGraphDelta(p.nodes || [], p.edges || []);
         }
+        applied[key] = true;
+        console.log('[phase] applied', key, '+'+((p.nodes||[]).length)+'N', '+'+((p.edges||[]).length)+'E');
+      })
+      .catch(function(err){ console.warn('[phase] '+key+' failed:', err); })
+      .then(function(){ inflight[key] = false; });
+  }
 
-        // Then nodes, grouped by colour — one fillStyle change per colour.
-        if (!currentBucket) {
-          const next = colorIter.next();
-          if (next.done) {
-            drawLegend();
-            return;
+  function refreshBar(p){
+    var box = document.getElementById('build-progress');
+    if(!box) return;
+    if(p.phase === 'idle' || p.full_ready){
+      box.style.opacity = '0';
+      setTimeout(function(){ box.style.display='none'; }, 400);
+      return;
+    }
+    box.style.display = 'block';
+    box.style.opacity = '1';
+    var pct = Math.max(0, Math.min(1, p.pct || 0));
+    document.getElementById('bp-fill').style.width = (pct*100).toFixed(1)+'%';
+    document.getElementById('bp-pct').firstChild.nodeValue = (pct*100).toFixed(0)+'%';
+    document.getElementById('bp-phase').textContent = (p.phase||'LOADING').toUpperCase();
+    document.getElementById('bp-msg').textContent = p.message || '…';
+    if(p.elapsed) document.getElementById('bp-elapsed').textContent = ' · '+p.elapsed.toFixed(1)+'s';
+  }
+
+  function _activeViewIsGraph() {
+    return window.JUG && JUG.state && JUG.state.activeView === 'graph';
+  }
+  function poll(){
+    // Only do graph-build work while the user is on the Graph tab.
+    // Knowledge / Board / Wiki users don't pay the cost.
+    if (!_activeViewIsGraph()) {
+      setTimeout(poll, 1500);
+      return;
+    }
+    fetch('/api/graph/progress').then(function(r){ return r.ok ? r.json() : null; }).then(function(p){
+      if(p){
+        refreshBar(p);
+        var seq = Promise.resolve();
+        var keys = Object.keys(p.phases || {});
+        keys.forEach(function(k){
+          if(!applied[k] && p.phases[k]){
+            seq = seq.then(function(){ return applyPhase(k); });
           }
-          [currentColor, currentBucket] = next.value;
-          ctx.fillStyle = currentColor;
-          bucketIdx = 0;
-        }
-
-        const nEnd = Math.min(bucketIdx + BATCH_NODES, currentBucket.length);
-        for (let i = bucketIdx; i < nEnd; i++) {
-          const n = currentBucket[i];
-          const pos = positions.get(n.id);
-          if (!pos) continue;
-          const r = n.kind === 'domain' ? 8 : 3;
-          ctx.beginPath();
-          ctx.arc(pos.x, pos.y, r, 0, 2 * Math.PI);
-          ctx.fill();
-        }
-        bucketIdx = nEnd;
-
-        if (bucketIdx >= currentBucket.length) {
-          currentBucket = null; // advance to the next colour bucket on the next frame
-        }
-        requestAnimationFrame(drawNextBatch);
-      }
-
-      function drawLegend() {
-        ctx.font = '11px Inter, system-ui, sans-serif';
-        const legend = [['domain','#6c63ff'],['memory','#ff6b6b'],['entity','#48cae4']];
-        legend.forEach(([label, color], i) => {
-          const lx = 12, ly = 16 + i * 18;
-          ctx.beginPath(); ctx.arc(lx, ly, 5, 0, 2*Math.PI); ctx.fillStyle = color; ctx.fill();
-          ctx.fillStyle = '#aaa'; ctx.fillText(label, lx + 10, ly + 4);
         });
-      }
-
-      requestAnimationFrame(drawNextBatch);
-    }
-
-    pollGraph();
-
-    // ── Knowledge tab (memories) ─────────────────────────────────────────────
-    const PAGE_SIZE = 50;
-    let _knowledgePage = { after: null, domain: '', stage: '' };
-    let _knowledgeNextAfter = null;
-    let _knowledgeTotal = 0;
-    let _knowledgeOffset = 0;
-
-    async function loadKnowledge() {
-      const domain = document.getElementById('domain-filter').value;
-      const stage = document.getElementById('stage-filter').value;
-      let url = `/api/memories?limit=${PAGE_SIZE}`;
-      if (domain) url += `&domain=${encodeURIComponent(domain)}`;
-      if (stage) url += `&stage=${encodeURIComponent(stage)}`;
-      if (_knowledgePage.after) url += `&after=${encodeURIComponent(_knowledgePage.after)}`;
-
-      try {
-        const data = await api(url);
-        _knowledgeTotal = data.total ?? 0;
-        _knowledgeNextAfter = data.next_after ?? null;
-
-        const tbody = document.getElementById('memory-tbody');
-        tbody.innerHTML = (data.memories ?? []).map(m => `
-          <tr>
-            <td>${escHtml((m.content ?? '').slice(0, 120))}</td>
-            <td><span class="badge ${m.heat > 0.5 ? 'hot' : ''}">${m.heat}</span></td>
-            <td>${escHtml(m.store_type ?? '')}</td>
-            <td>${escHtml(m.consolidation_stage ?? '')}</td>
-            <td>${escHtml(m.domain ?? '')}</td>
-            <td>
-              ${m.is_protected ? '<span class="badge protected">protected</span>' : ''}
-              ${m.is_global ? '<span class="badge">global</span>' : ''}
-            </td>
-          </tr>`).join('');
-
-        document.getElementById('page-info').textContent =
-          `${_knowledgeOffset + 1}–${_knowledgeOffset + (data.memories?.length ?? 0)} of ${_knowledgeTotal}`;
-        document.getElementById('page-prev').disabled = _knowledgeOffset === 0;
-        document.getElementById('page-next').disabled = !data.has_more;
-      } catch (err) {
-        document.getElementById('memory-tbody').innerHTML =
-          `<tr><td colspan="6" style="color:#ff6b6b;padding:1rem">Error loading memories: ${escHtml(String(err))}</td></tr>`;
-      }
-    }
-
-    document.getElementById('domain-filter').addEventListener('change', () => {
-      _knowledgePage = { after: null, domain: '', stage: '' };
-      _knowledgeOffset = 0;
-      if (activeTab === 'knowledge') loadKnowledge();
-    });
-    document.getElementById('stage-filter').addEventListener('change', () => {
-      _knowledgePage = { after: null, domain: '', stage: '' };
-      _knowledgeOffset = 0;
-      if (activeTab === 'knowledge') loadKnowledge();
-    });
-    document.getElementById('page-next').addEventListener('click', () => {
-      _knowledgeOffset += PAGE_SIZE;
-      _knowledgePage = { after: _knowledgeNextAfter, domain: _knowledgePage.domain, stage: _knowledgePage.stage };
-      loadKnowledge();
-    });
-    document.getElementById('page-prev').addEventListener('click', () => {
-      // Keyset pagination is forward-only; reload from start with reduced offset.
-      _knowledgeOffset = Math.max(0, _knowledgeOffset - PAGE_SIZE);
-      _knowledgePage = { after: null, domain: _knowledgePage.domain, stage: _knowledgePage.stage };
-      loadKnowledge();
-    });
-
-    // ── Board tab (Sankey consolidation pipeline) ────────────────────────────
-    async function loadBoard() {
-      try {
-        const data = await api('/api/sankey');
-        document.getElementById('board-total').textContent = data.total_memories ?? '—';
-        document.getElementById('board-transitions').textContent = data.transitions?.length ?? '—';
-        document.getElementById('board-stages').textContent = Object.keys(data.stage_metrics ?? {}).length;
-
-        renderSankey(data);
-        renderStageMetrics(data.stage_metrics ?? {});
-      } catch (err) {
-        document.getElementById('sankey-canvas').innerHTML =
-          `<div style="padding:2rem;color:#ff6b6b">Error loading board: ${escHtml(String(err))}</div>`;
-      }
-    }
-
-    function renderSankey(data) {
-      const canvas = document.getElementById('sankey-canvas-el');
-      const container = document.getElementById('sankey-canvas');
-      canvas.width = container.clientWidth;
-      canvas.height = container.clientHeight;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-      const stages = ['labile', 'early_ltp', 'late_ltp', 'consolidated', 'reconsolidating'];
-      const transitions = data.transitions ?? [];
-      const stageMetrics = data.stage_metrics ?? {};
-
-      // Simple horizontal Sankey: stages as vertical bars, flows as bezier bands.
-      const W = canvas.width, H = canvas.height;
-      const pad = 60, nodeW = 40;
-      const colW = (W - 2 * pad) / (stages.length - 1);
-
-      // Compute node heights proportional to memory count in each stage.
-      const maxCount = Math.max(1, ...stages.map(s => stageMetrics[s]?.count ?? 0));
-      const nodeHeights = Object.fromEntries(stages.map((s, i) => {
-        const count = stageMetrics[s]?.count ?? 0;
-        const h = Math.max(20, ((count / maxCount) * (H - 2 * pad)));
-        const x = pad + i * colW - nodeW / 2;
-        const y = (H - h) / 2;
-        return [s, { x, y, h, count, idx: i }];
-      }));
-
-      const stageColors = {
-        labile: '#6c63ff', early_ltp: '#48cae4', late_ltp: '#4ade80',
-        consolidated: '#fbbf24', reconsolidating: '#f87171',
-      };
-
-      // Draw flows first (behind nodes).
-      for (const t of transitions) {
-        const src = nodeHeights[t.from_stage], dst = nodeHeights[t.to_stage];
-        if (!src || !dst) continue;
-        const flowH = Math.max(4, (t.count / maxCount) * 40);
-        const sx = src.x + nodeW, sy = src.y + src.h / 2;
-        const dx = dst.x, dy = dst.y + dst.h / 2;
-        ctx.beginPath();
-        ctx.moveTo(sx, sy - flowH / 2);
-        ctx.bezierCurveTo((sx + dx) / 2, sy - flowH / 2, (sx + dx) / 2, dy - flowH / 2, dx, dy - flowH / 2);
-        ctx.lineTo(dx, dy + flowH / 2);
-        ctx.bezierCurveTo((sx + dx) / 2, dy + flowH / 2, (sx + dx) / 2, sy + flowH / 2, sx, sy + flowH / 2);
-        ctx.closePath();
-        ctx.fillStyle = 'rgba(108, 99, 255, 0.15)';
-        ctx.fill();
-        ctx.strokeStyle = 'rgba(108, 99, 255, 0.4)';
-        ctx.lineWidth = 0.5;
-        ctx.stroke();
-
-        // Label the flow count.
-        ctx.font = '10px Inter, system-ui, sans-serif';
-        ctx.fillStyle = '#aaa';
-        ctx.fillText(String(t.count), (sx + dx) / 2 - 5, (sy + dy) / 2 - 2);
-      }
-
-      // Draw stage nodes.
-      for (const [stage, n] of Object.entries(nodeHeights)) {
-        const color = stageColors[stage] ?? '#888';
-        ctx.fillStyle = color;
-        ctx.beginPath();
-        ctx.roundRect(n.x, n.y, nodeW, n.h, 4);
-        ctx.fill();
-
-        // Label.
-        ctx.save();
-        ctx.font = '10px Inter, system-ui, sans-serif';
-        ctx.fillStyle = '#e0e0f0';
-        ctx.translate(n.x + nodeW / 2, n.y + n.h + 14);
-        ctx.textAlign = 'center';
-        ctx.fillText(stage.replace('_', '_\n'), 0, 0);
-        ctx.restore();
-
-        // Count label inside node.
-        if (n.h > 20) {
-          ctx.font = 'bold 11px Inter, system-ui, sans-serif';
-          ctx.fillStyle = '#fff';
-          ctx.textAlign = 'center';
-          ctx.fillText(String(n.count), n.x + nodeW / 2, n.y + n.h / 2 + 4);
+        if(p.full_ready){
+          var allDone = keys.every(function(k){ return applied[k] || !p.phases[k]; });
+          if(allDone){ return; }
         }
       }
-    }
+      setTimeout(poll, 400);
+    }).catch(function(){ setTimeout(poll, 1200); });
+  }
+  setTimeout(poll, 200);
+})();
+</script>
 
-    function renderStageMetrics(metrics) {
-      const container = document.getElementById('board-metrics');
-      const stages = ['labile', 'early_ltp', 'late_ltp', 'consolidated', 'reconsolidating'];
-      container.innerHTML = stages.map(s => {
-        const m = metrics[s] ?? {};
-        return `<div class="stage-card">
-          <h3>${s}</h3>
-          <div class="stage-stat">Count: <span class="val">${m.count ?? 0}</span></div>
-          <div class="stage-stat">Avg heat: <span class="val">${(m.avg_heat ?? 0).toFixed(3)}</span></div>
-          <div class="stage-stat">Avg hours: <span class="val">${(m.avg_hours ?? 0).toFixed(1)}</span></div>
-          <div class="stage-stat">Avg stability: <span class="val">${(m.avg_stability ?? 0).toFixed(3)}</span></div>
-        </div>`;
-      }).join('');
-    }
+<div id="scanlines"></div>
+<div id="vignette"></div>
+<div id="graph-container"></div>
+<div id="timeline-container"></div>
+<div id="sankey-container"></div>
+<div id="knowledge-container"></div>
+<div id="wiki-container"></div>
 
-    // ── Utility ──────────────────────────────────────────────────────────────
-    function escHtml(s) {
-      return String(s)
-        .replace(/&/g, '&amp;')
-        .replace(/</g, '&lt;')
-        .replace(/>/g, '&gt;')
-        .replace(/"/g, '&quot;');
-    }
-  </script>
+<div id="info-panel" class="hud-panel">
+  <div class="panel-header">
+    <div class="reactor-dot"></div>
+    <div>
+      <div class="panel-title">CORTEX</div>
+      <div class="panel-subtitle">Neural Graph</div>
+    </div>
+  </div>
+  <div class="stat-row"><span>Domains</span><span class="val" id="s-dom">--</span></div>
+  <div class="stat-row"><span>Memories</span><span class="val" id="s-mem">--</span></div>
+  <div class="stat-row"><span>Entities</span><span class="val" id="s-ent">--</span></div>
+  <div class="stat-row"><span>Nodes</span><span class="val" id="s-nodes">--</span></div>
+  <div class="stat-row"><span>Synapses</span><span class="val" id="s-edge">--</span></div>
+  <div class="stat-row"><span>Discussions</span><span class="val" id="s-disc">--</span></div>
+
+  <div id="benchmark-summary" style="margin-top:10px;border-top:1px solid #ffffff10;padding-top:8px;display:none">
+    <div style="font-size:7px;text-transform:uppercase;letter-spacing:0.5px;color:var(--cyan-dim,#508090);margin-bottom:6px">System Benchmarks</div>
+    <div class="stat-row"><span>LongMemEval</span><span class="val bench-val" id="b-lme" style="color:#40D870">--</span></div>
+    <div class="stat-row"><span>LoCoMo</span><span class="val bench-val" id="b-loc" style="color:#40D870">--</span></div>
+    <div class="stat-row"><span>BEAM</span><span class="val bench-val" id="b-beam" style="color:#E0B040">--</span></div>
+  </div>
+
+  <div id="system-vitals" style="margin-top:10px;border-top:1px solid #ffffff10;padding-top:8px;display:none">
+    <div style="font-size:7px;text-transform:uppercase;letter-spacing:0.5px;color:var(--cyan-dim,#508090);margin-bottom:6px">System Vitals</div>
+    <div class="stat-row"><span>Mean Heat</span><span class="val" id="sv-heat">--</span></div>
+    <div class="stat-row"><span>New</span><span class="val" id="sv-labile" style="color:#00D2FF">--</span></div>
+    <div class="stat-row"><span>Growing</span><span class="val" id="sv-eltp" style="color:#60A0E0">--</span></div>
+    <div class="stat-row"><span>Strong</span><span class="val" id="sv-lltp" style="color:#40D870">--</span></div>
+    <div class="stat-row"><span>Stable</span><span class="val" id="sv-cons" style="color:#E8B840">--</span></div>
+    <div class="stat-row"><span>Updating</span><span class="val" id="sv-recon" style="color:#C070D0">--</span></div>
+  </div>
+</div>
+
+<div id="filter-bar">
+  <span class="view-toggle">
+    <button class="view-btn" data-view="graph">Graph</button>
+    <button class="view-btn active" data-view="knowledge">Knowledge</button>
+    <button class="view-btn" data-view="wiki">Wiki</button>
+    <button class="view-btn" data-view="timeline">Board</button>
+    <button class="view-btn" data-view="sankey">Pipeline</button>
+  </span>
+  <button class="filter-btn" id="glossary-toggle" title="Glossary (?)">?</button>
+  <span class="filter-sep"></span>
+  <!-- Single grouped select replaces 14 individual buttons — same
+       vocabulary, one row. "Reset" restores ``all``. -->
+  <button class="filter-btn" id="wfg-filter-reset"
+          title="Clear the graph filter (show everything)">Reset</button>
+  <select id="wfg-filter-select" class="filter-select"
+          aria-label="Workflow graph filter">
+    <option value="all" selected>All nodes</option>
+    <optgroup label="By layer">
+      <option value="L1">L1 — Claude setup (skills · hooks · commands · agents)</option>
+      <option value="L2">L2 — tools (Edit · Read · Grep · Glob · Bash · Write · Task)</option>
+      <option value="L3">L3 — files touched by tools</option>
+      <option value="L4">L4 — discussions</option>
+      <option value="L5">L5 — memories</option>
+      <option value="L6">L6 — AST symbols (functions · methods · classes)</option>
+    </optgroup>
+    <optgroup label="By kind">
+      <option value="kind:skill">Skills only</option>
+      <option value="kind:command">Commands only</option>
+      <option value="kind:hook">Hooks only</option>
+      <option value="kind:agent">Agents only</option>
+      <option value="kind:mcp">MCPs only</option>
+      <option value="kind:symbol">Symbols only</option>
+      <option value="kind:entity">Entities only</option>
+    </optgroup>
+    <optgroup label="By file cluster">
+      <option value="file:edit_write">Files edited / written</option>
+      <option value="file:read">Files read only</option>
+      <option value="file:grep_glob">Files matched by Grep / Glob</option>
+      <option value="file:bash">Files touched only by Bash</option>
+    </optgroup>
+    <optgroup label="By AST edge">
+      <option value="edge:defined_in">defined_in — symbol ↔ file</option>
+      <option value="edge:calls">calls — symbol ↔ symbol</option>
+      <option value="edge:imports">imports — file ↔ symbol</option>
+      <option value="edge:member_of">member_of — method ↔ class</option>
+    </optgroup>
+    <optgroup label="Structural">
+      <option value="cross-domain">Cross-domain (shared)</option>
+    </optgroup>
+  </select>
+  <span class="filter-sep"></span>
+  <select id="domain-select" class="filter-select"><option value="">All Domains</option></select>
+  <input type="text" id="search-box" placeholder="Search path, skill, command…">
+</div>
+
+<!-- Graph-only warning banner. Shown directly below the view-toggle
+     row when the Graph tab is active. The Graph view is enabled but
+     can be unresponsive at scale — explain the situation in-line so
+     users aren't confused if their browser hangs. Hidden by default;
+     controls.js toggles display on view change. -->
+<div id="cortex-graph-warn" role="status"
+     style="display:none;position:fixed;top:62px;left:50%;transform:translateX(-50%);z-index:200;
+            max-width:760px;padding:8px 36px 8px 14px;
+            background:linear-gradient(90deg,rgba(48,28,12,0.92),rgba(64,40,16,0.92));
+            border:1px solid rgba(224,140,64,0.5);border-radius:5px;
+            color:#FFE3B5;font:11.5px/1.45 -apple-system,Inter,system-ui,sans-serif;
+            letter-spacing:0.2px;box-shadow:0 4px 14px rgba(0,0,0,0.4)">
+  <span style="color:#FFB060;margin-right:6px">⚠</span>
+  <strong>Graph may be unusable at this scale.</strong>
+  Due to performance issues we are currently investigating, opening the Graph
+  view can freeze the browser when memory counts are high. We are actively
+  working on it. Use <strong>Knowledge</strong> or <strong>Board</strong> for
+  reliable browsing while we land the rewrite.
+  <button id="cortex-graph-warn-close" aria-label="Dismiss"
+          style="position:absolute;top:4px;right:6px;width:22px;height:22px;
+                 background:transparent;border:none;color:#FFB060;font-size:14px;
+                 cursor:pointer;line-height:1;padding:0">×</button>
+</div>
+<script>
+(function(){
+  var b = document.getElementById('cortex-graph-warn-close');
+  if (b) b.addEventListener('click', function() {
+    var w = document.getElementById('cortex-graph-warn');
+    if (w) { w.style.display = 'none'; w.dataset.dismissed = '1'; }
+  });
+})();
+</script>
+
+<div id="status-bar" class="hud-panel">
+  <div class="status-dot"></div>
+  <span id="status-text">Initializing</span>
+  <span style="color:var(--cyan-dim)">|</span>
+  <span id="status-zoom">L0</span>
+  <span style="color:var(--cyan-dim)">|</span>
+  <span id="status-time"></span>
+</div>
+
+<button id="reset-btn">Reset</button>
+<button id="monitor-toggle">Log <span id="monitor-badge">0</span></button>
+
+<div id="monitor-panel">
+  <div class="mon-header">
+    <div class="mon-title">Monitoring Log</div>
+    <button class="close-btn" id="monitor-close">&#x2715;</button>
+  </div>
+  <div class="mon-tabs">
+    <button class="mon-tab active" data-type="all">All <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-type="domain">Domain <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-type="entry-point">Entry <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-type="recurring-pattern">Pattern <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-type="tool-preference">Tool <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-type="behavioral-feature">Feature <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-type="memory">Memory <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-type="entity">Entity <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-type="discussion">Discussion <span class="mon-count">0</span></button>
+  </div>
+  <div class="mon-tabs mon-tabs-bio">
+    <span class="mon-tabs-label">Bio:</span>
+    <button class="mon-tab" data-bio="emotional">Emotional <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="urgency">Urgency <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="frustration">Frustration <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="satisfaction">Satisfaction <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="discovery">Discovery <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="confusion">Confusion <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="protected">Protected <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="high-heat">Hot <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="labile">New <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="consolidated">Stable <span class="mon-count">0</span></button>
+    <button class="mon-tab" data-bio="high-interference">Interfering <span class="mon-count">0</span></button>
+  </div>
+  <div id="monitor-log"></div>
+</div>
+
+<div id="detail-panel">
+  <div class="detail-peek-bar" id="detail-peek">&#x25B2; DETAIL VIEW</div>
+  <div class="detail-window-btns">
+    <button class="window-btn" id="minimize-detail" title="Minimize">&#x2500;</button>
+    <button class="window-btn" id="close-detail" title="Close">&#x2715;</button>
+  </div>
+  <div id="detail-content"></div>
+</div>
+
+<div id="tooltip"></div>
+
+<div id="diff-modal">
+  <div class="diff-modal-backdrop"></div>
+  <div class="diff-modal-panel">
+    <div class="diff-modal-header">
+      <div><span class="diff-modal-filename"></span><span class="diff-modal-subtitle"></span></div>
+      <button class="diff-modal-close">&#x2715;</button>
+    </div>
+    <div class="diff-modal-body"></div>
+  </div>
+</div>
+
+<div id="conversation-modal">
+  <div class="conv-modal-backdrop"></div>
+  <div class="conv-modal-panel">
+    <div class="conv-modal-header">
+      <div class="conv-modal-title"></div>
+      <button class="conv-modal-close">&#x2715;</button>
+    </div>
+    <div class="conv-modal-body"></div>
+  </div>
+</div>
+
+<div id="legend">
+  <div class="leg-section">Hierarchy — L1 setup</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#FCD34D;box-shadow:0 0 6px #FCD34D60"></div>Domain (hub)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#FB923C;box-shadow:0 0 6px #FB923C60"></div>Skill</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#FACC15;box-shadow:0 0 6px #FACC1560"></div>Command</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#A855F7;box-shadow:0 0 6px #A855F760"></div>Hook</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#EC4899;box-shadow:0 0 6px #EC489960"></div>Agent</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#6366F1;box-shadow:0 0 6px #6366F160"></div>MCP</div>
+
+  <div class="leg-section">Tools (L2)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#10B981;box-shadow:0 0 6px #10B98160"></div>Edit</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#059669;box-shadow:0 0 6px #05966960"></div>Write</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#06B6D4;box-shadow:0 0 6px #06B6D460"></div>Read</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#D946EF;box-shadow:0 0 6px #D946EF60"></div>Grep</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#C026D3;box-shadow:0 0 6px #C026D360"></div>Glob</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#F97316;box-shadow:0 0 6px #F9731660"></div>Bash</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#EC4899;box-shadow:0 0 6px #EC489960"></div>Task</div>
+
+  <div class="leg-section">Files (L3)</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#10B981;box-shadow:0 0 6px #10B98160"></div>Edited / Written</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#06B6D4;box-shadow:0 0 6px #06B6D460"></div>Read only</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#D946EF;box-shadow:0 0 6px #D946EF60"></div>Grep / Glob</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#F97316;box-shadow:0 0 6px #F9731660"></div>Bash only</div>
+
+  <div class="leg-section">L4 discussions</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#EF4444;box-shadow:0 0 6px #EF444460"></div>Discussion</div>
+
+  <div class="leg-section">L5 memories</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#86EFAC;box-shadow:0 0 6px #86EFAC60"></div>Memory · labile</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#4ADE80;box-shadow:0 0 6px #4ADE8060"></div>Memory · early LTP</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#16A34A;box-shadow:0 0 6px #16A34A60"></div>Memory · late LTP</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#166534;box-shadow:0 0 6px #16653460"></div>Memory · consolidated</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#C070D0;box-shadow:0 0 6px #C070D060"></div>Memory · semantic</div>
+
+  <div class="leg-section">L6 AST symbols</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#22D3EE;box-shadow:0 0 6px #22D3EE60"></div>Function</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#38BDF8;box-shadow:0 0 6px #38BDF860"></div>Method</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#8B5CF6;box-shadow:0 0 6px #8B5CF660"></div>Class / Struct / Enum / Trait</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#FBBF24;box-shadow:0 0 6px #FBBF2460"></div>Module / Package / Namespace</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#94A3B8;box-shadow:0 0 6px #94A3B860"></div>Constant / Field / Property</div>
+  <div class="leg-item"><div class="leg-dot" style="background:#50B0C8;box-shadow:0 0 6px #50B0C860"></div>Entity (knowledge graph)</div>
+
+  <div class="leg-section">Edges</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(120,200,220,0.7)"></div>in domain</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(150,200,180,0.7)"></div>tool → file</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(180,210,150,0.7)"></div>invoked skill</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(200,170,220,0.7)"></div>triggered hook</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(140,220,210,0.7)"></div>spawned agent</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(244,63,94,0.65)"></div>discussion → file</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(224,168,64,0.65)"></div>command → file</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(138,107,255,0.65)"></div>invoked mcp</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(100,116,139,0.7)"></div>symbol → file (defined_in)</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(120,180,200,0.7)"></div>calls (symbol → symbol)</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(200,150,100,0.65)"></div>imports (file → symbol)</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(150,200,150,0.7)"></div>member_of (method → class)</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(80,176,200,0.65)"></div>about entity</div>
+  <div class="leg-item"><div class="leg-line" style="background:rgba(200,150,255,0.4);border-top:1px dashed rgba(200,150,255,0.6)"></div>cross-domain</div>
+</div>
+
+<div id="glossary-panel">
+  <button class="close-btn" id="glossary-close">&#x2715;</button>
+  <div class="gloss-title">Graph Glossary</div>
+  <div class="gloss-subtitle">What each element represents</div>
+
+  <div class="gloss-section">Reading the map</div>
+  <div class="gloss-entry">
+    <div class="gloss-desc">Every project you work in becomes a <b>cloud of nodes</b> around one gold hub. Inside each cloud, nodes are arranged in five concentric levels by what Claude did: setup (L1), tools (L2), files (L3), discussions (L4), memories (L5). Thin violet threads between clouds mean the same file / skill / MCP is shared across domains.</div>
+  </div>
+
+  <div class="gloss-section">L1 · Claude setup</div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#FCD34D"></span><span class="gloss-name">Domain</span></div>
+    <div class="gloss-desc">The project hub — one big gold node per project you work in. Everything else in the cloud belongs to this domain.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#FB923C"></span><span class="gloss-name">Skill</span></div>
+    <div class="gloss-desc">A slash-command available to Claude (<code>/research-session</code>, <code>/loop</code>, plugin skills). Edge to domain = invoked at least once in that project.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#FACC15"></span><span class="gloss-name">Command</span></div>
+    <div class="gloss-desc">A distinct shell command executed in the Bash tool. Body = the command text; click for first-seen and last-invoked timestamps.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#A855F7"></span><span class="gloss-name">Hook</span></div>
+    <div class="gloss-desc">A hook script configured in <code>settings.json</code> (SessionStart, PostToolUse, etc.). Fires automatically around tool calls.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#EC4899"></span><span class="gloss-name">Agent</span></div>
+    <div class="gloss-desc">A subagent type spawned via the Task tool (Explore, Plan, a genius reasoning pattern, …). Edge to domain = spawned at least once.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#6366F1"></span><span class="gloss-name">MCP</span></div>
+    <div class="gloss-desc">An MCP server Claude called (cortex, ai-architect, …). When two domains share an MCP, a long indigo thread bridges them.</div>
+  </div>
+
+  <div class="gloss-section">L2 · Tools</div>
+  <div class="gloss-entry">
+    <div class="gloss-desc">One hub per Claude-native tool per domain. Color = the tool:
+      <b style="color:#10B981">Edit</b>, <b style="color:#059669">Write</b>,
+      <b style="color:#06B6D4">Read</b>,
+      <b style="color:#D946EF">Grep</b>, <b style="color:#C026D3">Glob</b>,
+      <b style="color:#F97316">Bash</b>,
+      <b style="color:#EC4899">Task</b>.
+      Files orbit the tool hub that most often touched them.
+    </div>
+  </div>
+
+  <div class="gloss-section">L3 · Files</div>
+  <div class="gloss-entry">
+    <div class="gloss-desc">Every file Claude ever opened, colored by the primary tool that touched it (priority: Edit/Write → Read → Grep/Glob → Bash-only). Click a file for its path, primary-tool cluster, <b>first-seen</b>, <b>last-accessed</b>, and <b>last-modified</b> timestamps, plus a <i>See diff against HEAD</i> button that renders new/modified/deleted/historical content inline.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#10B981"></span><span class="gloss-name">Edited / written</span></div>
+    <div class="gloss-desc">File was modified or created by Claude via Edit, Write, MultiEdit, or NotebookEdit.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#06B6D4"></span><span class="gloss-name">Read only</span></div>
+    <div class="gloss-desc">File was opened via Read or NotebookRead without being modified.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#D946EF"></span><span class="gloss-name">Grep / Glob</span></div>
+    <div class="gloss-desc">File was searched via Grep or Glob without being read or modified.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#F97316"></span><span class="gloss-name">Bash only</span></div>
+    <div class="gloss-desc">File was referenced only from a Bash command (<code>cat</code>, <code>tail</code>, pipelines, …).</div>
+  </div>
+
+  <div class="gloss-section">L4 · Discussions</div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-dot" style="background:#EF4444"></span><span class="gloss-name">Discussion</span></div>
+    <div class="gloss-desc">One Claude Code session. Click for started-at, last-activity, duration, message count, and a <i>View full conversation</i> button that replays every turn (including tool calls) inside the modal.</div>
+  </div>
+
+  <div class="gloss-section">L5 · Memories</div>
+  <div class="gloss-entry">
+    <div class="gloss-desc">Knowledge Cortex has stored. Color = consolidation stage:
+      <b style="color:#86EFAC">labile</b> (freshly encoded),
+      <b style="color:#4ADE80">early LTP</b> (1–6h),
+      <b style="color:#16A34A">late LTP</b> (6–24h),
+      <b style="color:#166534">consolidated</b> (&gt;24h),
+      <b style="color:#C070D0">semantic</b> (extracted schema). Node size reflects heat; click for full content, tags, and every scientific measurement (arousal, surprise, plasticity, …).
+    </div>
+  </div>
+
+  <div class="gloss-section">Edges</div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(120,200,220,0.7)"></span><span class="gloss-name">in domain</span></div>
+    <div class="gloss-desc">Structural edge pinning a node to its domain hub.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(150,200,180,0.7)"></span><span class="gloss-name">tool → file</span></div>
+    <div class="gloss-desc">Weight = number of times that tool touched the file.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(180,210,150,0.7)"></span><span class="gloss-name">invoked skill</span></div>
+    <div class="gloss-desc">Domain invoked a slash-command.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(200,170,220,0.7)"></span><span class="gloss-name">triggered hook</span></div>
+    <div class="gloss-desc">Hook script bound to an event in this domain.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(140,220,210,0.7)"></span><span class="gloss-name">spawned agent</span></div>
+    <div class="gloss-desc">Task hub spawned a subagent of this type.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(244,63,94,0.65)"></span><span class="gloss-name">discussion → file</span></div>
+    <div class="gloss-desc">That session touched this file. Weight = touches within the session.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(224,168,64,0.65)"></span><span class="gloss-name">command → file</span></div>
+    <div class="gloss-desc">The Bash command references this file path.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(138,107,255,0.65)"></span><span class="gloss-name">invoked mcp</span></div>
+    <div class="gloss-desc">Domain called an MCP server tool; label on the edge = the specific tool name.</div>
+  </div>
+  <div class="gloss-entry">
+    <div class="gloss-header"><span class="gloss-line" style="background:rgba(200,150,255,0.4);border-top:1px dashed rgba(200,150,255,0.6)"></span><span class="gloss-name">cross-domain</span></div>
+    <div class="gloss-desc">The same file, skill, or MCP is shared between two domains — renders as a long dashed thread.</div>
+  </div>
+
+  <div class="gloss-section">Filtering</div>
+  <div class="gloss-entry">
+    <div class="gloss-desc">Use the <b>grouped filter select</b> in the top bar to isolate one layer, kind (Skills / Commands / Hooks / Agents / MCPs), file cluster (Edited / Read-only / Searched / Bash-only), or cross-domain files. The <b>Reset</b> button restores every node.</div>
+  </div>
+
+  <div class="gloss-section">Controls</div>
+  <div class="gloss-entry">
+    <div class="gloss-desc">
+      <b>Click node</b> — open detail panel (rich per-kind metadata, dates, diff / conversation buttons).<br>
+      <b>Click background</b> — close detail.<br>
+      <b>Scroll</b> — zoom. At zoom &lt; 0.9 structural edges fade so clouds read cleanly.<br>
+      <b>Drag node</b> — reposition manually (domain hubs stay pinned).<br>
+      <b>R</b> — reset view · <b>M</b> — monitor · <b>Esc</b> — close panels.
+    </div>
+  </div>
+</div>
+
+<!-- Force-graph CDN stays disabled — the legacy canvas it mounts was
+     the source of the persistent alpha rectangle. We stub the global
+     BEFORE renderer.js runs so ``ForceGraph()(container)`` chains on
+     an inert Proxy and mounts nothing, while renderer.js / graph.js
+     continue to expose the JUG API the other scripts expect. -->
+<!-- <script src="https://unpkg.com/force-graph"></script> -->
+<script>
+  window.ForceGraph = function () {
+    var noop = function () { return stub; };
+    var stub = new Proxy({}, { get: function () { return noop; } });
+    return function () { return stub; };
+  };
+</script>
+<script src="/js/config.js"></script>
+<script src="/js/state.js"></script>
+<script src="/js/workflow_graph_shims.js"></script>
+<script src="/js/draw.js"></script>
+<script src="/js/tooltip.js"></script>
+<script src="/js/renderer.js"></script>
+<script src="/js/graph.js"></script>
+<script src="/js/detail_tools.js"></script>
+<script src="/js/detail_format.js"></script>
+<script src="/js/detail_diff.js"></script>
+<script src="/js/detail_panel.js"></script>
+<script src="/js/discussion_detail.js"></script>
+<script src="/js/memory_science.js"></script>
+<script src="/js/timeline.js"></script>
+<script src="/js/sankey.js"></script>
+<script src="/js/knowledge.js"></script>
+<script src="/js/wiki.js"></script>
+<script src="/js/controls.js"></script>
+<script src="/js/monitor.js"></script>
+<script src="/js/workflow_graph_labels.js"></script>
+<script src="/js/workflow_graph_humanize.js"></script>
+<script src="/js/workflow_graph_panel.js"></script>
+<script src="/js/workflow_graph_panel_helpers.js"></script>
+<script src="/js/workflow_graph_panel_renderers.js"></script>
+<script src="/js/workflow_graph_render_svg.js"></script>
+<script src="/js/workflow_graph_render_canvas.js"></script>
+<script src="/js/workflow_graph_tilemap.js"></script>
+<script src="/js/workflow_graph.js"></script>
+<script src="/js/workflow_graph_bridge.js"></script>
+<script src="/js/workflow_graph_filters.js"></script>
+<script src="/js/polling.js"></script>
+
 </body>
 </html>

@@ -206,4 +206,79 @@ export async function registerWikiRoutes(fastify: FastifyInstance): Promise<void
       return reply.status(HTTP_500).send({ error: err instanceof Error ? err.constructor.name : "UnknownError" }); // source: RFC 7231 §6.6 — 500 Internal Server Error; error class name only to avoid leaking internals (CWE-209)
     }
   });
+
+  /**
+   * GET /api/wiki/page_meta?path=<relPath>
+   *
+   * Returns lightweight page metadata including an optional db_row
+   * (the page's entry from the wiki_pages table, if the DB has one).
+   * The frontend uses `db_row.id` to fetch memos; if absent the memo
+   * section is skipped gracefully.
+   *
+   * precondition:  path query param is a relative wiki page filename.
+   * postcondition: returns { db_row: null } (stub — full implementation
+   *   requires a wiki_pages table; this agentic-ai port stores wiki
+   *   pages as raw filesystem markdown only, no DB row).
+   *
+   * source: cortex@ed33435 mcp_server/server/http_standalone_wiki.py (page_meta endpoint)
+   *   wiki.js:514 — `pmeta.db_row` is null-checked before use; null is a valid response.
+   */
+  fastify.get<{ Querystring: { path?: string } }>("/api/wiki/page_meta", async (_req, reply) => {
+    // Stub: this server has no wiki_pages DB table.
+    // Returning { db_row: null } causes the frontend to skip memo rendering
+    // without throwing — the null-guard at wiki.js:526 handles this correctly.
+    return reply.send({ db_row: null });
+  });
+
+  /**
+   * GET /api/wiki/memos?subject_type=page&subject_id=<id>&limit=<n>
+   *
+   * Returns memos (decision + rationale records) attached to a wiki page.
+   * This agentic-ai port has no memos table — return an empty list.
+   *
+   * precondition:  subject_id is a DB row id (integer string).
+   * postcondition: returns { memos: [] } (stub).
+   *
+   * source: cortex@ed33435 mcp_server/server/http_standalone_wiki.py (memos endpoint)
+   *   wiki.js:754 — `data.memos || []` fallback handles empty list gracefully.
+   */
+  fastify.get("/api/wiki/memos", async (_req, reply) => {
+    return reply.send({ memos: [] });
+  });
+
+  /**
+   * GET /api/wiki/bibliography/read?path=<relPath>
+   *
+   * Read a bibliography (.bib or .md) file from the wiki directory.
+   * Used by the frontend to resolve citation keys.
+   *
+   * precondition:  path query param is a relative filename within the wiki dir.
+   * postcondition: returns { content, rel_path } or { content: "" } if absent.
+   * FAILS_ON: path traversal — rejected (CWE-22 guard via path.basename).
+   *
+   * source: cortex@ed33435 mcp_server/server/http_standalone_wiki.py (bibliography_read)
+   *   wiki.js:1171 — `data.content` is null-checked; empty string causes skip.
+   */
+  fastify.get<{ Querystring: { path?: string } }>("/api/wiki/bibliography/read", async (req, reply) => {
+    try {
+      const relPath = req.query.path ?? "bibliography.bib";
+      const safe = path.basename(relPath);
+      if (!safe || safe.startsWith(".")) {
+        return reply.send({ content: "", rel_path: "" });
+      }
+      const full = path.join(getWikiDir(), safe);
+      const resolved = path.resolve(full);
+      if (!resolved.startsWith(path.resolve(getWikiDir()))) {
+        return reply.send({ content: "", rel_path: "" });
+      }
+      try {
+        const content = fs.readFileSync(resolved, "utf8");
+        return reply.send({ content, rel_path: safe });
+      } catch {
+        return reply.send({ content: "", rel_path: safe });
+      }
+    } catch (err) {
+      return reply.status(HTTP_500).send({ error: err instanceof Error ? err.constructor.name : "UnknownError" }); // source: RFC 7231 §6.6 — 500 Internal Server Error
+    }
+  });
 }
