@@ -244,3 +244,236 @@ export interface MemoryStore {
   /** Async searchVectors — present on PgMemoryStore, absent on SqliteMemoryStore. */
   searchVectorsAsync?(embedding: Buffer, topK: number, minHeat?: number): Promise<VecHit[]>;
 }
+
+// ── MemoryStoreExt — behavioral-subtyping extension ──────────────────────────
+//
+// All methods below were previously accessed via escape-hatch casts in the
+// composition root (index.ts) and consolidation handler using the pattern:
+//   const ext = store as unknown as Record<string, (...a) => unknown>;
+//   ext["method"]?.(args) ?? []
+//
+// That pattern is an LSP violation: `PgMemoryStore` silently returns [] for
+// every call because none of these methods existed on it. By lifting them onto
+// a named interface and requiring both backends to implement them, the compiler
+// enforces behavioral parity and optional-chaining escape hatches are removed.
+//
+// source: Liskov, B. H. & Wing, J. M. (1994). "A Behavioral Notion of
+//   Subtyping." ACM TOPLAS, 16(6) — the history constraint requires that the
+//   set of observable state histories of S must be a subset of those of T.
+//   A subtype returning [] for methods the supertype populates is a history
+//   constraint violation.
+//
+// Preconditions on every method in this extension are NOT stronger than the
+// SQLite implementations (ADR-0003): parameters are the same.
+// Postconditions on every PG method are NOT weaker: the returned data is
+// semantically equivalent to what SQLite returns for the same state.
+
+export interface MemoryStoreExt extends MemoryStore {
+  // ── Decay / stats ──────────────────────────────────────────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:108-112
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:107-109
+
+  /**
+   * Return all non-stale memories for the decay pipeline.
+   *
+   * postcondition: returns every row where is_stale = false.
+   *   Neither backend returns [] unconditionally.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:161
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:78
+   */
+  getAllMemoriesForDecay(): Record<string, unknown>[];
+
+  /**
+   * Return all non-stale memories for validation audit.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:116
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:56
+   */
+  getAllMemoriesForValidation(limit?: number): Record<string, unknown>[];
+
+  // ── Domain / directory / hot queries ──────────────────────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:19-86
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:8-41
+
+  /** Return memories for a domain ordered by heat descending. */
+  getMemoriesForDomain(domain: string, minHeat?: number, limit?: number): Record<string, unknown>[];
+
+  /** Return memories for a directory ordered by heat descending. */
+  getMemoriesForDirectory(directory: string, minHeat?: number): Record<string, unknown>[];
+
+  /** Return hot memories (heat_base >= minHeat). */
+  getHotMemories(minHeat?: number, limit?: number, includeBenchmarks?: boolean): Record<string, unknown>[];
+
+  // ── Recall (full-text search) ──────────────────────────────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:232-242
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py (FTS via tsvector)
+
+  /**
+   * Full-text search. Returns (memory_id, score) pairs ordered by relevance.
+   *
+   * SQLite: uses FTS5 MATCH.
+   * PG: uses websearch_to_tsquery() against content_tsv tsvector column.
+   *
+   * postcondition: returns [] if no matches; never throws for empty query.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:232
+   * source: PostgreSQL 11+ websearch_to_tsquery — https://www.postgresql.org/docs/current/textsearch-controls.html#TEXTSEARCH-PARSING-QUERIES
+   */
+  searchFts(query: string, limit?: number): Array<[number, number]>;
+
+  // ── Consolidation stage queries ────────────────────────────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:157-178
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:79-96
+
+  /** Return memories in a given consolidation stage. */
+  getMemoriesByStage(stage: string, limit?: number): Record<string, unknown>[];
+
+  /** Update consolidation fields for a memory row. */
+  updateMemoryConsolidation(
+    memoryId: number,
+    stage: string,
+    hoursInStage: number,
+    replayCount: number,
+    hippocampalDependency: number,
+  ): void;
+
+  /** Batch-insert stage transition records. */
+  insertStageTransitionsBatch(rows: Record<string, unknown>[]): number;
+
+  /** Update stage_entered_at timestamp. */
+  updateStageEnteredAt(memoryId: number, enteredAt: string): void;
+
+  // ── CLS queries ────────────────────────────────────────────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:183-217
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:136-162
+
+  /** Return episodic memories, optionally filtered by domain/directory. */
+  getEpisodicMemories(domain?: string, directory?: string, limit?: number): Record<string, unknown>[];
+
+  /** Return semantic memories, optionally filtered by domain. */
+  getSemanticMemories(domain?: string, limit?: number): Record<string, unknown>[];
+
+  /** Update store_type for a memory row. */
+  updateMemoryStoreType(memoryId: number, storeType: string): void;
+
+  // ── Entity queries for consolidation ──────────────────────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py
+
+  /** Return all entities, optionally filtered by minHeat. */
+  getAllEntities(opts?: { minHeat?: number; includeArchived?: boolean }): Record<string, unknown>[];
+
+  /** Batch-update entity heat. */
+  updateEntitiesHeatBatch(updates: Array<[number, number]>): void;
+
+  /** Archive entities by setting heat to 0. */
+  archiveEntitiesBatch(entityIds: number[]): number;
+
+  // ── Relationship queries ───────────────────────────────────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py
+
+  /** Return all relationships. */
+  getAllRelationships(): Record<string, unknown>[];
+
+  /** Find co-accessed entity pairs for a set of memory IDs. */
+  findCoAccessedPairs(memoryIds: number[]): Array<[number, number]>;
+
+  /** Batch-update relationship weights. */
+  updateRelationshipsWeightBatch(updates: Array<[number, number]>): void;
+
+  /** Delete relationships by IDs. */
+  deleteRelationshipsBatch(ids: number[]): number;
+
+  /** Insert a raw relationship record. */
+  insertRelationship(rel: Record<string, unknown>): void;
+
+  /** Reinforce or create a relationship between two entity names. */
+  reinforceOrCreateRelationship(entityA: string, entityB: string, learningRate: number): void;
+
+  // ── Plasticity / hippocampal transfer ─────────────────────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py
+
+  /** Return memories that are candidates for hippocampal transfer. */
+  getTransferCandidates(limit?: number): Record<string, unknown>[];
+
+  /** Update hippocampal dependency fraction for a memory row. */
+  updateHippocampalDependency(memoryId: number, dependency: number): void;
+
+  // ── Hot memories (recently accessed) ──────────────────────────────────
+
+  /**
+   * Return recently accessed memories.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:90-101
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:48-52
+   */
+  getRecentlyAccessedMemories(limit?: number, minAccessCount?: number): Record<string, unknown>[];
+
+  // ── Agent context query (for codebase-analyze incremental hashing) ────
+  //
+  // source: packages/memory/src/codebase-analysis/handlers/codebase-analyze-helpers.ts:142-160
+
+  /**
+   * Return memories for a given agent_context (used by codebase-analyze).
+   *
+   * postcondition: returns rows where agent_context = agentContext AND NOT is_stale.
+   *   Returns [] if none exist (not an error).
+   *
+   * source: packages/memory/src/codebase-analysis/handlers/codebase-analyze-helpers.ts:142-160
+   *   Uses SELECT id, tags FROM memories WHERE agent_context = ? AND NOT is_stale
+   */
+  getMemoriesByAgentContext(agentContext: string): Array<{ id: number; tags: string }>;
+
+  // ── Prospective memories ───────────────────────────────────────────────
+
+  /** Return all active prospective memories. */
+  getActiveProspectiveMemories(): Record<string, unknown>[];
+
+  // ── Replay / access ────────────────────────────────────────────────────
+
+  /** Increment replay_count for a memory. */
+  incrementReplayCount(memoryId: number): void;
+
+  // ── Archive / compression ──────────────────────────────────────────────
+
+  /** Insert a record into the memory_archives table. */
+  insertArchive(row: Record<string, unknown>): void;
+
+  /**
+   * Update memory content (compressed form) and optionally store embedding.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py (compression)
+   */
+  updateMemoryCompression(
+    memoryId: number,
+    content: string,
+    embedding: Buffer | null,
+    compressionLevel: number,
+    opts?: Record<string, unknown>,
+  ): void;
+
+  // ── By-IDs batch fetch ─────────────────────────────────────────────────
+
+  /**
+   * Fetch multiple memories by ID in one round-trip.
+   *
+   * postcondition: returns MemoryItem for each ID that exists; missing IDs are omitted.
+   */
+  getByIds(ids: number[]): Record<string, unknown>[];
+
+  // ── Consolidation log ──────────────────────────────────────────────────
+
+  /** Log a consolidation run. */
+  logConsolidation(data: Record<string, unknown>): void;
+}

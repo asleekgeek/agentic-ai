@@ -17,7 +17,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { MemoryStore } from "@agentic/memory/remember/storage/memory-store.js";
+import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-store.js";
 
 // ── Named constants ───────────────────────────────────────────────────────────
 // source: cortex@ed33435 mcp_server/handlers/get_causal_chain.py — max_edges=200
@@ -41,7 +41,7 @@ const DETECT_GAPS_DEFAULT_STALE_DAYS = 30;
 // ── Dependency bundle ─────────────────────────────────────────────────────────
 
 export interface NavigationDeps {
-  store: MemoryStore;
+  store: MemoryStoreExt;
 }
 
 // ── Error envelope helper ─────────────────────────────────────────────────────
@@ -73,7 +73,7 @@ type Direction = "incoming" | "outgoing" | "both";
 
 // source: cortex@ed33435 get_causal_chain.py:139-175 — BFS implementation
 function bfsEntityGraph(
-  store: MemoryStore,
+  store: MemoryStoreExt,
   startId: number,
   maxDepth: number,
   maxEdges: number,
@@ -225,10 +225,8 @@ export function registerNavigationTools(server: McpServer, deps: NavigationDeps)
         const recommendations: string[] = [];
 
         if (args.include_temporal_gaps) {
-          const storeExt = deps.store as unknown as {
-            getAllMemoriesForDecay?: () => Array<Record<string, unknown>>;
-          };
-          const allMems = storeExt.getAllMemoriesForDecay?.() ?? [];
+          // LSP-VIOLATION CLOSED (#1): getAllMemoriesForDecay is now on MemoryStoreExt.
+          const allMems = deps.store.getAllMemoriesForDecay();
           for (const mem of allMems) {
             const createdAt = mem["created_at"] as string | undefined;
             const heat = (mem["heat"] as number | undefined) ?? 0;

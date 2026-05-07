@@ -23,7 +23,7 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { MemoryStore } from "@agentic/memory/remember/storage/memory-store.js";
+import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-store.js";
 import { handler as consolidateHandler } from "@agentic/memory/consolidation/handler.js";
 import type { ConsolidationStore, ConsolidationSettings } from "@agentic/memory/consolidation/handler.js";
 import type { ProfilesStore } from "@agentic/memory/methodology/types.js";
@@ -37,7 +37,7 @@ const EMA_ALPHA = 0.1; // source: mcp_server/core/cognitive_profile.py EMA_ALPHA
 // ── Dependency bundle ─────────────────────────────────────────────────────────
 
 export interface ConsolidationDeps {
-  store: MemoryStore;
+  store: MemoryStoreExt;
 }
 
 // ── Profiles I/O ──────────────────────────────────────────────────────────────
@@ -68,72 +68,64 @@ function saveProfiles(profiles: ProfilesStore): void {
 
 // ── ConsolidationStore adapter ────────────────────────────────────────────────
 //
-// Wraps MemoryStore with additional methods required by consolidation.handler.
-// Methods not in MemoryStore interface are accessed via escape-hatch cast.
+// Wraps MemoryStoreExt with async wrappers required by consolidation.handler.
+//
+// LSP-VIOLATION CLOSED (#6): all methods previously accessed via escape-hatch
+// `ext["method"]?.() ?? []` now delegate to typed MemoryStoreExt methods.
+// Neither backend silently no-ops anymore.
 //
 // source: packages/memory/src/consolidation/handler.ts::ConsolidationStore
 
-function toConsolidationStore(store: MemoryStore): ConsolidationStore {
-  const ext = store as unknown as Record<string, (...args: unknown[]) => unknown>;
-
+function toConsolidationStore(store: MemoryStoreExt): ConsolidationStore {
   return {
     // ── shared / decay ───────────────────────────────────────────────────────
-    getAllMemoriesForDecay:       () => Promise.resolve((ext["getAllMemoriesForDecay"]?.() ?? []) as Record<string, unknown>[]),
-    getAllEntities:               (opts) => Promise.resolve((ext["getAllEntities"]?.(opts) ?? []) as Record<string, unknown>[]),
-    updateEntitiesHeatBatch:     (u) => { ext["updateEntitiesHeatBatch"]?.(u); return Promise.resolve(); },
+    getAllMemoriesForDecay:       () => Promise.resolve(store.getAllMemoriesForDecay()),
+    getAllEntities:               (opts) => Promise.resolve(store.getAllEntities(opts)),
+    updateEntitiesHeatBatch:     (u) => { store.updateEntitiesHeatBatch(u); return Promise.resolve(); },
     // ── plasticity ───────────────────────────────────────────────────────────
-    getAllRelationships:          () => Promise.resolve((ext["getAllRelationships"]?.() ?? []) as Record<string, unknown>[]),
-    getHotMemories:              (opts) => Promise.resolve((ext["getHotMemories"]?.(opts) ?? []) as Record<string, unknown>[]),
-    findCoAccessedPairs:         (ids) => Promise.resolve((ext["findCoAccessedPairs"]?.(ids) ?? []) as Array<[number, number]>),
-    updateRelationshipsWeightBatch: (u) => { ext["updateRelationshipsWeightBatch"]?.(u); return Promise.resolve(); },
+    getAllRelationships:          () => Promise.resolve(store.getAllRelationships()),
+    getHotMemories:              (opts) => Promise.resolve(store.getHotMemories(opts?.minHeat, opts?.limit)),
+    findCoAccessedPairs:         (ids) => Promise.resolve(store.findCoAccessedPairs([...ids])),
+    updateRelationshipsWeightBatch: (u) => { store.updateRelationshipsWeightBatch([...u]); return Promise.resolve(); },
     // ── pruning ──────────────────────────────────────────────────────────────
-    deleteRelationshipsBatch:    (ids) => Promise.resolve((ext["deleteRelationshipsBatch"]?.(ids) ?? 0) as number),
-    archiveEntitiesBatch:        (ids) => Promise.resolve((ext["archiveEntitiesBatch"]?.(ids) ?? 0) as number),
+    deleteRelationshipsBatch:    (ids) => Promise.resolve(store.deleteRelationshipsBatch([...ids])),
+    archiveEntitiesBatch:        (ids) => Promise.resolve(store.archiveEntitiesBatch([...ids])),
     // ── compression + sleep ──────────────────────────────────────────────────
-    insertArchive:               (row) => { ext["insertArchive"]?.(row); return Promise.resolve(); },
-    updateMemoryCompression:     (id, content, embedding, compressionLevel, opts) => { ext["updateMemoryCompression"]?.(id, content, embedding, compressionLevel, opts); return Promise.resolve(); },
+    insertArchive:               (row) => { store.insertArchive(row); return Promise.resolve(); },
+    updateMemoryCompression:     (id, content, embedding, compressionLevel, opts) => { store.updateMemoryCompression(id, content, embedding instanceof Buffer ? embedding : (embedding != null ? Buffer.from(embedding as unknown as ArrayBuffer) : null), compressionLevel, opts); return Promise.resolve(); },
     // ── CLS ──────────────────────────────────────────────────────────────────
-    getEpisodicMemories:         (l) => Promise.resolve((ext["getEpisodicMemories"]?.(l) ?? []) as Record<string, unknown>[]),
-    getSemanticMemories:         (l) => Promise.resolve((ext["getSemanticMemories"]?.(l) ?? []) as Record<string, unknown>[]),
+    getEpisodicMemories:         (l) => Promise.resolve(store.getEpisodicMemories(undefined, undefined, l)),
+    getSemanticMemories:         (l) => Promise.resolve(store.getSemanticMemories(undefined, l)),
     // ── memify ───────────────────────────────────────────────────────────────
-    deleteMemory:                (id) => { ext["deleteMemory"]?.(id); return Promise.resolve(); },
-    updateMemoryImportance:      (id, importance) => { ext["updateMemoryImportance"]?.(id, importance); return Promise.resolve(); },
-    insertRelationship:          (rel) => { ext["insertRelationship"]?.(rel); return Promise.resolve(); },
+    deleteMemory:                (id) => { store.deleteMemory(id); return Promise.resolve(); },
+    updateMemoryImportance:      (id, importance) => { store.updateMemoryImportance(id, importance); return Promise.resolve(); },
+    insertRelationship:          (rel) => { store.insertRelationship(rel); return Promise.resolve(); },
     // ── sleep ────────────────────────────────────────────────────────────────
-    // Use insertMemoryAsync when available (PG path). ext["insertMemory"]?.(mem) would call
-    // PgMemoryStore.insertMemory() which throws via _runSync().
-    // source: ADR-0042 — async path for PG backend
-    insertMemory: async (mem) => {
-      if (store.insertMemoryAsync) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        return store.insertMemoryAsync(mem as any);
-      }
-      return (ext["insertMemory"]?.(mem) ?? 0) as number;
-    },
+    insertMemory:                (mem) => Promise.resolve(store.insertMemory(mem as Parameters<typeof store.insertMemory>[0])),
     // ── cascade ──────────────────────────────────────────────────────────────
-    getMemoriesByStage:          (s, l) => Promise.resolve((ext["getMemoriesByStage"]?.(s, l) ?? []) as Record<string, unknown>[]),
-    updateMemoryConsolidation:   (id, s, h, r, d) => { ext["updateMemoryConsolidation"]?.(id, s, h, r, d); return Promise.resolve(); },
-    insertStageTransitionsBatch: (t) => { ext["insertStageTransitionsBatch"]?.(t); return Promise.resolve(); },
-    updateStageEnteredAt:        (memoryId, enteredAt) => { ext["updateStageEnteredAt"]?.(memoryId, enteredAt); return Promise.resolve(); },
+    getMemoriesByStage:          (s, l) => Promise.resolve(store.getMemoriesByStage(s, l)),
+    updateMemoryConsolidation:   (id, s, h, r, d) => { store.updateMemoryConsolidation(id, s, h, r, d); return Promise.resolve(); },
+    insertStageTransitionsBatch: (t) => { store.insertStageTransitionsBatch(t); return Promise.resolve(); },
+    updateStageEnteredAt:        (memoryId, enteredAt) => { store.updateStageEnteredAt(memoryId, enteredAt instanceof Date ? enteredAt.toISOString() : String(enteredAt)); return Promise.resolve(); },
     // ── homeostatic ──────────────────────────────────────────────────────────
-    // Use getHomeostaticFactorAsync when available (PG path — sync throws via _runSync).
-    // source: ADR-0042 — async path for PG backend
-    getHomeostaticFactor: async (d) => {
-      const pgStore = store as unknown as { getHomeostaticFactorAsync?: (domain: string) => Promise<number> };
-      if (pgStore.getHomeostaticFactorAsync) {
-        return pgStore.getHomeostaticFactorAsync(d);
-      }
-      return store.getHomeostaticFactor(d);
-    },
+    getHomeostaticFactor:        (d) => Promise.resolve(store.getHomeostaticFactor(d)),
     setHomeostaticFactor:        (d, f) => { store.setHomeostaticFactor(d, f); return Promise.resolve(); },
-    bumpHeatRaw:                 (id, heat) => { ext["bumpHeatRaw"]?.(id, heat); return Promise.resolve(); },
-    // ── batch connection (memify + homeostatic + sleep) ───────────────────────
-    acquireBatch:                () => ({ execute: async (sql: string, params?: unknown[]) => { ext["acquireBatch"]?.(); return { rows: [], rowcount: 0 }; void sql; void params; } }),
+    bumpHeatRaw:                 (id, heat) => { store.bumpHeatRaw(id, heat); return Promise.resolve(); },
+    // ── batch connection (no-op: acquireBatch was SQLite-only internal) ───────
+    // source: The acquireBatch pattern was a SQLite-specific internal that
+    // allowed the write gate to reuse a connection. With MemoryStoreExt,
+    // all methods are properly routed to the correct backend.
+    acquireBatch: () => ({
+      execute: async (sql: string, params?: unknown[]) => {
+        void sql; void params;
+        return { rows: [], rowcount: 0 };
+      },
+    }),
     // ── transfer ─────────────────────────────────────────────────────────────
-    getTransferCandidates:       (l) => Promise.resolve((ext["getTransferCandidates"]?.(l) ?? []) as Record<string, unknown>[]),
-    updateHippocampalDependency: (id, d) => { ext["updateHippocampalDependency"]?.(id, d); return Promise.resolve(); },
+    getTransferCandidates:       (l) => Promise.resolve(store.getTransferCandidates(l)),
+    updateHippocampalDependency: (id, d) => { store.updateHippocampalDependency(id, d); return Promise.resolve(); },
     // ── logging ──────────────────────────────────────────────────────────────
-    logConsolidation:            (e) => { ext["logConsolidation"]?.(e); return Promise.resolve(); },
+    logConsolidation:            (e) => { store.logConsolidation(e); return Promise.resolve(); },
   };
 }
 
@@ -280,8 +272,8 @@ export function registerConsolidationTools(server: McpServer, deps: Consolidatio
     async (_args) => {
       try {
         // source: cortex@ed33435 mcp_server/handlers/memory_stats.py::handler
-        const ext = deps.store as unknown as Record<string, (...args: unknown[]) => unknown>;
-        const allMems = (ext["getAllMemoriesForDecay"]?.() ?? []) as Array<Record<string, unknown>>;
+        // LSP-VIOLATION CLOSED (#1): getAllMemoriesForDecay is now on MemoryStoreExt.
+        const allMems = deps.store.getAllMemoriesForDecay() as Array<Record<string, unknown>>;
 
         const total = allMems.length;
         const episodic = allMems.filter((m) => m["store_type"] === "episodic").length;

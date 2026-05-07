@@ -42,7 +42,7 @@ import type { MemoryInsertData, MemoryItem } from "../types.js";
 import type {
   EntityRecord,
   HeatUpdate,
-  MemoryStore,
+  MemoryStoreExt,
   RelationshipRecord,
   VecHit,
 } from "./memory-store.js";
@@ -360,7 +360,7 @@ function parseJsonArray(v: unknown): string[] {
 
 // ── SqliteMemoryStore ────────────────────────────────────────────────────────
 
-export class SqliteMemoryStore implements MemoryStore {
+export class SqliteMemoryStore implements MemoryStoreExt {
   private readonly _db: DatabaseType;
 
   /**
@@ -645,7 +645,8 @@ export class SqliteMemoryStore implements MemoryStore {
       heat_base: clampHeat(data.heat ?? 1.0),
       heat_base_set_at: now,
       surprise_score: data.surprise_score ?? 0.0,
-      importance: data.importance ?? 0.5, // eslint-disable-line @typescript-eslint/no-magic-numbers -- source: infrastructure/sqlite_store.py default importance
+      // source: infrastructure/sqlite_store.py default importance
+      importance: data.importance ?? 0.5, // eslint-disable-line @typescript-eslint/no-magic-numbers
       emotional_valence: data.emotional_valence ?? 0.0,
       confidence: data.confidence ?? 1.0,
       store_type: data.store_type ?? "episodic",
@@ -1029,7 +1030,8 @@ export class SqliteMemoryStore implements MemoryStore {
       heat_base_set_at: (row["heat_base_set_at"] as string) ?? "",
       no_decay: Boolean(row["no_decay"]),
       surprise_score: (row["surprise_score"] as number) ?? 0.0,
-      importance: (row["importance"] as number) ?? 0.5, // eslint-disable-line @typescript-eslint/no-magic-numbers -- source: infrastructure/sqlite_store.py _normalize_row default importance
+      // source: infrastructure/sqlite_store.py _normalize_row default importance
+      importance: (row["importance"] as number) ?? 0.5, // eslint-disable-line @typescript-eslint/no-magic-numbers
       emotional_valence: (row["emotional_valence"] as number) ?? 0.0,
       confidence: (row["confidence"] as number) ?? 1.0,
       access_count: (row["access_count"] as number) ?? 0,
@@ -1097,5 +1099,503 @@ export class SqliteMemoryStore implements MemoryStore {
       confidence: (r["confidence"] as number) ?? 1.0,
       created_at: r["created_at"] as string,
     }));
+  }
+
+  // ── MemoryStoreExt methods ─────────────────────────────────────────────
+  // These were previously accessible only via escape-hatch casts in index.ts
+  // and consolidation.ts. Lifting them onto the interface closes all LSP
+  // violations on the SQLite backend.
+  //
+  // source: Liskov & Wing (1994) — the contract IS the interface; both
+  //   subtypes must satisfy the same behavioral contract.
+
+  // ── Decay / stats ──────────��───────────────────────────────────────────
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:108-112
+   */
+  getAllMemoriesForDecay(): Record<string, unknown>[] {
+    return this._db
+      .prepare("SELECT * FROM memories WHERE NOT is_stale")
+      .all() as Record<string, unknown>[];
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:78-86
+   */
+  // source: sqlite_store_queries.py:79
+  getAllMemoriesForValidation(limit = 1000): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this._db
+      .prepare("SELECT * FROM memories WHERE NOT is_stale ORDER BY last_accessed ASC LIMIT ?")
+      .all(limit) as Record<string, unknown>[];
+  }
+
+  // ── Domain / directory / hot queries ──────────────────────────────────
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:19-27
+   */
+  // source: sqlite_store_queries.py:21
+  getMemoriesForDomain(domain: string, minHeat = 0.05, limit = 50): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this._db
+      .prepare(
+        "SELECT * FROM memories WHERE (domain = ? OR is_global = 1) " +
+          "AND heat_base >= ? ORDER BY heat_base DESC LIMIT ?",
+      )
+      .all(domain, minHeat, limit) as Record<string, unknown>[];
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:29-37
+   */
+  // source: sqlite_store_queries.py:30
+  getMemoriesForDirectory(directory: string, minHeat = 0.05): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this._db
+      .prepare(
+        "SELECT * FROM memories WHERE (directory_context = ? OR is_global = 1) " +
+          "AND heat_base >= ? ORDER BY heat_base DESC",
+      )
+      .all(directory, minHeat) as Record<string, unknown>[];
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:39-57
+   */
+  // source: sqlite_store_queries.py:41
+  getHotMemories(minHeat = 0.7, limit = 20, includeBenchmarks = false): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    if (includeBenchmarks) {
+      return this._db
+        .prepare("SELECT * FROM memories WHERE heat_base >= ? ORDER BY heat_base DESC LIMIT ?")
+        .all(minHeat, limit) as Record<string, unknown>[];
+    }
+    return this._db
+      .prepare(
+        "SELECT * FROM memories WHERE heat_base >= ? " +
+          "AND NOT COALESCE(is_benchmark, 0) " +
+          "ORDER BY heat_base DESC LIMIT ?",
+      )
+      .all(minHeat, limit) as Record<string, unknown>[];
+  }
+
+  // ── Consolidation stage queries ─────────────────────────────���──────────
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:157
+   */
+  // source: sqlite_store_stats.py:108
+  getMemoriesByStage(stage: string, limit = 100): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this._db
+      .prepare(
+        "SELECT * FROM memories WHERE consolidation_stage = ? " +
+          "ORDER BY hours_in_stage DESC LIMIT ?",
+      )
+      .all(stage, limit) as Record<string, unknown>[];
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:70-84
+   */
+  updateMemoryConsolidation(
+    memoryId: number,
+    stage: string,
+    hoursInStage: number,
+    replayCount: number,
+    hippocampalDependency: number,
+  ): void {
+    this._db
+      .prepare(
+        "UPDATE memories SET consolidation_stage = ?, " +
+          "hours_in_stage = ?, replay_count = ?, " +
+          "hippocampal_dependency = ? WHERE id = ?",
+      )
+      .run(stage, hoursInStage, replayCount, hippocampalDependency, memoryId);
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:86-106
+   */
+  insertStageTransitionsBatch(rows: Record<string, unknown>[]): number {
+    if (rows.length === 0) return 0;
+    const stmt = this._db.prepare(
+      "INSERT INTO stage_transitions " +
+        "(memory_id, from_stage, to_stage, hours_in_prev_stage, trigger) " +
+        "VALUES (?, ?, ?, ?, ?)",
+    );
+    const runBatch = this._db.transaction((batchRows: Record<string, unknown>[]) => {
+      for (const r of batchRows) {
+        stmt.run(
+          Number(r["memory_id"]),
+          String(r["from_stage"]),
+          String(r["to_stage"]),
+          Number(r["hours_in_prev"] ?? r["hours_in_stage"] ?? 0),
+          String(r["trigger"] ?? "cascade"),
+        );
+      }
+    });
+    runBatch(rows);
+    return rows.length;
+  }
+
+  /**
+   * Update stage_entered_at for a memory row.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py — cascade stage logic
+   */
+  updateStageEnteredAt(memoryId: number, enteredAt: string): void {
+    this._db
+      .prepare("UPDATE memories SET stage_entered_at = ? WHERE id = ?")
+      .run(enteredAt, memoryId);
+  }
+
+  // ── CLS queries ────────────────────────���───────────────────────────────
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:183-199
+   */
+  // source: sqlite_store_stats.py:184
+  getEpisodicMemories(domain = "", directory = "", limit = 500): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    const conditions = ["store_type = 'episodic'", "NOT is_stale"];
+    const params: unknown[] = [];
+    if (domain) { conditions.push("domain = ?"); params.push(domain); }
+    if (directory) { conditions.push("directory_context = ?"); params.push(directory); }
+    params.push(limit);
+    return this._db
+      .prepare(`SELECT * FROM memories WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC LIMIT ?`)
+      .all(...params) as Record<string, unknown>[];
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:201-217
+   */
+  // source: sqlite_store_stats.py:201
+  getSemanticMemories(domain = "", limit = 500): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    if (domain) {
+      return this._db
+        .prepare(
+          "SELECT * FROM memories WHERE store_type = 'semantic' " +
+            "AND domain = ? AND NOT is_stale ORDER BY created_at DESC LIMIT ?",
+        )
+        .all(domain, limit) as Record<string, unknown>[];
+    }
+    return this._db
+      .prepare(
+        "SELECT * FROM memories WHERE store_type = 'semantic' " +
+          "AND NOT is_stale ORDER BY created_at DESC LIMIT ?",
+      )
+      .all(limit) as Record<string, unknown>[];
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:219-224
+   */
+  updateMemoryStoreType(memoryId: number, storeType: string): void {
+    this._db
+      .prepare("UPDATE memories SET store_type = ? WHERE id = ?")
+      .run(storeType, memoryId);
+  }
+
+  // ── Entity queries for consolidation ──────────────────────────────────
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:99-111
+   */
+  getAllEntities(opts?: { minHeat?: number; includeArchived?: boolean }): Record<string, unknown>[] {
+    // source: sqlite_store_entities.py:99
+    const minHeat = opts?.minHeat ?? 0.05; // eslint-disable-line @typescript-eslint/no-magic-numbers
+    if (opts?.includeArchived) {
+      return this._db
+        .prepare("SELECT * FROM entities WHERE heat >= ?")
+        .all(minHeat) as Record<string, unknown>[];
+    }
+    return this._db
+      .prepare("SELECT * FROM entities WHERE heat >= ? AND NOT archived")
+      .all(minHeat) as Record<string, unknown>[];
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:19-37
+   */
+  updateEntitiesHeatBatch(updates: Array<[number, number]>): void {
+    if (updates.length === 0) return;
+    const stmt = this._db.prepare("UPDATE entities SET heat = ? WHERE id = ?");
+    const tx = this._db.transaction((rows: Array<[number, number]>) => {
+      for (const [id, heat] of rows) stmt.run(heat, id);
+    });
+    tx(updates);
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:39-48
+   */
+  archiveEntitiesBatch(entityIds: number[]): number {
+    if (entityIds.length === 0) return 0;
+    const stmt = this._db.prepare("UPDATE entities SET heat = 0 WHERE id = ?");
+    const tx = this._db.transaction((ids: number[]) => {
+      for (const id of ids) stmt.run(id);
+    });
+    tx(entityIds);
+    return entityIds.length;
+  }
+
+  // ── Relationship queries ──────────────────────────────��────────────────
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:105-112
+   */
+  getAllRelationships(): Record<string, unknown>[] {
+    return this._db
+      .prepare(
+        `SELECT id, source_entity_id, target_entity_id, relationship_type,
+                weight, is_causal, confidence, created_at
+         FROM relationships`,
+      )
+      .all() as Record<string, unknown>[];
+  }
+
+  /**
+   * Find co-accessed entity pairs for a set of memory IDs.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:154-162
+   */
+  findCoAccessedPairs(memoryIds: number[]): Array<[number, number]> {
+    if (memoryIds.length === 0) return [];
+    const placeholders = memoryIds.map(() => "?").join(",");
+    const rows = this._db
+      .prepare(
+        `SELECT DISTINCT MIN(me1.entity_id, me2.entity_id) AS a, MAX(me1.entity_id, me2.entity_id) AS b
+         FROM memory_entities me1 JOIN memory_entities me2
+           ON me1.memory_id = me2.memory_id AND me1.entity_id < me2.entity_id
+         WHERE me1.memory_id IN (${placeholders})`,
+      )
+      .all(...memoryIds) as Array<{ a: number; b: number }>;
+    return rows.map((r) => [r.a, r.b] as [number, number]);
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py
+   */
+  updateRelationshipsWeightBatch(updates: Array<[number, number]>): void {
+    if (updates.length === 0) return;
+    const stmt = this._db.prepare("UPDATE relationships SET weight = ? WHERE id = ?");
+    const tx = this._db.transaction((rows: Array<[number, number]>) => {
+      for (const [id, weight] of rows) stmt.run(weight, id);
+    });
+    tx(updates);
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py
+   */
+  deleteRelationshipsBatch(ids: number[]): number {
+    if (ids.length === 0) return 0;
+    const placeholders = ids.map(() => "?").join(",");
+    const result = this._db
+      .prepare(`DELETE FROM relationships WHERE id IN (${placeholders})`)
+      .run(...ids);
+    return result.changes;
+  }
+
+  /**
+   * Insert a raw relationship record.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py
+   */
+  insertRelationship(rel: Record<string, unknown>): void {
+    const now = nowIso();
+    this._stmtUpsertRelationship.run(
+      Number(rel["source_entity_id"]),
+      Number(rel["target_entity_id"]),
+      String(rel["relationship_type"] ?? "generic"),
+      typeof rel["weight"] === "number" ? rel["weight"] : 1.0,
+      now,
+      now,
+    );
+  }
+
+  /**
+   * Reinforce or create a relationship between two entity names.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:133-207
+   */
+  reinforceOrCreateRelationship(entityA: string, entityB: string, _learningRate: number): void {
+    // Simplified SQLite version: upsert a co_retrieval relationship.
+    // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py
+    //   — reinforce_or_create_relationship
+    const srcRow = this._db
+      .prepare("SELECT id FROM entities WHERE LOWER(name) = LOWER(?) LIMIT 1")
+      .get(entityA) as { id: number } | undefined;
+    const tgtRow = this._db
+      .prepare("SELECT id FROM entities WHERE LOWER(name) = LOWER(?) LIMIT 1")
+      .get(entityB) as { id: number } | undefined;
+    if (srcRow == null || tgtRow == null) return;
+    const now = nowIso();
+    this._db
+      .prepare(
+        `INSERT INTO relationships (source_entity_id, target_entity_id, relationship_type, weight, created_at, last_reinforced)
+         VALUES (?, ?, 'co_retrieval', 1.0, ?, ?)
+         ON CONFLICT DO NOTHING`,
+      )
+      .run(srcRow.id, tgtRow.id, now, now);
+  }
+
+  // ── Hippocampal transfer ───────────────────────────────────────────────
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py — transfer candidates
+   */
+  // source: sqlite_store_stats.py
+  getTransferCandidates(limit = 50): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this._db
+      .prepare(
+        `SELECT * FROM memories
+         WHERE store_type = 'episodic'
+           AND hippocampal_dependency > 0.5
+           AND NOT is_stale
+         ORDER BY hippocampal_dependency DESC, heat_base DESC
+         LIMIT ?`,
+      )
+      .all(limit) as Record<string, unknown>[];
+  }
+
+  /**
+   * Update hippocampal dependency for a memory row.
+   */
+  updateHippocampalDependency(memoryId: number, dependency: number): void {
+    this._db
+      .prepare("UPDATE memories SET hippocampal_dependency = ? WHERE id = ?")
+      .run(dependency, memoryId);
+  }
+
+  // ── Recently accessed ─────────────────────────────��────────────────────
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:90-101
+   */
+  // source: sqlite_store_stats.py:93
+  getRecentlyAccessedMemories(limit = 20, minAccessCount = 1): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this._db
+      .prepare(
+        "SELECT * FROM memories WHERE access_count >= ? " +
+          "AND NOT is_stale ORDER BY last_accessed DESC LIMIT ?",
+      )
+      .all(minAccessCount, limit) as Record<string, unknown>[];
+  }
+
+  // ── Agent context query (codebase-analyze) ────────────────────────────
+  //
+  // LSP-VIOLATION CLOSED (#5): codebase-analyze called store.execute()
+  // which is SQLite-specific. Replaced with a typed method.
+  //
+  // source: packages/memory/src/codebase-analysis/handlers/codebase-analyze-helpers.ts:142-160
+
+  getMemoriesByAgentContext(agentContext: string): Array<{ id: number; tags: string }> {
+    const rows = this._db
+      .prepare(
+        "SELECT id, tags FROM memories WHERE agent_context = ? AND NOT is_stale",
+      )
+      .all(agentContext) as Array<{ id: number; tags: string | unknown }>;
+    return rows.map((r) => ({
+      id: r.id,
+      tags: typeof r.tags === "string" ? r.tags : JSON.stringify(r.tags ?? []),
+    }));
+  }
+
+  // ── Prospective memories ───────────────────────────────────────────────
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:39-42
+   */
+  getActiveProspectiveMemories(): Record<string, unknown>[] {
+    return this._db
+      .prepare("SELECT * FROM prospective_memories WHERE is_active")
+      .all() as Record<string, unknown>[];
+  }
+
+  // ── Replay count ───────────────────────��───────────────────────────────
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:125-130
+   */
+  incrementReplayCount(memoryId: number): void {
+    this._db
+      .prepare("UPDATE memories SET replay_count = replay_count + 1 WHERE id = ?")
+      .run(memoryId);
+  }
+
+  // ── Archive / compression ─────────────────────���────────────────────────
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:114-132
+   */
+  insertArchive(row: Record<string, unknown>): void {
+    try {
+      this._db
+        .prepare(
+          `INSERT INTO memory_archives (original_memory_id, content, mismatch_score, archive_reason)
+           VALUES (?, ?, ?, ?)`,
+        )
+        .run(
+          Number(row["original_memory_id"]),
+          String(row["content"] ?? ""),
+          typeof row["mismatch_score"] === "number" ? row["mismatch_score"] : 0.0,
+          String(row["archive_reason"] ?? ""),
+        );
+    } catch {
+      // best-effort: table may not exist in all schema versions
+    }
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py — compression
+   */
+  updateMemoryCompression(
+    memoryId: number,
+    content: string,
+    _embedding: Buffer | null,
+    compressionLevel: number,
+    _opts?: Record<string, unknown>,
+  ): void {
+    this._db
+      .prepare(
+        `UPDATE memories SET content = ?, compressed = 1,
+            compression_level = ?,
+            original_content = CASE WHEN original_content IS NULL THEN content ELSE original_content END
+         WHERE id = ?`,
+      )
+      .run(content, compressionLevel, memoryId);
+  }
+
+  // ── By-IDs batch fetch ─────────────────────────────────────────────────
+
+  getByIds(ids: number[]): Record<string, unknown>[] {
+    if (ids.length === 0) return [];
+    const placeholders = ids.map(() => "?").join(",");
+    return this._db
+      .prepare(`SELECT * FROM memories WHERE id IN (${placeholders})`)
+      .all(...ids) as Record<string, unknown>[];
+  }
+
+  // ── Consolidation log ──────────────────────────────────────────────────
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:228-241
+   */
+  logConsolidation(data: Record<string, unknown>): void {
+    try {
+      this._db
+        .prepare(
+          "INSERT INTO consolidation_log " +
+            "(memories_added, memories_updated, memories_archived, duration_ms) " +
+            "VALUES (?, ?, ?, ?)",
+        )
+        .run(
+          (data["memories_added"] as number) ?? 0,
+          (data["memories_updated"] as number) ?? 0,
+          (data["memories_archived"] as number) ?? 0,
+          (data["duration_ms"] as number) ?? 0,
+        );
+    } catch {
+      // best-effort: table may not exist in all schema versions
+    }
   }
 }

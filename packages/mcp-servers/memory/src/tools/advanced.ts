@@ -22,7 +22,7 @@
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import type { MemoryStore } from "@agentic/memory/remember/storage/memory-store.js";
+import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-store.js";
 import { syncInstructionsHandler } from "@agentic/memory/automation/handlers/sync-to-claude-md.js";
 import type { MemoryReadStore, MemoryRecord } from "@agentic/memory/automation/handlers/sync-to-claude-md.js";
 import { createTriggerHandler } from "@agentic/memory/automation/handlers/create-trigger.js";
@@ -51,34 +51,37 @@ const ROUNDING_FACTOR_2DP = 100;
 // ── Dependency bundle ─────────────────────────────────────────────────────────
 
 export interface AdvancedDeps {
-  store: MemoryStore;
+  store: MemoryStoreExt;
 }
 
 // ── Store adapters ────────────────────────────────────────────────────────────
 //
-// The automation handlers require specific store interfaces not in the core
-// MemoryStore port. We use escape-hatch casts to access methods that
-// SqliteMemoryStore implements but the MemoryStore interface doesn't declare.
+// The automation handlers require specific store interfaces. Methods that are
+// on MemoryStoreExt are called directly; SQLite-only methods still use limited
+// escape-hatch casts with explicit documentation of the limitation.
 //
 // source: Martin, R. C. (2017). Clean Architecture, Ch. 22 — composition root
 //   adapts concrete implementations to the ports callers declare.
 
-function toMemoryReadStore(store: MemoryStore): MemoryReadStore {
-  const ext = store as unknown as Record<string, (...args: unknown[]) => unknown>;
+function toMemoryReadStore(store: MemoryStoreExt): MemoryReadStore {
   return {
+    // getMemoriesForDirectory is on MemoryStoreExt — no escape-hatch needed.
     getMemoriesForDirectory: async (dir: string, opts: { min_heat: number }) => {
-      const raw = (ext["getMemoriesForDirectory"]?.(dir, opts.min_heat) ?? []) as Array<Record<string, unknown>>;
+      const raw = store.getMemoriesForDirectory(dir, opts.min_heat);
       return raw.map((m) => m as unknown as MemoryRecord);
     },
+    // getHotMemories is on MemoryStoreExt — no escape-hatch needed.
     getHotMemories: async (opts: { min_heat: number; limit: number }) => {
-      const raw = (ext["getHotMemoriesForDirectory"]?.(opts.min_heat, opts.limit)
-        ?? ext["getHotMemories"]?.(opts.min_heat, opts.limit) ?? []) as Array<Record<string, unknown>>;
+      const raw = store.getHotMemories(opts.min_heat, opts.limit);
       return raw.map((m) => m as unknown as MemoryRecord);
     },
   };
 }
 
-function toProspectiveMemoryStore(store: MemoryStore): ProspectiveMemoryStore {
+function toProspectiveMemoryStore(store: MemoryStoreExt): ProspectiveMemoryStore {
+  // insertProspectiveMemory and countActiveTriggers are SQLite-only (not on
+  // MemoryStoreExt yet). On PG these return defaults. This is a residual gap
+  // documented in the parity matrix but not blocking core functionality.
   const ext = store as unknown as Record<string, (...args: unknown[]) => unknown>;
   return {
     insertProspectiveMemory: async (record) => {
@@ -91,7 +94,9 @@ function toProspectiveMemoryStore(store: MemoryStore): ProspectiveMemoryStore {
   };
 }
 
-function toRuleStore(store: MemoryStore): RuleStore {
+function toRuleStore(store: MemoryStoreExt): RuleStore {
+  // insertRule is SQLite-only (rule engine not ported to PG). On PG this
+  // is a no-op. Documented residual gap.
   const ext = store as unknown as Record<string, (...args: unknown[]) => unknown>;
   return {
     insertRule: async (rule) => {
@@ -101,7 +106,9 @@ function toRuleStore(store: MemoryStore): RuleStore {
   };
 }
 
-function toRuleReadStore(store: MemoryStore): RuleReadStore {
+function toRuleReadStore(store: MemoryStoreExt): RuleReadStore {
+  // getAllActiveRules etc. are SQLite-only (rule engine not ported to PG).
+  // On PG these return []. Documented residual gap.
   const ext = store as unknown as Record<string, (...args: unknown[]) => unknown>;
 
   async function fetchRules(method: string): Promise<unknown[]> {
@@ -251,8 +258,8 @@ export function registerAdvancedTools(server: McpServer, deps: AdvancedDeps): vo
     async (args) => {
       try {
         // source: cortex@ed33435 mcp_server/handlers/assess_coverage.py::_handler_impl
-        const ext = deps.store as unknown as Record<string, (...args: unknown[]) => unknown>;
-        const allMems = (ext["getAllMemoriesForDecay"]?.() ?? []) as Array<Record<string, unknown>>;
+        // LSP-VIOLATION CLOSED (#1): getAllMemoriesForDecay is now on MemoryStoreExt.
+        const allMems = deps.store.getAllMemoriesForDecay() as Array<Record<string, unknown>>;
 
         // source: cortex@ed33435 assess_coverage.py:35 — filter by domain/directory
         const scoped = allMems.filter((m) => {

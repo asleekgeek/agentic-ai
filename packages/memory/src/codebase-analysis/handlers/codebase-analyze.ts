@@ -31,7 +31,7 @@ import {
   persistInheritanceEdge,
   resolveRelativePath,
 } from "./codebase-analyze-helpers.js";
-import type { MemoryStore } from "../../remember/storage/memory-store.js";
+import type { MemoryStoreExt as MemoryStore } from "../../remember/storage/memory-store.js";
 
 // ── Dependency injection types ────────────────────────────────────────────
 

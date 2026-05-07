@@ -25,7 +25,7 @@ import { codebaseAnalysis } from "@agentic/memory";
 import { changeImpactHandler } from "@agentic/memory/codebase-analysis/handlers/change-impact.js";
 import { importHandler } from "@agentic/memory/import/handler.js";
 import { remember } from "@agentic/memory/remember/handlers/remember.js";
-import type { MemoryStore } from "@agentic/memory/remember/storage/memory-store.js";
+import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-store.js";
 import { launchDashboard } from "@agentic/memory-dashboard/launcher";
 
 // ── Schema constants ──────────────────────────────────────────────────────────
@@ -101,7 +101,7 @@ export function registerIngestTools(server: McpServer, deps?: IngestDeps): void 
           throw new MissingStoreError("import_sessions", "IngestDeps.store — no store injected");
         }
         // source: packages/memory/src/import/handler.ts::importHandler
-        const store = deps.store as unknown as MemoryStore;
+        const store = deps.store as unknown as MemoryStoreExt;
         const rememberFn = (rawArgs: unknown): Promise<{ stored: true } | null> => {
           const result = remember(rawArgs, store);
           return Promise.resolve(result.stored ? { stored: true as const } : null);
@@ -242,7 +242,7 @@ export function registerIngestTools(server: McpServer, deps?: IngestDeps): void 
         // source: cortex@ed33435 mcp_server/handlers/change_impact.py::handler
         // source: cortex@ed33435 mcp_server/core/change_impact_matcher.py::match_memories
         // Real implementation: packages/memory/src/codebase-analysis/handlers/change-impact.ts
-        const store = deps?.store as unknown as MemoryStore;
+        const store = deps?.store as unknown as MemoryStoreExt;
         const response = await changeImpactHandler(
           {
             base:            args.base,

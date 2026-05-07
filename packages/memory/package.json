@@ -39,6 +39,10 @@
       "import": "./dist/narrative/handlers/sqlite-narrative-adapter.js",
       "types": "./dist/narrative/handlers/sqlite-narrative-adapter.d.ts"
     },
+    "./narrative/handlers/pg-narrative-adapter.js": {
+      "import": "./dist/narrative/handlers/pg-narrative-adapter.js",
+      "types": "./dist/narrative/handlers/pg-narrative-adapter.d.ts"
+    },
     "./methodology/types.js": {
       "import": "./dist/methodology/types.js",
       "types": "./dist/methodology/types.d.ts"
@@ -98,14 +102,6 @@
     "./recall/recall-handler.js": {
       "import": "./dist/recall/recall-handler.js",
       "types": "./dist/recall/recall-handler.d.ts"
-    },
-    "./recall/pg-recall.js": {
-      "import": "./dist/recall/pg-recall.js",
-      "types": "./dist/recall/pg-recall.d.ts"
-    },
-    "./recall/recall-pipeline-stages.js": {
-      "import": "./dist/recall/recall-pipeline-stages.js",
-      "types": "./dist/recall/recall-pipeline-stages.d.ts"
     },
     "./recall/recall-hierarchical-handler.js": {
       "import": "./dist/recall/recall-hierarchical-handler.js",
@@ -238,6 +234,7 @@
     "minimatch": "^10.0.1",
     "pg": "^8.13.0",
     "sqlite-vec": "^0.1.9",
+    "yaml": "^2.4.0",
     "zod": "^3.23.0"
   },
   "optionalDependencies": {

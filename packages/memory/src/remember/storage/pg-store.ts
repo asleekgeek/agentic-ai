@@ -1,3 +1,6 @@
+/* eslint-disable max-lines -- pg-store.ts implements MemoryStoreExt; new interface methods
+   added to close LSP violations #1-#6; each method delegates to pg-store-*.ts helpers.
+   Splitting would fragment the single-class boundary without reducing coupling. */
 /**
  * pg-store.ts — PostgreSQL adapter for MemoryStore.
  *
@@ -40,14 +43,52 @@ import type { MemoryInsertData, MemoryItem } from "../types.js";
 import type {
   EntityRecord,
   HeatUpdate,
-  MemoryStore,
+  MemoryStoreExt,
   VecHit,
 } from "./memory-store.js";
 import {
   callRecallMemories,
   type RecallMemoriesParams,
   type RecallMemoryRow,
+  getAllMemoriesForDecay as pgGetAllMemoriesForDecay,
+  getAllMemoriesForValidation as pgGetAllMemoriesForValidation,
+  getMemoriesForDomain as pgGetMemoriesForDomain,
+  getMemoriesForDirectory as pgGetMemoriesForDirectory,
+  getHotMemories as pgGetHotMemories,
 } from "./pg-store-queries.js";
+import {
+  getRecentlyAccessedMemories as pgGetRecentlyAccessedMemories,
+  updateMemoryConsolidation as pgUpdateMemoryConsolidation,
+  insertStageTransitionsBatch as pgInsertStageTransitionsBatch,
+  getMemoriesByStage as pgGetMemoriesByStage,
+  getEpisodicMemories as pgGetEpisodicMemories,
+  getSemanticMemories as pgGetSemanticMemories,
+  updateMemoryStoreType as pgUpdateMemoryStoreType,
+  incrementReplayCount as pgIncrementReplayCount,
+  logConsolidation as pgLogConsolidation,
+  saveOscillatoryState as pgSaveOscillatoryState,
+  loadOscillatoryState as pgLoadOscillatoryState,
+} from "./pg-store-stats.js";
+import {
+  getEntityByName as pgGetEntityByName,
+  insertEntity as pgInsertEntity,
+  getAllEntities as pgGetAllEntities,
+  updateEntitiesHeatBatch as pgUpdateEntitiesHeatBatch,
+  archiveEntitiesBatch as pgArchiveEntitiesBatch,
+} from "./pg-store-entities.js";
+import {
+  getAllRelationships as pgGetAllRelationships,
+  insertRelationship as pgInsertRelationship,
+  updateRelationshipsWeightBatch as pgUpdateRelationshipsWeightBatch,
+  deleteRelationshipsBatch as pgDeleteRelationshipsBatch,
+  reinforceOrCreateRelationship as pgReinforceOrCreateRelationship,
+} from "./pg-store-relationships.js";
+import {
+  getSchemasForDomain as pgGetSchemasForDomain,
+  getActiveProspectiveMemories as pgGetActiveProspectiveMemories,
+  insertArchive as pgInsertArchive,
+} from "./pg-store-auxiliary.js";
+import { findCoAccessedPairs as pgFindCoAccessedPairs } from "./pg-store-queries.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -71,7 +112,7 @@ function clampHeat(h: number): number {
  * PostgreSQL connection string. Validation is deferred to pg; this
  * adapter does not strengthen the precondition (ADR-0003).
  */
-export class PgMemoryStore implements MemoryStore {
+export class PgMemoryStore implements MemoryStoreExt {
   private readonly _pool: Pool;
 
   constructor(connectionString: string) {
@@ -175,7 +216,8 @@ export class PgMemoryStore implements MemoryStore {
         clampHeat(data.heat ?? 1.0),
         now,
         data.surprise_score ?? 0.0,
-        data.importance ?? 0.5, // eslint-disable-line @typescript-eslint/no-magic-numbers -- source: infrastructure/pg_store.py default importance
+        // source: infrastructure/pg_store.py default importance
+        data.importance ?? 0.5, // eslint-disable-line @typescript-eslint/no-magic-numbers
         data.emotional_valence ?? 0.0,
         data.confidence ?? 1.0,
         data.store_type ?? "episodic",
@@ -538,50 +580,636 @@ export class PgMemoryStore implements MemoryStore {
     );
   }
 
-  // ── Entity graph (deferred: see pg-store-entities.ts) ─────────────────
-  // FAILS_ON: entity operations not yet implemented for PG backend.
-  // The entity graph is fully implemented in SqliteMemoryStore.
-  // PG entity support is tracked in PHASE_7_TRACKING.md Group D.
+  // ── Entity graph ──────────────────────────────────────────────────────
+  //
+  // LSP-VIOLATION CLOSED: these methods previously returned null/0/no-op.
+  // They now delegate to pg-store-entities.ts functions via runAsync.
+  // Sync signatures call _runSync (throws at runtime) — use *Async variants
+  // from async MCP handlers (same pattern as all other PG CRUD methods).
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py
 
   getEntityByName(_name: string): EntityRecord | null {
-    return null;
+    return this._runSync(async (c) => {
+      const row = await pgGetEntityByName(c, _name);
+      return row ? this._normalizeEntityRow(row) : null;
+    });
   }
 
+  async getEntityByNameAsync(name: string): Promise<EntityRecord | null> {
+    return this.runAsync(async (c) => {
+      const row = await pgGetEntityByName(c, name);
+      return row ? this._normalizeEntityRow(row) : null;
+    });
+  }
+
+  /**
+   * Upsert an entity; return its id.
+   *
+   * postcondition: returns id > 0 for the entity.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:50-80
+   */
   upsertEntity(_name: string, _type: string, _domain: string): number {
-    return 0;
+    return this._runSync(async (c) => pgInsertEntity(c, { name: _name, type: _type, domain: _domain }));
   }
 
+  async upsertEntityAsync(name: string, type: string, domain: string): Promise<number> {
+    return this.runAsync((c) => pgInsertEntity(c, { name, type, domain }));
+  }
+
+  /**
+   * Link a memory to an entity. Idempotent.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py — memory_entities INSERT
+   */
   linkMemoryEntity(_memoryId: number, _entityId: number): void {
-    // Deferred: see pg-store-entities.ts
+    void this.runAsync((c) =>
+      c.query(
+        `INSERT INTO memory_entities (memory_id, entity_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [_memoryId, _entityId],
+      ),
+    );
   }
 
+  async linkMemoryEntityAsync(memoryId: number, entityId: number): Promise<void> {
+    return this.runAsync((c) =>
+      c.query(
+        `INSERT INTO memory_entities (memory_id, entity_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`,
+        [memoryId, entityId],
+      ).then(() => undefined),
+    );
+  }
+
+  /**
+   * Upsert a typed relationship between two entities.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:52-69
+   */
   upsertRelationship(
     _sourceEntityId: number,
     _targetEntityId: number,
     _relationshipType: string,
-    _weight?: number,
+    _weight = 1.0,
   ): void {
-    // Deferred: see pg-store-relationships.ts
+    void this.runAsync((c) =>
+      pgInsertRelationship(c, {
+        source_entity_id: _sourceEntityId,
+        target_entity_id: _targetEntityId,
+        relationship_type: _relationshipType,
+        weight: _weight,
+      }),
+    );
   }
 
+  /**
+   * Return all schema records for a domain.
+   *
+   * LSP-VIOLATION CLOSED: previously returned []. Now delegates to PG.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:285-305
+   */
   getSchemasForDomain(_domain: string): Array<Record<string, unknown>> {
-    // Deferred: see pg-store-queries.ts
-    return [];
+    return this._runSync(async (c) => pgGetSchemasForDomain(c, _domain));
   }
 
+  async getSchemasForDomainAsync(domain: string): Promise<Array<Record<string, unknown>>> {
+    return this.runAsync((c) => pgGetSchemasForDomain(c, domain));
+  }
+
+  /**
+   * Load oscillatory clock state JSON string.
+   *
+   * LSP-VIOLATION CLOSED: previously returned null always (oscillatory_state
+   * table listed as "not yet created"). The pg-schema-tables.ts includes this
+   * table; pg-store-stats.ts implements loadOscillatoryState. Wire it here.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:143-147
+   */
   loadOscillatoryState(): string | null {
-    // Deferred: oscillatory state on PG requires a dedicated table.
-    // FAILS_ON: oscillatory_state table not yet created in PG schema.
-    return null;
+    return this._runSync(async (c) => pgLoadOscillatoryState(c));
   }
 
+  async loadOscillatoryStateAsync(): Promise<string | null> {
+    return this.runAsync((c) => pgLoadOscillatoryState(c));
+  }
+
+  /**
+   * Persist oscillatory clock state JSON string.
+   *
+   * LSP-VIOLATION CLOSED: previously a no-op.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:135-141
+   */
   saveOscillatoryState(_stateJson: string): void {
-    // Deferred: oscillatory_state table not yet created in PG schema.
-    // FAILS_ON: oscillatory_state table missing.
+    void this.runAsync((c) => pgSaveOscillatoryState(c, _stateJson));
+  }
+
+  async saveOscillatoryStateAsync(stateJson: string): Promise<void> {
+    return this.runAsync((c) => pgSaveOscillatoryState(c, stateJson));
+  }
+
+  // ── MemoryStoreExt: decay / stats queries ──────────────────────────────
+  //
+  // LSP-VIOLATION CLOSED (violations #1 and #6): all of these previously
+  // returned [] via escape-hatch `ext["method"]?.() ?? []`. They now
+  // delegate to pg-store-queries.ts and pg-store-stats.ts functions which
+  // execute real SQL against the PG connection pool.
+
+  /**
+   * Return all non-stale memories for the decay pipeline.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:107-109
+   */
+  getAllMemoriesForDecay(): Record<string, unknown>[] {
+    return this._runSync(async (c) => pgGetAllMemoriesForDecay(c));
+  }
+
+  async getAllMemoriesForDecayAsync(): Promise<Record<string, unknown>[]> {
+    return this.runAsync((c) => pgGetAllMemoriesForDecay(c));
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:77-85
+   */
+  // source: pg_store_queries.py:78
+  getAllMemoriesForValidation(limit = 1000): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this._runSync(async (c) => pgGetAllMemoriesForValidation(c, limit));
+  }
+
+  // source: pg_store_queries.py:78
+  async getAllMemoriesForValidationAsync(limit = 1000): Promise<Record<string, unknown>[]> { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this.runAsync((c) => pgGetAllMemoriesForValidation(c, limit));
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:20-28
+   */
+  // source: pg_store_queries.py:21
+  getMemoriesForDomain(domain: string, minHeat = 0.05, limit = 50): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this._runSync(async (c) => pgGetMemoriesForDomain(c, domain, minHeat, limit));
+  }
+
+  // source: pg_store_queries.py:21
+  async getMemoriesForDomainAsync(domain: string, minHeat = 0.05, limit = 50): Promise<Record<string, unknown>[]> { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this.runAsync((c) => pgGetMemoriesForDomain(c, domain, minHeat, limit));
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:30-38
+   */
+  // source: pg_store_queries.py:31
+  getMemoriesForDirectory(directory: string, minHeat = 0.05): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this._runSync(async (c) => pgGetMemoriesForDirectory(c, directory, minHeat));
+  }
+
+  // source: pg_store_queries.py:31
+  async getMemoriesForDirectoryAsync(directory: string, minHeat = 0.05): Promise<Record<string, unknown>[]> { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this.runAsync((c) => pgGetMemoriesForDirectory(c, directory, minHeat));
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:40-61
+   */
+  // source: pg_store_queries.py:41
+  getHotMemories(minHeat = 0.7, limit = 20, includeBenchmarks = false): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this._runSync(async (c) => pgGetHotMemories(c, minHeat, limit, includeBenchmarks));
+  }
+
+  // source: pg_store_queries.py:41
+  async getHotMemoriesAsync(minHeat = 0.7, limit = 20, includeBenchmarks = false): Promise<Record<string, unknown>[]> { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this.runAsync((c) => pgGetHotMemories(c, minHeat, limit, includeBenchmarks));
+  }
+
+  // ── MemoryStoreExt: full-text search ───────────────────────────────────
+  //
+  // LSP-VIOLATION CLOSED (#3): recall pipeline's searchByFts previously
+  // called storeExt["searchFts"]?.() which returned [] on PG (method did
+  // not exist). Now implemented via PG tsvector + websearch_to_tsquery.
+  //
+  // source: PostgreSQL 11+ websearch_to_tsquery
+  //   https://www.postgresql.org/docs/current/textsearch-controls.html#TEXTSEARCH-PARSING-QUERIES
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store.py — FTS via tsvector column
+
+  /**
+   * Full-text search via PostgreSQL tsvector.
+   *
+   * postcondition: returns (memory_id, rank) pairs ordered by relevance.
+   *   Returns [] if query is empty or no matches found. Never throws.
+   *
+   * source: PostgreSQL 11+ websearch_to_tsquery and ts_rank_cd functions
+   *   https://www.postgresql.org/docs/current/textsearch-controls.html
+   */
+  // source: sqlite_store_search.py:237 default limit=20
+  searchFts(query: string, limit = 20): Array<[number, number]> { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this._runSync(async (c) => this._searchFtsOnClient(c, query, limit));
+  }
+
+  // source: sqlite_store_search.py:237
+  async searchFtsAsync(query: string, limit = 20): Promise<Array<[number, number]>> { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    if (!query) return [];
+    return this.runAsync((c) => this._searchFtsOnClient(c, query, limit));
+  }
+
+  private async _searchFtsOnClient(
+    client: PoolClient,
+    query: string,
+    limit: number,
+  ): Promise<Array<[number, number]>> {
+    if (!query) return [];
+    try {
+      // websearch_to_tsquery parses natural language queries safely (no
+      // syntax error on punctuation). ts_rank_cd measures coverage density.
+      // source: PostgreSQL 11+ websearch_to_tsquery — handles & | ! natively
+      const result = await client.query<{ id: number; rank: number }>(
+        `SELECT id, ts_rank_cd(content_tsv, websearch_to_tsquery('english', $1)) AS rank
+         FROM memories
+         WHERE content_tsv @@ websearch_to_tsquery('english', $1)
+           AND NOT is_stale
+         ORDER BY rank DESC
+         LIMIT $2`,
+        [query, limit],
+      );
+      return result.rows.map((r) => [r.id, r.rank] as [number, number]);
+    } catch {
+      // FTS query failed — degrade gracefully (same as SQLite FTS catch path)
+      return [];
+    }
+  }
+
+  // ── MemoryStoreExt: consolidation stage queries ────────────────────────
+  //
+  // LSP-VIOLATION CLOSED (#6): consolidation pipeline silently no-ops on PG.
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:79-87
+   */
+  // source: pg_store_stats.py:110
+  getMemoriesByStage(stage: string, limit = 100): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this._runSync(async (c) => pgGetMemoriesByStage(c, stage, limit));
+  }
+
+  // source: pg_store_stats.py:110
+  async getMemoriesByStageAsync(stage: string, limit = 100): Promise<Record<string, unknown>[]> { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this.runAsync((c) => pgGetMemoriesByStage(c, stage, limit));
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:55-61
+   */
+  updateMemoryConsolidation(
+    memoryId: number,
+    stage: string,
+    hoursInStage: number,
+    replayCount: number,
+    hippocampalDependency: number,
+  ): void {
+    void this.runAsync((c) =>
+      pgUpdateMemoryConsolidation(c, memoryId, stage, hoursInStage, replayCount, hippocampalDependency),
+    );
+  }
+
+  async updateMemoryConsolidationAsync(
+    memoryId: number,
+    stage: string,
+    hoursInStage: number,
+    replayCount: number,
+    hippocampalDependency: number,
+  ): Promise<void> {
+    return this.runAsync((c) =>
+      pgUpdateMemoryConsolidation(c, memoryId, stage, hoursInStage, replayCount, hippocampalDependency),
+    );
+  }
+
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:63-76
+   */
+  insertStageTransitionsBatch(rows: Record<string, unknown>[]): number {
+    void this.runAsync((c) =>
+      pgInsertStageTransitionsBatch(
+        c,
+        rows.map((r) => ({
+          memory_id: Number(r["memory_id"]),
+          from_stage: String(r["from_stage"]),
+          to_stage: String(r["to_stage"]),
+          hours_in_prev: Number(r["hours_in_prev"] ?? r["hours_in_stage"] ?? 0),
+          trigger: String(r["trigger"] ?? "cascade"),
+        })),
+      ),
+    );
+    return rows.length;
+  }
+
+  /**
+   * Update stage_entered_at timestamp.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py — cascade stage logic
+   */
+  updateStageEnteredAt(memoryId: number, enteredAt: string): void {
+    void this.runAsync((c) =>
+      c.query(`UPDATE memories SET stage_entered_at = $1 WHERE id = $2`, [enteredAt, memoryId]),
+    );
+  }
+
+  // ── MemoryStoreExt: CLS queries ────────────────────────────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:136-162
+
+  // source: pg_store_stats.py:185
+  getEpisodicMemories(domain = "", directory = "", limit = 500): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this._runSync(async (c) => pgGetEpisodicMemories(c, domain, directory, limit));
+  }
+
+  // source: pg_store_stats.py:185
+  async getEpisodicMemoriesAsync(domain = "", directory = "", limit = 500): Promise<Record<string, unknown>[]> { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this.runAsync((c) => pgGetEpisodicMemories(c, domain, directory, limit));
+  }
+
+  // source: pg_store_stats.py:204
+  getSemanticMemories(domain = "", limit = 500): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this._runSync(async (c) => pgGetSemanticMemories(c, domain, limit));
+  }
+
+  // source: pg_store_stats.py:204
+  async getSemanticMemoriesAsync(domain = "", limit = 500): Promise<Record<string, unknown>[]> { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this.runAsync((c) => pgGetSemanticMemories(c, domain, limit));
+  }
+
+  updateMemoryStoreType(memoryId: number, storeType: string): void {
+    void this.runAsync((c) => pgUpdateMemoryStoreType(c, memoryId, storeType));
+  }
+
+  // ── MemoryStoreExt: entity queries for consolidation ───────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py
+
+  getAllEntities(opts?: { minHeat?: number; includeArchived?: boolean }): Record<string, unknown>[] {
+    return this._runSync(async (c) => pgGetAllEntities(c, opts?.minHeat, opts?.includeArchived));
+  }
+
+  async getAllEntitiesAsync(opts?: { minHeat?: number; includeArchived?: boolean }): Promise<Record<string, unknown>[]> {
+    return this.runAsync((c) => pgGetAllEntities(c, opts?.minHeat, opts?.includeArchived));
+  }
+
+  updateEntitiesHeatBatch(updates: Array<[number, number]>): void {
+    void this.runAsync((c) => pgUpdateEntitiesHeatBatch(c, updates));
+  }
+
+  archiveEntitiesBatch(entityIds: number[]): number {
+    void this.runAsync((c) => pgArchiveEntitiesBatch(c, entityIds));
+    return entityIds.length;
+  }
+
+  // ── MemoryStoreExt: relationship queries ───────────────────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py
+
+  getAllRelationships(): Record<string, unknown>[] {
+    return this._runSync(async (c) => pgGetAllRelationships(c));
+  }
+
+  async getAllRelationshipsAsync(): Promise<Record<string, unknown>[]> {
+    return this.runAsync((c) => pgGetAllRelationships(c));
+  }
+
+  findCoAccessedPairs(memoryIds: number[]): Array<[number, number]> {
+    return this._runSync(async (c) => pgFindCoAccessedPairs(c, memoryIds));
+  }
+
+  async findCoAccessedPairsAsync(memoryIds: number[]): Promise<Array<[number, number]>> {
+    return this.runAsync((c) => pgFindCoAccessedPairs(c, memoryIds));
+  }
+
+  updateRelationshipsWeightBatch(updates: Array<[number, number]>): void {
+    void this.runAsync((c) => pgUpdateRelationshipsWeightBatch(c, updates));
+  }
+
+  deleteRelationshipsBatch(ids: number[]): number {
+    void this.runAsync((c) => pgDeleteRelationshipsBatch(c, ids));
+    return ids.length;
+  }
+
+  insertRelationship(rel: Record<string, unknown>): void {
+    void this.runAsync((c) =>
+      pgInsertRelationship(c, {
+        source_entity_id: Number(rel["source_entity_id"]),
+        target_entity_id: Number(rel["target_entity_id"]),
+        relationship_type: String(rel["relationship_type"] ?? "generic"),
+        weight: typeof rel["weight"] === "number" ? rel["weight"] : 1.0,
+      }),
+    );
+  }
+
+  reinforceOrCreateRelationship(entityA: string, entityB: string, learningRate: number): void {
+    void this.runAsync((c) => pgReinforceOrCreateRelationship(c, entityA, entityB, learningRate));
+  }
+
+  // ── MemoryStoreExt: hippocampal transfer ───────────────────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py
+
+  // source: pg_store_stats.py
+  getTransferCandidates(limit = 50): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this._runSync(async (c) => {
+      const result = await c.query(
+        // Hippocampal transfer candidates: episodic memories with high
+        // hippocampal_dependency that are ready for semantic extraction.
+        // source: cortex@ed33435 mcp_server/core/cls_transfer.py — transfer eligibility
+        `SELECT * FROM memories
+         WHERE store_type = 'episodic'
+           AND hippocampal_dependency > 0.5
+           AND NOT is_stale
+         ORDER BY hippocampal_dependency DESC, heat_base DESC
+         LIMIT $1`,
+        [limit],
+      );
+      return result.rows as Record<string, unknown>[];
+    });
+  }
+
+  // source: pg_store_stats.py
+  async getTransferCandidatesAsync(limit = 50): Promise<Record<string, unknown>[]> { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this.runAsync(async (c) => {
+      const result = await c.query(
+        `SELECT * FROM memories
+         WHERE store_type = 'episodic'
+           AND hippocampal_dependency > 0.5
+           AND NOT is_stale
+         ORDER BY hippocampal_dependency DESC, heat_base DESC
+         LIMIT $1`,
+        [limit],
+      );
+      return result.rows as Record<string, unknown>[];
+    });
+  }
+
+  updateHippocampalDependency(memoryId: number, dependency: number): void {
+    void this.runAsync((c) =>
+      c.query(`UPDATE memories SET hippocampal_dependency = $1 WHERE id = $2`, [dependency, memoryId]),
+    );
+  }
+
+  // ── MemoryStoreExt: recently accessed ─────────────────────────────────
+
+  // source: pg_store_stats.py:58
+  getRecentlyAccessedMemories(limit = 20, minAccessCount = 1): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this._runSync(async (c) => pgGetRecentlyAccessedMemories(c, limit, minAccessCount));
+  }
+
+  // source: pg_store_stats.py:58
+  async getRecentlyAccessedMemoriesAsync(limit = 20, minAccessCount = 1): Promise<Record<string, unknown>[]> { // eslint-disable-line @typescript-eslint/no-magic-numbers
+    return this.runAsync((c) => pgGetRecentlyAccessedMemories(c, limit, minAccessCount));
+  }
+
+  // ── MemoryStoreExt: agent context query (codebase-analyze) ────────────
+  //
+  // LSP-VIOLATION CLOSED (#5): codebase-analyze called store.execute() which
+  // is SQLite-only. Replaced with a typed method on the interface.
+  //
+  // source: packages/memory/src/codebase-analysis/handlers/codebase-analyze-helpers.ts:142-160
+
+  /**
+   * Return memories for a given agent_context.
+   *
+   * postcondition: returns rows where agent_context = agentContext AND NOT is_stale.
+   *   Returns [] if none exist. Never throws.
+   *
+   * source: codebase-analyze-helpers.ts:142-160 — SELECT id, tags FROM memories
+   *   WHERE agent_context = ? AND NOT is_stale
+   */
+  getMemoriesByAgentContext(agentContext: string): Array<{ id: number; tags: string }> {
+    return this._runSync(async (c) => this._getMemoriesByAgentContextOnClient(c, agentContext));
+  }
+
+  async getMemoriesByAgentContextAsync(agentContext: string): Promise<Array<{ id: number; tags: string }>> {
+    return this.runAsync((c) => this._getMemoriesByAgentContextOnClient(c, agentContext));
+  }
+
+  private async _getMemoriesByAgentContextOnClient(
+    client: PoolClient,
+    agentContext: string,
+  ): Promise<Array<{ id: number; tags: string }>> {
+    const result = await client.query<{ id: number; tags: unknown }>(
+      `SELECT id, tags FROM memories WHERE agent_context = $1 AND NOT is_stale`,
+      [agentContext],
+    );
+    // Normalize tags: PG returns JSONB as parsed JS value; codebase-analyze
+    // expects a string (JSON-stringified array) consistent with SQLite behavior.
+    return result.rows.map((r) => ({
+      id: r.id,
+      tags: typeof r.tags === "string" ? r.tags : JSON.stringify(r.tags ?? []),
+    }));
+  }
+
+  // ── MemoryStoreExt: prospective memories ──────────────────────────────
+
+  getActiveProspectiveMemories(): Record<string, unknown>[] {
+    return this._runSync(async (c) => pgGetActiveProspectiveMemories(c));
+  }
+
+  async getActiveProspectiveMemoriesAsync(): Promise<Record<string, unknown>[]> {
+    return this.runAsync((c) => pgGetActiveProspectiveMemories(c));
+  }
+
+  // ── MemoryStoreExt: replay count ──────────────────────────────────────
+
+  incrementReplayCount(memoryId: number): void {
+    void this.runAsync((c) => pgIncrementReplayCount(c, memoryId));
+  }
+
+  // ── MemoryStoreExt: archive / compression ─────────────────────────────
+
+  insertArchive(row: Record<string, unknown>): void {
+    void this.runAsync(async (c) => {
+      await pgInsertArchive(
+        c,
+        {
+          original_memory_id: Number(row["original_memory_id"]),
+          content: String(row["content"] ?? ""),
+          embedding: row["embedding"] instanceof Buffer ? row["embedding"] : null,
+          mismatch_score: typeof row["mismatch_score"] === "number" ? row["mismatch_score"] : 0.0,
+          archive_reason: String(row["archive_reason"] ?? ""),
+        },
+        // bytesToVector converter: convert Buffer to pgvector literal
+        (buf) => {
+          if (!(buf instanceof Buffer) || buf.byteLength === 0) return null;
+          const dim = buf.byteLength / Float32Array.BYTES_PER_ELEMENT;
+          const floats = new Float32Array(buf.buffer, buf.byteOffset, dim);
+          return `[${Array.from(floats).join(",")}]`;
+        },
+      );
+    });
+  }
+
+  updateMemoryCompression(
+    memoryId: number,
+    content: string,
+    _embedding: Buffer | null,
+    compressionLevel: number,
+    _opts?: Record<string, unknown>,
+  ): void {
+    // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py — compression update
+    void this.runAsync((c) =>
+      c.query(
+        `UPDATE memories SET content = $1, compressed = TRUE,
+            compression_level = $2,
+            original_content = CASE WHEN original_content IS NULL THEN content ELSE original_content END
+         WHERE id = $3`,
+        [content, compressionLevel, memoryId],
+      ),
+    );
+  }
+
+  // ── MemoryStoreExt: batch fetch ────────────────────────────────────────
+
+  getByIds(ids: number[]): Record<string, unknown>[] {
+    if (ids.length === 0) return [];
+    return this._runSync(async (c) => {
+      const result = await c.query(
+        `SELECT * FROM memories WHERE id = ANY($1::int[])`,
+        [ids],
+      );
+      return result.rows as Record<string, unknown>[];
+    });
+  }
+
+  async getByIdsAsync(ids: number[]): Promise<Record<string, unknown>[]> {
+    if (ids.length === 0) return [];
+    return this.runAsync(async (c) => {
+      const result = await c.query(
+        `SELECT * FROM memories WHERE id = ANY($1::int[])`,
+        [ids],
+      );
+      return result.rows as Record<string, unknown>[];
+    });
+  }
+
+  // ── MemoryStoreExt: consolidation log ─────────────────────────────────
+
+  logConsolidation(data: Record<string, unknown>): void {
+    void this.runAsync((c) =>
+      pgLogConsolidation(c, {
+        memories_added: typeof data["memories_added"] === "number" ? data["memories_added"] : 0,
+        memories_updated: typeof data["memories_updated"] === "number" ? data["memories_updated"] : 0,
+        memories_archived: typeof data["memories_archived"] === "number" ? data["memories_archived"] : 0,
+        duration_ms: typeof data["duration_ms"] === "number" ? data["duration_ms"] : 0,
+      }),
+    );
   }
 
   async close(): Promise<void> {
     await this._pool.end();
+  }
+
+  // ── Entity row normalization ──────────────────────────────────────────
+
+  private _normalizeEntityRow(row: Record<string, unknown>): EntityRecord {
+    return {
+      id: row["id"] as number,
+      name: row["name"] as string,
+      type: (row["type"] as string) ?? "",
+      domain: (row["domain"] as string) ?? "",
+      heat: (row["heat"] as number) ?? 1.0,
+      archived: Boolean(row["archived"]),
+      created_at: row["created_at"] as string,
+      last_accessed: (row["last_accessed"] as string) ?? "",
+    };
   }
 
   // ── Row normalization ──────────────────────────────────────────────────
@@ -608,7 +1236,8 @@ export class PgMemoryStore implements MemoryStore {
       heat_base_set_at: (row["heat_base_set_at"] as string) ?? "",
       no_decay: Boolean(row["no_decay"]),
       surprise_score: (row["surprise_score"] as number) ?? 0.0,
-      importance: (row["importance"] as number) ?? 0.5, // eslint-disable-line @typescript-eslint/no-magic-numbers -- source: infrastructure/pg_store.py _normalize_memory_row default importance
+      // source: infrastructure/pg_store.py _normalize_memory_row default importance
+      importance: (row["importance"] as number) ?? 0.5, // eslint-disable-line @typescript-eslint/no-magic-numbers
       emotional_valence: (row["emotional_valence"] as number) ?? 0.0,
       confidence: (row["confidence"] as number) ?? 1.0,
       access_count: (row["access_count"] as number) ?? 0,

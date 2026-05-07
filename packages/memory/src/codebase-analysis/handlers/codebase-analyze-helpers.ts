@@ -10,8 +10,16 @@ import { join, relative } from "node:path";
 import { EXT_TO_LANG } from "../codebase-parser.js";
 import type { FileAnalysis } from "../types.js";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-type MemoryStore = any;
+import type { MemoryStoreExt } from "../../remember/storage/memory-store.js";
+
+// Re-export for callers that import the type from here.
+export type { MemoryStoreExt as MemoryStore };
+
+// Internal alias — callers that use the `any` escape hatch should migrate to
+// MemoryStoreExt; for now we keep the local alias to minimise diff surface.
+// LSP-VIOLATION CLOSED (#5): replaced store.execute() / store.acquireBatch()
+// with store.getMemoriesByAgentContext() on the typed interface.
+type MemoryStore = MemoryStoreExt;
 
 export const CODEBASE_AGENT_CONTEXT = "codebase";
 export const FILE_TAG_PREFIX = "file:";
@@ -134,46 +142,61 @@ function _extractFileHash(tags: string[]): [string, string] {
   return [filePath, contentHash];
 }
 
+/**
+ * Load existing file→(memoryId, hash) map from the store.
+ *
+ * LSP-VIOLATION CLOSED (#5): previously called store.execute() (SQLite-only)
+ * via an escape-hatch pattern that silently returned an empty Map on PG
+ * (causing every PG run to be a full re-ingest with no incremental savings).
+ * Now calls store.getMemoriesByAgentContext() which is on MemoryStoreExt and
+ * implemented by both SqliteMemoryStore and PgMemoryStore.
+ *
+ * postcondition: returns Map from filePath → [memoryId, contentHash].
+ *   Returns empty Map if no memories exist for the agent context (first run).
+ *
+ * source: cortex@ed33435 mcp_server/handlers/codebase_analyze_helpers.py:loadExistingHashes
+ */
 export function loadExistingHashes(
   store: MemoryStore,
 ): Map<string, [number, string]> {
   const hashes = new Map<string, [number, string]>();
   try {
-    const rows = (
-      store.acquireBatch?.() ??
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      store
-    ).execute(
-      "SELECT id, tags FROM memories WHERE agent_context = $1 AND NOT is_stale",
-      [CODEBASE_AGENT_CONTEXT],
-    );
-    for (const row of rows ?? []) {
-      const memId = row.id as number;
+    // getMemoriesByAgentContext is defined on MemoryStoreExt — implemented
+    // by both SqliteMemoryStore and PgMemoryStore without escape-hatch.
+    const rows = store.getMemoriesByAgentContext(CODEBASE_AGENT_CONTEXT);
+    for (const row of rows) {
+      const memId = row.id;
       const tags = _parseTags(row.tags);
       const [fp, ch] = _extractFileHash(tags);
       if (fp && ch) hashes.set(fp, [memId, ch]);
     }
   } catch {
-    // best-effort
+    // best-effort: returns empty Map on any error (first run behavior)
   }
   return hashes;
 }
 
+/**
+ * Mark deleted file memories as stale.
+ *
+ * LSP-VIOLATION CLOSED (#5): previously called store.execute() (SQLite-only)
+ * which silently failed on PG. Now calls store.markMemoryStale() which is
+ * on the MemoryStore interface and implemented by both backends.
+ *
+ * The legacy `heat = 0` clause was redundant with `is_stale = TRUE`
+ * — every scan filters `NOT is_stale` before the heat signal is
+ * consulted, so the heat value on stale rows is never read. A3 drops
+ * the redundant zeroing; the heat_base column keeps its last value.
+ * source: phase-3-a3-migration-design.md §3.6.
+ *
+ * postcondition: returns memoryIds.length on success; 0 on error.
+ */
 export function markStale(store: MemoryStore, memoryIds: number[]): number {
-  /**
-   * Mark deleted file memories as stale.
-   *
-   * The legacy `heat = 0` clause was redundant with `is_stale = TRUE`
-   * — every scan filters `NOT is_stale` before the heat signal is
-   * consulted, so the heat value on stale rows is never read. A3 drops
-   * the redundant zeroing; the heat_base column keeps its last value.
-   * Source: phase-3-a3-migration-design.md §3.6.
-   */
   if (memoryIds.length === 0) return 0;
   try {
     for (const mid of memoryIds) {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-      store.execute("UPDATE memories SET is_stale = TRUE WHERE id = $1", [mid]);
+      // markMemoryStale is on MemoryStore (base interface) — no escape-hatch needed.
+      store.markMemoryStale(mid, true);
     }
     return memoryIds.length;
   } catch {
@@ -202,14 +225,12 @@ function _getOrCreateEntity(
   domain: string,
 ): number {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
     const existing = store.getEntityByName(name) as Record<string, unknown> | null;
     if (existing) return existing["id"] as number;
   } catch {
     // fall through to insert
   }
-  // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-  return store.insertEntity({ name, type: entityType, domain }) as number;
+  return store.upsertEntity(name, entityType, domain);
 }
 
 function _persistSymbolEntities(
@@ -225,7 +246,6 @@ function _persistSymbolEntities(
     const symEid = _getOrCreateEntity(store, sym.name, kind, domain);
     entities++;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       store.insertRelationship({
         source_entity_id: fileEid,
         target_entity_id: symEid,
@@ -252,7 +272,6 @@ function _persistImportEntities(
     const depEid = _getOrCreateEntity(store, imp.module, "dependency", domain);
     entities++;
     try {
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       store.insertRelationship({
         source_entity_id: fileEid,
         target_entity_id: depEid,
@@ -302,7 +321,6 @@ export function persistFileEdge(
     try {
       const srcEid = _getOrCreateEntity(store, srcPath, "file", domain);
       const tgtEid = _getOrCreateEntity(store, tgtPath, "file", domain);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       store.insertRelationship({
         source_entity_id: srcEid,
         target_entity_id: tgtEid,
@@ -327,7 +345,6 @@ export function persistInheritanceEdge(
     try {
       const childEid = _getOrCreateEntity(store, child, "class", domain);
       const parentEid = _getOrCreateEntity(store, parent, "class", domain);
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
       store.insertRelationship({
         source_entity_id: childEid,
         target_entity_id: parentEid,
@@ -347,25 +364,32 @@ export function persistCommunityTags(
   communities: Map<string, number>,
 ): void {
   if (communities.size === 0) return;
+  // Get all codebase memories once and filter by filePath in JS.
+  // This replaces the SQLite-only store.execute() pattern with
+  // getMemoriesByAgentContext() which works on both backends.
+  // source: codebase-analyze-helpers.ts — LSP violation #5 fix
+  const allCodebaseMemories = (() => {
+    try {
+      return store.getMemoriesByAgentContext(CODEBASE_AGENT_CONTEXT);
+    } catch {
+      return [];
+    }
+  })();
+
   for (const [filePath, clusterId] of communities) {
     try {
-      const rows = (
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        store.execute(
-          "SELECT id, tags FROM memories WHERE agent_context = 'codebase' AND NOT is_stale AND content LIKE $1",
-          [`%${filePath}%`],
-        ) ?? []
-      ) as Record<string, unknown>[];
+      const rows = allCodebaseMemories.filter((r) =>
+        typeof r.tags === "string" && r.tags.includes(filePath) ||
+        store.getMemory?.(r.id as number)?.content?.includes(filePath),
+      ) as Array<{ id: number; tags: string }>;
       for (const row of rows) {
-        const tags = _parseTags(row["tags"]);
+        const tags = _parseTags(row.tags);
         const tag = `cluster:${clusterId}`;
         if (!tags.includes(tag)) {
           tags.push(tag);
-          // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-          store.execute("UPDATE memories SET tags = $1 WHERE id = $2", [
-            JSON.stringify(tags),
-            row["id"],
-          ]);
+          // Use updateMemoryContent (MemoryStore interface method — works on both backends).
+          const mem = store.getMemory(row.id);
+          if (mem) store.updateMemoryContent(row.id, mem.content, tags);
         }
       }
     } catch {
