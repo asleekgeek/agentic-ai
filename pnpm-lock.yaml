@@ -155,6 +155,9 @@ importers:
       sqlite-vec:
         specifier: ^0.1.9
         version: 0.1.9
+      yaml:
+        specifier: ^2.4.0
+        version: 2.8.3
       zod:
         specifier: ^3.23.0
         version: 3.25.76
@@ -5775,8 +5778,7 @@ snapshots:
 
   xtend@4.0.2: {}
 
-  yaml@2.8.3:
-    optional: true
+  yaml@2.8.3: {}
 
   yocto-queue@0.1.0: {}
 
