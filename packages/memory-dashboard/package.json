@@ -1,6 +1,6 @@
 {
   "name": "@agentic/memory-dashboard",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "private": true,
   "description": "HTTP dashboard server for the 3D constellation map \u2014 TS port of cortex@ed33435 mcp_server/server/",
   "type": "module",

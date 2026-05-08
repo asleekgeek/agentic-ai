@@ -14,8 +14,8 @@
     {
       "name": "memory",
       "source": "./plugins/memory/",
-      "description": "Persistent memory for Claude Code — TS port of Cortex. Thermodynamic heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence integration. SQLite by default; PostgreSQL + pgvector when DATABASE_URL is set. 41 published papers as sources. 0.0.23: fix import_sessions/backfill_memories async-on-PG bug — rememberAsync now routes insertMemory through PgMemoryStore.insertMemoryAsync, closing the backfilled:0 regression.",
-      "version": "0.1.1",
+      "description": "Persistent memory for Claude Code — TS port of Cortex. Thermodynamic heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence integration. SQLite by default; PostgreSQL + pgvector when DATABASE_URL is set. 41 published papers as sources. 0.1.2: fix static-dir 4-step fallback (deployed install returned 404 on /); fix parseTags TypeError on PG JSONB arrays (facets endpoint returned {error:TypeError}).",
+      "version": "0.1.2",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
