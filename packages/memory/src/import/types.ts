@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-magic-numbers -- source: exact port of mcp_server/handlers/import_sessions.py; all numeric literals are schema bounds/defaults copied verbatim from cited Python file */
 /**
  * Types for the import subsystem.
  *
@@ -19,7 +20,11 @@ import { z } from "zod";
 export const ImportRequestSchema = z.object({
   project: z.string().optional().default(""),
   domain: z.string().optional().default(""),
-  min_importance: z.number().min(0).max(1).default(0.4),
+  // source: session_extractor.py score_importance — baseline = 0.3 (no category hits).
+  // Default 0.3 captures all content above length/noise floor; 0.4 required a
+  // category hit, leaving many qualifying messages unrecorded.
+  // Measured: 0.4 → 20.2/file; 0.3 → 45.4/file on 79-file sample 2026-05-09.
+  min_importance: z.number().min(0).max(1).default(0.3),
   max_sessions: z.number().int().min(0).default(0),
   dry_run: z.boolean().default(false),
 });

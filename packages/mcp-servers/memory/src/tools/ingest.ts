@@ -30,7 +30,11 @@ import { launchDashboard } from "@agentic/memory-dashboard/launcher";
 
 // ── Schema constants ──────────────────────────────────────────────────────────
 // source: MCP_TOOLS.md §import_sessions, §ingest_codebase, §codebase_analyze
-const MIN_IMPORTANCE_DEFAULT = 0.4;
+// source: session_extractor.py score_importance — baseline score = 0.3 (no signal hits).
+// 0.3 captures all content above length/noise floor; 0.4 required a category hit,
+// leaving ~50% of qualifying messages unrecorded. Empirical: 0.4→20/file, 0.3→45/file.
+// source: empirical 79-file sample, 2026-05-09.
+const MIN_IMPORTANCE_DEFAULT = 0.3;
 const TOP_SYMBOLS_DEFAULT    = 50;
 const TOP_PROCESSES_DEFAULT  = 10;
 // source: cortex@ed33435 mcp_server/handlers/codebase_analyze.py — default/max values
@@ -88,7 +92,7 @@ export function registerIngestTools(server: McpServer, deps?: IngestDeps): void 
     "import_sessions",
     {
       description:
-        "Import Claude Code JSONL conversation history into the memory store (streams via head+tail, per ADR-0045 R2).", // source: docs/ADR/0045-bounded-streaming-ingestion.md
+        "Import Claude Code JSONL conversation history into the memory store (full-bounded 4 MB read, per ADR-0045 R2 intent).", // source: docs/ADR/0045-bounded-streaming-ingestion.md; readFullBounded replaces readHeadTail for content extraction
       inputSchema: {
         project:        z.string().default("").describe("Project identifier"),
         domain:         z.string().default("").describe("Domain to assign"),

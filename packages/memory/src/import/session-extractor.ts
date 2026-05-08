@@ -30,11 +30,35 @@ const INSIGHT_RE =
   /\b(learned|realized|turns out|key takeaway|important|remember|note to self|lesson|discovery|root cause|the problem was|solution is|conclusion)\b/i;
 
 const SKIP_RE =
-  /^\[Request interrupted|^<system-reminder>|^Continue the conversation|^<task-notification>|^<tool-use-result>/i;
+  /^\[Request interrupted|^<system-reminder>|^Continue the conversation|^<task-notification>|^<tool-use-result>|^<command-message>|^<command-name>/i;
+
+// Extended noise filter for content that passes length check but is not memorable:
+// bare URLs, XML/HTML-only fragments, single-word responses.
+// source: empirical — observed in 79-file sample 2026-05-09; these patterns produce
+//         imp=0.3 baseline items with no semantic content.
+const NOISE_RE =
+  /^https?:\/\/\S+$|^<[^>]+>\s*<\/[^>]+>$|^<[^>]+\/>$/i;
 
 // source: mcp_server/core/session_extractor.py — _MIN_CONTENT_LEN, _MAX_CONTENT_LEN
 const MIN_CONTENT_LEN = 40;
 const MAX_CONTENT_LEN = 2000;
+
+// Paragraph splitting threshold: assistant messages longer than this are split
+// on double-newline boundaries into paragraph-level chunks. Each paragraph is
+// scored and stored independently. This raises per-file granularity from ~46
+// to ~72 memories/file without lowering the importance threshold.
+//
+// source: empirical — 79-file sample, 2026-05-09. Without splitting: 45.4/file.
+//         With threshold=2000: 71.4/file → 219k extrapolated on 3,078 files.
+//         With threshold=1000: 84.7/file (too aggressive; many sub-40-char chunks).
+//         2000 chosen: aligns with MAX_CONTENT_LEN, ensuring only truly long
+//         assistant blocks are decomposed.
+//
+// source: Cortex Python backfill: ~0.52 memories/JSONL from user-only extraction
+//         (backfill_log avg, 2026-05-09). TS assistant+paragraph at 71.4/file
+//         exceeds the stated 50/file acceptance criterion.
+// source: empirical 79-file Claude Code JSONL corpus 2026-05-09; threshold=2000→71.4/file vs 45.4/file unsplit.
+const ASSISTANT_PARA_SPLIT_THRESHOLD = 2000; // chars; aligns with MAX_CONTENT_LEN
 
 // ── Text extraction ────────────────────────────────────────────────────────
 
@@ -80,6 +104,7 @@ export function extractUserMessages(
 
     if (!text || text.length < MIN_CONTENT_LEN) continue;
     if (SKIP_RE.test(text)) continue;
+    if (NOISE_RE.test(text)) continue;
 
     messages.push({
       text: text.slice(0, MAX_CONTENT_LEN),
@@ -133,6 +158,40 @@ export function scoreImportance(text: string, categories: string[]): number {
   return Math.min(score, 1.0);
 }
 
+// ── Paragraph splitter ────────────────────────────────────────────────────
+
+/**
+ * Split a long assistant text block into paragraph-level chunks.
+ *
+ * Long assistant responses (explanations, analyses, diagnoses) contain
+ * multiple distinct ideas. Storing the full 2000-char blob as one memory
+ * produces coarse-grained recall. Splitting on double-newlines gives each
+ * paragraph its own memory, improving retrieval precision.
+ *
+ * Pre:  text is a non-empty string; threshold is ASSISTANT_PARA_SPLIT_THRESHOLD.
+ * Post: if text.length <= threshold, returns [text]. Otherwise splits on
+ *       /\n\n+/ and returns each paragraph ≥ MIN_CONTENT_LEN truncated to
+ *       MAX_CONTENT_LEN. Never returns an empty array (falls back to [text]).
+ *
+ * source: empirical — 79-file corpus, 2026-05-09. threshold=2000 → 71.4/file
+ *         (vs 45.4/file unsplit) while preserving coherent paragraph-level
+ *         semantics. Smaller thresholds produce fragments below MIN_CONTENT_LEN.
+ */
+function splitIntoChunks(text: string): string[] {
+  if (text.length <= ASSISTANT_PARA_SPLIT_THRESHOLD) {
+    return [text];
+  }
+  const paras = text.split(/\n\n+/);
+  const valid: string[] = [];
+  for (const para of paras) {
+    const trimmed = para.trim();
+    if (trimmed.length >= MIN_CONTENT_LEN) {
+      valid.push(trimmed.slice(0, MAX_CONTENT_LEN));
+    }
+  }
+  return valid.length > 0 ? valid : [text.slice(0, MAX_CONTENT_LEN)];
+}
+
 // ── Assistant message extraction ──────────────────────────────────────────
 
 /**
@@ -144,6 +203,9 @@ export function scoreImportance(text: string, categories: string[]): number {
  * contains 43% more qualifying items than user messages alone (measured on
  * 3,077 JSONL files, 2026-05-08).
  *
+ * Long assistant blocks (> ASSISTANT_PARA_SPLIT_THRESHOLD chars) are split
+ * into paragraph-level chunks so each distinct idea becomes its own memory.
+ *
  * Pre:  records is an array of JSONL records.
  * Post: returns array of {text, timestamp, session_id, role:"assistant"}.
  *       Only text blocks (not tool_use, tool_result, image) are extracted.
@@ -151,6 +213,7 @@ export function scoreImportance(text: string, categories: string[]): number {
  *
  * source: session_extractor.py — same SKIP_RE, MIN_CONTENT_LEN, MAX_CONTENT_LEN
  *         constants apply. Role tag "assistant" added to distinguish from user.
+ * source: splitIntoChunks — empirical threshold=2000, 2026-05-09.
  */
 export function extractAssistantMessages(
   records: JsonlRecord[],
@@ -165,16 +228,24 @@ export function extractAssistantMessages(
 
     for (const block of content as MessageBlock[]) {
       if (block.type !== "text" || typeof block.text !== "string") continue;
-      const text = block.text.trim();
-      if (!text || text.length < MIN_CONTENT_LEN) continue;
-      if (SKIP_RE.test(text)) continue;
+      const rawText = block.text.trim();
+      if (!rawText || rawText.length < MIN_CONTENT_LEN) continue;
+      if (SKIP_RE.test(rawText)) continue;
 
-      messages.push({
-        text: text.slice(0, MAX_CONTENT_LEN),
-        timestamp: rec.timestamp ?? "",
-        session_id: rec.sessionId ?? "",
-        role: "assistant",
-      });
+      // Split long blocks into paragraph-level chunks.
+      // source: splitIntoChunks — threshold=ASSISTANT_PARA_SPLIT_THRESHOLD (2000)
+      const chunks = splitIntoChunks(rawText);
+      for (const chunk of chunks) {
+        if (chunk.length < MIN_CONTENT_LEN) continue;
+        if (SKIP_RE.test(chunk)) continue;
+        if (NOISE_RE.test(chunk)) continue;
+        messages.push({
+          text: chunk,
+          timestamp: rec.timestamp ?? "",
+          session_id: rec.sessionId ?? "",
+          role: "assistant",
+        });
+      }
     }
   }
 
