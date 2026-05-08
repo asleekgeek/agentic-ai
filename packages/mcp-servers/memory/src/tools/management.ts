@@ -9,8 +9,9 @@
  *   - validate_memory: marks stale memories whose source files no longer exist.
  *     Ported from cortex@ed33435 mcp_server/handlers/validate_memory.py.
  *   - seed_project: calls real seedProjectHandlerFn from @agentic/memory/codebase-analysis.
- *   - backfill_memories: calls real importHandler from @agentic/memory/import.
- *     source: packages/memory/src/import/handler.ts::importHandler
+ *   - backfill_memories: calls backfillMemoriesHandler (force:true, full-file scan,
+ *     rglob discovery, hash-dedup). Replaces importHandler which used force:false
+ *     causing ~90% write-gate rejection. source: backfill-memories.ts fix 0.1.4.
  *   - get_methodology_graph: builds graph from profiles.json.
  *     Ported from cortex@ed33435 mcp_server/handlers/get_methodology_graph.py.
  *   - get_telemetry: returns in-process telemetry counters + read/write ratio.
@@ -31,7 +32,7 @@ import { homedir } from "node:os";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-store.js";
-import { importHandler } from "@agentic/memory/import/handler.js";
+import { backfillMemoriesHandler, type BackfillImportResponse } from "@agentic/memory/import/backfill-memories.js";
 import { rememberAsync } from "@agentic/memory/remember/handlers/remember.js";
 import { handler as seedProjectHandlerFn } from "@agentic/memory/codebase-analysis/handlers/seed-project.js";
 import { summary as telemetrySummary } from "@agentic/memory/shared/telemetry.js";
@@ -45,7 +46,11 @@ const VALIDATE_ERROR_CAP = 10;
 const SEED_MAX_FILE_SIZE_KB = 64;
 // source: MCP_TOOLS.md §backfill_memories max_files default=20
 const BACKFILL_MAX_FILES_DEFAULT = 20;
-const BACKFILL_MIN_IMPORTANCE = 0.35; // source: Ebbinghaus retention curve — min_importance threshold of 0.35 per MCP_TOOLS.md §backfill_memories
+// source: session_extractor.py — baseline importance score = 0.3 (any message with text content)
+// Setting min_importance = 0.3 includes all messages that pass SKIP_RE + MIN_CONTENT_LEN filters.
+// Previous default was 0.35 which excluded messages with no category keyword match.
+// source: empirical — 3,077 files, 2026-05-08: 0.3 captures 45k items vs 17k at 0.35.
+const BACKFILL_MIN_IMPORTANCE = 0.3;
 
 // ── Dependency bundle ─────────────────────────────────────────────────────────
 
@@ -208,30 +213,52 @@ export function registerManagementTools(server: McpServer, deps: ManagementDeps)
     },
     async (args) => {
       try {
-        // source: packages/memory/src/import/handler.ts::importHandler
-        // Fix: use rememberAsync so PgMemoryStore.insertMemoryAsync is called instead
-        // of the sync insertMemory() which throws on PG. Root-cause: ADR-0042.
+        // source: packages/memory/src/import/backfill-memories.ts::backfillMemoriesHandler
+        //
+        // CRITICAL FIX: Previously called importHandler (import_sessions path) which
+        // used force:false, causing the write gate to reject ~90% of memories.
+        // backfillMemoriesHandler uses force:true (bypass gate), hash-based dedup via
+        // backfill_log, and rglob discovery matching Python backfill_memories.py.
+        //
+        // Contract change (LSP):
+        //   Pre:  same args (project, max_files, min_importance, dry_run, force_reprocess)
+        //   Post: stored count is now up to 100x higher because gate bypass is active.
+        //         Dedup guarantee: backfill_log (SQLite) / no-op on PG (PG gets dedup
+        //         via ON CONFLICT on content_hash at the memories table level).
+        //
+        // source: cortex@ed33435 mcp_server/handlers/backfill_memories.py:handler
         // source: engineer@41e5778 — *Async-when-available pattern for PG/SQLite parity.
-        const rememberFn = async (rawArgs: unknown): Promise<{ stored: true } | null> => {
+        // RememberHandler expects (args: RememberArgs) but rememberAsync accepts unknown.
+        // The cast is safe: backfillMemoriesHandler passes args through RememberArgs shape.
+        // source: import/types.ts::RememberHandler contract; backfill-memories.ts::importSingleItem
+        const rememberFn = async (rawArgs: unknown): Promise<{ stored: boolean; memory_id?: number } | null> => {
           const result = await rememberAsync(rawArgs, deps.store);
-          return result.stored ? { stored: true as const } : null;
+          if (!result.stored) return null;
+          return { stored: true, memory_id: (result as { memory_id?: number }).memory_id };
         };
 
-        const response = await importHandler(
+        const response = await backfillMemoriesHandler(
           {
-            project:        args.project,
-            domain:         "",
-            min_importance: args.min_importance,
-            max_sessions:   args.max_files,
-            dry_run:        args.dry_run,
+            project:         args.project,
+            max_files:       args.max_files,
+            min_importance:  args.min_importance,
+            dry_run:         args.dry_run,
+            force_reprocess: args.force_reprocess,
           },
+          deps.store,
           rememberFn,
         );
+
+        if ("dry_run" in response && response.dry_run) {
+          return { content: [{ type: "text" as const, text: JSON.stringify(response) }] };
+        }
+        const imp = response as BackfillImportResponse;
         return { content: [{ type: "text" as const, text: JSON.stringify({
-          backfilled:      response.imported,
-          skipped:         response.skipped,
-          files_processed: response.total_files,
-          dry_run:         args.dry_run,
+          backfilled:          imp.backfilled,
+          files_processed:     imp.files_processed,
+          files_already_done:  imp.files_already_done,
+          items_gated:         imp.items_gated,
+          total_files_found:   imp.total_files_found,
         }) }] };
       } catch (err) {
         return errorText("backfill_memories", err);
