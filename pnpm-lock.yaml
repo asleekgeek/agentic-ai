@@ -121,6 +121,31 @@ importers:
         version: 5.9.3
 
   packages/mcp-servers/prd:
+    dependencies:
+      '@agentic/prd-benchmark':
+        specifier: workspace:*
+        version: link:../../prd-pipeline/packages/benchmark
+      '@agentic/prd-core':
+        specifier: workspace:*
+        version: link:../../prd-pipeline/packages/core
+      '@agentic/prd-orchestration':
+        specifier: workspace:*
+        version: link:../../prd-pipeline/packages/orchestration
+      '@agentic/prd-strategy':
+        specifier: workspace:*
+        version: link:../../prd-pipeline/packages/strategy
+      '@agentic/prd-validation':
+        specifier: workspace:*
+        version: link:../../prd-pipeline/packages/validation
+      '@agentic/prd-verification':
+        specifier: workspace:*
+        version: link:../../prd-pipeline/packages/verification
+      '@modelcontextprotocol/sdk':
+        specifier: ^1.12.0
+        version: 1.29.0(zod@3.25.76)
+      zod:
+        specifier: ^3.24.0
+        version: 3.25.76
     devDependencies:
       '@types/node':
         specifier: ^25.6.0
@@ -519,6 +544,33 @@ importers:
         version: 5.9.3
 
   packages/reasoning: {}
+
+  plugins/codebase: {}
+
+  plugins/memory:
+    dependencies:
+      better-sqlite3:
+        specifier: ^12.0.0
+        version: 12.9.0
+      pg:
+        specifier: ^8.13.0
+        version: 8.20.0
+      sqlite-vec:
+        specifier: ^0.1.9
+        version: 0.1.9
+    optionalDependencies:
+      '@xenova/transformers':
+        specifier: ^2.17.2
+        version: 2.17.2
+      onnxruntime-node:
+        specifier: ^1.25.1
+        version: 1.25.1
+
+  plugins/prd:
+    dependencies:
+      ajv:
+        specifier: ^8.17.1
+        version: 8.20.0
 
 packages:
 

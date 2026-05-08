@@ -1,6 +1,6 @@
 {
   "name": "@agentic/plugin-prd",
-  "version": "0.0.6",
+  "version": "0.1.0",
   "private": true,
   "description": "Self-contained PRD MCP server plugin. The bundle contains all workspace code; ajv is declared here because schema-oracle uses createRequire (CodeGen path) that esbuild cannot pre-bundle.",
   "type": "module",
