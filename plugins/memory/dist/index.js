@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import {createRequire} from "node:module"; const require=createRequire(import.meta.url);
+import { createRequire as __cjsCreateRequire } from "node:module"; const require = __cjsCreateRequire(import.meta.url);
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -13209,6 +13209,349 @@ var init_fileFromPath = __esm({
   }
 });
 
+// packages/memory/dist/wiki/layout.js
+function slugify(value, maxLen = _MAX_SLUG_LEN) {
+  if (!value)
+    return "unknown";
+  const cleaned = value.trim().toLowerCase().replace(_SAFE, "-").replace(/^-+|-+$/g, "");
+  if (!cleaned)
+    return "unknown";
+  const trimmed = cleaned.slice(0, maxLen).replace(/-+$/, "");
+  return trimmed || "unknown";
+}
+function adrFilename(number3, slug) {
+  return `${String(number3).padStart(4, "0")}-${slug}.md`;
+}
+function pagePath(kind2, filename) {
+  if (!PAGE_KINDS.includes(kind2)) {
+    throw new Error(`unknown wiki page kind: ${kind2}`);
+  }
+  return `${kind2}/${filename}`;
+}
+function indexPath() {
+  return ".generated/INDEX.md";
+}
+var PAGE_KINDS, _SAFE, _MAX_SLUG_LEN;
+var init_layout = __esm({
+  "packages/memory/dist/wiki/layout.js"() {
+    "use strict";
+    PAGE_KINDS = [
+      "adr",
+      "specs",
+      "guides",
+      "reference",
+      "conventions",
+      "lessons",
+      "notes",
+      "journal",
+      "files"
+    ];
+    _SAFE = /[^a-zA-Z0-9_.\\-]+/g;
+    _MAX_SLUG_LEN = 80;
+  }
+});
+
+// packages/memory/dist/wiki/pages.js
+function nowIso3() {
+  return (/* @__PURE__ */ new Date()).toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+function formatFrontmatter(fm) {
+  if (!fm || Object.keys(fm).length === 0)
+    return "";
+  const lines = ["---"];
+  for (const key of Object.keys(fm).sort()) {
+    const value = fm[key];
+    let rendered;
+    if (Array.isArray(value)) {
+      rendered = "[" + value.map(String).join(", ") + "]";
+    } else if (value == null) {
+      rendered = "";
+    } else {
+      rendered = String(value);
+    }
+    lines.push(`${key}: ${rendered}`);
+  }
+  lines.push("---");
+  lines.push("");
+  return lines.join("\n");
+}
+function stripInlineList(value) {
+  let inner = value.trim();
+  if (inner.startsWith("[") && inner.endsWith("]")) {
+    inner = inner.slice(1, -1);
+  }
+  return inner.split(",").map((s2) => s2.trim()).filter(Boolean);
+}
+function parsePage(text) {
+  if (!text.startsWith("---\n") && !text.startsWith("---\r\n")) {
+    return { frontmatter: {}, body: text };
+  }
+  const lines = text.split("\n");
+  if (!lines[0] || lines[0].trim() !== "---") {
+    return { frontmatter: {}, body: text };
+  }
+  const fm = {};
+  let bodyStart = lines.length;
+  for (let idx = 1; idx < lines.length; idx++) {
+    const line = lines[idx];
+    if (!line)
+      continue;
+    if (line.trim() === "---") {
+      bodyStart = idx + 1;
+      break;
+    }
+    if (!line.includes(":"))
+      continue;
+    const colonIdx = line.indexOf(":");
+    const key = line.slice(0, colonIdx).trim();
+    const raw = line.slice(colonIdx + 1).trim();
+    if (raw.startsWith("[") && raw.endsWith("]")) {
+      fm[key] = stripInlineList(raw);
+    } else {
+      fm[key] = raw;
+    }
+  }
+  let bodyLines = lines.slice(bodyStart);
+  while (bodyLines.length > 0 && bodyLines[0] === "") {
+    bodyLines = bodyLines.slice(1);
+  }
+  return { frontmatter: fm, body: bodyLines.join("\n") };
+}
+function renderPage(doc) {
+  const header = formatFrontmatter(doc.frontmatter);
+  if (header && doc.body) {
+    return header + doc.body + (doc.body.endsWith("\n") ? "" : "\n");
+  }
+  if (header)
+    return header;
+  return doc.body ? doc.body + (doc.body.endsWith("\n") ? "" : "\n") : "";
+}
+function buildAdr(args) {
+  const status = args.status ?? "accepted";
+  if (!ADR_STATUSES.includes(status)) {
+    throw new Error(`unknown ADR status: ${status}`);
+  }
+  const fm = {
+    kind: "adr",
+    number: String(args.number).padStart(4, "0"),
+    title: args.title,
+    status,
+    created: nowIso3(),
+    tags: args.tags ?? ["adr"]
+  };
+  const body = `# ADR-${String(args.number).padStart(4, "0")}: ${args.title}
+
+## Status
+
+${status}
+
+## Context
+
+${args.context}
+
+## Decision
+
+${args.decision}
+
+## Consequences
+
+${args.consequences}
+`;
+  return renderPage({ frontmatter: fm, body });
+}
+var ADR_STATUSES;
+var init_pages = __esm({
+  "packages/memory/dist/wiki/pages.js"() {
+    "use strict";
+    init_layout();
+    ADR_STATUSES = [
+      "proposed",
+      "accepted",
+      "rejected",
+      "superseded",
+      "deprecated"
+    ];
+  }
+});
+
+// packages/memory/dist/wiki/schema-loader.js
+var schema_loader_exports = {};
+__export(schema_loader_exports, {
+  loadRegistry: () => loadRegistry
+});
+import * as fs3 from "node:fs";
+import * as path3 from "node:path";
+function parseKind(relPath, content) {
+  const doc = parsePage(content);
+  const fm = doc.frontmatter;
+  const name = fm["name"] ?? path3.basename(relPath, ".md");
+  if (!name)
+    return null;
+  const toStringArray = (v2) => {
+    if (Array.isArray(v2))
+      return v2.map(String);
+    if (typeof v2 === "string" && v2)
+      return [v2];
+    return [];
+  };
+  return {
+    name,
+    display_name: String(fm["display_name"] ?? name),
+    dir_name: String(fm["dir_name"] ?? name + "s"),
+    required_sections: toStringArray(fm["required_sections"]),
+    optional_sections: toStringArray(fm["optional_sections"]),
+    parent_kind: fm["parent_kind"] ?? null,
+    autofill_prompt: String(fm["autofill_prompt"] ?? "")
+  };
+}
+function parseRulesTable(body) {
+  const rows = [];
+  let m2;
+  const re2 = /^\|(.+)\|$/gm;
+  while ((m2 = re2.exec(body)) !== null) {
+    rows.push(m2[1]);
+  }
+  if (rows.length < 2)
+    return [];
+  const headerCells = rows[0].split("|").map((c2) => c2.trim().toLowerCase());
+  const rules = [];
+  for (const row of rows.slice(2)) {
+    const cells = row.split("|").map((c2) => c2.trim());
+    if (cells.length !== headerCells.length)
+      continue;
+    const r2 = {};
+    headerCells.forEach((h2, i2) => {
+      r2[h2] = cells[i2] ?? "";
+    });
+    if (!r2["pattern"] || !r2["kind"])
+      continue;
+    let target = r2["target"] ?? null;
+    if (target === "reject" || target === "-" || target === "") {
+      target = null;
+    }
+    let weight = 1;
+    const rawWeight = r2["weight"];
+    if (rawWeight) {
+      const parsed = parseFloat(rawWeight);
+      if (!isNaN(parsed))
+        weight = parsed;
+    }
+    rules.push({
+      pattern: r2["pattern"],
+      pattern_kind: r2["kind"],
+      target_kind: target,
+      weight,
+      note: r2["note"] ?? ""
+    });
+  }
+  return rules;
+}
+function parseView(relPath, content) {
+  const doc = parsePage(content);
+  const m2 = QUERY_BLOCK_RE.exec(doc.body);
+  if (!m2)
+    return null;
+  const fm = doc.frontmatter;
+  return {
+    name: String(fm["name"] ?? path3.basename(relPath, ".md")),
+    rel_path: relPath,
+    query: m2[1].trim(),
+    description: String(fm["description"] ?? "")
+  };
+}
+function parseTrigger(relPath, content) {
+  const doc = parsePage(content);
+  const fm = doc.frontmatter;
+  const event = fm["event"];
+  if (!event)
+    return null;
+  return {
+    name: String(fm["name"] ?? path3.basename(relPath, ".md")),
+    event: String(event),
+    condition: String(fm["condition"] ?? ""),
+    action: String(fm["action"] ?? "")
+  };
+}
+function loadFolderDirect(wikiRoot, folder, parser) {
+  const results = {};
+  const full = path3.join(wikiRoot, folder);
+  if (!fs3.existsSync(full))
+    return results;
+  function walk(dir) {
+    let entries;
+    try {
+      entries = fs3.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const entryPath = path3.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(entryPath);
+      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+        const relPath = path3.relative(wikiRoot, entryPath).replace(/\\/g, "/");
+        try {
+          const content = fs3.readFileSync(entryPath, "utf-8");
+          const parsed = parser(relPath, content);
+          if (parsed !== null) {
+            const key = parsed.name ?? relPath;
+            results[key] = parsed;
+          }
+        } catch {
+        }
+      }
+    }
+  }
+  walk(full);
+  return results;
+}
+function loadRegistry(wikiRoot) {
+  const kinds = loadFolderDirect(wikiRoot, "_kinds", parseKind);
+  const rules = [];
+  const rulesDir = path3.join(wikiRoot, "_rules");
+  if (fs3.existsSync(rulesDir)) {
+    const walk = (dir) => {
+      let entries;
+      try {
+        entries = fs3.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of [...entries].sort((a2, b2) => a2.name.localeCompare(b2.name))) {
+        const entryPath = path3.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(entryPath);
+        } else if (entry.isFile() && entry.name.endsWith(".md")) {
+          try {
+            const content = fs3.readFileSync(entryPath, "utf-8");
+            const body = parsePage(content).body;
+            rules.push(...parseRulesTable(body));
+          } catch {
+          }
+        }
+      }
+    };
+    walk(rulesDir);
+  }
+  const views = loadFolderDirect(wikiRoot, "_views", parseView);
+  const triggers = loadFolderDirect(wikiRoot, "_triggers", parseTrigger);
+  return {
+    kinds,
+    rules,
+    views,
+    triggers,
+    known_kind_names: new Set(Object.keys(kinds))
+  };
+}
+var QUERY_BLOCK_RE;
+var init_schema_loader = __esm({
+  "packages/memory/dist/wiki/schema-loader.js"() {
+    "use strict";
+    init_pages();
+    QUERY_BLOCK_RE = /```cortex-query\n([\s\S]*?)\n```/;
+  }
+});
+
 // node_modules/.pnpm/node-gyp-build@4.8.4/node_modules/node-gyp-build/node-gyp-build.js
 var require_node_gyp_build = __commonJS({
   "node_modules/.pnpm/node-gyp-build@4.8.4/node_modules/node-gyp-build/node-gyp-build.js"(exports2, module2) {
@@ -14114,349 +14457,6 @@ var require_tree_sitter = __commonJS({
     module.exports.SyntaxNode = SyntaxNode;
     module.exports.TreeCursor = TreeCursor;
     module.exports.LookaheadIterator = LookaheadIterator;
-  }
-});
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/layout.js
-function slugify(value, maxLen = _MAX_SLUG_LEN) {
-  if (!value)
-    return "unknown";
-  const cleaned = value.trim().toLowerCase().replace(_SAFE, "-").replace(/^-+|-+$/g, "");
-  if (!cleaned)
-    return "unknown";
-  const trimmed = cleaned.slice(0, maxLen).replace(/-+$/, "");
-  return trimmed || "unknown";
-}
-function adrFilename(number3, slug) {
-  return `${String(number3).padStart(4, "0")}-${slug}.md`;
-}
-function pagePath(kind2, filename) {
-  if (!PAGE_KINDS.includes(kind2)) {
-    throw new Error(`unknown wiki page kind: ${kind2}`);
-  }
-  return `${kind2}/${filename}`;
-}
-function indexPath() {
-  return ".generated/INDEX.md";
-}
-var PAGE_KINDS, _SAFE, _MAX_SLUG_LEN;
-var init_layout = __esm({
-  "../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/layout.js"() {
-    "use strict";
-    PAGE_KINDS = [
-      "adr",
-      "specs",
-      "guides",
-      "reference",
-      "conventions",
-      "lessons",
-      "notes",
-      "journal",
-      "files"
-    ];
-    _SAFE = /[^a-zA-Z0-9_.\\-]+/g;
-    _MAX_SLUG_LEN = 80;
-  }
-});
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/pages.js
-function nowIso3() {
-  return (/* @__PURE__ */ new Date()).toISOString().replace(/\.\d{3}Z$/, "Z");
-}
-function formatFrontmatter(fm) {
-  if (!fm || Object.keys(fm).length === 0)
-    return "";
-  const lines = ["---"];
-  for (const key of Object.keys(fm).sort()) {
-    const value = fm[key];
-    let rendered;
-    if (Array.isArray(value)) {
-      rendered = "[" + value.map(String).join(", ") + "]";
-    } else if (value == null) {
-      rendered = "";
-    } else {
-      rendered = String(value);
-    }
-    lines.push(`${key}: ${rendered}`);
-  }
-  lines.push("---");
-  lines.push("");
-  return lines.join("\n");
-}
-function stripInlineList(value) {
-  let inner = value.trim();
-  if (inner.startsWith("[") && inner.endsWith("]")) {
-    inner = inner.slice(1, -1);
-  }
-  return inner.split(",").map((s2) => s2.trim()).filter(Boolean);
-}
-function parsePage(text) {
-  if (!text.startsWith("---\n") && !text.startsWith("---\r\n")) {
-    return { frontmatter: {}, body: text };
-  }
-  const lines = text.split("\n");
-  if (!lines[0] || lines[0].trim() !== "---") {
-    return { frontmatter: {}, body: text };
-  }
-  const fm = {};
-  let bodyStart = lines.length;
-  for (let idx = 1; idx < lines.length; idx++) {
-    const line = lines[idx];
-    if (!line)
-      continue;
-    if (line.trim() === "---") {
-      bodyStart = idx + 1;
-      break;
-    }
-    if (!line.includes(":"))
-      continue;
-    const colonIdx = line.indexOf(":");
-    const key = line.slice(0, colonIdx).trim();
-    const raw = line.slice(colonIdx + 1).trim();
-    if (raw.startsWith("[") && raw.endsWith("]")) {
-      fm[key] = stripInlineList(raw);
-    } else {
-      fm[key] = raw;
-    }
-  }
-  let bodyLines = lines.slice(bodyStart);
-  while (bodyLines.length > 0 && bodyLines[0] === "") {
-    bodyLines = bodyLines.slice(1);
-  }
-  return { frontmatter: fm, body: bodyLines.join("\n") };
-}
-function renderPage(doc) {
-  const header = formatFrontmatter(doc.frontmatter);
-  if (header && doc.body) {
-    return header + doc.body + (doc.body.endsWith("\n") ? "" : "\n");
-  }
-  if (header)
-    return header;
-  return doc.body ? doc.body + (doc.body.endsWith("\n") ? "" : "\n") : "";
-}
-function buildAdr(args) {
-  const status = args.status ?? "accepted";
-  if (!ADR_STATUSES.includes(status)) {
-    throw new Error(`unknown ADR status: ${status}`);
-  }
-  const fm = {
-    kind: "adr",
-    number: String(args.number).padStart(4, "0"),
-    title: args.title,
-    status,
-    created: nowIso3(),
-    tags: args.tags ?? ["adr"]
-  };
-  const body = `# ADR-${String(args.number).padStart(4, "0")}: ${args.title}
-
-## Status
-
-${status}
-
-## Context
-
-${args.context}
-
-## Decision
-
-${args.decision}
-
-## Consequences
-
-${args.consequences}
-`;
-  return renderPage({ frontmatter: fm, body });
-}
-var ADR_STATUSES;
-var init_pages = __esm({
-  "../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/pages.js"() {
-    "use strict";
-    init_layout();
-    ADR_STATUSES = [
-      "proposed",
-      "accepted",
-      "rejected",
-      "superseded",
-      "deprecated"
-    ];
-  }
-});
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/schema-loader.js
-var schema_loader_exports = {};
-__export(schema_loader_exports, {
-  loadRegistry: () => loadRegistry
-});
-import * as fs2 from "node:fs";
-import * as path from "node:path";
-function parseKind(relPath, content) {
-  const doc = parsePage(content);
-  const fm = doc.frontmatter;
-  const name = fm["name"] ?? path.basename(relPath, ".md");
-  if (!name)
-    return null;
-  const toStringArray = (v2) => {
-    if (Array.isArray(v2))
-      return v2.map(String);
-    if (typeof v2 === "string" && v2)
-      return [v2];
-    return [];
-  };
-  return {
-    name,
-    display_name: String(fm["display_name"] ?? name),
-    dir_name: String(fm["dir_name"] ?? name + "s"),
-    required_sections: toStringArray(fm["required_sections"]),
-    optional_sections: toStringArray(fm["optional_sections"]),
-    parent_kind: fm["parent_kind"] ?? null,
-    autofill_prompt: String(fm["autofill_prompt"] ?? "")
-  };
-}
-function parseRulesTable(body) {
-  const rows = [];
-  let m2;
-  const re2 = /^\|(.+)\|$/gm;
-  while ((m2 = re2.exec(body)) !== null) {
-    rows.push(m2[1]);
-  }
-  if (rows.length < 2)
-    return [];
-  const headerCells = rows[0].split("|").map((c2) => c2.trim().toLowerCase());
-  const rules = [];
-  for (const row of rows.slice(2)) {
-    const cells = row.split("|").map((c2) => c2.trim());
-    if (cells.length !== headerCells.length)
-      continue;
-    const r2 = {};
-    headerCells.forEach((h2, i2) => {
-      r2[h2] = cells[i2] ?? "";
-    });
-    if (!r2["pattern"] || !r2["kind"])
-      continue;
-    let target = r2["target"] ?? null;
-    if (target === "reject" || target === "-" || target === "") {
-      target = null;
-    }
-    let weight = 1;
-    const rawWeight = r2["weight"];
-    if (rawWeight) {
-      const parsed = parseFloat(rawWeight);
-      if (!isNaN(parsed))
-        weight = parsed;
-    }
-    rules.push({
-      pattern: r2["pattern"],
-      pattern_kind: r2["kind"],
-      target_kind: target,
-      weight,
-      note: r2["note"] ?? ""
-    });
-  }
-  return rules;
-}
-function parseView(relPath, content) {
-  const doc = parsePage(content);
-  const m2 = QUERY_BLOCK_RE.exec(doc.body);
-  if (!m2)
-    return null;
-  const fm = doc.frontmatter;
-  return {
-    name: String(fm["name"] ?? path.basename(relPath, ".md")),
-    rel_path: relPath,
-    query: m2[1].trim(),
-    description: String(fm["description"] ?? "")
-  };
-}
-function parseTrigger(relPath, content) {
-  const doc = parsePage(content);
-  const fm = doc.frontmatter;
-  const event = fm["event"];
-  if (!event)
-    return null;
-  return {
-    name: String(fm["name"] ?? path.basename(relPath, ".md")),
-    event: String(event),
-    condition: String(fm["condition"] ?? ""),
-    action: String(fm["action"] ?? "")
-  };
-}
-function loadFolderDirect(wikiRoot, folder, parser) {
-  const results = {};
-  const full = path.join(wikiRoot, folder);
-  if (!fs2.existsSync(full))
-    return results;
-  function walk(dir) {
-    let entries;
-    try {
-      entries = fs2.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const entryPath = path.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        walk(entryPath);
-      } else if (entry.isFile() && entry.name.endsWith(".md")) {
-        const relPath = path.relative(wikiRoot, entryPath).replace(/\\/g, "/");
-        try {
-          const content = fs2.readFileSync(entryPath, "utf-8");
-          const parsed = parser(relPath, content);
-          if (parsed !== null) {
-            const key = parsed.name ?? relPath;
-            results[key] = parsed;
-          }
-        } catch {
-        }
-      }
-    }
-  }
-  walk(full);
-  return results;
-}
-function loadRegistry(wikiRoot) {
-  const kinds = loadFolderDirect(wikiRoot, "_kinds", parseKind);
-  const rules = [];
-  const rulesDir = path.join(wikiRoot, "_rules");
-  if (fs2.existsSync(rulesDir)) {
-    const walk = (dir) => {
-      let entries;
-      try {
-        entries = fs2.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of [...entries].sort((a2, b2) => a2.name.localeCompare(b2.name))) {
-        const entryPath = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(entryPath);
-        } else if (entry.isFile() && entry.name.endsWith(".md")) {
-          try {
-            const content = fs2.readFileSync(entryPath, "utf-8");
-            const body = parsePage(content).body;
-            rules.push(...parseRulesTable(body));
-          } catch {
-          }
-        }
-      }
-    };
-    walk(rulesDir);
-  }
-  const views = loadFolderDirect(wikiRoot, "_views", parseView);
-  const triggers = loadFolderDirect(wikiRoot, "_triggers", parseTrigger);
-  return {
-    kinds,
-    rules,
-    views,
-    triggers,
-    known_kind_names: new Set(Object.keys(kinds))
-  };
-}
-var QUERY_BLOCK_RE;
-var init_schema_loader = __esm({
-  "../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/schema-loader.js"() {
-    "use strict";
-    init_pages();
-    QUERY_BLOCK_RE = /```cortex-query\n([\s\S]*?)\n```/;
   }
 });
 
@@ -28672,7 +28672,7 @@ var StdioServerTransport = class {
   }
 };
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/index.js
+// packages/mcp-servers/memory/dist/index.js
 import { homedir as homedir11 } from "node:os";
 import { join as join21 } from "node:path";
 
@@ -32276,7 +32276,7 @@ Anthropic.Beta = Beta;
 var { HUMAN_PROMPT, AI_PROMPT } = Anthropic;
 var sdk_default = Anthropic;
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/infrastructure/anthropic-llm-client.js
+// packages/memory/dist/infrastructure/anthropic-llm-client.js
 var DEFAULT_MAX_TOKENS = 1024;
 var DEFAULT_TEMPERATURE = 1;
 var DEFAULT_MODEL = "claude-3-5-haiku-20241022";
@@ -32324,7 +32324,7 @@ var AnthropicLlmClient = class {
   }
 };
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/narrative/handlers/sqlite-narrative-adapter.js
+// packages/memory/dist/narrative/handlers/sqlite-narrative-adapter.js
 function rowToRecord(row) {
   let tags;
   try {
@@ -32398,7 +32398,7 @@ var SqliteNarrativeAdapter = class {
   }
 };
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/narrative/handlers/pg-narrative-adapter.js
+// packages/memory/dist/narrative/handlers/pg-narrative-adapter.js
 function rowToRecord2(row) {
   let tags;
   const rawTags = row.tags;
@@ -32471,7 +32471,7 @@ var PgNarrativeAdapter = class {
   }
 };
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/sqlite-store.js
+// packages/memory/dist/remember/storage/sqlite-store.js
 import { createRequire } from "node:module";
 import Database from "better-sqlite3";
 var _require = createRequire(import.meta.url);
@@ -33687,10 +33687,10 @@ var SqliteMemoryStore = class {
   }
 };
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/pg-store.js
+// packages/memory/dist/remember/storage/pg-store.js
 import { Pool } from "pg";
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/pg-store-queries.js
+// packages/memory/dist/remember/storage/pg-store-queries.js
 async function getMemoriesForDomain(client, domain, minHeat = 0.05, limit = 50) {
   return (await client.query(`SELECT * FROM memories WHERE (domain = $1 OR is_global = TRUE) AND heat_base >= $2 ORDER BY heat_base DESC LIMIT $3`, [domain, minHeat, limit])).rows;
 }
@@ -33773,7 +33773,7 @@ async function callRecallMemories(client, params) {
   return result.rows;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/pg-store-stats.js
+// packages/memory/dist/remember/storage/pg-store-stats.js
 async function getRecentlyAccessedMemories(client, limit = 20, minAccessCount = 1) {
   return (await client.query("SELECT * FROM memories WHERE access_count >= $1 AND NOT is_stale ORDER BY last_accessed DESC LIMIT $2", [minAccessCount, limit])).rows;
 }
@@ -33836,7 +33836,7 @@ async function logConsolidation(client, data) {
   return row.id;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/pg-store-entities.js
+// packages/memory/dist/remember/storage/pg-store-entities.js
 function canonicalize(name) {
   return name.trim();
 }
@@ -33874,7 +33874,7 @@ async function getAllEntities(client, minHeat = 0.05, includeArchived = false) {
   return (await client.query(q2, [minHeat])).rows;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/pg-store-relationships.js
+// packages/memory/dist/remember/storage/pg-store-relationships.js
 async function updateRelationshipsWeightBatch(client, updates) {
   if (updates.length === 0)
     return 0;
@@ -33940,7 +33940,7 @@ async function reinforceOrCreateRelationship(client, sourceName, targetName, del
   }
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/pg-store-auxiliary.js
+// packages/memory/dist/remember/storage/pg-store-auxiliary.js
 async function getActiveProspectiveMemories(client) {
   const result = await client.query("SELECT * FROM prospective_memories WHERE is_active");
   return result.rows;
@@ -33958,7 +33958,7 @@ async function getSchemasForDomain(client, domain) {
   return (await client.query("SELECT * FROM schemas WHERE domain = $1 ORDER BY formation_count DESC", [domain])).rows;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/pg-store-rules.js
+// packages/memory/dist/remember/storage/pg-store-rules.js
 async function insertRule(client, data) {
   const result = await client.query(`INSERT INTO memory_rules
        (rule_type, scope, scope_value, condition, action, priority, is_active, created_at)
@@ -34011,7 +34011,7 @@ async function insertProspectiveMemory(client, data) {
   return row.id;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/pg-store.js
+// packages/memory/dist/remember/storage/pg-store.js
 var FLOAT32_BYTES_PER_ELEMENT = Float32Array.BYTES_PER_ELEMENT;
 function nowIso2() {
   return (/* @__PURE__ */ new Date()).toISOString();
@@ -34943,7 +34943,7 @@ var PgMemoryStore = class {
   }
 };
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/co-activation.js
+// packages/memory/dist/recall/co-activation.js
 var ENTITY_EXTRACTION_CAP = 10;
 var CO_ACTIVATION_TOP_K = 5;
 var ENTITY_PAIR_CAP = 5;
@@ -34981,7 +34981,7 @@ async function applyCoActivation(results, store, settings) {
   }
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/hopfield.js
+// packages/memory/dist/recall/hopfield.js
 var DEFAULT_BETA = 8;
 var DEFAULT_TOP_K = 10;
 function softmax(logits) {
@@ -35054,7 +35054,7 @@ function retrieve(queryEmbedding, matrix, beta = DEFAULT_BETA, topK = DEFAULT_TO
   return pairs.slice(0, topK);
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/hdc-encoder.js
+// packages/memory/dist/recall/hdc-encoder.js
 import * as crypto from "node:crypto";
 var HDC_DIM = 1024;
 var _SEED = 3735928559;
@@ -35200,7 +35200,7 @@ function computeHdcScores(queryText, memoryContents, dim = HDC_DIM, threshold = 
   return results;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/spreading-activation.js
+// packages/memory/dist/recall/spreading-activation.js
 var DEFAULT_DECAY = 0.65;
 var DEFAULT_THRESHOLD = 0.1;
 var DEFAULT_MAX_DEPTH = 3;
@@ -35322,7 +35322,7 @@ function buildEntityGraph(entities, relationships, minHeat = 0) {
   return { graph, nameIndex };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/knowledge-graph.js
+// packages/memory/dist/recall/knowledge-graph.js
 var MIN_NL_TOKEN_LEN = 4;
 var NL_STOP_WORDS = /* @__PURE__ */ new Set([
   "the",
@@ -35390,7 +35390,7 @@ function extractKeywords(text) {
   return [...new Set(tokens)];
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/dendritic-clusters.js
+// packages/memory/dist/recall/dendritic-clusters.js
 var BRANCH_ADMISSION_THRESHOLD = 0.3;
 var ENTITY_WEIGHT = 0.7;
 var TAG_WEIGHT = 0.3;
@@ -35431,7 +35431,7 @@ function findBestBranch(memoryEntities, memoryTags, branches, options) {
   return { branch: best, score: bestScore };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/bm25.js
+// packages/memory/dist/recall/bm25.js
 var STOPWORDS = /* @__PURE__ */ new Set([
   "the",
   "a",
@@ -35555,7 +35555,7 @@ function computeNgramScore(query, document) {
   return 0.4 * tri + 0.35 * bi + 0.25 * cw;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/heat.js
+// packages/memory/dist/recall/heat.js
 function computeSessionCoherence(heat, createdAt, bonus = 0.1, windowHours = 4) {
   if (!createdAt)
     return heat;
@@ -35580,7 +35580,7 @@ function computeRecencyBoost(createdAt, boostMax = 0.3, halflifeDays = 7, cutoff
   return boostMax * Math.exp(-elapsedDays * Math.LN2 / halflifeDays);
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/rrf.js
+// packages/memory/dist/recall/rrf.js
 var DEFAULT_RRF_K = 60;
 function rrfFuseIds(rankedLists, k2 = DEFAULT_RRF_K) {
   const scores = /* @__PURE__ */ new Map();
@@ -35645,7 +35645,7 @@ function wrrfFuseSignals(signals, weights, k2 = DEFAULT_RRF_K) {
   return entries;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/types.js
+// packages/memory/dist/recall/types.js
 var QueryIntent = {
   TEMPORAL: "temporal",
   CAUSAL: "causal",
@@ -35774,7 +35774,7 @@ var HierarchicalRecallResponseSchema = external_exports.object({
   }).optional()
 });
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/multi-signal-fusion.js
+// packages/memory/dist/recall/multi-signal-fusion.js
 function computeTextSignals(query, hotMems) {
   if (hotMems.length === 0)
     return { bm25: [], ngram: [] };
@@ -35851,7 +35851,7 @@ function applyStrategicOrdering(results, topFraction = 0.3, bottomFraction = 0.2
   ];
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/query-intent.js
+// packages/memory/dist/recall/query-intent.js
 var TEMPORAL_RE = /\b(when|happened|history|last time|recently|before|after|yesterday|today|earlier|previous|chronolog|timeline|sequence)\b/i;
 var CAUSAL_RE = /\b(why|because|caused|cause|root cause|reason|led to|resulted in|consequence|due to|fault|blame|origin|source of)\b/i;
 var SEMANTIC_RE = /\b(related|similar|like|about|associated|connected|relevant|pertaining|regarding|concerning|involves)\b/i;
@@ -36042,7 +36042,7 @@ function computeRetrievalWeights(primaryIntent, _scores) {
   return Object.fromEntries(Object.entries(weights).map(([k2, v2]) => [k2, Math.round(v2 * 1e3) / 1e3]));
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/rules.js
+// packages/memory/dist/recall/rules.js
 var DEFAULT_BOOST = 0.1;
 var DEFAULT_PENALTY = 0.1;
 function applyRules(results, rules, scoreField = "score") {
@@ -36076,7 +36076,7 @@ function applyRules(results, rules, scoreField = "score") {
   }).filter((result) => (result[scoreField] ?? 0) > 0);
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/recall-handler.js
+// packages/memory/dist/recall/recall-handler.js
 var ABLATE_HOPFIELD = process.env["CORTEX_ABLATE_HOPFIELD"] === "1";
 var ABLATE_HDC = process.env["CORTEX_ABLATE_HDC"] === "1";
 var ABLATE_SPREADING_ACTIVATION = process.env["CORTEX_ABLATE_SPREADING_ACTIVATION"] === "1";
@@ -36337,7 +36337,7 @@ async function recallHandler(args, store, embeddings = null, settings = DEFAULT_
   };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/vector-similarity.js
+// packages/memory/dist/recall/vector-similarity.js
 function norm(v2) {
   if (v2.length === 0)
     return 0;
@@ -36365,7 +36365,7 @@ function cosineSimilarity(a2, b2) {
   return dot(a2, b2) / (na * nb);
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/recall-hierarchical-handler.js
+// packages/memory/dist/recall/recall-hierarchical-handler.js
 var LW_SHORT_L0 = 0.2;
 var LW_SHORT_L1 = 0.3;
 var LW_SHORT_L2 = 0.5;
@@ -36558,7 +36558,7 @@ async function recallHierarchicalHandler(args, store, embeddings = null, setting
   };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/graph/types.js
+// packages/memory/dist/graph/types.js
 var CognitiveGraphNodeSchema = external_exports.object({
   id: external_exports.number().int().positive(),
   content: external_exports.string(),
@@ -36627,7 +36627,7 @@ var HeatPropagationConfigSchema = external_exports.object({
   initialActivation: external_exports.number().min(0).default(1)
 });
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/graph/node-traversal.js
+// packages/memory/dist/graph/node-traversal.js
 var DEFAULT_MAX_DEPTH2 = 3;
 var DEFAULT_MIN_WEIGHT = 0.05;
 function enqueueNeighbors(current, srGraph, visited, queue, minWeight) {
@@ -36771,7 +36771,7 @@ function springRelax(positions, srGraph, idxMap, iterations) {
   }
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/graph/navigation.js
+// packages/memory/dist/graph/navigation.js
 function ensureStartIncluded(startId, startMem, allMems) {
   if (allMems.some((m2) => m2.id === startId))
     return allMems;
@@ -36835,7 +36835,7 @@ function navigate(startMem, allMems, options = {}) {
   return response;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/graph/handlers/navigate-memory.js
+// packages/memory/dist/graph/handlers/navigate-memory.js
 async function handler(args, port) {
   if (!args || args["memory_id"] === void 0) {
     return { startMemoryId: 0, neighbors: [], total: 0, srGraphSize: 0 };
@@ -36880,7 +36880,7 @@ async function handler(args, port) {
   return response;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/fractal-drill-down.js
+// packages/memory/dist/recall/fractal-drill-down.js
 var DOMAIN_CANDIDATE_CAP2 = 500;
 var AVG_HEAT_FALLBACK = 0.5;
 var DEFAULT_CLUSTER_THRESHOLD2 = 0.6;
@@ -37061,7 +37061,7 @@ async function drillDownHandler(args, deps) {
   return { cluster_id: clusterId, children: clusterChildren, child_count: clusterChildren.length };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/recall.js
+// packages/mcp-servers/memory/dist/tools/recall.js
 var RECALL_MAX_RESULTS_CAP = 100;
 var RECALL_DEFAULT_RESULTS = 10;
 var RECALL_MIN_HEAT_DEFAULT = 0.05;
@@ -37167,7 +37167,7 @@ function registerRecallTools(server2, deps) {
   });
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/predictive-coding.js
+// packages/memory/dist/remember/predictive-coding.js
 var CODE_BLOCK_RE = /```[\s\S]*?```|`[^`\n]+`/g;
 var FILE_PATH_RE = /(?:\.{0,2}\/)?(?:[\w@.-]+\/)+[\w@.-]+\.\w+/g;
 var URL_RE = /https?:\/\/\S+/g;
@@ -37251,7 +37251,7 @@ function gateDecision(noveltyScore, threshold, bypass) {
   ];
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/write-gate.js
+// packages/memory/dist/remember/write-gate.js
 var SUCCESS_KW = /\b(fixed|resolved|succeeded|passed|completed|done)\b/i;
 var IMPORTANCE_BASELINE = 0.5;
 var IMPORTANCE_DELTA_ERROR = 0.2;
@@ -37342,7 +37342,7 @@ function buildRejectionResponse(score, importance) {
   };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/write-gate-calibration.js
+// packages/memory/dist/remember/write-gate-calibration.js
 var TARGET_ACCEPTANCE_RATE = 0.5;
 var EMA_DECAY = 0.95;
 var ADJUSTMENT_STEP = 0.02;
@@ -37418,7 +37418,7 @@ function effectiveThreshold(domain, defaultThreshold = 0.4) {
   return state?.threshold ?? defaultThreshold;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/types.js
+// packages/memory/dist/remember/types.js
 var DEFAULT_IMPORTANCE3 = 0.5;
 var DEFAULT_CALIBRATION_THRESHOLD = 0.4;
 var DEFAULT_ACCEPTANCE_EMA = 0.5;
@@ -37577,7 +37577,7 @@ var CalibrationStateSchema = external_exports.object({
   lastAdjustmentAt: external_exports.number().int().default(0)
 });
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/handlers/remember.js
+// packages/memory/dist/remember/handlers/remember.js
 var SURPRISE_BOOST_FACTOR = 0.3;
 var RECENT_CONTENTS_LIMIT = 10;
 var VECTOR_SEARCH_TOP_K = 5;
@@ -37821,7 +37821,7 @@ function extractEntityNamesFromContent(content) {
   return [...names].slice(0, ENTITY_EXTRACTION_CAP2);
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/handlers/forget.js
+// packages/memory/dist/remember/handlers/forget.js
 var FORGET_CONTENT_PREVIEW_CHARS = 80;
 async function forgetAsync(args, store) {
   const memoryId = args.memory_id;
@@ -37864,7 +37864,7 @@ async function forgetAsync(args, store) {
   };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/handlers/anchor.js
+// packages/memory/dist/remember/handlers/anchor.js
 var ANCHOR_REASON_TAG_MAX_CHARS = 40;
 var ANCHOR_CONTENT_PREVIEW_CHARS = 120;
 function buildAnchorTags(existingTags, reason) {
@@ -37915,7 +37915,7 @@ async function anchorAsync(args, store) {
   };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/handlers/rate-memory.js
+// packages/memory/dist/remember/handlers/rate-memory.js
 var CONFIDENCE_MIN_SAMPLES = 3;
 var CONFIDENCE_ROUNDING_FACTOR = 1e4;
 var RATE_CONTENT_PREVIEW_CHARS = 80;
@@ -37958,7 +37958,7 @@ async function rateMemoryAsync(args, store) {
   };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/remember.js
+// packages/mcp-servers/memory/dist/tools/remember.js
 function errorText2(tool, err) {
   const message = err instanceof Error ? err.message : String(err);
   return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
@@ -38028,12 +38028,12 @@ function registerRememberTools(server2, deps) {
   });
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/methodology.js
+// packages/mcp-servers/memory/dist/tools/methodology.js
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/domain-detector.js
+// packages/memory/dist/methodology/domain-detector.js
 var W_PROJECT = 0.5;
 var W_CONTENT = 0.3;
 var W_CATEGORY = 0.2;
@@ -38175,7 +38175,7 @@ function detectDomain(context, profiles) {
   return buildDetectionResult(domainScores);
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/methodology-engine.js
+// packages/memory/dist/methodology/methodology-engine.js
 var ALL_CATEGORIES = [
   "bug-fix",
   "feature",
@@ -38490,7 +38490,7 @@ function generateContext(domainId, profile) {
   return lines.join("\n");
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/handlers/query-methodology.js
+// packages/memory/dist/methodology/handlers/query-methodology.js
 function emptyResponse(opts) {
   return {
     domain: opts.domain ?? null,
@@ -38548,12 +38548,12 @@ function queryMethodology(args, profiles) {
   };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/handlers/detect-domain.js
+// packages/memory/dist/methodology/handlers/detect-domain.js
 function detectDomainHandler(args, profiles) {
   return detectDomain({ cwd: args.cwd, project: args.project, firstMessage: args.firstMessage }, profiles);
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/types.js
+// packages/memory/dist/methodology/types.js
 var PERSONA_NUMERIC_DIMENSIONS = [
   "activeReflective",
   "sensingIntuitive",
@@ -38575,7 +38575,7 @@ var PERSONA_DIMENSIONS = [
   ...PERSONA_CATEGORICAL_DIMENSIONS
 ];
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/linear-algebra.js
+// packages/memory/dist/methodology/linear-algebra.js
 function norm2(v2) {
   if (v2.length === 0)
     return 0;
@@ -38609,7 +38609,7 @@ function zeros(dim) {
   return new Array(dim).fill(0);
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/cognitive-profile.js
+// packages/memory/dist/methodology/cognitive-profile.js
 function clamp(v2) {
   return Math.max(-1, Math.min(1, v2));
 }
@@ -38696,7 +38696,7 @@ function composePersonas(vectors, weights) {
   return pv;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/handlers/rebuild-profiles.js
+// packages/memory/dist/methodology/handlers/rebuild-profiles.js
 function buildProjectDomainMap(existingProfiles, byProject) {
   const map = {};
   for (const [domainId, domain] of Object.entries(existingProfiles.domains)) {
@@ -38852,7 +38852,7 @@ function checkSkip(profiles, force = false) {
   return { skip: false };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/attribution-pipeline.js
+// packages/memory/dist/methodology/attribution-pipeline.js
 var SIGNAL_NAMES = [
   // 0-6: tool-use signals
   "tool:Read",
@@ -39046,7 +39046,7 @@ function traceAttribution(conversations, dictionary, profile) {
   return { nodes, edges };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/handlers/explore-features.js
+// packages/memory/dist/methodology/handlers/explore-features.js
 function buildSeedDictionary() {
   return {
     K: 8,
@@ -39155,7 +39155,7 @@ function exploreFeatures(args, profiles) {
   }
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/methodology.js
+// packages/mcp-servers/memory/dist/tools/methodology.js
 function methodologyDir() {
   return join(homedir(), ".claude", "methodology");
 }
@@ -39278,12 +39278,12 @@ function registerMethodologyTools(server2) {
   });
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/consolidation.js
+// packages/mcp-servers/memory/dist/tools/consolidation.js
 import { existsSync as existsSync2, readFileSync as readFileSync2, mkdirSync, writeFileSync } from "node:fs";
 import { join as join2 } from "node:path";
 import { homedir as homedir2 } from "node:os";
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/decay-cycle.js
+// packages/memory/dist/consolidation/decay-cycle.js
 function parseDatetime(value) {
   if (value == null)
     return null;
@@ -39318,7 +39318,7 @@ function computeEntityDecay(entities, now = null, opts = {}) {
   return updates;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/decay.js
+// packages/memory/dist/consolidation/stages/decay.js
 function groupByDomain(memories) {
   const groups = /* @__PURE__ */ new Map();
   for (const mem of memories) {
@@ -39351,7 +39351,7 @@ async function runDecayCycle(store, settings, memories = null) {
   };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/causal-graph.js
+// packages/memory/dist/consolidation/causal-graph.js
 var PMI_ZERO_SENTINEL = -10;
 var PMI_DECIMAL_PLACES = 4;
 var DEFAULT_INDEPENDENCE_THRESHOLD = 0.5;
@@ -39489,7 +39489,7 @@ function discoverCausalEdges(entityNames, coOccurrences, entityCounts, totalMemo
   return orientEdges(skeleton, coOccurrences, entityFirstSeen);
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/cls.js
+// packages/memory/dist/consolidation/stages/cls.js
 var EPISODIC_SAMPLE_CAP = 2e3;
 var SEMANTICS_SAMPLE_CAP = 2e3;
 var MIN_PATTERN_SIZE = 3;
@@ -39731,7 +39731,7 @@ async function runClsCycle(store, _settings, embeddings) {
   return stats;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/compression.js
+// packages/memory/dist/consolidation/stages/compression.js
 var CODE_BLOCK_RE2 = /```[\s\S]*?```/g;
 var FILE_PATH_RE2 = /(?:\.{0,2}\/)?(?:[\w@.-]+\/)+[\w@.-]+\.\w+/g;
 var ERROR_RE = /\b\w*(?:Error|Exception|Traceback)\b/;
@@ -39982,7 +39982,7 @@ async function runCompressionCycle(store, settings, embeddings, memories = null)
   return stats;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/homeostatic-health.js
+// packages/memory/dist/consolidation/homeostatic-health.js
 var EMPTY_HEALTH = {
   mean: 0,
   std: 0,
@@ -40118,7 +40118,7 @@ function computeDistributionHealthStreaming(valueChunks, targetMean) {
   return [healthFromMoments(m1, std, skew, kurtosis, targetMean), n3];
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/homeostatic-plasticity.js
+// packages/memory/dist/consolidation/homeostatic-plasticity.js
 var DEFAULT_COHORT_SIGMA = 0.5;
 var DEFAULT_COHORT_STRENGTH = 0.3;
 function detectHotCohort(heats, mean, std, cohortThresholdSigma = DEFAULT_COHORT_SIGMA) {
@@ -40141,7 +40141,7 @@ function applyCohortCorrection(heats, cohortIndices, targetMean, correctionStren
   });
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/homeostatic.js
+// packages/memory/dist/consolidation/stages/homeostatic.js
 var BIMODALITY_TRIGGER = 0.7;
 var TARGET_HEAT = 0.4;
 var FOLD_LOG_THRESHOLD = Math.log(2);
@@ -40401,7 +40401,7 @@ async function runHomeostaticCycle(store, memories = null) {
   }
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/ablation.js
+// packages/memory/dist/consolidation/ablation.js
 var Mechanism = {
   OSCILLATORY_CLOCK: "oscillatory_clock",
   CASCADE: "consolidation_cascade",
@@ -40435,7 +40435,7 @@ function isMechanismDisabled(mechanism) {
   return (typeof process !== "undefined" ? process.env[`CORTEX_ABLATE_${name}`] : void 0) === "1";
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/cascade-advancement.js
+// packages/memory/dist/consolidation/cascade-advancement.js
 var ConsolidationStage = {
   LABILE: "labile",
   EARLY_LTP: "early_ltp",
@@ -40559,7 +40559,7 @@ function computeAdvancementReadiness(currentStage, hoursInStage, dopamineLevelOr
   return [ready, nextStage, readinessScore];
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/cascade.js
+// packages/memory/dist/consolidation/stages/cascade.js
 var ADVANCEABLE_STAGES = ["labile", "early_ltp", "late_ltp", "reconsolidating"];
 var HEARTBEAT_SKIP_HOURS = 1;
 var TRANSITION_PREVIEW_CAP = 50;
@@ -40666,7 +40666,7 @@ async function runCascadeAdvancement(store) {
   }
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/microglial-pruning.js
+// packages/memory/dist/consolidation/microglial-pruning.js
 var ALPHA_THRESHOLD = 0.05;
 var TEMPORAL_HALF_LIFE_HOURS = 168;
 var MIN_ENTITY_HEAT = 0.02;
@@ -40765,7 +40765,7 @@ function identifyOrphanedEntities(entities, edgeEntityIds, memoryEntityIds, minH
   return entities.filter((ent) => isOrphanCandidate(ent, edgeEntityIds, memoryEntityIds, minHeat, minAccessCount)).map((ent) => ({ ...ent, archive_reason: ["orphaned", "cold", "low_access"] }));
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/pruning.js
+// packages/memory/dist/consolidation/stages/pruning.js
 function formatEdges(relationships) {
   return relationships.map((r2) => ({
     source_entity_id: r2["source_entity_id"],
@@ -40837,7 +40837,7 @@ async function runPruningCycle(store) {
   }
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/synaptic-plasticity-hebbian.js
+// packages/memory/dist/consolidation/synaptic-plasticity-hebbian.js
 var MAX_WEIGHT = 5;
 var MIN_WEIGHT = 0.01;
 var LTP_RATE = 0.05;
@@ -40913,7 +40913,7 @@ function applyHebbianUpdate(edges, coAccessedPairs, entityActivities, entityThre
   return edges.map((edge) => hebbianSingle(edge, coAccessedPairs, entityActivities, entityThresholds, hoursSinceLastUpdate, ltpRate, ltdRate));
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/plasticity.js
+// packages/memory/dist/consolidation/stages/plasticity.js
 var CO_ACCESS_SAMPLE_CAP = 2e3;
 async function selectCoAccessSample(store, memories) {
   if (memories === null) {
@@ -41001,7 +41001,7 @@ async function runPlasticityCycle(store, memories = null) {
   }
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/memify.js
+// packages/memory/dist/consolidation/stages/memify.js
 var PRUNE_HEAT_THRESHOLD = 0.01;
 var PRUNE_CONFIDENCE_THRESHOLD = 0.3;
 var STRENGTHEN_MIN_ACCESS = 5;
@@ -41146,7 +41146,7 @@ async function runMemifyCycle(store, memories = null) {
   return stats;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/concept-vocabulary.js
+// packages/memory/dist/wiki/concept-vocabulary.js
 var CONCEPT_MAP = {
   // ── Programming & DevOps ──────────────────────────────────────────
   memory: ["cache", "storage", "store", "recall", "retrieve", "persist"],
@@ -41231,7 +41231,7 @@ function buildReverseMap(conceptMap) {
 }
 var REVERSE_MAP = buildReverseMap(CONCEPT_MAP);
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/enrichment.js
+// packages/memory/dist/wiki/enrichment.js
 var QUESTION_TEMPLATES = [
   "What is {noun}?",
   "How does {noun} work?",
@@ -41292,7 +41292,7 @@ function buildEnrichedContent(content) {
   return content + "\n\n<!-- doc2query -->\n" + queries.join("\n");
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/sleep-compute.js
+// packages/memory/dist/consolidation/sleep-compute.js
 function dreamReplay(memories, maxMemories = 50) {
   const hot = [...memories].sort((a2, b2) => (b2["heat"] ?? 0) - (a2["heat"] ?? 0)).slice(0, maxMemories);
   const updates = [];
@@ -41441,7 +41441,7 @@ function runSleepCompute(memories, clusters = null, directory = "", periodLabel 
   };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/sleep.js
+// packages/memory/dist/consolidation/stages/sleep.js
 async function applyDreamReplay(store, embeddings, replayUpdates) {
   let count = 0;
   for (const upd of replayUpdates) {
@@ -41518,7 +41518,7 @@ async function runDeepSleep(store, embeddings, memories = null) {
   };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/two-stage-model.js
+// packages/memory/dist/consolidation/two-stage-model.js
 var HIPPOCAMPAL_RELEASE_THRESHOLD = 0.05;
 var REPLAY_TRANSFER_RATE = 0.02;
 var SCHEMA_ACCELERATION = 2.5;
@@ -41547,7 +41547,7 @@ function updateHippocampalDependency(currentDependency, replayCount, schemaMatch
   return Math.max(0, Math.round((currentDependency - delta) * 1e4) / 1e4);
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/transfer.js
+// packages/memory/dist/consolidation/stages/transfer.js
 async function runTwoStageTransfer(store) {
   const candidates = await store.getTransferCandidates(200);
   let transferred = 0;
@@ -41571,7 +41571,7 @@ async function runTwoStageTransfer(store) {
   return { transferred, released, scanned: candidates.length };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/handler.js
+// packages/memory/dist/consolidation/handler.js
 async function timed(fn) {
   const t0 = performance.now();
   try {
@@ -41679,7 +41679,7 @@ async function handler2(store, settings, embeddings, args = {}) {
   };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/consolidation.js
+// packages/mcp-servers/memory/dist/tools/consolidation.js
 var ROUNDING_FACTOR_4DP = 1e4;
 var EMA_ALPHA = 0.1;
 function methodologyDir2() {
@@ -41969,16 +41969,16 @@ function registerConsolidationTools(server2, deps) {
   });
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/management.js
-import { existsSync as existsSync16, readFileSync as readFileSync12 } from "node:fs";
-import { join as join19 } from "node:path";
-import { homedir as homedir9 } from "node:os";
+// packages/mcp-servers/memory/dist/tools/management.js
+import { existsSync as existsSync6, readFileSync as readFileSync4 } from "node:fs";
+import { join as join5 } from "node:path";
+import { homedir as homedir4 } from "node:os";
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/import/handler.js
+// packages/memory/dist/import/handler.js
 import { join as join3 } from "node:path";
 import { homedir as homedir3 } from "node:os";
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/import/heat.js
+// packages/memory/dist/import/heat.js
 var DEFAULT_HALF_LIFE_DAYS = 30;
 var DEFAULT_HEAT_FLOOR = 0.3;
 var LN2 = Math.LN2;
@@ -41999,7 +41999,7 @@ function computeAgeDays(timestamp, nowMs) {
   return Math.max(0, deltaMs / 864e5);
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/import/scanner.js
+// packages/memory/dist/import/scanner.js
 import { existsSync as existsSync3, openSync, readSync, fstatSync, closeSync, readdirSync, statSync as statSync2 } from "node:fs";
 var HEAD_BYTES = 32768;
 var TAIL_BYTES = 8192;
@@ -42104,7 +42104,7 @@ function discoverJsonlFiles(projectsDir, projectFilter) {
   return results;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/import/session-extractor.js
+// packages/memory/dist/import/session-extractor.js
 var DECISION_RE3 = /\b(decided|chose|switched|migrated|selected|picked|opted|going with|let'?s use|we should|must use|prefer|instead of|rather than|moved to|changed to)\b/i;
 var ERROR_RE2 = /\b(error|exception|traceback|failed|failure|bug|crash|broken|timeout|denied|rejected|not working|doesn'?t work|fix|fixed|resolved|debug|issue)\b/i;
 var ARCHITECTURE_RE = /\b(architecture|design|pattern|refactor|restructur|modular|decouple|abstract|layer|interface|protocol|clean architecture|solid|dependency injection|factory|observer|singleton)\b/i;
@@ -42250,7 +42250,7 @@ function extractSessionSummary(records) {
   };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/import/domain-detector.js
+// packages/memory/dist/import/domain-detector.js
 var CONTAINER_NAMES = /* @__PURE__ */ new Set([
   "developments",
   "projects",
@@ -42274,7 +42274,7 @@ function detectDomainFromPath(cwd) {
   return last !== void 0 ? last.toLowerCase() : "unknown";
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/import/types.js
+// packages/memory/dist/import/types.js
 var ImportRequestSchema = external_exports.object({
   project: external_exports.string().optional().default(""),
   domain: external_exports.string().optional().default(""),
@@ -42302,7 +42302,7 @@ var ImportResponseSchema = external_exports.object({
   error: external_exports.string().optional()
 });
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/import/handler.js
+// packages/memory/dist/import/handler.js
 var CLAUDE_DIR = join3(homedir3(), ".claude");
 var PROJECTS_DIR = join3(CLAUDE_DIR, "projects");
 var MAX_PREVIEW_ITEMS = 50;
@@ -42426,4202 +42426,13 @@ async function importHandler(args, rememberHandler, projectsDirOverride) {
   return buildResult(totalImported, totalGated, totalSkipped, sessionsScanned, jsonlFiles.length, dry_run, previewItems, errors);
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/shared/types.js
-var ConversationMetaSchema = external_exports.object({
-  sessionId: external_exports.string(),
-  slug: external_exports.string().nullable().optional(),
-  project: external_exports.string().default(""),
-  cwd: external_exports.string().nullable().optional(),
-  firstMessage: external_exports.string().nullable().optional(),
-  allText: external_exports.string().nullable().optional(),
-  keywords: external_exports.array(external_exports.string()).default([]),
-  startedAt: external_exports.string().nullable().optional(),
-  endedAt: external_exports.string().nullable().optional(),
-  messageCount: external_exports.number().int().default(0),
-  userCount: external_exports.number().int().default(0),
-  assistantCount: external_exports.number().int().default(0),
-  turnCount: external_exports.number().int().default(0),
-  toolsUsed: external_exports.array(external_exports.string()).default([]),
-  duration: external_exports.number().nullable().optional(),
-  fileSize: external_exports.number().int().nullable().optional()
-});
-var MemoryMetaSchema = external_exports.object({
-  file: external_exports.string().default(""),
-  path: external_exports.string().default(""),
-  project: external_exports.string().default(""),
-  name: external_exports.string().default(""),
-  description: external_exports.string().default(""),
-  type: external_exports.string().default(""),
-  body: external_exports.string().default(""),
-  modifiedAt: external_exports.string().default(""),
-  createdAt: external_exports.string().nullable().optional()
-});
-var GraphNodeSchema = external_exports.object({
-  id: external_exports.string(),
-  type: external_exports.enum(["domain", "entry-point", "recurring-pattern", "tool-preference"]),
-  label: external_exports.string().default(""),
-  domain: external_exports.string().default(""),
-  confidence: external_exports.number().nullable().optional(),
-  frequency: external_exports.number().int().nullable().optional(),
-  ratio: external_exports.number().nullable().optional(),
-  color: external_exports.string().default("#999999"),
-  size: external_exports.number().default(1)
-});
-var GraphEdgeSchema = external_exports.object({
-  source: external_exports.string(),
-  target: external_exports.string(),
-  type: external_exports.enum(["has-entry", "has-pattern", "uses-tool", "bridge"]),
-  weight: external_exports.number().default(1),
-  label: external_exports.string().nullable().optional()
-});
-var GraphDataSchema = external_exports.object({
-  nodes: external_exports.array(GraphNodeSchema).default([]),
-  edges: external_exports.array(GraphEdgeSchema).default([]),
-  blindSpotRegions: external_exports.array(external_exports.record(external_exports.unknown())).default([])
-});
-var TopSignalSchema = external_exports.object({
-  signal: external_exports.string(),
-  weight: external_exports.number()
-});
-var BehavioralFeatureSchema = external_exports.object({
-  index: external_exports.number().int(),
-  label: external_exports.string().default(""),
-  description: external_exports.string().default(""),
-  direction: external_exports.array(external_exports.number()).default([]),
-  topSignals: external_exports.array(TopSignalSchema).default([])
-});
-var SparseActivationSchema = external_exports.object({
-  weights: external_exports.record(external_exports.number()).default({}),
-  reconstructionError: external_exports.number().default(0)
-});
-var AttributionNodeSchema = external_exports.object({
-  id: external_exports.string(),
-  label: external_exports.string().default(""),
-  layer: external_exports.enum(["input", "extractor", "classifier", "feature", "aggregator", "output"]),
-  activation: external_exports.number().default(0)
-});
-var AttributionEdgeSchema = external_exports.object({
-  source: external_exports.string(),
-  target: external_exports.string(),
-  weight: external_exports.number().default(0)
-});
-var AttributionGraphSchema = external_exports.object({
-  nodes: external_exports.array(AttributionNodeSchema).default([]),
-  edges: external_exports.array(AttributionEdgeSchema).default([])
-});
-var PersonaVectorSchema = external_exports.object({
-  activeReflective: external_exports.number().default(0),
-  sensingIntuitive: external_exports.number().default(0),
-  sequentialGlobal: external_exports.number().default(0),
-  thoroughness: external_exports.number().default(0),
-  autonomy: external_exports.number().default(0),
-  verbosity: external_exports.number().default(0),
-  riskTolerance: external_exports.number().default(0),
-  focusScope: external_exports.number().default(0),
-  iterationSpeed: external_exports.number().default(0)
-});
-var PersistentFeatureSchema = external_exports.object({
-  label: external_exports.string(),
-  persistence: external_exports.number().default(0),
-  consistency: external_exports.number().default(0),
-  domains: external_exports.array(external_exports.string()).default([])
-});
-var FeatureDictionarySchema = external_exports.object({
-  K: external_exports.number().int(),
-  D: external_exports.number().int(),
-  sparsity: external_exports.number().int().default(0),
-  signalNames: external_exports.array(external_exports.string()).default([]),
-  features: external_exports.array(BehavioralFeatureSchema).default([]),
-  learnedFromSessions: external_exports.number().int().default(0)
-});
+// packages/memory/dist/codebase-analysis/handlers/seed-project.js
+import { existsSync as existsSync5 } from "node:fs";
+import { basename as basename3, resolve as resolvePath } from "node:path";
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/shared/types-profiles.js
-var EntryPointSchema = external_exports.object({
-  pattern: external_exports.string(),
-  frequency: external_exports.number().int().default(0),
-  confidence: external_exports.number().default(0),
-  exampleMessages: external_exports.array(external_exports.string()).default([])
-});
-var RecurringPatternSchema = external_exports.object({
-  pattern: external_exports.string(),
-  ngramSignature: external_exports.array(external_exports.string()).default([]),
-  frequency: external_exports.number().int().default(0),
-  sessionsObserved: external_exports.number().int().default(0),
-  confidence: external_exports.number().default(0)
-});
-var ToolPreferenceSchema = external_exports.object({
-  ratio: external_exports.number().default(0),
-  avgPerSession: external_exports.number().default(0)
-});
-var SessionShapeSchema = external_exports.object({
-  avgDuration: external_exports.number().default(0),
-  avgTurns: external_exports.number().default(0),
-  avgMessages: external_exports.number().default(0),
-  burstRatio: external_exports.number().default(0),
-  explorationRatio: external_exports.number().default(0),
-  dominantMode: external_exports.enum(["burst", "exploration", "mixed"]).default("mixed")
-});
-var CognitiveStyleSchema = external_exports.object({
-  activeReflective: external_exports.number().default(0),
-  sensingIntuitive: external_exports.number().default(0),
-  sequentialGlobal: external_exports.number().default(0),
-  problemDecomposition: external_exports.enum(["top-down", "bottom-up"]).default("top-down"),
-  explorationStyle: external_exports.enum(["depth-first", "breadth-first"]).default("depth-first"),
-  verificationBehavior: external_exports.enum(["test-first", "test-after", "no-test"]).default("no-test")
-});
-var GlobalStyleSchema = external_exports.object({
-  activeReflective: external_exports.number().default(0),
-  sensingIntuitive: external_exports.number().default(0),
-  sequentialGlobal: external_exports.number().default(0),
-  confidence: external_exports.number().default(0),
-  sessionCount: external_exports.number().int().default(0)
-});
-var BridgeSchema = external_exports.object({
-  toDomain: external_exports.string(),
-  pattern: external_exports.string().default(""),
-  weight: external_exports.number().default(0),
-  examples: external_exports.array(external_exports.record(external_exports.unknown())).default([]),
-  edgeCount: external_exports.number().int().default(0)
-});
-var BlindSpotSchema = external_exports.object({
-  type: external_exports.enum(["category", "tool", "pattern"]),
-  value: external_exports.string(),
-  severity: external_exports.enum(["high", "medium", "low"]).default("medium"),
-  description: external_exports.string().default(""),
-  suggestion: external_exports.string().default("")
-});
-var DetectionContextSchema = external_exports.object({
-  cwd: external_exports.string().nullable().optional(),
-  project: external_exports.string().nullable().optional(),
-  firstMessage: external_exports.string().nullable().optional()
-});
-var AlternativeDomainSchema = external_exports.object({
-  id: external_exports.string(),
-  confidence: external_exports.number().default(0)
-});
-var DetectionResultSchema = external_exports.object({
-  coldStart: external_exports.boolean().default(false),
-  domain: external_exports.string().nullable().optional(),
-  confidence: external_exports.number().default(0),
-  isNew: external_exports.boolean().default(false),
-  alternativeDomains: external_exports.array(AlternativeDomainSchema).default([]),
-  context: external_exports.string().nullable().optional()
-});
-var DomainProfileSchema = external_exports.object({
-  id: external_exports.string(),
-  label: external_exports.string().default(""),
-  projects: external_exports.array(external_exports.string()).default([]),
-  categories: external_exports.record(external_exports.number()).default({}),
-  topKeywords: external_exports.array(external_exports.string()).default([]),
-  entryPoints: external_exports.array(EntryPointSchema).default([]),
-  recurringPatterns: external_exports.array(RecurringPatternSchema).default([]),
-  toolPreferences: external_exports.record(ToolPreferenceSchema).default({}),
-  sessionShape: SessionShapeSchema.nullable().optional(),
-  connectionBridges: external_exports.array(BridgeSchema).default([]),
-  blindSpots: external_exports.array(BlindSpotSchema).default([]),
-  metacognitive: CognitiveStyleSchema.nullable().optional(),
-  confidence: external_exports.number().default(0),
-  sessionCount: external_exports.number().int().default(0),
-  lastUpdated: external_exports.string().nullable().optional(),
-  firstSeen: external_exports.string().nullable().optional()
-});
-var ProfilesV2Schema = external_exports.object({
-  version: external_exports.number().int().default(2),
-  updatedAt: external_exports.string().nullable().optional(),
-  globalStyle: GlobalStyleSchema.nullable().optional(),
-  domains: external_exports.record(DomainProfileSchema).default({})
-});
-var SessionLogEntrySchema = external_exports.object({
-  sessionId: external_exports.string(),
-  domain: external_exports.string().default(""),
-  timestamp: external_exports.string().default(""),
-  project: external_exports.string().nullable().optional(),
-  cwd: external_exports.string().nullable().optional(),
-  duration: external_exports.number().nullable().optional(),
-  turnCount: external_exports.number().int().default(0),
-  toolsUsed: external_exports.array(external_exports.string()).default([]),
-  category: external_exports.string().default(""),
-  entryKeywords: external_exports.array(external_exports.string()).default([])
-});
-var SessionLogSchema = external_exports.object({
-  sessions: external_exports.array(SessionLogEntrySchema).default([])
-});
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/shared/memory-types.js
-var MemorySchema = external_exports.object({
-  id: external_exports.number().int().nullable().optional(),
-  content: external_exports.string(),
-  embedding: external_exports.instanceof(Uint8Array).nullable().optional(),
-  tags: external_exports.array(external_exports.string()).default([]),
-  source: external_exports.string().default(""),
-  // "session", "tool", "user", "consolidation"
-  domain: external_exports.string().default(""),
-  directoryContext: external_exports.string().default(""),
-  createdAt: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
-  lastAccessed: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
-  // Thermodynamic properties
-  heat: external_exports.number().default(1),
-  surpriseScore: external_exports.number().default(0),
-  importance: external_exports.number().default(0.5),
-  emotionalValence: external_exports.number().default(0),
-  confidence: external_exports.number().default(1),
-  // Access tracking (metamemory)
-  accessCount: external_exports.number().int().default(0),
-  usefulCount: external_exports.number().int().default(0),
-  // Reconsolidation state
-  plasticity: external_exports.number().default(1),
-  stability: external_exports.number().default(0),
-  reconsolidationCount: external_exports.number().int().default(0),
-  lastReconsolidated: external_exports.string().datetime().nullable().optional(),
-  // Store type (CLS dual-store)
-  storeType: external_exports.enum(["episodic", "semantic"]).default("episodic"),
-  // Compression
-  compressed: external_exports.boolean().default(false),
-  compressionLevel: external_exports.number().int().default(0),
-  // 0=full, 1=gist, 2=tag
-  originalContent: external_exports.string().nullable().optional(),
-  // Protection
-  isProtected: external_exports.boolean().default(false),
-  isStale: external_exports.boolean().default(false),
-  isGlobal: external_exports.boolean().default(false),
-  // Visible to all projects when True
-  // Engram allocation
-  slotIndex: external_exports.number().int().nullable().optional(),
-  excitability: external_exports.number().default(1),
-  // Consolidation cascade (Kandel 2001, Dudai 2012)
-  consolidationStage: external_exports.string().default("labile"),
-  // labile/early_ltp/late_ltp/consolidated/reconsolidating
-  hoursInStage: external_exports.number().default(0),
-  replayCount: external_exports.number().int().default(0),
-  // Oscillatory context (Hasselmo 2005, Buzsaki 2015)
-  thetaPhaseAtEncoding: external_exports.number().default(0),
-  encodingStrength: external_exports.number().default(1),
-  // Pattern separation (Leutgeb 2007, Yassa & Stark 2011)
-  separationIndex: external_exports.number().default(0),
-  interferenceScore: external_exports.number().default(0),
-  // Schema integration (Tse 2007, Gilboa & Marlatte 2017)
-  schemaMatchScore: external_exports.number().default(0),
-  schemaId: external_exports.string().nullable().optional(),
-  // Hippocampal dependency (McClelland 1995)
-  hippocampalDependency: external_exports.number().default(1)
-});
-var EntitySchema = external_exports.object({
-  id: external_exports.number().int().nullable().optional(),
-  name: external_exports.string(),
-  type: external_exports.enum([
-    "file",
-    "function",
-    "variable",
-    "dependency",
-    "decision",
-    "error",
-    "solution",
-    "domain",
-    "pattern"
-  ]),
-  domain: external_exports.string().default(""),
-  createdAt: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
-  lastAccessed: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
-  heat: external_exports.number().default(1),
-  archived: external_exports.boolean().default(false)
-});
-var RelationshipSchema = external_exports.object({
-  id: external_exports.number().int().nullable().optional(),
-  sourceEntityId: external_exports.number().int(),
-  targetEntityId: external_exports.number().int(),
-  relationshipType: external_exports.string(),
-  // co_occurrence, imports, calls, caused_by, resolved_by, etc.
-  weight: external_exports.number().default(1),
-  isCausal: external_exports.boolean().default(false),
-  confidence: external_exports.number().default(1),
-  createdAt: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
-  lastReinforced: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
-  // Stochastic synaptic transmission (Markram 1998, Abbott & Regehr 2004)
-  releaseProbability: external_exports.number().default(0.5),
-  // p(transmission) per access [0,1]
-  facilitation: external_exports.number().default(0),
-  // Short-term facilitation accumulator
-  depression: external_exports.number().default(0)
-  // Short-term depression accumulator
-});
-var ProspectiveTriggerSchema = external_exports.object({
-  id: external_exports.number().int().nullable().optional(),
-  content: external_exports.string(),
-  triggerCondition: external_exports.string(),
-  triggerType: external_exports.enum(["directory_match", "keyword_match", "entity_match", "time_based"]),
-  targetDirectory: external_exports.string().nullable().optional(),
-  isActive: external_exports.boolean().default(true),
-  createdAt: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
-  triggeredAt: external_exports.string().datetime().nullable().optional(),
-  triggeredCount: external_exports.number().int().default(0)
-});
-var CheckpointSchema = external_exports.object({
-  id: external_exports.number().int().nullable().optional(),
-  sessionId: external_exports.string().default("default"),
-  directoryContext: external_exports.string().default(""),
-  currentTask: external_exports.string().default(""),
-  filesBeingEdited: external_exports.array(external_exports.string()).default([]),
-  keyDecisions: external_exports.array(external_exports.string()).default([]),
-  openQuestions: external_exports.array(external_exports.string()).default([]),
-  nextSteps: external_exports.array(external_exports.string()).default([]),
-  activeErrors: external_exports.array(external_exports.string()).default([]),
-  customContext: external_exports.string().default(""),
-  epoch: external_exports.number().int().default(0),
-  createdAt: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
-  isActive: external_exports.boolean().default(true)
-});
-var MemoryArchiveSchema = external_exports.object({
-  id: external_exports.number().int().nullable().optional(),
-  originalMemoryId: external_exports.number().int(),
-  content: external_exports.string(),
-  embedding: external_exports.instanceof(Uint8Array).nullable().optional(),
-  archivedAt: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
-  mismatchScore: external_exports.number().default(0),
-  archiveReason: external_exports.string().default("")
-  // "reconsolidation", "compression", "extinction"
-});
-var ConsolidationLogSchema = external_exports.object({
-  id: external_exports.number().int().nullable().optional(),
-  timestamp: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
-  memoriesAdded: external_exports.number().int().default(0),
-  memoriesUpdated: external_exports.number().int().default(0),
-  memoriesArchived: external_exports.number().int().default(0),
-  durationMs: external_exports.number().int().default(0)
-});
-var MemoryStatsSchema = external_exports.object({
-  totalMemories: external_exports.number().int().default(0),
-  episodicCount: external_exports.number().int().default(0),
-  semanticCount: external_exports.number().int().default(0),
-  activeCount: external_exports.number().int().default(0),
-  archivedCount: external_exports.number().int().default(0),
-  staleCount: external_exports.number().int().default(0),
-  protectedCount: external_exports.number().int().default(0),
-  avgHeat: external_exports.number().default(0),
-  totalEntities: external_exports.number().int().default(0),
-  totalRelationships: external_exports.number().int().default(0),
-  activeTriggers: external_exports.number().int().default(0),
-  lastConsolidation: external_exports.string().datetime().nullable().optional(),
-  // Consolidation stage distribution
-  labileCount: external_exports.number().int().default(0),
-  earlyLtpCount: external_exports.number().int().default(0),
-  lateLtpCount: external_exports.number().int().default(0),
-  consolidatedCount: external_exports.number().int().default(0),
-  reconsolidatingCount: external_exports.number().int().default(0),
-  avgInterferenceScore: external_exports.number().default(0),
-  schemaCount: external_exports.number().int().default(0),
-  distributionHealth: external_exports.number().default(0)
-});
-var RecallResultSchema2 = external_exports.object({
-  memoryId: external_exports.number().int(),
-  content: external_exports.string(),
-  score: external_exports.number().default(0),
-  heat: external_exports.number().default(0),
-  domain: external_exports.string().default(""),
-  tags: external_exports.array(external_exports.string()).default([]),
-  storeType: external_exports.string().default("episodic"),
-  createdAt: external_exports.string().default(""),
-  signals: external_exports.record(external_exports.number()).default({})
-});
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/shared/wiki-ir.js
-var ClaimTypeSchema = external_exports.enum([
-  "assertion",
-  "decision",
-  "observation",
-  "question",
-  "method",
-  "result",
-  "limitation",
-  "reference"
-]);
-var EvidenceRefSchema = external_exports.object({
-  kind: external_exports.enum(["file", "commit", "paper", "memory", "claim", "benchmark", "url"]),
-  target: external_exports.string(),
-  context: external_exports.string().nullable().optional()
-});
-var ClaimEventSchema = external_exports.object({
-  id: external_exports.number().int().nullable().optional(),
-  memoryId: external_exports.number().int().nullable().optional(),
-  sessionId: external_exports.string().default(""),
-  text: external_exports.string().min(1).max(2e3),
-  claimType: ClaimTypeSchema.default("assertion"),
-  entityIds: external_exports.array(external_exports.number().int()).default([]),
-  evidenceRefs: external_exports.array(EvidenceRefSchema).default([]),
-  confidence: external_exports.number().min(0).max(1).default(0.5),
-  supersedes: external_exports.number().int().nullable().optional(),
-  extractedAt: external_exports.string().datetime().nullable().optional()
-});
-var ConceptStatusSchema = external_exports.enum([
-  "candidate",
-  "saturating",
-  "promoted",
-  "merged",
-  "split",
-  "abandoned"
-]);
-var AxialSlotsSchema = external_exports.object({
-  conditions: external_exports.array(external_exports.string()).default([]),
-  context: external_exports.array(external_exports.string()).default([]),
-  strategies: external_exports.array(external_exports.string()).default([]),
-  consequences: external_exports.array(external_exports.string()).default([])
-});
-var ConceptSchema = external_exports.object({
-  id: external_exports.number().int().nullable().optional(),
-  label: external_exports.string().min(1).max(200),
-  status: ConceptStatusSchema.default("candidate"),
-  entityIds: external_exports.array(external_exports.number().int()).default([]),
-  groundingMemoryIds: external_exports.array(external_exports.number().int()).default([]),
-  groundingClaimIds: external_exports.array(external_exports.number().int()).default([]),
-  properties: external_exports.record(external_exports.array(external_exports.string())).default({}),
-  axialSlots: AxialSlotsSchema.default({}),
-  saturationRate: external_exports.number().default(1),
-  saturationStreak: external_exports.number().int().default(0),
-  firstSeenAt: external_exports.string().datetime().nullable().optional(),
-  lastPropertyAt: external_exports.string().datetime().nullable().optional(),
-  promotedPageId: external_exports.number().int().nullable().optional(),
-  mergedIntoId: external_exports.number().int().nullable().optional(),
-  splitIntoIds: external_exports.array(external_exports.number().int()).default([])
-});
-var DraftStatusSchema = external_exports.enum(["pending", "approved", "rejected", "published"]);
-var SectionSchema = external_exports.object({
-  heading: external_exports.string(),
-  body: external_exports.string(),
-  claimIds: external_exports.array(external_exports.number().int()).default([])
-});
-var ProvenanceSchema = external_exports.object({
-  sourceType: external_exports.enum(["concept", "memory", "user", "claim-set"]).default("concept"),
-  sourceIds: external_exports.array(external_exports.number().int()).default([]),
-  synthesisModel: external_exports.string().nullable().optional(),
-  synthesisPromptHash: external_exports.string().nullable().optional(),
-  generatedAt: external_exports.string().datetime().nullable().optional()
-});
-var DraftPageSchema = external_exports.object({
-  id: external_exports.number().int().nullable().optional(),
-  conceptId: external_exports.number().int().nullable().optional(),
-  memoryId: external_exports.number().int().nullable().optional(),
-  title: external_exports.string().min(1).max(300),
-  kind: external_exports.string(),
-  lead: external_exports.string().max(500).default(""),
-  sections: external_exports.array(SectionSchema).default([]),
-  frontmatter: external_exports.record(external_exports.unknown()).default({}),
-  provenance: ProvenanceSchema.default({}),
-  confidence: external_exports.number().min(0).max(1).default(0.5),
-  status: DraftStatusSchema.default("pending")
-});
-var PageStatusSchema = external_exports.enum(["seedling", "budding", "evergreen"]);
-var LifecycleStateSchema = external_exports.enum(["active", "area", "archived", "evergreen"]);
-var ApprovedPageSchema = external_exports.object({
-  id: external_exports.number().int().nullable().optional(),
-  memoryId: external_exports.number().int().nullable().optional(),
-  conceptId: external_exports.number().int().nullable().optional(),
-  relPath: external_exports.string(),
-  slug: external_exports.string(),
-  kind: external_exports.string(),
-  title: external_exports.string(),
-  domain: external_exports.string().default(""),
-  domains: external_exports.array(external_exports.string()).default([]),
-  tags: external_exports.array(external_exports.string()).default([]),
-  audience: external_exports.array(external_exports.string()).default([]),
-  requires: external_exports.array(external_exports.string()).default([]),
-  status: PageStatusSchema.default("seedling"),
-  lifecycleState: LifecycleStateSchema.default("active"),
-  supersedes: external_exports.string().nullable().optional(),
-  supersededBy: external_exports.string().nullable().optional(),
-  verified: external_exports.string().nullable().optional(),
-  lead: external_exports.string(),
-  sections: external_exports.array(SectionSchema).default([]),
-  bodyHash: external_exports.string().default(""),
-  // thermodynamic survival state
-  heat: external_exports.number().min(0).max(1).default(1),
-  accessCount: external_exports.number().int().default(0),
-  citationCount: external_exports.number().int().default(0),
-  backlinkCount: external_exports.number().int().default(0),
-  isStale: external_exports.boolean().default(false),
-  planted: external_exports.string().datetime().nullable().optional(),
-  tended: external_exports.string().datetime().nullable().optional()
-});
-var MemoSubjectSchema = external_exports.enum(["concept", "draft", "page", "claim"]);
-var CurationMemoSchema = external_exports.object({
-  id: external_exports.number().int().nullable().optional(),
-  subjectType: MemoSubjectSchema,
-  subjectId: external_exports.number().int(),
-  decision: external_exports.string(),
-  rationale: external_exports.string().default(""),
-  alternatives: external_exports.array(external_exports.record(external_exports.unknown())).default([]),
-  inputs: external_exports.record(external_exports.unknown()).default({}),
-  confidence: external_exports.number().min(0).max(1).default(0.5),
-  author: external_exports.string().default("system"),
-  createdAt: external_exports.string().datetime().nullable().optional()
-});
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/shared/categorizer.js
-var CATEGORY_RULES = {
-  "bug-fix": ["fix", "bug", "broken", "crash", "error", "issue", "regression", "failing"],
-  feature: ["add", "implement", "new", "build", "create", "introduce", "support"],
-  refactor: ["refactor", "restructure", "clean up", "simplify", "extract", "rename"],
-  research: ["research", "investigate", "explore", "evaluate", "compare", "analyze"],
-  config: ["config", "setup", "install", "environment", "settings", "dependency"],
-  docs: ["document", "readme", "changelog", "comment", "guide", "tutorial"],
-  debug: ["debug", "log", "trace", "inspect", "diagnose", "why is"],
-  architecture: ["architecture", "design", "pattern", "system", "module", "protocol"],
-  deployment: ["deploy", "ci/cd", "pipeline", "release", "docker", "publish", "production"],
-  testing: ["test", "spec", "assert", "mock", "coverage", "unit test"]
-};
-var SIGNAL_PATTERNS = (() => {
-  const map = /* @__PURE__ */ new Map();
-  for (const [cat, signals] of Object.entries(CATEGORY_RULES)) {
-    const compiled = signals.map((signal) => {
-      if (signal.includes(" ")) {
-        return { signal, weight: 1.5, regex: null };
-      }
-      return {
-        signal,
-        weight: 1,
-        regex: new RegExp(`\\b${signal}\\b`, "i")
-      };
-    });
-    map.set(cat, compiled);
-  }
-  return map;
-})();
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/shared/content-hardening.js
-var CONTENT_MAX_BYTES = 1 * 1024 * 1024;
-var BIDI_OVERRIDES = "\u202A\u202B\u202C\u202D\u202E\u2066\u2067\u2068\u2069";
-var STRIP_RE = new RegExp(`[\0-\b\v\f-\x7F-\x9F\uFEFF${BIDI_OVERRIDES}]`, "g");
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/reranker.js
-import { tmpdir } from "os";
-var FLASHRANK_CACHE_DIR = process.env["FLASHRANK_CACHE_DIR"] ?? tmpdir();
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/retrieval-dispatch.js
-var _SIMPLE_INTENTS = /* @__PURE__ */ new Set([
-  QueryIntent.GENERAL,
-  QueryIntent.SEMANTIC,
-  QueryIntent.TEMPORAL,
-  QueryIntent.CAUSAL,
-  QueryIntent.KNOWLEDGE_UPDATE
-]);
-var MIXED_INTENTS = /* @__PURE__ */ new Set([QueryIntent.MULTI_HOP]);
-var DEEP_INTENTS = /* @__PURE__ */ new Set([
-  QueryIntent.ENTITY,
-  QueryIntent.INSTRUCTION
-]);
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/recall-pipeline-stages.js
-function envFloat(name, defaultVal) {
-  if (typeof process === "undefined")
-    return defaultVal;
-  const raw = process.env[name];
-  if (raw === void 0 || raw === null)
-    return defaultVal;
-  const n3 = parseFloat(raw);
-  return isNaN(n3) ? defaultVal : n3;
-}
-var _HOPFIELD_BETA = envFloat("CORTEX_HOPFIELD_BETA", 0.3);
-var _HDC_BETA = envFloat("CORTEX_HDC_BETA", 0.2);
-var _SA_BETA = envFloat("CORTEX_SA_BETA", 0.25);
-var _DENDRITIC_DELTA = envFloat("CORTEX_DENDRITIC_DELTA", 0.1);
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/recall-pipeline.js
-function envFloat2(name, defaultVal) {
-  if (typeof process === "undefined")
-    return defaultVal;
-  const raw = process.env[name];
-  if (raw === void 0 || raw === null)
-    return defaultVal;
-  const n3 = parseFloat(raw);
-  return isNaN(n3) ? defaultVal : n3;
-}
-var _EMOTIONAL_RETRIEVAL_BETA = envFloat2("CORTEX_EMOTIONAL_RETRIEVAL_BETA", 0.2);
-var _MOOD_CONGRUENT_BETA = envFloat2("CORTEX_MOOD_CONGRUENT_BETA", 0.15);
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/pg-recall-weights.js
-var _PG_INTENT_OVERRIDES = {
-  [QueryIntent.TEMPORAL]: {
-    heat: 0.6,
-    recency: 0.2
-  },
-  [QueryIntent.KNOWLEDGE_UPDATE]: {
-    recency: 0.5,
-    heat: 0.5
-  },
-  [QueryIntent.EVENT_ORDER]: {
-    heat: 0.4,
-    recency: 0.3,
-    fts: 0.6
-  },
-  [QueryIntent.SUMMARIZATION]: {
-    heat: 0.5,
-    fts: 0.7
-  },
-  [QueryIntent.PREFERENCE]: {
-    fts: 0.8,
-    heat: 0.5
-  }
-};
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/pg-recall.js
-var _TYPE_INTENTS = {
-  [QueryIntent.INSTRUCTION]: "instruction",
-  [QueryIntent.PREFERENCE]: "preference"
-};
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/index.js
-var codebase_analysis_exports = {};
-__export(codebase_analysis_exports, {
-  CODE_GRAPH_TAG_PREFIX: () => CODE_GRAPH_TAG_PREFIX,
-  EXT_TO_LANG: () => EXT_TO_LANG,
-  HEAT_BY_TYPE: () => HEAT_BY_TYPE,
-  IMPORT_EXTRACTORS: () => IMPORT_EXTRACTORS,
-  McpConnectionError: () => McpConnectionError2,
-  SYMBOL_EXTRACTORS: () => SYMBOL_EXTRACTORS,
-  accommodateSchema: () => accommodateSchema,
-  buildCallEdges: () => buildCallEdges,
-  buildConversationRecord: () => buildConversationRecord,
-  buildMemoryContent: () => buildMemoryContent,
-  buildResolvedCallEdges: () => buildResolvedCallEdges,
-  buildTypeIndex: () => buildTypeIndex,
-  callUpstream: () => callUpstream,
-  changeImpactHandler: () => changeImpactHandler,
-  changeImpactSchema: () => schema6,
-  classifySchemaMatch: () => classifySchemaMatch,
-  codeGraphTag: () => codeGraphTag,
-  codebaseAnalyzeHandler: () => handler3,
-  codebaseAnalyzeSchema: () => schema2,
-  collectAllDiscoveries: () => collectAllDiscoveries,
-  computeDuration: () => computeDuration,
-  computeImpact: () => computeImpact,
-  computePredictionError: () => computePredictionError,
-  computeSchemaFreeEnergy: () => computeSchemaFreeEnergy,
-  computeSchemaMatch: () => computeSchemaMatch,
-  detectCommunities: () => detectCommunities,
-  detectLanguage: () => detectLanguage,
-  discoverAllMemories: () => discoverAllMemories,
-  discoverConversations: () => discoverConversations,
-  extractCallsGeneric: () => extractCallsGeneric,
-  extractCallsPerFunction: () => extractCallsPerFunction,
-  extractDocstring: () => extractDocstring,
-  extractGoDefinitions: () => extractGoDefinitions,
-  extractGoImports: () => extractGoImports,
-  extractImportsGo: () => extractImportsGo,
-  extractImportsJs: () => extractImportsJs,
-  extractImportsPython: () => extractImportsPython,
-  extractImportsRust: () => extractImportsRust,
-  extractImportsSwift: () => extractImportsSwift,
-  extractInheritance: () => extractInheritance,
-  extractJsDefinitions: () => extractJsDefinitions,
-  extractJsImports: () => extractJsImports,
-  extractMessageStats: () => extractMessageStats,
-  extractMetadataFields: () => extractMetadataFields,
-  extractPythonDefinitions: () => extractPythonDefinitions,
-  extractPythonImports: () => extractPythonImports,
-  extractRustDefinitions: () => extractRustDefinitions,
-  extractRustImports: () => extractRustImports,
-  extractSchemaFromCluster: () => extractSchemaFromCluster,
-  extractSwiftDefinitions: () => extractSwiftDefinitions,
-  extractSwiftImports: () => extractSwiftImports,
-  extractSymbolsGo: () => extractSymbolsGo,
-  extractSymbolsJs: () => extractSymbolsJs,
-  extractSymbolsPython: () => extractSymbolsPython,
-  extractSymbolsRust: () => extractSymbolsRust,
-  extractSymbolsSwift: () => extractSymbolsSwift,
-  extractUserText: () => extractUserText,
-  findBestMatchingSchema: () => findBestMatchingSchema,
-  findCachedGraph: () => findCachedGraph,
-  findChildren: () => findChildren,
-  generateLabel: () => generateLabel,
-  generatePredictions: () => generatePredictions,
-  groupByProject: () => groupByProject,
-  heatForTags: () => heatForTags,
-  ingestCodebaseHandler: () => handler4,
-  ingestCodebaseSchema: () => schema3,
-  ingestPrdHandler: () => handler5,
-  ingestPrdSchema: () => schema4,
-  isAvailable: () => isAvailable,
-  iterToolUses: () => iterToolUses,
-  makeImportInfo: () => makeImportInfo,
-  makeSchema: () => makeSchema,
-  makeSymbolDef: () => makeSymbolDef,
-  memoiseGraphPath: () => memoiseGraphPath,
-  mergeSchemas: () => mergeSchemas,
-  nodeText: () => nodeText,
-  normaliseMcpPayload: () => normaliseMcpPayload,
-  parseFile: () => parseFile,
-  parseFileAst: () => parseFileAst,
-  projectKey: () => projectKey,
-  readHeadTail: () => readHeadTail2,
-  resolveAllImports: () => resolveAllImports,
-  resolveImportToFile: () => resolveImportToFile,
-  resolveTypeReferences: () => resolveTypeReferences,
-  schemaFromDict: () => schemaFromDict,
-  schemaToDict: () => schemaToDict,
-  seedProjectHandler: () => handler6,
-  seedProjectSchema: () => schema5,
-  shouldMergeSchemas: () => shouldMergeSchemas,
-  shouldReviseSchema: () => shouldReviseSchema,
-  stageCicd: () => stageCicd,
-  stageConfigs: () => stageConfigs,
-  stageDocs: () => stageDocs,
-  stageEntryPoints: () => stageEntryPoints,
-  stageStructuralSummary: () => stageStructuralSummary,
-  walkType: () => walkType
-});
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/types.js
-function makeImportInfo(module2, names = [], isRelative = false) {
-  return { module: module2, names, isRelative };
-}
-function makeSymbolDef(name, kind2, signature = "", docstring = "") {
-  return { name, kind: kind2, signature, docstring };
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/codebase-parser.js
-import { createHash as createHash2 } from "node:crypto";
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/codebase-extractors.js
-var codebase_extractors_exports = {};
-__export(codebase_extractors_exports, {
-  IMPORT_EXTRACTORS: () => IMPORT_EXTRACTORS,
-  SYMBOL_EXTRACTORS: () => SYMBOL_EXTRACTORS,
-  extractDocstring: () => extractDocstring,
-  extractImportsGo: () => extractImportsGo,
-  extractImportsJs: () => extractImportsJs,
-  extractImportsPython: () => extractImportsPython,
-  extractImportsRust: () => extractImportsRust,
-  extractImportsSwift: () => extractImportsSwift,
-  extractSymbolsGo: () => extractSymbolsGo,
-  extractSymbolsJs: () => extractSymbolsJs,
-  extractSymbolsPython: () => extractSymbolsPython,
-  extractSymbolsRust: () => extractSymbolsRust,
-  extractSymbolsSwift: () => extractSymbolsSwift
-});
-var PY_IMPORT = /^import\s+([\w.]+)/gm;
-var PY_FROM_IMPORT = /^from\s+([\w.]+)\s+import\s+(.+?)$/gm;
-var JS_IMPORT = /^import\s+(?:\{[^}]*\}|[\w*]+(?:\s+as\s+\w+)?)\s+from\s+['"]([^'"]+)['"]/gm;
-var JS_REQUIRE = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
-var GO_IMPORT_SINGLE = /^import\s+"([^"]+)"/gm;
-var GO_IMPORT_BLOCK = /^import\s*\(([\s\S]*?)\)/gm;
-var GO_IMPORT_LINE = /"([^"]+)"/g;
-var RUST_USE = /^use\s+([\w:]+(?:::\{[^}]+\})?)/gm;
-var SWIFT_IMPORT = /^import\s+(\w+)/gm;
-var PY_DEF = /^\s*(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)/gm;
-var PY_CLASS = /^\s*class\s+(\w+)(?:\(([^)]*)\))?/gm;
-var JS_FUNC = /^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)/gm;
-var JS_CLASS = /^(?:export\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?/gm;
-var JS_INTERFACE = /^(?:export\s+)?interface\s+(\w+)/gm;
-var JS_TYPE = /^(?:export\s+)?type\s+(\w+)\s*=/gm;
-var GO_FUNC = /^func\s+(?:\([^)]*\)\s+)?(\w+)\s*\(([^)]*)\)/gm;
-var GO_TYPE = /^type\s+(\w+)\s+(struct|interface)\b/gm;
-var RUST_FN = /^(?:pub\s+)?(?:async\s+)?fn\s+(\w+)\s*(?:<[^>]*)?\s*\(([^)]*)\)/gm;
-var RUST_STRUCT = /^(?:pub\s+)?struct\s+(\w+)/gm;
-var RUST_ENUM = /^(?:pub\s+)?enum\s+(\w+)/gm;
-var RUST_TRAIT = /^(?:pub\s+)?trait\s+(\w+)/gm;
-var SWIFT_FUNC = /^\s*(?:public\s+|private\s+|internal\s+|open\s+|static\s+)*func\s+(\w+)\s*\(([^)]*)\)/gm;
-var SWIFT_CLASS = /^\s*(?:public\s+|private\s+|open\s+|final\s+)*class\s+(\w+)/gm;
-var SWIFT_STRUCT = /^\s*(?:public\s+|private\s+)*struct\s+(\w+)/gm;
-var SWIFT_PROTOCOL = /^\s*(?:public\s+|private\s+)*protocol\s+(\w+)/gm;
-var SWIFT_ENUM = /^\s*(?:public\s+|private\s+)*enum\s+(\w+)/gm;
-var PY_MODULE_DOC = /^(?:"""([\s\S]*?)"""|'''([\s\S]*?)''')/;
-var JS_MODULE_DOC = /^\/\*\*([\s\S]*?)\*\//;
-function allMatches(re2, content) {
-  const results = [];
-  const g2 = new RegExp(re2.source, re2.flags.includes("g") ? re2.flags : re2.flags + "g");
-  let m2;
-  while ((m2 = g2.exec(content)) !== null)
-    results.push(m2);
-  return results;
-}
-function extractImportsPython(content) {
-  const imports = [];
-  for (const m2 of allMatches(PY_IMPORT, content)) {
-    imports.push(makeImportInfo(m2[1]));
-  }
-  for (const m2 of allMatches(PY_FROM_IMPORT, content)) {
-    const module2 = m2[1];
-    const names = m2[2].split(",").map((n3) => n3.trim());
-    imports.push(makeImportInfo(module2, names, module2.startsWith(".")));
-  }
-  return imports;
-}
-function extractImportsJs(content) {
-  const imports = [];
-  for (const m2 of allMatches(JS_IMPORT, content)) {
-    const mod = m2[1];
-    imports.push(makeImportInfo(mod, [], mod.startsWith(".")));
-  }
-  for (const m2 of allMatches(JS_REQUIRE, content)) {
-    const mod = m2[1];
-    imports.push(makeImportInfo(mod, [], mod.startsWith(".")));
-  }
-  return imports;
-}
-function extractImportsGo(content) {
-  const imports = [];
-  for (const m2 of allMatches(GO_IMPORT_SINGLE, content)) {
-    imports.push(makeImportInfo(m2[1]));
-  }
-  for (const m2 of allMatches(GO_IMPORT_BLOCK, content)) {
-    const block = m2[1];
-    for (const lm of allMatches(GO_IMPORT_LINE, block)) {
-      imports.push(makeImportInfo(lm[1]));
-    }
-  }
-  return imports;
-}
-function extractImportsRust(content) {
-  return allMatches(RUST_USE, content).map((m2) => makeImportInfo(m2[1]));
-}
-function extractImportsSwift(content) {
-  return allMatches(SWIFT_IMPORT, content).map((m2) => makeImportInfo(m2[1]));
-}
-function extractSymbolsPython(content) {
-  const defs = [];
-  for (const m2 of allMatches(PY_DEF, content)) {
-    defs.push(makeSymbolDef(m2[1], "function", (m2[2] ?? "").slice(0, 120)));
-  }
-  for (const m2 of allMatches(PY_CLASS, content)) {
-    defs.push(makeSymbolDef(m2[1], "class", m2[2] ?? ""));
-  }
-  return defs;
-}
-function extractSymbolsJs(content) {
-  const defs = [];
-  for (const m2 of allMatches(JS_FUNC, content)) {
-    defs.push(makeSymbolDef(m2[1], "function", (m2[2] ?? "").slice(0, 120)));
-  }
-  for (const m2 of allMatches(JS_CLASS, content)) {
-    defs.push(makeSymbolDef(m2[1], "class", m2[2] ?? ""));
-  }
-  for (const m2 of allMatches(JS_INTERFACE, content)) {
-    defs.push(makeSymbolDef(m2[1], "interface"));
-  }
-  for (const m2 of allMatches(JS_TYPE, content)) {
-    defs.push(makeSymbolDef(m2[1], "type"));
-  }
-  return defs;
-}
-function extractSymbolsGo(content) {
-  const defs = [];
-  for (const m2 of allMatches(GO_FUNC, content)) {
-    defs.push(makeSymbolDef(m2[1], "function", (m2[2] ?? "").slice(0, 120)));
-  }
-  for (const m2 of allMatches(GO_TYPE, content)) {
-    defs.push(makeSymbolDef(m2[1], m2[2]));
-  }
-  return defs;
-}
-function extractSymbolsRust(content) {
-  const defs = [];
-  for (const m2 of allMatches(RUST_FN, content)) {
-    defs.push(makeSymbolDef(m2[1], "function", (m2[2] ?? "").slice(0, 120)));
-  }
-  for (const m2 of allMatches(RUST_STRUCT, content)) {
-    defs.push(makeSymbolDef(m2[1], "class"));
-  }
-  for (const m2 of allMatches(RUST_ENUM, content)) {
-    defs.push(makeSymbolDef(m2[1], "enum"));
-  }
-  for (const m2 of allMatches(RUST_TRAIT, content)) {
-    defs.push(makeSymbolDef(m2[1], "trait"));
-  }
-  return defs;
-}
-function extractSymbolsSwift(content) {
-  const defs = [];
-  for (const m2 of allMatches(SWIFT_FUNC, content)) {
-    defs.push(makeSymbolDef(m2[1], "function", (m2[2] ?? "").slice(0, 120)));
-  }
-  for (const m2 of allMatches(SWIFT_CLASS, content)) {
-    defs.push(makeSymbolDef(m2[1], "class"));
-  }
-  for (const m2 of allMatches(SWIFT_STRUCT, content)) {
-    defs.push(makeSymbolDef(m2[1], "class"));
-  }
-  for (const m2 of allMatches(SWIFT_PROTOCOL, content)) {
-    defs.push(makeSymbolDef(m2[1], "protocol"));
-  }
-  for (const m2 of allMatches(SWIFT_ENUM, content)) {
-    defs.push(makeSymbolDef(m2[1], "enum"));
-  }
-  return defs;
-}
-function extractDocstring(content, language2) {
-  if (language2 === "python") {
-    const m2 = PY_MODULE_DOC.exec(content);
-    if (m2)
-      return (m2[1] ?? m2[2] ?? "").trim().slice(0, 200);
-  } else if (language2 === "javascript" || language2 === "typescript") {
-    const m2 = JS_MODULE_DOC.exec(content);
-    if (m2) {
-      const text = m2[1].trim().replace(/^\s*\*\s?/gm, "");
-      return text.trim().slice(0, 200);
-    }
-  }
-  for (const line of content.split("\n").slice(0, 5)) {
-    const stripped = line.trim();
-    if (stripped.startsWith("#") && !stripped.startsWith("#!")) {
-      return stripped.replace(/^#+\s*/, "").trim().slice(0, 200);
-    }
-    if (stripped.startsWith("//")) {
-      return stripped.replace(/^\/+\s*/, "").trim().slice(0, 200);
-    }
-  }
-  return "";
-}
-var IMPORT_EXTRACTORS = {
-  python: extractImportsPython,
-  javascript: extractImportsJs,
-  typescript: extractImportsJs,
-  go: extractImportsGo,
-  rust: extractImportsRust,
-  swift: extractImportsSwift
-};
-var SYMBOL_EXTRACTORS = {
-  python: extractSymbolsPython,
-  javascript: extractSymbolsJs,
-  typescript: extractSymbolsJs,
-  go: extractSymbolsGo,
-  rust: extractSymbolsRust,
-  swift: extractSymbolsSwift
-};
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/codebase-parser.js
-var EXT_TO_LANG = {
-  ".py": "python",
-  ".js": "javascript",
-  ".ts": "typescript",
-  ".tsx": "typescript",
-  ".jsx": "javascript",
-  ".go": "go",
-  ".rs": "rust",
-  ".swift": "swift",
-  ".java": "java",
-  ".kt": "kotlin",
-  ".rb": "ruby",
-  ".cs": "csharp",
-  ".c": "c",
-  ".cpp": "cpp",
-  ".h": "c",
-  ".m": "objc"
-};
-function detectLanguage(path6) {
-  for (const [ext2, lang] of Object.entries(EXT_TO_LANG)) {
-    if (path6.endsWith(ext2))
-      return lang;
-  }
-  return "unknown";
-}
-function parseFile(path6, content) {
-  const { IMPORT_EXTRACTORS: IMPORT_EXTRACTORS2, SYMBOL_EXTRACTORS: SYMBOL_EXTRACTORS2, extractDocstring: extractDocstring2 } = codebase_extractors_exports;
-  const language2 = detectLanguage(path6);
-  const contentHash = createHash2("sha256").update(content, "utf8").digest("hex").slice(0, 16);
-  const importExtractor = IMPORT_EXTRACTORS2[language2] ?? ((_2) => []);
-  const symbolExtractor = SYMBOL_EXTRACTORS2[language2] ?? ((_2) => []);
-  const imports = importExtractor(content);
-  const definitions = symbolExtractor(content);
-  const docstring = extractDocstring2(content, language2);
-  return {
-    path: path6,
-    language: language2,
-    contentHash,
-    imports,
-    definitions,
-    docstring,
-    lineCount: content.split("\n").length,
-    callsPerFunction: {}
-  };
-}
-function buildMemoryContent(analysis) {
-  const parts = [`# File: ${analysis.path}`, `Language: ${analysis.language}`];
-  if (analysis.docstring) {
-    parts.push(`Purpose: ${analysis.docstring}`);
-  }
-  if (analysis.imports.length > 0) {
-    parts.push("", "## Imports");
-    for (const imp of analysis.imports.slice(0, 20)) {
-      if (imp.names.length > 0) {
-        parts.push(`- from ${imp.module} import ${imp.names.slice(0, 5).join(", ")}`);
-      } else {
-        parts.push(`- ${imp.module}`);
-      }
-    }
-  }
-  if (analysis.definitions.length > 0) {
-    parts.push("", "## Definitions");
-    for (const sym of analysis.definitions.slice(0, 30)) {
-      const sig = sym.signature ? `(${sym.signature})` : "";
-      parts.push(`- ${sym.kind}: ${sym.name}${sig}`);
-    }
-  }
-  parts.push(`
-${analysis.lineCount} lines`);
-  return parts.join("\n");
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/codebase-graph.js
-import { posix } from "node:path";
-function resolveImportToFile(module2, importingFile, knownFiles, isRelative = false) {
-  const candidates = _buildCandidates(module2, importingFile, isRelative);
-  for (const candidate of candidates) {
-    const normalized = posix.normalize(candidate);
-    if (knownFiles.has(normalized))
-      return normalized;
-  }
-  return null;
-}
-function _buildCandidates(module2, importingFile, isRelative) {
-  const candidates = [];
-  if (isRelative) {
-    const baseDir = posix.dirname(importingFile);
-    const clean = module2.replace(/^\.+/, "");
-    if (clean) {
-      const rel = clean.replace(/\./g, "/");
-      candidates.push(`${baseDir}/${rel}.py`);
-      candidates.push(`${baseDir}/${rel}/__init__.py`);
-    }
-  } else {
-    const asPath = module2.replace(/\./g, "/");
-    _addPathVariants(candidates, asPath);
-    const parts = asPath.split("/");
-    for (let i2 = 1; i2 < parts.length; i2++) {
-      _addPathVariants(candidates, parts.slice(i2).join("/"));
-    }
-  }
-  return candidates;
-}
-function _addPathVariants(candidates, base) {
-  candidates.push(`${base}.py`);
-  candidates.push(`${base}/__init__.py`);
-  candidates.push(`${base}.ts`);
-  candidates.push(`${base}.tsx`);
-  candidates.push(`${base}.js`);
-}
-function resolveAllImports(analyses) {
-  const knownFiles = new Set(analyses.map((a2) => a2.path));
-  const edges = [];
-  for (const analysis of analyses) {
-    for (const imp of analysis.imports) {
-      const target = resolveImportToFile(imp.module, analysis.path, knownFiles, imp.isRelative);
-      if (target && target !== analysis.path) {
-        edges.push([analysis.path, target]);
-      }
-    }
-  }
-  return edges;
-}
-function extractInheritance(analyses) {
-  const edges = [];
-  for (const analysis of analyses) {
-    for (const sym of analysis.definitions) {
-      if (sym.kind === "class" && sym.signature) {
-        const parents = _parseParentClasses(sym.signature);
-        for (const parent of parents) {
-          edges.push([sym.name, parent]);
-        }
-      }
-    }
-  }
-  return edges;
-}
-function _parseParentClasses(signature) {
-  const clean = signature.replace(/^\(|\)$/g, "");
-  if (!clean)
-    return [];
-  const parents = [];
-  for (const part of clean.split(",")) {
-    const name = part.trim().split("[")[0].trim();
-    if (name && !["object", "ABC", "Protocol"].includes(name)) {
-      parents.push(name);
-    }
-  }
-  return parents;
-}
-function buildCallEdges(analyses, callSites) {
-  const symbolToFile = /* @__PURE__ */ new Map();
-  for (const analysis of analyses) {
-    for (const sym of analysis.definitions) {
-      const baseName = sym.name.split(".").at(-1);
-      if (!symbolToFile.has(baseName)) {
-        symbolToFile.set(baseName, analysis.path);
-      }
-    }
-  }
-  const edges = [];
-  for (const [filePath, calls] of callSites) {
-    for (const callName of calls) {
-      const base = callName.split(".").at(-1).split("(")[0];
-      const targetFile = symbolToFile.get(base);
-      if (targetFile && targetFile !== filePath) {
-        edges.push([filePath, base, targetFile]);
-      }
-    }
-  }
-  return edges;
-}
-function buildResolvedCallEdges(analyses) {
-  const symbolToQname = /* @__PURE__ */ new Map();
-  for (const analysis of analyses) {
-    for (const sym of analysis.definitions) {
-      const base = sym.name.split(".").at(-1);
-      if (!symbolToQname.has(base)) {
-        symbolToQname.set(base, [analysis.path, sym.name]);
-      }
-    }
-  }
-  const edges = [];
-  for (const analysis of analyses) {
-    const perFn = analysis.callsPerFunction ?? {};
-    for (const [callerQname, callees] of Object.entries(perFn)) {
-      const seenPair = /* @__PURE__ */ new Set();
-      for (const callName of callees) {
-        let base = callName.split(".").at(-1) ?? "";
-        for (const c2 of ["(", "[", "<"]) {
-          const idx = base.indexOf(c2);
-          if (idx >= 0)
-            base = base.slice(0, idx);
-        }
-        base = base.trim();
-        if (!base)
-          continue;
-        const hit = symbolToQname.get(base);
-        if (!hit)
-          continue;
-        const [targetFile, targetQname] = hit;
-        const key = `${targetFile}::${targetQname}`;
-        if (seenPair.has(key))
-          continue;
-        seenPair.add(key);
-        edges.push([analysis.path, callerQname, targetFile, targetQname]);
-      }
-    }
-  }
-  return edges;
-}
-function detectCommunities(fileEdges, callEdges) {
-  const adj = _buildAdjacency(fileEdges, callEdges);
-  const nodes = /* @__PURE__ */ new Set();
-  for (const [a2, neighbors] of adj) {
-    nodes.add(a2);
-    for (const b2 of neighbors)
-      nodes.add(b2);
-  }
-  if (nodes.size < 2) {
-    const result = /* @__PURE__ */ new Map();
-    for (const n3 of nodes)
-      result.set(n3, 0);
-    return result;
-  }
-  return _labelPropagation(adj, nodes);
-}
-function _buildAdjacency(fileEdges, callEdges) {
-  const adj = /* @__PURE__ */ new Map();
-  function addEdge(a2, b2) {
-    if (!adj.has(a2))
-      adj.set(a2, /* @__PURE__ */ new Set());
-    if (!adj.has(b2))
-      adj.set(b2, /* @__PURE__ */ new Set());
-    adj.get(a2).add(b2);
-    adj.get(b2).add(a2);
-  }
-  for (const [src, tgt] of fileEdges)
-    addEdge(src, tgt);
-  for (const [src, , tgt] of callEdges)
-    addEdge(src, tgt);
-  return adj;
-}
-function _labelPropagation(adj, nodes) {
-  const label = /* @__PURE__ */ new Map();
-  let nextLabel = 0;
-  const sorted = [...nodes].sort();
-  for (const node of sorted) {
-    if (label.has(node))
-      continue;
-    const queue = [node];
-    const lbl = nextLabel++;
-    while (queue.length > 0) {
-      const cur = queue.pop();
-      if (label.has(cur))
-        continue;
-      label.set(cur, lbl);
-      for (const neighbor of adj.get(cur) ?? []) {
-        if (!label.has(neighbor))
-          queue.push(neighbor);
-      }
-    }
-  }
-  return label;
-}
-function computeImpact(targetFile, fileEdges, callEdges, maxDepth = 3) {
-  const dependents = /* @__PURE__ */ new Map();
-  const dependencies = /* @__PURE__ */ new Map();
-  function add3(map, k2, v2) {
-    if (!map.has(k2))
-      map.set(k2, /* @__PURE__ */ new Set());
-    map.get(k2).add(v2);
-  }
-  for (const [src, tgt] of fileEdges) {
-    add3(dependents, tgt, src);
-    add3(dependencies, src, tgt);
-  }
-  for (const [src, , tgt] of callEdges) {
-    add3(dependents, tgt, src);
-    add3(dependencies, src, tgt);
-  }
-  const upstream = _bfs(targetFile, dependents, maxDepth);
-  const downstream = _bfs(targetFile, dependencies, maxDepth);
-  return {
-    upstream: [...upstream].filter((f2) => f2 !== targetFile).sort(),
-    downstream: [...downstream].filter((f2) => f2 !== targetFile).sort()
-  };
-}
-function _bfs(start, adj, maxDepth) {
-  const visited = /* @__PURE__ */ new Set([start]);
-  let frontier = [start];
-  for (let depth = 0; depth < maxDepth; depth++) {
-    const next = [];
-    for (const node of frontier) {
-      for (const neighbor of adj.get(node) ?? []) {
-        if (!visited.has(neighbor)) {
-          visited.add(neighbor);
-          next.push(neighbor);
-        }
-      }
-    }
-    frontier = next;
-    if (frontier.length === 0)
-      break;
-  }
-  return visited;
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/codebase-type-resolver.js
-var _NOISE_TYPES = /* @__PURE__ */ new Set([
-  "Self",
-  "self",
-  "Any",
-  "String",
-  "Int",
-  "Bool",
-  "Double",
-  "Float",
-  "Array",
-  "Dictionary",
-  "Set",
-  "Optional",
-  "Result",
-  "Error",
-  "Void",
-  "View",
-  "Body",
-  "some",
-  "Type",
-  "Data",
-  "URL",
-  "Date",
-  "UUID",
-  "True",
-  "False",
-  "None",
-  "nil",
-  "List",
-  "Dict",
-  "Tuple",
-  "object",
-  "str",
-  "int",
-  "float",
-  "bool",
-  "bytes",
-  "dict",
-  "list",
-  "tuple",
-  "set",
-  "type",
-  "cls",
-  "args",
-  "kwargs"
-]);
-var _TYPE_KINDS = /* @__PURE__ */ new Set([
-  "class",
-  "protocol",
-  "enum",
-  "interface",
-  "trait",
-  "struct",
-  "type"
-]);
-var MIN_TYPE_NAME_LENGTH = 3;
-function buildTypeIndex(analyses) {
-  const index = /* @__PURE__ */ new Map();
-  for (const analysis of analyses) {
-    for (const sym of analysis.definitions) {
-      if (!_TYPE_KINDS.has(sym.kind))
-        continue;
-      const base = sym.name.split(".").at(-1);
-      if (_NOISE_TYPES.has(base) || base.length < MIN_TYPE_NAME_LENGTH)
-        continue;
-      if (!index.has(base))
-        index.set(base, analysis.path);
-    }
-  }
-  return index;
-}
-function resolveTypeReferences(analyses, fileContents) {
-  const typeIndex = buildTypeIndex(analyses);
-  const edges = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const analysis of analyses) {
-    const content = fileContents.get(analysis.path) ?? "";
-    if (!content)
-      continue;
-    for (const [typeName2, defFile] of typeIndex) {
-      if (defFile === analysis.path)
-        continue;
-      const re2 = new RegExp(`\\b${escapeRegex2(typeName2)}\\b`);
-      if (re2.test(content)) {
-        const key = `${analysis.path}::${defFile}`;
-        if (!seen.has(key)) {
-          edges.push([analysis.path, defFile]);
-          seen.add(key);
-        }
-      }
-    }
-  }
-  return edges;
-}
-function escapeRegex2(s2) {
-  return s2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/schema-extraction.js
-var _MIN_FORMATION_COUNT = 5;
-var _ENTITY_FREQUENCY_THRESHOLD = 0.4;
-var _HIGH_MATCH_THRESHOLD = 0.7;
-var _SCHEMA_MERGE_THRESHOLD = 0.6;
-var _RELATIONSHIP_FREQUENCY_THRESHOLD = 0.3;
-function makeSchema(overrides = {}) {
-  return {
-    schemaId: "",
-    domain: "",
-    label: "",
-    entitySignature: {},
-    relationshipTypes: [],
-    tagSignature: {},
-    consistencyThreshold: _HIGH_MATCH_THRESHOLD,
-    formationCount: 0,
-    assimilationCount: 0,
-    violationCount: 0,
-    lastUpdatedHours: 0,
-    ...overrides
-  };
-}
-function extractSchemaFromCluster(clusterMemories, domain = "", schemaId = "", entityThreshold = _ENTITY_FREQUENCY_THRESHOLD, minMemories = _MIN_FORMATION_COUNT) {
-  if (clusterMemories.length < minMemories)
-    return null;
-  const n3 = clusterMemories.length;
-  const entitySignature = _extractEntitySignature(clusterMemories, n3, entityThreshold);
-  const tagSignature = _extractTagSignature(clusterMemories, n3, entityThreshold);
-  const frequentPatterns = _extractRelationshipPatterns(clusterMemories, n3);
-  if (Object.keys(entitySignature).length === 0 && Object.keys(tagSignature).length === 0) {
-    return null;
-  }
-  return makeSchema({
-    schemaId,
-    domain,
-    label: generateLabel(entitySignature, tagSignature),
-    entitySignature,
-    relationshipTypes: frequentPatterns,
-    tagSignature,
-    formationCount: n3
-  });
-}
-function _extractEntitySignature(memories, n3, threshold) {
-  const entityCounts = /* @__PURE__ */ new Map();
-  for (const mem of memories) {
-    const seen = /* @__PURE__ */ new Set();
-    const entities = mem["entities"] ?? [];
-    for (const ent of entities) {
-      const name = typeof ent === "string" ? ent : ent["name"] ?? "";
-      if (name && !seen.has(name)) {
-        entityCounts.set(name, (entityCounts.get(name) ?? 0) + 1);
-        seen.add(name);
-      }
-    }
-  }
-  const result = {};
-  for (const [name, count] of entityCounts) {
-    if (count / n3 >= threshold)
-      result[name] = count / n3;
-  }
-  return result;
-}
-function _extractTagSignature(memories, n3, threshold) {
-  const tagCounts = /* @__PURE__ */ new Map();
-  for (const mem of memories) {
-    for (const tag of mem["tags"] ?? []) {
-      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
-    }
-  }
-  const result = {};
-  for (const [tag, count] of tagCounts) {
-    if (count / n3 >= threshold)
-      result[tag] = count / n3;
-  }
-  return result;
-}
-function _extractRelationshipPatterns(memories, n3) {
-  const relPatterns = /* @__PURE__ */ new Map();
-  for (const mem of memories) {
-    for (const rel of mem["relationships"] ?? []) {
-      if (typeof rel === "object" && rel !== null) {
-        const pattern = [
-          rel["source_type"] ?? "",
-          rel["relationship_type"] ?? "",
-          rel["target_type"] ?? ""
-        ];
-        if (pattern.every(Boolean)) {
-          const key = pattern.join("|");
-          relPatterns.set(key, (relPatterns.get(key) ?? 0) + 1);
-        }
-      }
-    }
-  }
-  const result = [];
-  for (const [key, count] of relPatterns) {
-    if (count / n3 >= _RELATIONSHIP_FREQUENCY_THRESHOLD) {
-      result.push(key.split("|"));
-    }
-  }
-  return result;
-}
-function generateLabel(entitySig, tagSig) {
-  const topEntities = Object.entries(entitySig).sort((a2, b2) => b2[1] - a2[1]).slice(0, 3);
-  const topTags = Object.entries(tagSig).sort((a2, b2) => b2[1] - a2[1]).slice(0, 2);
-  const parts = topEntities.map(([name]) => name);
-  if (topTags.length > 0) {
-    parts.push(`[${topTags.map(([t2]) => t2).join(", ")}]`);
-  }
-  return parts.length > 0 ? parts.join(" + ") : "unnamed_schema";
-}
-function jaccardSimilarity4(a2, b2) {
-  if (a2.size === 0 && b2.size === 0)
-    return 0;
-  let intersection2 = 0;
-  for (const item of a2)
-    if (b2.has(item))
-      intersection2++;
-  return intersection2 / (a2.size + b2.size - intersection2);
-}
-function shouldMergeSchemas(schemaA, schemaB) {
-  const entitiesA = new Set(Object.keys(schemaA.entitySignature));
-  const entitiesB = new Set(Object.keys(schemaB.entitySignature));
-  return jaccardSimilarity4(entitiesA, entitiesB) >= _SCHEMA_MERGE_THRESHOLD;
-}
-function _computeMergeWeights(schemaA, schemaB) {
-  const total = schemaA.formationCount + schemaB.formationCount || 1;
-  return [schemaA.formationCount / total, schemaB.formationCount / total, total];
-}
-function mergeSchemas(schemaA, schemaB, mergedId = "") {
-  const [wA, wB, total] = _computeMergeWeights(schemaA, schemaB);
-  const mergedEntities = _weightedMergeDicts(schemaA.entitySignature, schemaB.entitySignature, wA, wB);
-  const mergedTags = _weightedMergeDicts(schemaA.tagSignature, schemaB.tagSignature, wA, wB);
-  const allRels = [
-    .../* @__PURE__ */ new Set([
-      ...schemaA.relationshipTypes.map((r2) => r2.join("|")),
-      ...schemaB.relationshipTypes.map((r2) => r2.join("|"))
-    ])
-  ].map((s2) => s2.split("|"));
-  return makeSchema({
-    schemaId: mergedId || `merged_${schemaA.schemaId}_${schemaB.schemaId}`,
-    domain: schemaA.domain || schemaB.domain,
-    label: generateLabel(mergedEntities, mergedTags),
-    entitySignature: mergedEntities,
-    relationshipTypes: allRels,
-    tagSignature: mergedTags,
-    consistencyThreshold: Math.min(schemaA.consistencyThreshold, schemaB.consistencyThreshold),
-    formationCount: total,
-    assimilationCount: schemaA.assimilationCount + schemaB.assimilationCount,
-    violationCount: 0
-  });
-}
-function _weightedMergeDicts(dictA, dictB, wA, wB) {
-  const allKeys = /* @__PURE__ */ new Set([...Object.keys(dictA), ...Object.keys(dictB)]);
-  const result = {};
-  for (const key of allKeys) {
-    result[key] = (dictA[key] ?? 0) * wA + (dictB[key] ?? 0) * wB;
-  }
-  return result;
-}
-function schemaToDict(schema12) {
-  return {
-    schema_id: schema12.schemaId,
-    domain: schema12.domain,
-    label: schema12.label,
-    entity_signature: schema12.entitySignature,
-    relationship_types: schema12.relationshipTypes.map((r2) => [...r2]),
-    tag_signature: schema12.tagSignature,
-    consistency_threshold: schema12.consistencyThreshold,
-    formation_count: schema12.formationCount,
-    assimilation_count: schema12.assimilationCount,
-    violation_count: schema12.violationCount,
-    last_updated_hours: schema12.lastUpdatedHours
-  };
-}
-function schemaFromDict(data) {
-  return makeSchema({
-    schemaId: data["schema_id"] ?? "",
-    domain: data["domain"] ?? "",
-    label: data["label"] ?? "",
-    entitySignature: data["entity_signature"] ?? {},
-    relationshipTypes: (data["relationship_types"] ?? []).map((r2) => r2),
-    tagSignature: data["tag_signature"] ?? {},
-    consistencyThreshold: data["consistency_threshold"] ?? _HIGH_MATCH_THRESHOLD,
-    formationCount: data["formation_count"] ?? 0,
-    assimilationCount: data["assimilation_count"] ?? 0,
-    violationCount: data["violation_count"] ?? 0,
-    lastUpdatedHours: data["last_updated_hours"] ?? 0
-  });
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/schema-engine.js
-var _HIGH_MATCH_THRESHOLD2 = 0.7;
-var _MEDIUM_MATCH_THRESHOLD = 0.3;
-var _MAX_VIOLATIONS_BEFORE_REVISION = 10;
-var _SCHEMA_EMA_ALPHA = 0.1;
-function jaccardSimilarity5(a2, b2) {
-  if (a2.size === 0 && b2.size === 0)
-    return 0;
-  let intersection2 = 0;
-  for (const item of a2)
-    if (b2.has(item))
-      intersection2++;
-  return intersection2 / (a2.size + b2.size - intersection2);
-}
-function computeSchemaMatch(memoryEntities, memoryTags, schema12) {
-  if (Object.keys(schema12.entitySignature).length === 0 && Object.keys(schema12.tagSignature).length === 0) {
-    return 0;
-  }
-  const scores = [];
-  if (Object.keys(schema12.entitySignature).length > 0) {
-    const entityScore = _computeEntityMatch(memoryEntities, schema12);
-    scores.push(entityScore * 0.7);
-  }
-  if (Object.keys(schema12.tagSignature).length > 0) {
-    const tagJaccard = jaccardSimilarity5(new Set(memoryTags), new Set(Object.keys(schema12.tagSignature)));
-    scores.push(tagJaccard * 0.3);
-  }
-  return Math.min(1, scores.reduce((a2, b2) => a2 + b2, 0));
-}
-function _computeEntityMatch(memoryEntities, schema12) {
-  const memoryEntitySet = new Set(memoryEntities);
-  const schemaEntities = new Set(Object.keys(schema12.entitySignature));
-  if (memoryEntitySet.size === 0 && schemaEntities.size === 0)
-    return 0;
-  const overlap = [...memoryEntitySet].filter((e2) => schemaEntities.has(e2));
-  const weightedOverlap = overlap.reduce((sum, e2) => sum + (schema12.entitySignature[e2] ?? 0), 0);
-  const totalWeight = Object.values(schema12.entitySignature).reduce((a2, b2) => a2 + b2, 0);
-  return weightedOverlap / Math.max(totalWeight, 1e-10);
-}
-function classifySchemaMatch(matchScore) {
-  if (matchScore >= _HIGH_MATCH_THRESHOLD2)
-    return "assimilate";
-  if (matchScore >= _MEDIUM_MATCH_THRESHOLD)
-    return "normal";
-  return "accommodate";
-}
-function findBestMatchingSchema(memoryEntities, memoryTags, schemas) {
-  let bestSchema = null;
-  let bestScore = 0;
-  for (const schema12 of schemas) {
-    const score = computeSchemaMatch(memoryEntities, memoryTags, schema12);
-    if (score > bestScore) {
-      bestScore = score;
-      bestSchema = schema12;
-    }
-  }
-  if (bestScore < 0.1)
-    return [null, 0];
-  return [bestSchema, bestScore];
-}
-function accommodateSchema(schema12, newEntities, newTags, alpha = _SCHEMA_EMA_ALPHA) {
-  const updatedEntities = _emaUpdateSignature(schema12.entitySignature, newEntities, alpha);
-  const updatedTags = _emaUpdateSignature(schema12.tagSignature, newTags, alpha);
-  return makeSchema({
-    ...schema12,
-    label: generateLabel(updatedEntities, updatedTags),
-    entitySignature: updatedEntities,
-    tagSignature: updatedTags,
-    violationCount: schema12.violationCount + 1,
-    lastUpdatedHours: 0
-  });
-}
-function _emaUpdateSignature(current, observed, alpha) {
-  const updated = { ...current };
-  const observedSet = new Set(observed);
-  for (const item of observed) {
-    if (item in updated) {
-      updated[item] = (1 - alpha) * updated[item] + alpha * 1;
-    } else {
-      updated[item] = alpha;
-    }
-  }
-  for (const item of Object.keys(updated)) {
-    if (!observedSet.has(item)) {
-      updated[item] = updated[item] * (1 - alpha * 0.5);
-      if (updated[item] < 0.05)
-        delete updated[item];
-    }
-  }
-  return updated;
-}
-function shouldReviseSchema(schema12) {
-  const totalUsage = schema12.formationCount + schema12.assimilationCount;
-  if (totalUsage === 0)
-    return false;
-  const violationRatio = schema12.violationCount / Math.max(totalUsage, 1);
-  return schema12.violationCount >= _MAX_VIOLATIONS_BEFORE_REVISION || violationRatio > 0.4;
-}
-function generatePredictions(schema12) {
-  return { ...schema12.entitySignature };
-}
-function computePredictionError(predictions, observedEntities) {
-  const observedSet = new Set(observedEntities);
-  const errors = {};
-  for (const [entity, prob] of Object.entries(predictions)) {
-    if (!observedSet.has(entity))
-      errors[entity] = prob;
-  }
-  for (const entity of observedEntities) {
-    if (!(entity in predictions))
-      errors[entity] = -0.5;
-  }
-  return errors;
-}
-function computeSchemaFreeEnergy(predictionErrors) {
-  return Object.values(predictionErrors).reduce((sum, e2) => sum + e2 * e2, 0);
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/ast-extractors.js
-function nodeText(node, source) {
-  return source.slice(node.startIndex, node.endIndex).toString("utf8");
-}
-function findChildren(node, ...types2) {
-  return (node.children ?? []).filter((c2) => types2.includes(c2.type));
-}
-function walkType(node, nodeType) {
-  const results = [];
-  if (node.type === nodeType)
-    results.push(node);
-  for (const child of node.children ?? []) {
-    results.push(...walkType(child, nodeType));
-  }
-  return results;
-}
-function extractPythonImports(root, source) {
-  const imports = [];
-  for (const node of root.children ?? []) {
-    if (node.type === "import_statement") {
-      for (const nameNode of findChildren(node, "dotted_name")) {
-        imports.push(makeImportInfo(nodeText(nameNode, source)));
-      }
-    } else if (node.type === "import_from_statement") {
-      const modNode = node.childForFieldName("module_name");
-      const module2 = modNode ? nodeText(modNode, source) : "";
-      const names = findChildren(node, "dotted_name", "aliased_import").filter((n3) => n3 !== modNode).map((n3) => nodeText(n3, source));
-      const isRelative = module2.startsWith(".");
-      imports.push(makeImportInfo(module2, names, isRelative));
-    }
-  }
-  return imports;
-}
-function extractPythonDefinitions(root, source, parentClass = "") {
-  const defs = [];
-  for (const node of root.children ?? []) {
-    if (node.type === "function_definition") {
-      _extractPythonFunc(node, source, defs, parentClass);
-    } else if (node.type === "decorated_definition") {
-      _extractPythonDecorated(node, source, defs, parentClass);
-    } else if (node.type === "class_definition") {
-      _extractPythonClass(node, source, defs);
-    }
-  }
-  return defs;
-}
-function _extractPythonFunc(node, source, defs, parent) {
-  const nameNode = node.childForFieldName("name");
-  const paramsNode = node.childForFieldName("parameters");
-  const name = nameNode ? nodeText(nameNode, source) : "";
-  const sig = paramsNode ? nodeText(paramsNode, source).slice(0, 120) : "";
-  const kind2 = parent ? "method" : "function";
-  const fullName = parent ? `${parent}.${name}` : name;
-  defs.push(makeSymbolDef(fullName, kind2, sig));
-}
-function _extractPythonDecorated(node, source, defs, parent) {
-  for (const child of node.children ?? []) {
-    if (child.type === "function_definition" || child.type === "class_definition") {
-      const fake = { children: [child] };
-      defs.push(...extractPythonDefinitions(fake, source, parent));
-    }
-  }
-}
-function _extractPythonClass(node, source, defs) {
-  const nameNode = node.childForFieldName("name");
-  const superclassNode = node.childForFieldName("superclasses");
-  const clsName = nameNode ? nodeText(nameNode, source) : "";
-  const sig = superclassNode ? nodeText(superclassNode, source).slice(0, 120) : "";
-  defs.push(makeSymbolDef(clsName, "class", sig));
-  const body = node.childForFieldName("body");
-  if (body) {
-    defs.push(...extractPythonDefinitions(body, source, clsName));
-  }
-}
-function extractJsImports(root, source) {
-  const imports = [];
-  for (const node of walkType(root, "import_statement")) {
-    const src = node.childForFieldName("source");
-    if (src) {
-      const mod = nodeText(src, source).replace(/^['"]|['"]$/g, "");
-      imports.push(makeImportInfo(mod, [], mod.startsWith(".")));
-    }
-  }
-  return imports;
-}
-function extractJsDefinitions(root, source) {
-  const defs = [];
-  for (const node of root.children ?? []) {
-    _extractJsNode(node, source, defs, "");
-  }
-  return defs;
-}
-function _extractJsNode(node, source, defs, parent) {
-  const type = node.type;
-  if (type === "function_declaration" || type === "function") {
-    _extractJsFunc(node, source, defs, parent);
-  } else if (type === "class_declaration") {
-    _extractJsClass(node, source, defs);
-  } else if (type === "interface_declaration") {
-    const name = node.childForFieldName("name");
-    if (name)
-      defs.push(makeSymbolDef(nodeText(name, source), "interface"));
-  } else if (type === "type_alias_declaration") {
-    const name = node.childForFieldName("name");
-    if (name)
-      defs.push(makeSymbolDef(nodeText(name, source), "type"));
-  } else if (type === "export_statement") {
-    for (const child of node.children ?? []) {
-      _extractJsNode(child, source, defs, parent);
-    }
-  } else if (type === "method_definition") {
-    const name = node.childForFieldName("name");
-    if (name) {
-      const text = nodeText(name, source);
-      const full = parent ? `${parent}.${text}` : text;
-      defs.push(makeSymbolDef(full, "method"));
-    }
-  }
-}
-function _extractJsFunc(node, source, defs, parent) {
-  const nameNode = node.childForFieldName("name");
-  const paramsNode = node.childForFieldName("parameters");
-  if (nameNode) {
-    const name = nodeText(nameNode, source);
-    const full = parent ? `${parent}.${name}` : name;
-    const sig = paramsNode ? nodeText(paramsNode, source).slice(0, 120) : "";
-    defs.push(makeSymbolDef(full, "function", sig));
-  }
-}
-function _extractJsClass(node, source, defs) {
-  const nameNode = node.childForFieldName("name");
-  if (!nameNode)
-    return;
-  const clsName = nodeText(nameNode, source);
-  defs.push(makeSymbolDef(clsName, "class"));
-  const body = node.childForFieldName("body");
-  if (body) {
-    for (const child of body.children ?? []) {
-      _extractJsNode(child, source, defs, clsName);
-    }
-  }
-}
-var _CALL_NODE_TYPES = ["call", "call_expression"];
-function extractCallsGeneric(root, source) {
-  const calls = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const callType of _CALL_NODE_TYPES) {
-    for (const node of walkType(root, callType)) {
-      const func = node.childForFieldName("function");
-      if (!func)
-        continue;
-      const name = nodeText(func, source).trim();
-      if (name && !seen.has(name) && name.length < 100) {
-        calls.push(name);
-        seen.add(name);
-      }
-    }
-  }
-  return calls;
-}
-var _FUNCTION_NODE_TYPES = /* @__PURE__ */ new Set([
-  "function_definition",
-  // Python, Rust, Swift
-  "function_declaration",
-  // JS, TS, Go, Swift
-  "method_definition",
-  // JS, TS (class bodies)
-  "method_declaration",
-  // TS interfaces, Go method receivers
-  "function_signature"
-  // TS interfaces, Swift protocols
-]);
-var _CLASS_NODE_TYPES = /* @__PURE__ */ new Set([
-  "class_definition",
-  // Python
-  "class_declaration",
-  // JS, TS, Java, Kotlin
-  "impl_item"
-  // Rust impl ClassName { ... }
-]);
-function _calleeBasename(callNode, source) {
-  const fnRef = callNode.childForFieldName("function");
-  if (!fnRef)
-    return "";
-  let text = nodeText(fnRef, source).trim();
-  const dotIdx = text.lastIndexOf(".");
-  let base = dotIdx >= 0 ? text.slice(dotIdx + 1) : text;
-  for (const c2 of ["(", "[", "<"]) {
-    const idx = base.indexOf(c2);
-    if (idx >= 0)
-      base = base.slice(0, idx);
-  }
-  return base.trim();
-}
-function extractCallsPerFunction(root, source) {
-  const out = {};
-  function walk(node, classScope) {
-    for (const child of node.children ?? []) {
-      const ntype = child.type;
-      if (_CLASS_NODE_TYPES.has(ntype)) {
-        const nameNode = child.childForFieldName("name");
-        const cls = nameNode ? nodeText(nameNode, source) : classScope;
-        const body = child.childForFieldName("body") ?? child;
-        walk(body, cls || classScope);
-      } else if (ntype === "decorated_definition") {
-        walk(child, classScope);
-      } else if (_FUNCTION_NODE_TYPES.has(ntype)) {
-        const nameNode = child.childForFieldName("name");
-        const fnName = nameNode ? nodeText(nameNode, source) : "";
-        const body = child.childForFieldName("body") ?? child;
-        if (fnName) {
-          const qname = classScope ? `${classScope}.${fnName}` : fnName;
-          const calls = [];
-          const seen = /* @__PURE__ */ new Set();
-          for (const callType of _CALL_NODE_TYPES) {
-            for (const callNode of walkType(body, callType)) {
-              const base = _calleeBasename(callNode, source);
-              if (base && !seen.has(base) && base.length < 100) {
-                calls.push(base);
-                seen.add(base);
-              }
-            }
-          }
-          out[qname] = calls;
-        }
-        walk(body, classScope);
-      } else {
-        walk(child, classScope);
-      }
-    }
-  }
-  walk(root, "");
-  return out;
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/ast-extractors-extra.js
-function extractGoImports(root, source) {
-  const imports = [];
-  for (const node of walkType(root, "import_spec")) {
-    const pathNode = node.childForFieldName("path");
-    if (pathNode) {
-      const mod = nodeText(pathNode, source).replace(/^"|"$/g, "");
-      imports.push(makeImportInfo(mod));
-    }
-  }
-  return imports;
-}
-function extractGoDefinitions(root, source) {
-  const defs = [];
-  for (const node of root.children ?? []) {
-    if (node.type === "function_declaration") {
-      const name = node.childForFieldName("name");
-      const params = node.childForFieldName("parameters");
-      if (name) {
-        const sig = params ? nodeText(params, source).slice(0, 120) : "";
-        defs.push(makeSymbolDef(nodeText(name, source), "function", sig));
-      }
-    } else if (node.type === "method_declaration") {
-      const name = node.childForFieldName("name");
-      const receiver = node.childForFieldName("receiver");
-      if (name) {
-        const recv = _extractGoReceiver(receiver, source);
-        const full = recv ? `${recv}.${nodeText(name, source)}` : nodeText(name, source);
-        defs.push(makeSymbolDef(full, "method"));
-      }
-    } else if (node.type === "type_declaration") {
-      for (const spec of findChildren(node, "type_spec")) {
-        const n3 = spec.childForFieldName("name");
-        const t2 = spec.childForFieldName("type");
-        if (n3) {
-          const kind2 = t2 && (t2.type === "struct_type" || t2.type === "interface_type") ? t2.type.replace("_type", "") : "type";
-          defs.push(makeSymbolDef(nodeText(n3, source), kind2));
-        }
-      }
-    }
-  }
-  return defs;
-}
-function _extractGoReceiver(receiver, source) {
-  if (!receiver)
-    return "";
-  for (const child of walkType(receiver, "type_identifier")) {
-    return nodeText(child, source);
-  }
-  return "";
-}
-function extractSwiftImports(root, source) {
-  return walkType(root, "import_declaration").map((n3) => makeImportInfo(nodeText(n3, source).replace(/^import\s+/, "").trim()));
-}
-function extractSwiftDefinitions(root, source) {
-  const defs = [];
-  _extractSwiftNode(root, source, defs, "");
-  return defs;
-}
-var _SWIFT_KIND_MAP = {
-  class_declaration: "class",
-  struct_declaration: "class",
-  protocol_declaration: "protocol",
-  enum_declaration: "enum"
-};
-function _extractSwiftNode(node, source, defs, parent) {
-  const type = node.type;
-  if (type === "function_declaration") {
-    const name = node.childForFieldName("name");
-    if (name) {
-      const n3 = nodeText(name, source);
-      const full = parent ? `${parent}.${n3}` : n3;
-      defs.push(makeSymbolDef(full, parent ? "method" : "function"));
-    }
-  } else if (_SWIFT_KIND_MAP[type]) {
-    const name = node.childForFieldName("name");
-    if (name) {
-      const n3 = nodeText(name, source);
-      defs.push(makeSymbolDef(n3, _SWIFT_KIND_MAP[type]));
-      const body = node.childForFieldName("body");
-      if (body) {
-        for (const child of body.children ?? []) {
-          _extractSwiftNode(child, source, defs, n3);
-        }
-      }
-    }
-  } else {
-    for (const child of node.children ?? []) {
-      _extractSwiftNode(child, source, defs, parent);
-    }
-  }
-}
-function extractRustImports(root, source) {
-  return walkType(root, "use_declaration").map((n3) => makeImportInfo(nodeText(n3, source).replace(/^use\s+/, "").replace(/;$/, "").trim()));
-}
-function extractRustDefinitions(root, source) {
-  const defs = [];
-  for (const node of root.children ?? []) {
-    _extractRustNode(node, source, defs);
-  }
-  return defs;
-}
-function _extractRustNode(node, source, defs) {
-  const type = node.type;
-  if (type === "function_item") {
-    const name = node.childForFieldName("name");
-    if (name)
-      defs.push(makeSymbolDef(nodeText(name, source), "function"));
-  } else if (type === "struct_item") {
-    const name = node.childForFieldName("name");
-    if (name)
-      defs.push(makeSymbolDef(nodeText(name, source), "class"));
-  } else if (type === "enum_item") {
-    const name = node.childForFieldName("name");
-    if (name)
-      defs.push(makeSymbolDef(nodeText(name, source), "enum"));
-  } else if (type === "trait_item") {
-    const name = node.childForFieldName("name");
-    if (name)
-      defs.push(makeSymbolDef(nodeText(name, source), "trait"));
-  } else if (type === "impl_item") {
-    _extractRustImpl(node, source, defs);
-  }
-}
-function _extractRustImpl(node, source, defs) {
-  const typeNode = node.childForFieldName("type");
-  if (!typeNode)
-    return;
-  const implName = nodeText(typeNode, source);
-  const body = node.childForFieldName("body");
-  if (!body)
-    return;
-  for (const child of body.children ?? []) {
-    if (child.type === "function_item") {
-      const fnName = child.childForFieldName("name");
-      if (fnName) {
-        const full = `${implName}.${nodeText(fnName, source)}`;
-        defs.push(makeSymbolDef(full, "method"));
-      }
-    }
-  }
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/ast-parser.js
-import { createHash as createHash3 } from "node:crypto";
-var AST_SUPPORTED = /* @__PURE__ */ new Set(["python", "typescript", "javascript", "go", "rust", "swift"]);
-var CONTENT_HASH_HEX_CHARS = 16;
-var DOCSTRING_MAX_CHARS = 200;
-var _treeSitterChecked = false;
-var _treeSitterAvailable = false;
-function isAvailable() {
-  if (_treeSitterChecked)
-    return _treeSitterAvailable;
-  _treeSitterChecked = true;
-  try {
-    require_tree_sitter();
-    _treeSitterAvailable = true;
-  } catch {
-    _treeSitterAvailable = false;
-  }
-  return _treeSitterAvailable;
-}
-function parseFileAst(path6, content) {
-  const language2 = detectLanguage(path6);
-  const contentHash = createHash3("sha256").update(content).digest("hex").slice(0, CONTENT_HASH_HEX_CHARS);
-  const text = content.toString("utf8");
-  const extractorAndTree = _getExtractorAndTree(language2, content);
-  if (!extractorAndTree) {
-    return parseFile(path6, text);
-  }
-  const { extractor, tree } = extractorAndTree;
-  const root = tree.rootNode;
-  const { imports, definitions } = extractor(root, content);
-  const docstring = _extractModuleDoc(root, language2, content);
-  const callsPerFunction = extractCallsPerFunction(root, content);
-  return {
-    path: path6,
-    language: language2,
-    contentHash,
-    imports,
-    definitions,
-    docstring,
-    lineCount: text.split("\n").length,
-    callsPerFunction
-  };
-}
-function _getExtractorAndTree(language2, content) {
-  if (!AST_SUPPORTED.has(language2))
-    return null;
-  const extractor = _EXTRACTORS[language2];
-  if (!extractor)
-    return null;
-  if (!isAvailable())
-    return null;
-  try {
-    const TreeSitter = require_tree_sitter();
-    const parser = new TreeSitter();
-    const grammar = _loadGrammar(language2);
-    if (!grammar)
-      return null;
-    parser.setLanguage(grammar);
-    const tree = parser.parse(content);
-    return { extractor, tree };
-  } catch {
-    return null;
-  }
-}
-function _loadGrammar(language2) {
-  const pkgMap = {
-    python: "tree-sitter-python",
-    javascript: "tree-sitter-javascript",
-    typescript: "tree-sitter-typescript/typescript",
-    go: "tree-sitter-go",
-    rust: "tree-sitter-rust",
-    swift: "tree-sitter-swift"
-  };
-  const pkg = pkgMap[language2];
-  if (!pkg)
-    return null;
-  try {
-    return __require(pkg);
-  } catch {
-    return null;
-  }
-}
-function nodeText2(node, source) {
-  return source.slice(node.startIndex, node.endIndex).toString("utf8");
-}
-function _extractModuleDoc(root, language2, source) {
-  const children = root.children ?? [];
-  if (children.length === 0)
-    return "";
-  const first = children[0];
-  if (first === void 0)
-    return "";
-  if (language2 === "python") {
-    let target = first;
-    if (first.type === "expression_statement" && (first.children ?? []).length > 0) {
-      const child0 = first.children[0];
-      if (child0 !== void 0)
-        target = child0;
-    }
-    if (target.type === "string") {
-      return nodeText2(target, source).replace(/^["']+|["']+$/g, "").trim().slice(0, DOCSTRING_MAX_CHARS);
-    }
-  }
-  if (first.type === "comment") {
-    return nodeText2(first, source).replace(/^[/#* ]+/, "").trim().slice(0, DOCSTRING_MAX_CHARS);
-  }
-  return "";
-}
-function _extractPython(root, source) {
-  return {
-    imports: extractPythonImports(root, source),
-    definitions: extractPythonDefinitions(root, source),
-    calls: extractCallsGeneric(root, source)
-  };
-}
-function _extractJs(root, source) {
-  return {
-    imports: extractJsImports(root, source),
-    definitions: extractJsDefinitions(root, source),
-    calls: extractCallsGeneric(root, source)
-  };
-}
-function _extractGo(root, source) {
-  return {
-    imports: extractGoImports(root, source),
-    definitions: extractGoDefinitions(root, source),
-    calls: extractCallsGeneric(root, source)
-  };
-}
-function _extractSwift(root, source) {
-  return {
-    imports: extractSwiftImports(root, source),
-    definitions: extractSwiftDefinitions(root, source),
-    calls: extractCallsGeneric(root, source)
-  };
-}
-function _extractRust(root, source) {
-  return {
-    imports: extractRustImports(root, source),
-    definitions: extractRustDefinitions(root, source),
-    calls: extractCallsGeneric(root, source)
-  };
-}
-var _EXTRACTORS = {
-  python: _extractPython,
-  javascript: _extractJs,
-  typescript: _extractJs,
-  go: _extractGo,
-  swift: _extractSwift,
-  rust: _extractRust
-};
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/scanner-parse.js
-import { statSync as statSync3 } from "node:fs";
-function extractUserText(content) {
-  if (typeof content === "string")
-    return content;
-  if (Array.isArray(content)) {
-    return content.filter((b2) => typeof b2 === "object" && b2 !== null).filter((b2) => b2["type"] === "text").map((b2) => b2["text"] ?? "").join(" ");
-  }
-  return "";
-}
-function extractMetadataFields(rawRecords) {
-  let sessionId = null;
-  let slug = null;
-  let cwd = null;
-  let firstTimestamp = null;
-  let lastTimestamp = null;
-  for (const rec of rawRecords) {
-    if (rec["sessionId"] && !sessionId)
-      sessionId = rec["sessionId"];
-    if (rec["slug"] && !slug)
-      slug = rec["slug"];
-    if (rec["cwd"] && !cwd)
-      cwd = rec["cwd"];
-    const ts = rec["timestamp"];
-    if (ts) {
-      if (!firstTimestamp || ts < firstTimestamp)
-        firstTimestamp = ts;
-      if (!lastTimestamp || ts > lastTimestamp)
-        lastTimestamp = ts;
-    }
-  }
-  return { sessionId, slug, cwd, firstTimestamp, lastTimestamp };
-}
-function _extractToolsFromContent(content, toolsUsed) {
-  if (!Array.isArray(content))
-    return;
-  for (const block of content) {
-    if (typeof block === "object" && block !== null && block["type"] === "tool_use" && block["name"]) {
-      toolsUsed.add(block["name"]);
-    }
-  }
-}
-function extractMessageStats(rawRecords) {
-  let userCount = 0;
-  let assistantCount = 0;
-  const toolsUsed = /* @__PURE__ */ new Set();
-  let firstMessage = null;
-  const allTextParts = [];
-  let allTextLen = 0;
-  for (const rec of rawRecords) {
-    if (rec["type"] === "user") {
-      userCount++;
-      const msg = rec["message"] ?? {};
-      const content = msg["content"];
-      if (content && !rec["isMeta"] && !rec["toolUseResult"]) {
-        const text = extractUserText(content);
-        if (text && !text.startsWith("[Request interrupted")) {
-          if (!firstMessage)
-            firstMessage = text;
-          if (allTextLen < 4e3) {
-            const chunk = text.slice(0, 4e3 - allTextLen);
-            allTextParts.push(chunk);
-            allTextLen += chunk.length;
-          }
-        }
-      }
-    }
-    if (rec["type"] === "assistant") {
-      assistantCount++;
-      _extractToolsFromContent((rec["message"] ?? {})["content"], toolsUsed);
-    }
-  }
-  return {
-    userCount,
-    assistantCount,
-    toolsUsed,
-    firstMessage,
-    allText: allTextParts.join(" ") || null
-  };
-}
-function computeDuration(firstTs, lastTs) {
-  if (!firstTs || !lastTs)
-    return null;
-  try {
-    const t1 = new Date(firstTs).getTime();
-    const t2 = new Date(lastTs).getTime();
-    return t2 - t1;
-  } catch {
-    return null;
-  }
-}
-function _extractKeywords(text) {
-  const seen = /* @__PURE__ */ new Set();
-  const words = [];
-  for (const word of text.toLowerCase().split(/\W+/)) {
-    if (word.length >= 4 && !seen.has(word)) {
-      seen.add(word);
-      words.push(word);
-    }
-  }
-  return words.slice(0, 20);
-}
-function buildConversationRecord(meta, stats, filePath, projectName, fallbackId) {
-  const sessionId = meta.sessionId ?? fallbackId;
-  const allText = stats.allText;
-  let fileSize = null;
-  try {
-    fileSize = statSync3(filePath).size;
-  } catch {
-    fileSize = null;
-  }
-  return {
-    sessionId,
-    slug: meta.slug,
-    project: projectName,
-    cwd: meta.cwd,
-    firstMessage: stats.firstMessage,
-    allText,
-    keywords: _extractKeywords(allText ?? ""),
-    startedAt: meta.firstTimestamp,
-    endedAt: meta.lastTimestamp,
-    messageCount: stats.userCount + stats.assistantCount,
-    userCount: stats.userCount,
-    assistantCount: stats.assistantCount,
-    turnCount: stats.assistantCount,
-    toolsUsed: [...stats.toolsUsed],
-    duration: computeDuration(meta.firstTimestamp, meta.lastTimestamp),
-    fileSize
-  };
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/scanner.js
-import { existsSync as existsSync4, openSync as openSync2, readdirSync as readdirSync2, readSync as readSync2, statSync as statSync4 } from "node:fs";
-import { join as join4 } from "node:path";
-var HEAD_BYTES2 = 32768;
-var TAIL_BYTES2 = 8192;
-function _parseJsonlLines(lines) {
-  const records = [];
-  for (const line of lines) {
-    const trimmed = line.trim();
-    if (!trimmed)
-      continue;
-    try {
-      records.push(JSON.parse(trimmed));
-    } catch {
-    }
-  }
-  return records;
-}
-function readHeadTail2(filePath) {
-  if (!existsSync4(filePath))
-    return [];
-  try {
-    const stat = statSync4(filePath);
-    const fileSize = stat.size;
-    const fd = openSync2(filePath, "r");
-    const headSize = Math.min(HEAD_BYTES2, fileSize);
-    const headBuf = Buffer.alloc(headSize);
-    readSync2(fd, headBuf, 0, headSize, 0);
-    const headStr = headBuf.toString("utf8");
-    const headLines = headStr.split("\n");
-    if (headSize < fileSize)
-      headLines.pop();
-    let records = _parseJsonlLines(headLines);
-    if (fileSize > HEAD_BYTES2 + TAIL_BYTES2) {
-      const tailBuf = Buffer.alloc(TAIL_BYTES2);
-      readSync2(fd, tailBuf, 0, TAIL_BYTES2, fileSize - TAIL_BYTES2);
-      const tailStr = tailBuf.toString("utf8");
-      const tailLines = tailStr.split("\n");
-      tailLines.shift();
-      records = records.concat(_parseJsonlLines(tailLines));
-    }
-    try {
-      const { closeSync: closeSync2 } = __require("node:fs");
-      closeSync2(fd);
-    } catch {
-    }
-    return records;
-  } catch {
-    return [];
-  }
-}
-function* iterToolUses(filePath) {
-  if (!existsSync4(filePath))
-    return;
-  const { readFileSync: readFileSync13 } = __require("node:fs");
-  let content;
-  try {
-    content = readFileSync13(filePath, "utf8");
-  } catch {
-    return;
-  }
-  const lines = content.split("\n");
-  for (let lineNo = 0; lineNo < lines.length; lineNo++) {
-    const s2 = (lines[lineNo] ?? "").trim();
-    if (!s2)
-      continue;
-    let rec;
-    try {
-      rec = JSON.parse(s2);
-    } catch {
-      continue;
-    }
-    if (rec["type"] !== "assistant")
-      continue;
-    const msgContent = (rec["message"] ?? {})["content"];
-    if (!Array.isArray(msgContent))
-      continue;
-    for (const block of msgContent) {
-      if (typeof block !== "object" || block === null || block["type"] !== "tool_use")
-        continue;
-      const b2 = block;
-      yield {
-        name: b2["name"] ?? "",
-        input: b2["input"] ?? {},
-        line: lineNo + 1
-      };
-    }
-  }
-}
-function _formatTimestamp(ms) {
-  return new Date(ms).toISOString().replace("+00:00", "Z");
-}
-function _parseMemoryFile(filePath, projectName, fileName) {
-  let content;
-  try {
-    content = __require("node:fs").readFileSync(filePath, "utf8");
-  } catch {
-    return null;
-  }
-  if (!content)
-    return null;
-  const { meta, body } = _parseYamlFrontmatter(content);
-  let modifiedAt = null;
-  let createdAt = null;
-  try {
-    const st2 = statSync4(filePath);
-    modifiedAt = _formatTimestamp(st2.mtimeMs);
-    createdAt = _formatTimestamp(st2.birthtimeMs ?? st2.ctimeMs);
-  } catch {
-  }
-  return {
-    file: fileName,
-    path: filePath,
-    project: projectName,
-    name: meta["name"] ?? fileName.replace(".md", ""),
-    description: meta["description"] ?? "",
-    type: meta["type"] ?? "unknown",
-    body,
-    modifiedAt,
-    createdAt
-  };
-}
-function _parseYamlFrontmatter(content) {
-  if (!content.startsWith("---"))
-    return { meta: {}, body: content };
-  const end = content.indexOf("\n---", 3);
-  if (end < 0)
-    return { meta: {}, body: content };
-  const frontmatter = content.slice(3, end).trim();
-  const body = content.slice(end + 4).trim();
-  const meta = {};
-  for (const line of frontmatter.split("\n")) {
-    const colon = line.indexOf(":");
-    if (colon < 0)
-      continue;
-    const key = line.slice(0, colon).trim();
-    const val = line.slice(colon + 1).trim();
-    meta[key] = val;
-  }
-  return { meta, body };
-}
-function discoverAllMemories(claudeDir) {
-  const projectsDir = join4(claudeDir, "projects");
-  const memories = [];
-  let projectEntries;
-  try {
-    projectEntries = readdirSync2(projectsDir);
-  } catch {
-    return [];
-  }
-  for (const pdirName of projectEntries) {
-    const pdirPath = join4(projectsDir, pdirName);
-    try {
-      if (!statSync4(pdirPath).isDirectory())
-        continue;
-    } catch {
-      continue;
-    }
-    const memoryDir = join4(pdirPath, "memory");
-    let files;
-    try {
-      files = readdirSync2(memoryDir);
-    } catch {
-      continue;
-    }
-    for (const fileName of files) {
-      if (!fileName.endsWith(".md") || fileName === "MEMORY.md")
-        continue;
-      try {
-        const result = _parseMemoryFile(join4(memoryDir, fileName), pdirName, fileName);
-        if (result)
-          memories.push(result);
-      } catch (e2) {
-        process.stderr.write(`[methodology-agent] Failed to read ${join4(memoryDir, fileName)}: ${e2}
-`);
-      }
-    }
-  }
-  return memories;
-}
-function _parseConversationFile(filePath, projectName, fallbackId) {
-  const rawRecords = readHeadTail2(filePath);
-  if (rawRecords.length === 0)
-    return null;
-  const meta = extractMetadataFields(rawRecords);
-  const stats = extractMessageStats(rawRecords);
-  if (stats.userCount + stats.assistantCount === 0)
-    return null;
-  return buildConversationRecord(meta, stats, filePath, projectName, fallbackId);
-}
-function discoverConversations(claudeDir) {
-  const projectsDir = join4(claudeDir, "projects");
-  const conversations = [];
-  let projectEntries;
-  try {
-    projectEntries = readdirSync2(projectsDir);
-  } catch {
-    return [];
-  }
-  for (const pdirName of projectEntries) {
-    const pdirPath = join4(projectsDir, pdirName);
-    try {
-      if (!statSync4(pdirPath).isDirectory())
-        continue;
-    } catch {
-      continue;
-    }
-    let projEntries;
-    try {
-      projEntries = readdirSync2(pdirPath);
-    } catch {
-      continue;
-    }
-    for (const entryName of projEntries) {
-      if (!entryName.endsWith(".jsonl"))
-        continue;
-      if (entryName.includes("subagent"))
-        continue;
-      const filePath = join4(pdirPath, entryName);
-      if (filePath.includes("subagents"))
-        continue;
-      try {
-        const record3 = _parseConversationFile(filePath, pdirName, entryName.replace(".jsonl", ""));
-        if (record3)
-          conversations.push(record3);
-      } catch (e2) {
-        process.stderr.write(`[methodology-agent] Failed to read conversation ${filePath}: ${e2}
-`);
-      }
-    }
-  }
-  return conversations;
-}
-function groupByProject(conversations) {
-  const groups = {};
-  for (const conv of conversations) {
-    const proj = conv.project ?? "";
-    if (!groups[proj])
-      groups[proj] = [];
-    groups[proj].push(conv);
-  }
-  return groups;
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-helpers.js
-import { createHash as createHash4 } from "node:crypto";
-import { resolve, basename as basename2 } from "node:path";
-var CODE_GRAPH_TAG_PREFIX = "_code_graph:";
-var PROJECT_KEY_HASH_LENGTH = 8;
-function projectKey(projectPath) {
-  const p2 = resolve(projectPath);
-  const digest = createHash4("sha256").update(p2, "utf8").digest("hex").slice(0, PROJECT_KEY_HASH_LENGTH);
-  return `${basename2(p2)}-${digest}`;
-}
-function codeGraphTag(projectPath) {
-  return `${CODE_GRAPH_TAG_PREFIX}${projectKey(projectPath)}`;
-}
-function findCachedGraph(store, projectPath) {
-  const tag = codeGraphTag(projectPath);
-  let mems;
-  try {
-    mems = store.getAllMemoriesForDecay();
-  } catch {
-    return null;
-  }
-  for (const mem of mems) {
-    let rawTags = mem["tags"] ?? [];
-    if (typeof rawTags === "string") {
-      try {
-        rawTags = JSON.parse(rawTags);
-      } catch {
-        rawTags = [];
-      }
-    }
-    if (!Array.isArray(rawTags) || !rawTags.includes(tag))
-      continue;
-    const content = mem["content"] ?? "";
-    if (content.startsWith("graph_path=")) {
-      return content.slice("graph_path=".length).trim();
-    }
-  }
-  return null;
-}
-function memoiseGraphPath(store, projectPath, graphPath) {
-  const tag = codeGraphTag(projectPath);
-  const record3 = {
-    content: `graph_path=${graphPath}`,
-    tags: [tag, "_ingest", "code-graph"],
-    source: "ingest_codebase",
-    domain: "cortex-ingest",
-    directory_context: resolve(projectPath),
-    is_protected: true,
-    importance: 1,
-    heat: 1
-  };
-  try {
-    return store.insertMemory(record3);
-  } catch {
-    return null;
-  }
-}
-async function callUpstream(serverName, toolName, args, pool = null) {
-  if (pool === null) {
-    throw new McpConnectionError2(`callUpstream(${serverName}, ${toolName}) \u2014 McpClientPool not injected. Wire a real pool via the deps object at the composition root.`);
-  }
-  return pool.call(serverName, toolName, args);
-}
-function normaliseMcpPayload(payload) {
-  if (typeof payload !== "object" || payload === null)
-    return payload;
-  const p2 = payload;
-  if (!("content" in p2))
-    return payload;
-  const content = p2["content"];
-  if (!Array.isArray(content) || content.length === 0)
-    return payload;
-  const first = content[0];
-  if (first["type"] !== "text")
-    return payload;
-  const text = first["text"] ?? "";
-  try {
-    return JSON.parse(text);
-  } catch {
-    return { text };
-  }
-}
-var McpConnectionError2 = class extends Error {
-  constructor(message) {
-    super(message);
-    this.name = "McpConnectionError";
-  }
-};
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/codebase-analyze.js
-import { existsSync as existsSync5, readFileSync as readFileSync3, statSync as statSync6 } from "node:fs";
-import { extname } from "node:path";
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/codebase-analyze-helpers.js
-import { readdirSync as readdirSync3, statSync as statSync5 } from "node:fs";
-import { join as join5, relative } from "node:path";
-var CODEBASE_AGENT_CONTEXT = "codebase";
-var FILE_TAG_PREFIX = "file:";
-var HASH_TAG_PREFIX = "hash:";
-var CANDIDATE_MULTIPLIER = 10;
-var IGNORE_DIRS = /* @__PURE__ */ new Set([
-  ".git",
-  "node_modules",
-  "__pycache__",
-  ".venv",
-  "venv",
-  "dist",
-  "build",
-  ".next",
-  ".nuxt",
-  "target",
-  ".cargo",
-  "vendor",
-  ".tox",
-  "coverage",
-  ".mypy_cache",
-  ".pytest_cache"
-]);
-function* _walkDir(root) {
-  let entries;
-  try {
-    entries = readdirSync3(root, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    if (IGNORE_DIRS.has(entry.name))
-      continue;
-    const fullPath = join5(root, entry.name);
-    if (entry.isDirectory()) {
-      yield* _walkDir(fullPath);
-    } else if (entry.isFile()) {
-      yield fullPath;
-    }
-  }
-}
-function collectSourceFiles(root, languages, maxFiles, maxBytes) {
-  const langFilter = languages && languages.length > 0 ? new Set(languages) : null;
-  const candidateCap = Math.max(maxFiles * CANDIDATE_MULTIPLIER, maxFiles);
-  const candidates = [];
-  for (const p2 of _walkDir(root)) {
-    candidates.push(p2);
-    if (candidates.length >= candidateCap)
-      break;
-  }
-  candidates.sort();
-  const files = [];
-  for (const p2 of candidates) {
-    if (files.length >= maxFiles)
-      break;
-    const ext2 = p2.slice(p2.lastIndexOf(".")).toLowerCase();
-    const lang = EXT_TO_LANG[ext2];
-    if (!lang)
-      continue;
-    if (langFilter && !langFilter.has(lang))
-      continue;
-    try {
-      const st2 = statSync5(p2);
-      if (st2.size > maxBytes)
-        continue;
-    } catch {
-      continue;
-    }
-    files.push(p2);
-  }
-  return files;
-}
-function _parseTags(raw) {
-  if (Array.isArray(raw))
-    return raw;
-  if (typeof raw === "string") {
-    try {
-      return JSON.parse(raw);
-    } catch {
-      return [];
-    }
-  }
-  return [];
-}
-function _extractFileHash(tags) {
-  let filePath = "";
-  let contentHash = "";
-  for (const tag of tags) {
-    if (typeof tag === "string") {
-      if (tag.startsWith(FILE_TAG_PREFIX))
-        filePath = tag.slice(FILE_TAG_PREFIX.length);
-      else if (tag.startsWith(HASH_TAG_PREFIX))
-        contentHash = tag.slice(HASH_TAG_PREFIX.length);
-    }
-  }
-  return [filePath, contentHash];
-}
-function loadExistingHashes(store) {
-  const hashes = /* @__PURE__ */ new Map();
-  try {
-    const rows = store.getMemoriesByAgentContext(CODEBASE_AGENT_CONTEXT);
-    for (const row of rows) {
-      const memId = row.id;
-      const tags = _parseTags(row.tags);
-      const [fp, ch] = _extractFileHash(tags);
-      if (fp && ch)
-        hashes.set(fp, [memId, ch]);
-    }
-  } catch {
-  }
-  return hashes;
-}
-function markStale(store, memoryIds) {
-  if (memoryIds.length === 0)
-    return 0;
-  try {
-    for (const mid of memoryIds) {
-      store.markMemoryStale(mid, true);
-    }
-    return memoryIds.length;
-  } catch {
-    return 0;
-  }
-}
-var VALID_KINDS = /* @__PURE__ */ new Set([
-  "function",
-  "class",
-  "interface",
-  "type",
-  "enum",
-  "trait",
-  "protocol",
-  "constant",
-  "struct"
-]);
-async function _getOrCreateEntity(store, name, entityType, domain) {
-  try {
-    const existing = store.getEntityByNameAsync ? await store.getEntityByNameAsync(name) : store.getEntityByName(name);
-    if (existing)
-      return existing["id"];
-  } catch {
-  }
-  if (store.upsertEntityAsync) {
-    return store.upsertEntityAsync(name, entityType, domain);
-  }
-  return store.upsertEntity(name, entityType, domain);
-}
-async function _persistSymbolEntities(store, analysis, fileEid, domain) {
-  let entities = 0;
-  let relationships = 0;
-  for (const sym of analysis.definitions) {
-    const kind2 = VALID_KINDS.has(sym.kind) ? sym.kind : "function";
-    const symEid = await _getOrCreateEntity(store, sym.name, kind2, domain);
-    entities++;
-    try {
-      if (store.insertRelationshipAsync) {
-        await store.insertRelationshipAsync({
-          source_entity_id: fileEid,
-          target_entity_id: symEid,
-          relationship_type: "defines",
-          weight: 1
-        });
-      } else {
-        store.insertRelationship({
-          source_entity_id: fileEid,
-          target_entity_id: symEid,
-          relationship_type: "defines",
-          weight: 1
-        });
-      }
-      relationships++;
-    } catch (err) {
-      process.stderr.write(`[codebase-analyze] _persistSymbolEntities failed for ${sym.name}: ${err.message}
-`);
-    }
-  }
-  return [entities, relationships];
-}
-async function _persistImportEntities(store, analysis, fileEid, domain) {
-  let entities = 0;
-  let relationships = 0;
-  for (const imp of analysis.imports) {
-    const depEid = await _getOrCreateEntity(store, imp.module, "dependency", domain);
-    entities++;
-    try {
-      if (store.insertRelationshipAsync) {
-        await store.insertRelationshipAsync({
-          source_entity_id: fileEid,
-          target_entity_id: depEid,
-          relationship_type: "imports",
-          weight: 1
-        });
-      } else {
-        store.insertRelationship({
-          source_entity_id: fileEid,
-          target_entity_id: depEid,
-          relationship_type: "imports",
-          weight: 1
-        });
-      }
-      relationships++;
-    } catch (err) {
-      process.stderr.write(`[codebase-analyze] _persistImportEntities failed for ${imp.module}: ${err.message}
-`);
-    }
-  }
-  return [entities, relationships];
-}
-async function persistEntities(store, analysis, _memoryId, domain) {
-  let entities = 0;
-  let relationships = 0;
-  try {
-    const fileEid = await _getOrCreateEntity(store, analysis.path, "file", domain);
-    entities++;
-    const [se2, sr2] = await _persistSymbolEntities(store, analysis, fileEid, domain);
-    entities += se2;
-    relationships += sr2;
-    const [ie2, ir2] = await _persistImportEntities(store, analysis, fileEid, domain);
-    entities += ie2;
-    relationships += ir2;
-  } catch (err) {
-    process.stderr.write(`[codebase-analyze] persistEntities failed for ${analysis.path}: ${err.message}
-`);
-  }
-  return [entities, relationships];
-}
-async function persistFileEdge(store, edges, domain) {
-  let count = 0;
-  for (const [srcPath, tgtPath] of edges) {
-    try {
-      const srcEid = await _getOrCreateEntity(store, srcPath, "file", domain);
-      const tgtEid = await _getOrCreateEntity(store, tgtPath, "file", domain);
-      if (store.insertRelationshipAsync) {
-        await store.insertRelationshipAsync({
-          source_entity_id: srcEid,
-          target_entity_id: tgtEid,
-          relationship_type: "imports",
-          weight: 1
-        });
-      } else {
-        store.insertRelationship({
-          source_entity_id: srcEid,
-          target_entity_id: tgtEid,
-          relationship_type: "imports",
-          weight: 1
-        });
-      }
-      count++;
-    } catch (err) {
-      process.stderr.write(`[codebase-analyze] persistFileEdge failed for ${srcPath}\u2192${tgtPath}: ${err.message}
-`);
-    }
-  }
-  return count;
-}
-async function persistInheritanceEdge(store, edges, domain) {
-  let count = 0;
-  for (const [child, parent] of edges) {
-    try {
-      const childEid = await _getOrCreateEntity(store, child, "class", domain);
-      const parentEid = await _getOrCreateEntity(store, parent, "class", domain);
-      if (store.insertRelationshipAsync) {
-        await store.insertRelationshipAsync({
-          source_entity_id: childEid,
-          target_entity_id: parentEid,
-          relationship_type: "extends",
-          weight: 1
-        });
-      } else {
-        store.insertRelationship({
-          source_entity_id: childEid,
-          target_entity_id: parentEid,
-          relationship_type: "extends",
-          weight: 1
-        });
-      }
-      count++;
-    } catch (err) {
-      process.stderr.write(`[codebase-analyze] persistInheritanceEdge failed for ${child}\u2192${parent}: ${err.message}
-`);
-    }
-  }
-  return count;
-}
-async function persistCommunityTags(store, communities) {
-  if (communities.size === 0)
-    return;
-  const allCodebaseMemories = (() => {
-    try {
-      return store.getMemoriesByAgentContext(CODEBASE_AGENT_CONTEXT);
-    } catch {
-      return [];
-    }
-  })();
-  for (const [filePath, clusterId] of communities) {
-    try {
-      const rows = allCodebaseMemories.filter((r2) => typeof r2.tags === "string" && r2.tags.includes(filePath) || store.getMemory?.(r2.id)?.content?.includes(filePath));
-      for (const row of rows) {
-        const tags = _parseTags(row.tags);
-        const tag = `cluster:${clusterId}`;
-        if (!tags.includes(tag)) {
-          tags.push(tag);
-          const mem = store.getMemory(row.id);
-          if (mem)
-            store.updateMemoryContent(row.id, mem.content, tags);
-        }
-      }
-    } catch {
-    }
-  }
-}
-function resolveRelativePath(sourcePath, root) {
-  try {
-    return relative(root, sourcePath) || sourcePath;
-  } catch {
-    return sourcePath;
-  }
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/codebase-analyze.js
-var schema2 = {
-  title: "Codebase analyze",
-  description: "Walk a codebase and store its structure as memories using tree-sitter AST parsing (with regex fallback for unsupported languages). One memory per file, with symbols as entities and imports as relationships; then cross-file symbol resolution, call-graph extraction, and community detection over the call graph. Incremental \u2014 only re-processes files whose content hash changed since last run (tracked via HASH_TAG_PREFIX tags). Use this on first onboarding to a serious codebase, or after a major refactor that invalidates symbol assumptions. Distinct from `seed_project` (5-stage shallow structural sweep, no AST), `backfill_memories` (Claude Code conversations, not source files), `wiki_seed_codebase` (seeds wiki pages from .md docs), and `ingest_codebase` (downstream PRD-generator consumer). Mutates memories + entities + relationships tables.",
-  inputSchema: {
-    type: "object",
-    required: [],
-    properties: {
-      directory: {
-        type: "string",
-        description: "Root directory of the codebase to analyze.",
-        examples: ["/Users/alice/code/cortex"]
-      },
-      languages: {
-        type: "array",
-        description: "Restrict analysis to specific languages.",
-        items: { type: "string" },
-        default: []
-      },
-      max_files: {
-        type: "integer",
-        description: "Maximum number of files to process per call.",
-        default: 500,
-        // source: cortex mcp_server/handlers/codebase_analyze.py — max_files default=500
-        minimum: 1,
-        maximum: 5e4
-        // source: cortex mcp_server/handlers/codebase_analyze.py — max_files max=50000
-      },
-      max_file_size_kb: {
-        type: "integer",
-        description: "Skip files larger than this many kilobytes.",
-        default: 100,
-        // source: cortex mcp_server/handlers/codebase_analyze.py — max_file_size_kb default=100
-        minimum: 1,
-        maximum: 4096
-        // source: 4096 KB = standard 4 MB file-size upper bound (in exempt list)
-      },
-      incremental: {
-        type: "boolean",
-        description: "Only re-process files whose content hash changed.",
-        default: true
-      },
-      dry_run: {
-        type: "boolean",
-        description: "Report what would be analyzed without writing memories.",
-        default: false
-      },
-      domain: {
-        type: "string",
-        description: "Cognitive domain to tag analysis memories with.",
-        examples: ["cortex", "auth-service"]
-      }
-    }
-  }
-};
-var CODEBASE_SOURCE = "codebase_analyze";
-var CODEBASE_TAG = "codebase";
-var LANG_TAG_PREFIX = "lang:";
-var DEFAULT_MAX_FILES = 500;
-var DEFAULT_MAX_FILE_SIZE_KB = 100;
-var MAX_SYMBOL_TAGS_PER_FILE = 10;
-var BYTES_PER_KB = 1024;
-function _parseArgs(args) {
-  const a2 = args ?? {};
-  const directory = (a2["directory"] ?? process.cwd()).trim() || process.cwd();
-  const languages = a2["languages"] ?? null;
-  const maxFiles = Number(a2["max_files"] ?? DEFAULT_MAX_FILES);
-  const maxKb = Number(a2["max_file_size_kb"] ?? DEFAULT_MAX_FILE_SIZE_KB);
-  const incremental = a2["incremental"] ?? true;
-  const dryRun = a2["dry_run"] ?? false;
-  const domain = a2["domain"] ?? "";
-  return { directory, languages, maxFiles, maxBytes: maxKb * BYTES_PER_KB, incremental, dryRun, domain };
-}
-function _buildTags(relPath, analysis) {
-  const tags = [
-    CODEBASE_TAG,
-    `${FILE_TAG_PREFIX}${relPath}`,
-    `${HASH_TAG_PREFIX}${analysis.contentHash}`,
-    `${LANG_TAG_PREFIX}${analysis.language}`
-  ];
-  for (const sym of analysis.definitions.slice(0, MAX_SYMBOL_TAGS_PER_FILE)) {
-    tags.push(`symbol:${sym.name}`);
-  }
-  return tags;
-}
-function _parseOneFile(path6, content) {
-  if (isAvailable()) {
-    return parseFileAst(path6, Buffer.from(content, "utf8"));
-  }
-  return parseFile(path6, content);
-}
-async function _storeFile(root, relPath, analysis, domain, store) {
-  const content = buildMemoryContent(analysis);
-  const tags = _buildTags(relPath, analysis);
-  const insertData = {
-    content,
-    tags,
-    directory_context: root,
-    domain,
-    source: CODEBASE_SOURCE,
-    agent_context: CODEBASE_AGENT_CONTEXT
-  };
-  let memoryId = null;
-  try {
-    if (store.insertMemoryAsync) {
-      memoryId = await store.insertMemoryAsync(insertData);
-    } else {
-      memoryId = store.insertMemory(insertData);
-    }
-  } catch {
-    return [null, 0, 0];
-  }
-  if (memoryId === null)
-    return [null, 0, 0];
-  const [ents, rels] = await persistEntities(store, analysis, memoryId, domain || "code");
-  return [memoryId, ents, rels];
-}
-async function _processFiles(sourceFiles, root, existing, incremental, domain, store) {
-  let newCount = 0;
-  let updatedCount = 0;
-  let unchangedCount = 0;
-  let totalEntities = 0;
-  let totalRelationships = 0;
-  const seenPaths = /* @__PURE__ */ new Set();
-  const allAnalyses = [];
-  const fileContents = /* @__PURE__ */ new Map();
-  for (const sourcePath of sourceFiles) {
-    const relPath = resolveRelativePath(sourcePath, root);
-    seenPaths.add(relPath);
-    let content;
-    try {
-      content = readFileSync3(sourcePath, "utf8");
-    } catch {
-      continue;
-    }
-    fileContents.set(relPath, content);
-    const analysis = _parseOneFile(relPath, content);
-    allAnalyses.push(analysis);
-    if (incremental && existing.has(relPath)) {
-      const existingEntry = existing.get(relPath);
-      if (existingEntry !== void 0 && existingEntry[1] === analysis.contentHash) {
-        unchangedCount++;
-        continue;
-      }
-      updatedCount++;
-    } else {
-      newCount++;
-    }
-    const [, ents, rels] = await _storeFile(root, relPath, analysis, domain, store);
-    totalEntities += ents;
-    totalRelationships += rels;
-  }
-  return {
-    newCount,
-    updatedCount,
-    unchangedCount,
-    totalEntities,
-    totalRelationships,
-    seenPaths,
-    allAnalyses,
-    fileContents
-  };
-}
-async function _runGraphAnalysis(analyses, fileContents, store, domain) {
-  const importEdges = resolveAllImports(analyses);
-  const typeRefEdges = resolveTypeReferences(analyses, fileContents);
-  const allFileEdgesMap = /* @__PURE__ */ new Map();
-  for (const e2 of [...importEdges, ...typeRefEdges]) {
-    allFileEdgesMap.set(`${e2[0]}::${e2[1]}`, e2);
-  }
-  const allFileEdges = [...allFileEdgesMap.values()];
-  const inheritEdges = extractInheritance(analyses);
-  const communities = detectCommunities(allFileEdges, []);
-  const fileRels = await persistFileEdge(store, allFileEdges, domain);
-  const inheritRels = await persistInheritanceEdge(store, inheritEdges, domain);
-  await persistCommunityTags(store, communities);
-  return {
-    import_edges: importEdges.length,
-    type_ref_edges: typeRefEdges.length,
-    total_file_edges: allFileEdges.length,
-    inheritance_edges: inheritEdges.length,
-    communities: new Set(communities.values()).size,
-    file_edges_stored: fileRels,
-    inherit_edges_stored: inheritRels
-  };
-}
-async function handler3(args, deps) {
-  const { directory: root, languages, maxFiles, maxBytes, incremental, dryRun, domain } = _parseArgs(args);
-  if (!existsSync5(root) || !statSync6(root).isDirectory()) {
-    return { analyzed: false, reason: `directory not found: ${root}` };
-  }
-  process.stderr.write(`[codebase-analyze] scanning ${root} (max_files=${maxFiles}, incremental=${incremental})
-`);
-  const sourceFiles = collectSourceFiles(root, languages, maxFiles, maxBytes);
-  process.stderr.write(`[codebase-analyze] found ${sourceFiles.length} source files
-`);
-  if (dryRun) {
-    const langs = [
-      ...new Set(sourceFiles.map((f2) => EXT_TO_LANG[extname(f2).toLowerCase()] ?? "?"))
-    ];
-    return {
-      analyzed: false,
-      dry_run: true,
-      directory: root,
-      source_files: sourceFiles.length,
-      languages: langs
-    };
-  }
-  const store = deps.store;
-  const existing = incremental ? loadExistingHashes(store) : /* @__PURE__ */ new Map();
-  if (incremental) {
-    process.stderr.write(`[codebase-analyze] loaded ${existing.size} existing file hashes
-`);
-  }
-  const { newCount, updatedCount, unchangedCount, totalEntities, totalRelationships, seenPaths, allAnalyses, fileContents } = await _processFiles(sourceFiles, root, existing, incremental, domain, store);
-  const stale = _markDeleted(existing, seenPaths, store, incremental);
-  const graphStats = await _runGraphAnalysis(allAnalyses, fileContents, store, domain || "code");
-  process.stderr.write(`[codebase-analyze] done: ${newCount} new, ${updatedCount} updated, ${unchangedCount} unchanged, ${stale} stale
-`);
-  return {
-    analyzed: true,
-    directory: root,
-    source_files: sourceFiles.length,
-    new: newCount,
-    updated: updatedCount,
-    unchanged: unchangedCount,
-    stale_marked: stale,
-    entities: totalEntities,
-    relationships: totalRelationships,
-    graph: graphStats,
-    languages: [
-      ...new Set(sourceFiles.map((f2) => EXT_TO_LANG[extname(f2).toLowerCase()] ?? "?"))
-    ]
-  };
-}
-function _markDeleted(existing, seenPaths, store, incremental) {
-  if (!incremental)
-    return 0;
-  const deletedIds = [];
-  for (const [path6, [mid]] of existing) {
-    if (!seenPaths.has(path6))
-      deletedIds.push(mid);
-  }
-  return markStale(store, deletedIds);
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-codebase.js
-import { homedir as homedir4 } from "node:os";
-import { join as join8 } from "node:path";
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-codebase-cypher.js
-var _UPSTREAM_SERVER = "codebase";
-var _SYMBOL_LABELS = [
-  ["Function", "Function"],
-  ["Method", "Method"],
-  ["Struct", "Struct"]
-];
-function isTransportError(e2) {
-  return e2 instanceof McpConnectionError2 || e2 instanceof TypeError || e2 instanceof RangeError || e2 instanceof SyntaxError;
-}
-var _CODE_EXTS = [".py", ".ts", ".tsx", ".rs", ".js"];
-var _MAX_RUST_QN_DROP = 3;
-function filePathFromQn(qn) {
-  if (!qn || !qn.includes("::"))
-    return [];
-  const candidates = [];
-  const head = qn.split("::", 2)[0] ?? "";
-  if (!head)
-    return [];
-  const headIsPath = head.includes("/") || _CODE_EXTS.some((ext2) => head.endsWith(ext2));
-  const headIsDottedModule = !headIsPath && head.includes(".") && !head.includes("/") && !_CODE_EXTS.some((ext2) => head.endsWith(ext2));
-  if (headIsPath) {
-    candidates.push(head);
-    return candidates;
-  }
-  if (headIsDottedModule) {
-    candidates.push(head.replaceAll(".", "/") + ".py");
-    return candidates;
-  }
-  const parts = qn.split("::");
-  for (let drop = 1; drop <= _MAX_RUST_QN_DROP; drop++) {
-    if (parts.length - drop < 1)
-      break;
-    const prefix = parts.slice(0, parts.length - drop);
-    if (prefix.length === 0)
-      continue;
-    const cand = prefix.join("/") + ".py";
-    if (!candidates.includes(cand))
-      candidates.push(cand);
-  }
-  return candidates;
-}
-async function _runQuery(graphPath, cypher) {
-  const payload = await callUpstream(_UPSTREAM_SERVER, "query_graph", {
-    graph_path: graphPath,
-    query: cypher
-  });
-  const result = normaliseMcpPayload(payload);
-  if (typeof result === "object" && result !== null) {
-    const r2 = result;
-    if (r2["status"] === "error") {
-      return [null, String(r2["message"] ?? "<unknown upstream error>")];
-    }
-    return [r2, null];
-  }
-  return [null, `unexpected payload type: ${typeof result}`];
-}
-async function fetchTopSymbols(graphPath, limit) {
-  const rows = [];
-  const diagnostics = [];
-  const perLabel = limit !== null && limit > 0 ? Math.max(1, Math.floor(limit / _SYMBOL_LABELS.length)) : null;
-  for (const [label, kind2] of _SYMBOL_LABELS) {
-    const clauses = [
-      `MATCH (n:${label})`,
-      "RETURN n.qualified_name AS qualified_name, n.name AS name, n.start_line AS start_line, n.end_line AS end_line, n.visibility AS visibility"
-    ];
-    if (perLabel !== null) {
-      clauses.push("ORDER BY (n.end_line - n.start_line) DESC");
-      clauses.push(`LIMIT ${perLabel}`);
-    } else {
-      clauses.push("ORDER BY n.qualified_name");
-    }
-    const cypher = clauses.join(" ");
-    let result;
-    let err;
-    try {
-      [result, err] = await _runQuery(graphPath, cypher);
-    } catch (e2) {
-      if (isTransportError(e2)) {
-        diagnostics.push(`${label}: ${e2.constructor.name}: ${e2.message}`);
-        continue;
-      }
-      throw e2;
-    }
-    if (err !== null) {
-      diagnostics.push(`${label}: ${err}`);
-      continue;
-    }
-    const columns = result["columns"] ?? [
-      "qualified_name",
-      "name",
-      "start_line",
-      "end_line",
-      "visibility"
-    ];
-    for (const row of result["rows"] ?? []) {
-      const record3 = {};
-      columns.forEach((col, i2) => {
-        record3[col] = row[i2];
-      });
-      const qn = record3["qualified_name"] ?? record3["name"];
-      if (!qn)
-        continue;
-      rows.push({
-        qualified_name: qn,
-        name: record3["name"] ?? qn,
-        kind: kind2,
-        // file assigned later from containment edges
-        file: null,
-        start_line: record3["start_line"] ?? null,
-        end_line: record3["end_line"] ?? null,
-        visibility: record3["visibility"] ?? null
-      });
-    }
-  }
-  const finalRows = limit !== null && limit > 0 ? rows.slice(0, limit) : rows;
-  return [finalRows, diagnostics];
-}
-async function fetchCallEdges(graphPath, known) {
-  if (known.size === 0)
-    return [[], []];
-  const edges = [];
-  const seen = /* @__PURE__ */ new Set();
-  const diagnostics = [];
-  for (const srcLabel of ["Function", "Method", "Struct"]) {
-    const cypher = `MATCH (a:${srcLabel})-[]->(b:Function|Method|Struct) RETURN a.qualified_name AS src, b.qualified_name AS dst`;
-    let result;
-    let err;
-    try {
-      [result, err] = await _runQuery(graphPath, cypher);
-    } catch (e2) {
-      if (isTransportError(e2)) {
-        diagnostics.push(`call-edges/${srcLabel}: ${e2.constructor.name}: ${e2.message}`);
-        continue;
-      }
-      throw e2;
-    }
-    if (err !== null) {
-      diagnostics.push(`call-edges/${srcLabel}: ${err}`);
-      continue;
-    }
-    for (const row of result["rows"] ?? []) {
-      if (row.length < 2)
-        continue;
-      const src = row[0];
-      const dst = row[1];
-      if (!src || !dst)
-        continue;
-      if (!known.has(src) || !known.has(dst) || src === dst)
-        continue;
-      const key = `${src}::${dst}`;
-      if (seen.has(key))
-        continue;
-      seen.add(key);
-      edges.push([src, dst]);
-    }
-  }
-  return [edges, diagnostics];
-}
-async function fetchFileContainment(graphPath, knownFiles, knownSymbols) {
-  if (knownFiles.size === 0 || knownSymbols.size === 0)
-    return [[], []];
-  const edges = [];
-  const seen = /* @__PURE__ */ new Set();
-  const diagnostics = [];
-  const cypher = "MATCH (f:File)-[]->(n:Function|Method|Struct) RETURN f.path AS file_path, n.qualified_name AS qn";
-  let result;
-  let err;
-  try {
-    [result, err] = await _runQuery(graphPath, cypher);
-  } catch (e2) {
-    if (isTransportError(e2)) {
-      diagnostics.push(`file-containment: ${e2.constructor.name}: ${e2.message}`);
-      return [edges, diagnostics];
-    }
-    throw e2;
-  }
-  if (err !== null) {
-    diagnostics.push(`file-containment: ${err}`);
-    return [edges, diagnostics];
-  }
-  for (const row of result["rows"] ?? []) {
-    if (row.length < 2)
-      continue;
-    const f2 = row[0];
-    const qn = row[1];
-    if (!f2 || !qn)
-      continue;
-    if (!knownFiles.has(f2) || !knownSymbols.has(qn))
-      continue;
-    const key = `${f2}::${qn}`;
-    if (seen.has(key))
-      continue;
-    seen.add(key);
-    edges.push([f2, qn]);
-  }
-  return [edges, diagnostics];
-}
-async function fetchFiles(graphPath, limit) {
-  const clauses = [
-    "MATCH (f:File)",
-    "RETURN f.path AS path, f.name AS name, f.extension AS extension, f.size_bytes AS size_bytes",
-    "ORDER BY f.path"
-  ];
-  if (limit !== null && limit > 0)
-    clauses.push(`LIMIT ${limit}`);
-  const cypher = clauses.join(" ");
-  let result;
-  let err;
-  try {
-    [result, err] = await _runQuery(graphPath, cypher);
-  } catch (e2) {
-    if (isTransportError(e2)) {
-      return [
-        [],
-        [`files: ${e2.constructor.name}: ${e2.message}`]
-      ];
-    }
-    throw e2;
-  }
-  if (err !== null)
-    return [[], [`files: ${err}`]];
-  const rows = [];
-  for (const row of result["rows"] ?? []) {
-    if (row.length < 1 || !row[0])
-      continue;
-    const [fPath, fName, fExt, fSize] = row;
-    rows.push({
-      path: fPath,
-      name: fName ?? null,
-      extension: fExt ?? null,
-      size_bytes: fSize ?? null
-    });
-  }
-  return [rows, []];
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-codebase-graph.js
-import { existsSync as existsSync6, rmSync, statSync as statSync7 } from "node:fs";
-import { join as join6, resolve as resolve2 } from "node:path";
-var _UPSTREAM_SERVER2 = "codebase";
-function silentCleanStaleGraphSlot(outputDir) {
-  const slot = join6(outputDir, "graph");
-  try {
-    if (existsSync6(slot) && !statSync7(slot).isDirectory()) {
-      rmSync(slot);
-    }
-  } catch {
-  }
-}
-async function _callAnalyze(projectPath, outputDir, language2, pool) {
-  return callUpstream(_UPSTREAM_SERVER2, "analyze_codebase", {
-    path: resolve2(projectPath),
-    output_dir: resolve2(outputDir),
-    language: language2
-  }, pool);
-}
-async function ensureGraph(store, projectPath, outputDir, language2, forceReindex, pool = null) {
-  if (!forceReindex) {
-    const cached2 = findCachedGraph(store, projectPath);
-    if (cached2)
-      return [cached2, { reused_cached: true, graph_path: cached2 }];
-  }
-  silentCleanStaleGraphSlot(outputDir);
-  let payload = await _callAnalyze(projectPath, outputDir, language2, pool);
-  let result = normaliseMcpPayload(payload);
-  if (typeof result === "object" && result !== null && result["status"] === "error" && String(result["message"] ?? "").includes("Not a directory")) {
-    silentCleanStaleGraphSlot(outputDir);
-    payload = await _callAnalyze(projectPath, outputDir, language2, pool);
-    result = normaliseMcpPayload(payload);
-  }
-  if (typeof result === "object" && result !== null && result["status"] === "error") {
-    throw new McpConnectionError2(`upstream analyze_codebase failed: ${result["message"] ?? "<no message>"}`);
-  }
-  const graphPath = result["graph_path"] ?? join6(resolve2(outputDir), "graph");
-  memoiseGraphPath(store, projectPath, graphPath);
-  result["graph_path"] = graphPath;
-  result["reused_cached"] = false;
-  return [graphPath, result];
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-codebase-pages.js
-import { mkdirSync as mkdirSync2, writeFileSync as writeFileSync2 } from "node:fs";
-import { dirname, join as join7 } from "node:path";
-function _slug(text) {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
-}
-function renderProcessPage(process3) {
-  const entry = process3["entry_point"] ?? process3["name"] ?? "unknown";
-  const kind2 = process3["entry_kind"] ?? "entry";
-  const depth = process3["bfs_depth"] ?? process3["depth"] ?? 0;
-  const symbols = process3["symbols"] ?? [];
-  const symbolCount = process3["symbol_count"] ?? symbols.length;
-  const slug = _slug(entry) || "process";
-  const relPath = `reference/codebase/${slug}.md`;
-  const lines = [
-    "---",
-    `title: Process \u2014 ${entry}`,
-    "kind: reference",
-    `tags: [code-reference, process, ${kind2}]`,
-    "---",
-    "",
-    `# Process \u2014 \`${entry}\``,
-    "",
-    `- **Entry kind:** ${kind2}`,
-    `- **BFS depth:** ${depth}`,
-    `- **Symbols in flow:** ${symbolCount}`,
-    ""
-  ];
-  if (symbols.length > 0) {
-    lines.push("## Symbols reached");
-    for (const sym of symbols.slice(0, 50)) {
-      const qn = typeof sym === "string" ? sym : sym["qualified_name"] ?? "";
-      if (qn)
-        lines.push(`- \`${qn}\``);
-    }
-    if (symbols.length > 50)
-      lines.push(`- \u2026 and ${symbols.length - 50} more.`);
-    lines.push("");
-  }
-  return [relPath, lines.join("\n")];
-}
-function writeProcessPages(processes, wikiRoot) {
-  const written = [];
-  for (const proc of processes) {
-    try {
-      const [relPath, markdown] = renderProcessPage(proc);
-      const fullPath = join7(wikiRoot, relPath);
-      mkdirSync2(dirname(fullPath), { recursive: true });
-      writeFileSync2(fullPath, markdown, "utf8");
-      written.push(relPath);
-    } catch {
-    }
-  }
-  return written;
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-codebase-schema.js
-var schema3 = {
-  description: "Ingest a codebase analysis from the upstream ai-automatised-pipeline MCP server into Cortex's store. Triggers `analyze_codebase` upstream (or reuses a cached graph_path memo), pulls every Function/Method/Struct + every call edge + every File\u2192symbol containment edge via Cypher, then materialises them as memories + KG entities + edges, plus a wiki reference page per detected process entry point. Use this to seed the Wiki / Board / Knowledge / Graph views from a freshly-indexed or re-indexed codebase. Distinct from `codebase_analyze` (Cortex's OWN tree-sitter analyzer, no upstream MCP), `seed_project` (5-stage shallow sweep, no AST), and `wiki_seed_codebase` (consumes existing .md docs, not analysis). Mutates wiki/, memories, entities, relationships. Latency varies (10s-5min depending on cache hit). Cortex only consumes upstream analysis \u2014 it does not drive the pipeline. Returns counts and the wiki paths written.",
-  inputSchema: {
-    type: "object",
-    required: ["project_path"],
-    properties: {
-      project_path: {
-        type: "string",
-        description: "Absolute path to the codebase root to analyse. Used both as the pipeline input and to memoise the resulting graph path so subsequent ingests are idempotent.",
-        examples: ["/Users/alice/code/cortex"]
-      },
-      output_dir: {
-        type: "string",
-        description: "Directory where the code graph is stored. Defaults to ~/.cache/cortex/code-graphs/<project-key>/.",
-        examples: ["/Users/alice/.cache/cortex/code-graphs/cortex-ab12cd34"]
-      },
-      language: {
-        type: "string",
-        description: "Language filter passed to analyze_codebase.",
-        enum: ["auto", "rust", "python", "typescript"],
-        default: "auto"
-      },
-      force_reindex: {
-        type: "boolean",
-        description: "If true, call analyze_codebase even when a cached graph path exists for this project.",
-        default: false
-      },
-      top_symbols: {
-        type: ["integer", "null"],
-        description: "Optional explicit cap on symbols materialised as memories + KG nodes. Default null = pull every Function/Method/Struct in the graph (full chain hierarchy).",
-        default: null,
-        minimum: 0,
-        examples: [null, 200, 1e3]
-      },
-      top_processes: {
-        type: ["integer", "null"],
-        description: "Optional explicit cap on processes materialised as wiki pages. Default null = pull every entry-point process.",
-        default: null,
-        minimum: 0,
-        examples: [null, 25, 100]
-      }
-    }
-  }
-};
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-codebase-writers.js
-function _shortSymbolSummary(sym) {
-  const qn = sym.qualified_name ?? sym.name ?? "<anon>";
-  const kind2 = sym.kind ?? "symbol";
-  const community = sym["community"];
-  const process3 = sym["process"];
-  const parts = [`${kind2} ${qn}`];
-  if (community !== void 0 && community !== null)
-    parts.push(`community=${community}`);
-  if (process3)
-    parts.push(`process=${process3}`);
-  return parts.join(" | ");
-}
-function writeSymbolMemories(store, symbols, projectPath, domain) {
-  const ids = [];
-  for (const sym of symbols) {
-    const qn = sym.qualified_name ?? sym.name;
-    if (!qn)
-      continue;
-    const summary = _shortSymbolSummary(sym);
-    let content = `Code symbol: ${qn}
-
-${summary}`;
-    if (sym.file)
-      content += `
-File: ${sym.file}`;
-    const record3 = {
-      content,
-      tags: ["code-reference", "ingest", sym.kind ?? "symbol"],
-      source: "ingest_codebase",
-      domain,
-      directory_context: projectPath,
-      importance: Number(sym["relevance_score"] ?? 0.5) || 0.5,
-      heat: 0.8,
-      is_protected: false
-    };
-    try {
-      ids.push(store.insertMemory(record3));
-    } catch {
-    }
-  }
-  return ids;
-}
-function writeSymbolEntities(store, symbols, domain) {
-  const nameToId = /* @__PURE__ */ new Map();
-  const collisions = /* @__PURE__ */ new Map();
-  for (const sym of symbols) {
-    const qn = sym.qualified_name ?? sym.name;
-    if (!qn)
-      continue;
-    if (nameToId.has(qn)) {
-      collisions.set(qn, (collisions.get(qn) ?? 1) + 1);
-      continue;
-    }
-    try {
-      const eid = store.insertEntity({
-        name: qn,
-        type: sym.kind ?? "symbol",
-        domain,
-        heat: 0.8
-      });
-      nameToId.set(qn, eid);
-    } catch {
-    }
-  }
-  const diagnostics = [];
-  if (collisions.size > 0) {
-    const total = [...collisions.values()].reduce((a2, b2) => a2 + b2, 0);
-    const sample = [...collisions.keys()].sort().slice(0, 3).join(", ");
-    diagnostics.push(`qn-collision: ${collisions.size} qualified_names had ${total} duplicate symbols (kept first). sample: ${sample}`);
-  }
-  return [nameToId, diagnostics];
-}
-function writeSymbolRelationships(store, edges, nameToId) {
-  let written = 0;
-  for (const [srcName, targetName] of edges) {
-    const srcId = nameToId.get(srcName);
-    const dstId = nameToId.get(targetName);
-    if (srcId === void 0 || dstId === void 0 || srcId === dstId)
-      continue;
-    try {
-      store.insertRelationship({
-        source_entity_id: srcId,
-        target_entity_id: dstId,
-        relationship_type: "calls",
-        weight: 1,
-        confidence: 0.9
-      });
-      written++;
-    } catch {
-    }
-  }
-  return written;
-}
-function writeFileMemories(store, files, projectPath, domain) {
-  const ids = [];
-  for (const f2 of files) {
-    if (!f2.path)
-      continue;
-    const ext2 = f2.extension ?? "";
-    const size = f2.size_bytes ?? 0;
-    const record3 = {
-      content: `Code file: ${f2.path}
-
-extension=${ext2} | size_bytes=${size}`,
-      tags: ["code-reference", "ingest", "file"],
-      source: "ingest_codebase",
-      domain,
-      directory_context: projectPath,
-      importance: 0.4,
-      heat: 0.6,
-      is_protected: false
-    };
-    try {
-      ids.push(store.insertMemory(record3));
-    } catch {
-    }
-  }
-  return ids;
-}
-function writeFileEntities(store, files, domain) {
-  const nameToId = /* @__PURE__ */ new Map();
-  for (const f2 of files) {
-    if (!f2.path || nameToId.has(f2.path))
-      continue;
-    try {
-      const eid = store.insertEntity({
-        name: f2.path,
-        type: "file",
-        domain,
-        heat: 0.6
-      });
-      nameToId.set(f2.path, eid);
-    } catch {
-    }
-  }
-  return nameToId;
-}
-function writeFileRelationships(store, edges, fileToId, symbolToId) {
-  let written = 0;
-  for (const [filePath, symbolQn] of edges) {
-    const srcId = fileToId.get(filePath);
-    const dstId = symbolToId.get(symbolQn);
-    if (srcId === void 0 || dstId === void 0)
-      continue;
-    try {
-      store.insertRelationship({
-        source_entity_id: srcId,
-        target_entity_id: dstId,
-        relationship_type: "contains",
-        weight: 1,
-        confidence: 0.95
-      });
-      written++;
-    } catch {
-    }
-  }
-  return written;
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-codebase.js
-var _UPSTREAM_SERVER3 = "codebase";
-var _DEFAULT_TOP_SYMBOLS = null;
-var _DEFAULT_TOP_PROCESSES = null;
-function _defaultOutputDir(projectPath) {
-  return join8(homedir4(), ".cache", "cortex", "code-graphs", projectKey(projectPath));
-}
-function _parseIntOrNull(raw) {
-  if (raw === null || raw === void 0)
-    return null;
-  const n3 = Number(raw);
-  return Number.isFinite(n3) ? n3 : null;
-}
-function _attributeFilesToSymbols(symbols, fileEdges, knownFiles) {
-  const qnToFile = new Map(fileEdges.map(([f2, qn]) => [qn, f2]));
-  let fallbackUsed = 0;
-  let fallbackUnverified = 0;
-  for (const sym of symbols) {
-    const qn = sym.qualified_name;
-    if (!qn)
-      continue;
-    const authoritative = qnToFile.get(qn);
-    if (authoritative !== void 0) {
-      sym.file = authoritative;
-      continue;
-    }
-    const candidates = filePathFromQn(qn);
-    const match2 = candidates.find((c2) => knownFiles.has(c2)) ?? null;
-    if (match2 !== null) {
-      sym.file = match2;
-      fallbackUsed++;
-    } else {
-      sym.file = null;
-      if (candidates.length > 0)
-        fallbackUnverified++;
-    }
-  }
-  const diagnostics = [];
-  if (fallbackUsed > 0) {
-    diagnostics.push(`file-attribution: ${fallbackUsed} symbols had no (:File)-[]->(:symbol) edge; used qn-split fallback (verified against known files)`);
-  }
-  if (fallbackUnverified > 0) {
-    diagnostics.push(`file-attribution: ${fallbackUnverified} symbols had no containment edge AND the qn-split fallback didn't match a known file (likely non-Python indexer); file=null`);
-  }
-  return diagnostics;
-}
-async function _pullSymbolsAndFiles(graphPath, topSymbols) {
-  const diagnostics = [];
-  const [symbols, symDiag] = await fetchTopSymbols(graphPath, topSymbols);
-  diagnostics.push(...symDiag);
-  const [files, fileDiag] = await fetchFiles(graphPath, null);
-  diagnostics.push(...fileDiag);
-  let callEdges = [];
-  let fileEdges = [];
-  if (symbols.length > 0) {
-    const knownSymbols = new Set(symbols.map((s2) => s2.qualified_name).filter(Boolean));
-    const [ce2, ceDiag] = await fetchCallEdges(graphPath, knownSymbols);
-    callEdges = ce2;
-    diagnostics.push(...ceDiag);
-    const knownFiles = new Set(files.map((f2) => f2.path).filter(Boolean));
-    if (knownFiles.size > 0) {
-      const [fe2, feDiag] = await fetchFileContainment(graphPath, knownFiles, knownSymbols);
-      fileEdges = fe2;
-      diagnostics.push(...feDiag);
-    }
-    diagnostics.push(..._attributeFilesToSymbols(symbols, fileEdges, knownFiles));
-  }
-  return { symbols, files, callEdges, fileEdges, diagnostics };
-}
-async function _pullProcesses(graphPath, topProcesses, pool) {
-  try {
-    const procPayload = await callUpstream(_UPSTREAM_SERVER3, "get_processes", {
-      graph_path: graphPath
-    }, pool);
-    const procResult = normaliseMcpPayload(procPayload);
-    const allProcs = procResult["processes"] ?? [];
-    return topProcesses === null ? allProcs : allProcs.slice(0, topProcesses);
-  } catch {
-    return [];
-  }
-}
-async function handler4(args, deps) {
-  const a2 = args ?? {};
-  const projectPath = (a2["project_path"] ?? "").trim();
-  if (!projectPath)
-    return { ingested: false, reason: "project_path is required" };
-  const outputDir = a2["output_dir"] ?? _defaultOutputDir(projectPath);
-  const language2 = a2["language"] ?? "auto";
-  const forceReindex = Boolean(a2["force_reindex"] ?? false);
-  const topSymbols = _parseIntOrNull(a2["top_symbols"] ?? _DEFAULT_TOP_SYMBOLS);
-  const topProcesses = _parseIntOrNull(a2["top_processes"] ?? _DEFAULT_TOP_PROCESSES);
-  const store = deps.store;
-  let graphPath;
-  let analyzeStats;
-  try {
-    [graphPath, analyzeStats] = await ensureGraph(store, projectPath, outputDir, language2, forceReindex, deps.mcpClientPool);
-  } catch (e2) {
-    if (e2 instanceof McpConnectionError2) {
-      return { ingested: false, reason: "upstream_mcp_unreachable", error: String(e2) };
-    }
-    return {
-      ingested: false,
-      reason: "analyze_failed",
-      error: `${e2.constructor.name}: ${e2.message}`
-    };
-  }
-  let symbols = [];
-  let files = [];
-  let callEdges = [];
-  let fileEdges = [];
-  let diagnostics = [];
-  if (topSymbols === null || topSymbols > 0) {
-    ({ symbols, files, callEdges, fileEdges, diagnostics } = await _pullSymbolsAndFiles(graphPath, topSymbols));
-  }
-  const processes = topProcesses === null || topProcesses > 0 ? await _pullProcesses(graphPath, topProcesses, deps.mcpClientPool) : [];
-  const symMem = writeSymbolMemories(store, symbols, projectPath, `code:${projectPath.split("/").pop()}`);
-  const domain = `code:${projectPath.split("/").pop() ?? "unknown"}`;
-  const fileMem = writeFileMemories(store, files, projectPath, domain);
-  const [symEnt, entDiag] = writeSymbolEntities(store, symbols, domain);
-  diagnostics.push(...entDiag);
-  const fileEnt = writeFileEntities(store, files, domain);
-  const callCount = writeSymbolRelationships(store, callEdges, symEnt);
-  const containCount = writeFileRelationships(store, fileEdges, fileEnt, symEnt);
-  const wikiPaths = writeProcessPages(processes, deps.wikiRoot);
-  const response = {
-    ingested: true,
-    graph_path: graphPath,
-    analyze: analyzeStats,
-    memories_written: symMem.length + fileMem.length,
-    entities_written: symEnt.size + fileEnt.size,
-    edges_written: callCount + containCount,
-    wiki_pages_written: wikiPaths,
-    symbol_count_seen: symbols.length,
-    file_count_seen: files.length,
-    process_count_seen: processes.length
-  };
-  if (diagnostics.length > 0)
-    response["diagnostics"] = diagnostics;
-  return response;
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-prd.js
-import { mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync3 } from "node:fs";
-import { dirname as dirname2, join as join9, resolve as resolve3 } from "node:path";
-var _UPSTREAM_SERVER4 = "prd-gen";
-var BULLET_MIN_LENGTH = 8;
-var SLUG_MAX_LENGTH = 80;
-var DECISION_IMPORTANCE = 0.7;
-var REQUIREMENT_IMPORTANCE = 0.5;
-var INGEST_HEAT = 0.8;
-var SUMMARY_IMPORTANCE = 0.8;
-var SUMMARY_HEAT = 0.9;
-var schema4 = {
-  description: "Ingest a PRD (Product Requirements Document) into Cortex's store. Source: a file path, raw markdown, or a prd-gen pipeline state id (fetched via upstream MCP). Writes the PRD as a wiki spec page under specs/<slug>.md, extracts decisions and requirements as separate tagged memories (`decision`, `requirement`), and optionally routes the document through prd-gen's `validate_prd_document` to capture quality signals. Use this after a PRD is authored or generated so Cortex's Wiki/Board/Knowledge views reflect it. Distinct from `wiki_write` (manual single-page write, no decision/requirement extraction), `ingest_codebase` (code symbols, not requirement documents), and `remember` (one memory, no wiki page or structured extraction). Mutates wiki/specs/ + memories table. Latency varies (~500ms-3s depending on validation flag). Returns {wiki_path, memories_created: {summary, decisions, requirements}, validation?: stats}.",
-  inputSchema: {
-    type: "object",
-    required: [],
-    properties: {
-      path: {
-        type: "string",
-        description: "Absolute path to a markdown PRD file. Mutually exclusive with content/pipeline_id.",
-        examples: ["/Users/alice/code/myapp/docs/prd-auth-v2.md"]
-      },
-      content: {
-        type: "string",
-        description: "Raw PRD markdown. Mutually exclusive with path/pipeline_id."
-      },
-      pipeline_id: {
-        type: "string",
-        description: "prd-gen pipeline state id. When supplied, Cortex calls get_pipeline_state to fetch the rendered PRD.",
-        examples: ["prd-pipeline-12345"]
-        // source: illustrative example id from cortex prd-gen docs
-      },
-      title: {
-        type: "string",
-        description: "Override the PRD title (otherwise parsed from the first # heading or filename).",
-        examples: ["Auth v2 redesign"]
-      },
-      validate: {
-        type: "boolean",
-        description: "If true, call prd-gen's validate_prd_document and attach validation stats to the ingestion summary.",
-        default: false
-      },
-      domain: {
-        type: "string",
-        description: "Cognitive domain to tag the ingested memories with.",
-        examples: ["myapp", "auth-service"]
-      }
-    }
-  }
-};
-async function _fetchPrd(args, pool) {
-  const path6 = (args["path"] ?? "").trim();
-  const content = args["content"] ?? "";
-  const pipelineId = (args["pipeline_id"] ?? "").trim();
-  const provided = [Boolean(path6), Boolean(content), Boolean(pipelineId)];
-  if (provided.filter(Boolean).length !== 1) {
-    throw new Error("exactly one of path / content / pipeline_id must be supplied");
-  }
-  if (path6)
-    return [readFileSync4(resolve3(path6), "utf8"), "path"];
-  if (content)
-    return [content, "content"];
-  const payload = await callUpstream(_UPSTREAM_SERVER4, "get_pipeline_state", {
-    pipeline_id: pipelineId
-  }, pool);
-  const result = normaliseMcpPayload(payload);
-  const prdText = result["rendered_prd"] ?? result["prd"] ?? result["text"];
-  if (!prdText) {
-    throw new Error(`prd-gen returned no rendered PRD for pipeline_id=${pipelineId}`);
-  }
-  return [prdText, "pipeline_id"];
-}
-function _extractTitle(text, override) {
-  if (override)
-    return override.trim();
-  for (const line of text.split("\n")) {
-    const trimmed = line.trim();
-    if (trimmed.startsWith("# "))
-      return trimmed.slice(2).trim();
-  }
-  return "Untitled PRD";
-}
-var _SECTION_RE = /^#{2,3}\s+(.+?)\s*$/gm;
-function _splitSections(text) {
-  const matches2 = [...text.matchAll(_SECTION_RE)];
-  const sections = [];
-  for (let i2 = 0; i2 < matches2.length; i2++) {
-    const m2 = matches2[i2];
-    if (!m2)
-      continue;
-    const heading = (m2[1] ?? "").trim();
-    const start = (m2.index ?? 0) + m2[0].length;
-    const nextMatch = matches2[i2 + 1];
-    const end = nextMatch !== void 0 ? nextMatch.index ?? text.length : text.length;
-    const body = text.slice(start, end).trim();
-    if (heading && body)
-      sections.push([heading, body]);
-  }
-  return sections;
-}
-var _DECISION_HEADINGS = /* @__PURE__ */ new Set([
-  "decisions",
-  "decision",
-  "architecture decisions"
-]);
-var _REQUIREMENT_HEADINGS = /* @__PURE__ */ new Set([
-  "requirements",
-  "functional requirements",
-  "non-functional requirements",
-  "acceptance criteria",
-  "user stories"
-]);
-function _extractBullets(body) {
-  const out = [];
-  for (const line of body.split("\n")) {
-    const stripped = line.trim();
-    if (stripped.startsWith("- ") || stripped.startsWith("* ")) {
-      out.push(stripped.slice(2).trim());
-    } else {
-      const numbered = /^\d+[.)]\s+(.+)/.exec(stripped);
-      if (numbered?.[1])
-        out.push(numbered[1].trim());
-    }
-  }
-  return out.filter((b2) => b2.length >= BULLET_MIN_LENGTH);
-}
-function _slugify(text) {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, SLUG_MAX_LENGTH) || "prd";
-}
-function _nowIso() {
-  return (/* @__PURE__ */ new Date()).toISOString().replace(/\.\d{3}Z$/, "Z");
-}
-function _renderPrdSpecPage(title, text, source) {
-  const slug = _slugify(title);
-  const relPath = `specs/${slug}.md`;
-  const frontmatter = [
-    "---",
-    `title: ${title}`,
-    "kind: spec",
-    "tags: [prd, spec, ingest]",
-    `source: ${source}`,
-    `updated: ${_nowIso()}`,
-    "---",
-    ""
-  ];
-  const body = text.trimStart().startsWith("# ") ? text.trim() : `# ${title}
-
-${text.trim()}`;
-  return [relPath, frontmatter.join("\n") + "\n" + body + "\n"];
-}
-function _writePage(wikiRoot, relPath, markdown) {
-  const fullPath = join9(wikiRoot, relPath);
-  mkdirSync3(dirname2(fullPath), { recursive: true });
-  writeFileSync3(fullPath, markdown, "utf8");
-}
-function _writeBulletMemories(store, bullets, tag, title, domain, directory) {
-  const ids = [];
-  for (const bullet of bullets) {
-    const content = `${tag.charAt(0).toUpperCase() + tag.slice(1)} (from PRD '${title}'): ${bullet}`;
-    const record3 = {
-      content,
-      tags: [tag, "prd", "ingest"],
-      source: "ingest_prd",
-      domain,
-      directory_context: directory,
-      importance: tag === "decision" ? DECISION_IMPORTANCE : REQUIREMENT_IMPORTANCE,
-      heat: INGEST_HEAT,
-      is_protected: tag === "decision"
-    };
-    try {
-      ids.push(store.insertMemory(record3));
-    } catch {
-    }
-  }
-  return ids;
-}
-async function _maybeValidate(text, pool) {
-  try {
-    const payload = await callUpstream(_UPSTREAM_SERVER4, "validate_prd_document", {
-      content: text
-    }, pool);
-    return normaliseMcpPayload(payload);
-  } catch (e2) {
-    if (e2 instanceof McpConnectionError2) {
-      return { skipped: true, reason: "upstream_unreachable" };
-    }
-    return { skipped: true, reason: e2.constructor.name };
-  }
-}
-async function handler5(args, deps) {
-  const a2 = args ?? {};
-  let text;
-  let source;
-  try {
-    [text, source] = await _fetchPrd(a2, deps.mcpClientPool);
-  } catch (e2) {
-    if (e2 instanceof McpConnectionError2) {
-      return { ingested: false, reason: "prd_gen_unreachable", error: String(e2) };
-    }
-    const err = e2;
-    if (err.message?.includes("ENOENT") || err.message?.includes("not found")) {
-      return { ingested: false, reason: `prd file not found: ${err.message}` };
-    }
-    return { ingested: false, reason: String(err.message ?? err) };
-  }
-  const title = _extractTitle(text, a2["title"]);
-  const domain = (a2["domain"] ?? "prd").trim() || "prd";
-  const rawPath = a2["path"] ?? ".";
-  const directory = dirname2(resolve3(rawPath));
-  const [relPath, markdown] = _renderPrdSpecPage(title, text, source);
-  let wikiPath = relPath;
-  try {
-    _writePage(deps.wikiRoot, relPath, markdown);
-  } catch {
-    wikiPath = null;
-  }
-  const store = deps.store;
-  const decisionBullets = [];
-  const requirementBullets = [];
-  for (const [heading, body] of _splitSections(text)) {
-    const h2 = heading.toLowerCase();
-    if (_DECISION_HEADINGS.has(h2) || [..._DECISION_HEADINGS].some((k2) => h2.includes(k2))) {
-      decisionBullets.push(..._extractBullets(body));
-    } else if (_REQUIREMENT_HEADINGS.has(h2) || [..._REQUIREMENT_HEADINGS].some((k2) => h2.includes(k2))) {
-      requirementBullets.push(..._extractBullets(body));
-    }
-  }
-  const decisionIds = _writeBulletMemories(store, decisionBullets, "decision", title, domain, directory);
-  const requirementIds = _writeBulletMemories(store, requirementBullets, "requirement", title, domain, directory);
-  const summaryRecord = {
-    content: `PRD ingested: '${title}' (${decisionBullets.length} decisions, ${requirementBullets.length} requirements).`,
-    tags: ["prd", "ingest", "summary"],
-    source: "ingest_prd",
-    domain,
-    directory_context: directory,
-    importance: SUMMARY_IMPORTANCE,
-    heat: SUMMARY_HEAT,
-    is_protected: true
-  };
-  let summaryId = null;
-  try {
-    summaryId = store.insertMemory(summaryRecord);
-  } catch {
-  }
-  let validation = null;
-  if (a2["validate"]) {
-    validation = await _maybeValidate(text, deps.mcpClientPool);
-  }
-  return {
-    ingested: true,
-    title,
-    source,
-    wiki_path: wikiPath,
-    summary_memory_id: summaryId,
-    decision_count: decisionIds.length,
-    requirement_count: requirementIds.length,
-    validation
-  };
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/seed-project.js
-import { existsSync as existsSync8 } from "node:fs";
-import { basename as basename4, resolve as resolvePath } from "node:path";
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/file-scanner.js
-import { existsSync as existsSync7, readFileSync as readFileSync5, readdirSync as readdirSync4, statSync as statSync8 } from "node:fs";
-import { basename as basename3, extname as extname2, join as join10, relative as relative2 } from "node:path";
+// packages/memory/dist/codebase-analysis/file-scanner.js
+import { existsSync as existsSync4, readFileSync as readFileSync3, readdirSync as readdirSync2, statSync as statSync3 } from "node:fs";
+import { basename as basename2, extname, join as join4, relative } from "node:path";
 var HEAT_BY_TYPE = {
   structural_summary: 0.9,
   // source: cortex@ed33435 seed_project_constants.py:10
@@ -46684,7 +42495,7 @@ var CI_FILES = [
   ".gitlab-ci.yml",
   "bitbucket-pipelines.yml"
 ];
-var IGNORE_DIRS2 = /* @__PURE__ */ new Set([
+var IGNORE_DIRS = /* @__PURE__ */ new Set([
   ".git",
   ".hg",
   ".svn",
@@ -46739,7 +42550,7 @@ var CICD_DIR_YAML_CAP = 3;
 var CICD_MAX_BYTES = 32768;
 function safeRead(filePath, maxBytes) {
   try {
-    const buf = readFileSync5(filePath);
+    const buf = readFileSync3(filePath);
     const slice = buf.subarray(0, maxBytes);
     return slice.toString("utf-8");
   } catch {
@@ -46754,20 +42565,20 @@ function* walkPruned(root) {
       break;
     let entries;
     try {
-      entries = readdirSync4(dir, { encoding: "utf8" });
+      entries = readdirSync2(dir, { encoding: "utf8" });
     } catch {
       continue;
     }
     for (const name of entries) {
-      const full = join10(dir, name);
+      const full = join4(dir, name);
       let stat;
       try {
-        stat = statSync8(full, { bigint: false });
+        stat = statSync3(full, { bigint: false });
       } catch {
         continue;
       }
       if (stat.isDirectory()) {
-        if (!IGNORE_DIRS2.has(name)) {
+        if (!IGNORE_DIRS.has(name)) {
           stack.push(full);
         }
       } else if (stat.isFile()) {
@@ -46779,7 +42590,7 @@ function* walkPruned(root) {
 function detectLanguages(root) {
   const extCounts = /* @__PURE__ */ new Map();
   for (const file of walkPruned(root)) {
-    const lang = EXT_MAP[extname2(file).toLowerCase()];
+    const lang = EXT_MAP[extname(file).toLowerCase()];
     if (lang)
       extCounts.set(lang, (extCounts.get(lang) ?? 0) + 1);
   }
@@ -46789,19 +42600,19 @@ function topLevelLayout(root) {
   const items = [];
   let entries;
   try {
-    entries = readdirSync4(root, { encoding: "utf8" });
+    entries = readdirSync2(root, { encoding: "utf8" });
   } catch {
     return [];
   }
   for (const name of entries.sort()) {
     if (name.startsWith(".") && name !== ".github")
       continue;
-    if (IGNORE_DIRS2.has(name))
+    if (IGNORE_DIRS.has(name))
       continue;
-    const full = join10(root, name);
+    const full = join4(root, name);
     let isDir = false;
     try {
-      isDir = statSync8(full).isDirectory();
+      isDir = statSync3(full).isDirectory();
     } catch {
     }
     items.push(`${isDir ? "[dir] " : "[file] "}${name}`);
@@ -46811,12 +42622,12 @@ function topLevelLayout(root) {
 function stageConfigs(root, maxBytes) {
   const discoveries = [];
   for (const name of CONFIG_FILES) {
-    const p2 = join10(root, name);
-    if (!existsSync7(p2))
+    const p2 = join4(root, name);
+    if (!existsSync4(p2))
       continue;
     let isFile2 = false;
     try {
-      isFile2 = statSync8(p2).isFile();
+      isFile2 = statSync3(p2).isFile();
     } catch {
       continue;
     }
@@ -46840,15 +42651,15 @@ function stageDocs(root, maxBytes) {
   const discoveries = [];
   let rootEntries;
   try {
-    rootEntries = readdirSync4(root, { encoding: "utf8" });
+    rootEntries = readdirSync2(root, { encoding: "utf8" });
   } catch {
     rootEntries = [];
   }
   for (const name of rootEntries) {
-    const p2 = join10(root, name);
+    const p2 = join4(root, name);
     let isFile2 = false;
     try {
-      isFile2 = statSync8(p2).isFile();
+      isFile2 = statSync3(p2).isFile();
     } catch {
       continue;
     }
@@ -46874,12 +42685,12 @@ ${content}`,
   }
   const docSuffixes = /* @__PURE__ */ new Set([".md", ".rst", ".txt", ".adoc"]);
   for (const docDir of DOC_DIRS) {
-    const d2 = join10(root, docDir);
-    if (!existsSync7(d2))
+    const d2 = join4(root, docDir);
+    if (!existsSync4(d2))
       continue;
     let isDir = false;
     try {
-      isDir = statSync8(d2).isDirectory();
+      isDir = statSync3(d2).isDirectory();
     } catch {
       continue;
     }
@@ -46887,28 +42698,28 @@ ${content}`,
       continue;
     let dirEntries;
     try {
-      dirEntries = readdirSync4(d2, { encoding: "utf8" }).sort();
+      dirEntries = readdirSync2(d2, { encoding: "utf8" }).sort();
     } catch {
       continue;
     }
     for (const name of dirEntries) {
-      const p2 = join10(d2, name);
+      const p2 = join4(d2, name);
       let isFile2 = false;
       try {
-        isFile2 = statSync8(p2).isFile();
+        isFile2 = statSync3(p2).isFile();
       } catch {
         continue;
       }
       if (!isFile2)
         continue;
-      if (!docSuffixes.has(extname2(name).toLowerCase()))
+      if (!docSuffixes.has(extname(name).toLowerCase()))
         continue;
       if (seen.has(p2))
         continue;
       seen.add(p2);
       const content = safeRead(p2, maxBytes);
       if (content.trim()) {
-        const relPath = relative2(root, p2);
+        const relPath = relative(root, p2);
         const isAdr = docDir.includes("adr");
         discoveries.push({
           title: `Doc: ${relPath}`,
@@ -46927,13 +42738,13 @@ function stageEntryPoints(root, maxBytes) {
   for (const filePath of walkPruned(root)) {
     if (discoveries.length >= STAGE_ENTRY_POINTS_CAP)
       break;
-    const name = basename3(filePath);
+    const name = basename2(filePath);
     if (!ENTRY_POINT_NAMES.has(name))
       continue;
     const content = safeRead(filePath, maxBytes);
     if (!content.trim())
       continue;
-    const relPath = relative2(root, filePath);
+    const relPath = relative(root, filePath);
     discoveries.push({
       title: `Entry point: ${relPath}`,
       content: `# Entry point: ${relPath}
@@ -46951,19 +42762,19 @@ function stageCicd(root) {
   for (const pathStr of CI_FILES) {
     if (found.length >= STAGE_CICD_CAP)
       break;
-    const p2 = join10(root, pathStr);
-    if (!existsSync7(p2))
+    const p2 = join4(root, pathStr);
+    if (!existsSync4(p2))
       continue;
     let stat;
     try {
-      stat = statSync8(p2);
+      stat = statSync3(p2);
     } catch {
       continue;
     }
     if (stat.isDirectory()) {
       let entries;
       try {
-        entries = readdirSync4(p2, { encoding: "utf8" });
+        entries = readdirSync2(p2, { encoding: "utf8" });
       } catch {
         continue;
       }
@@ -46971,10 +42782,10 @@ function stageCicd(root) {
       for (const yamlName of yamlFiles) {
         if (found.length >= STAGE_CICD_CAP)
           break;
-        const fp = join10(p2, yamlName);
+        const fp = join4(p2, yamlName);
         const content = safeRead(fp, CICD_MAX_BYTES);
         if (content.trim()) {
-          const relPath = relative2(root, fp);
+          const relPath = relative(root, fp);
           found.push({
             title: `CI/CD: ${relPath}`,
             content: `# CI/CD: ${relPath}
@@ -46990,8 +42801,8 @@ ${content}
       const content = safeRead(p2, CICD_MAX_BYTES);
       if (content.trim()) {
         found.push({
-          title: `CI/CD: ${basename3(p2)}`,
-          content: `# ${basename3(p2)}
+          title: `CI/CD: ${basename2(p2)}`,
+          content: `# ${basename2(p2)}
 
 \`\`\`
 ${content}
@@ -47006,7 +42817,7 @@ ${content}
 function stageStructuralSummary(root) {
   const layout = topLevelLayout(root);
   const languages = detectLanguages(root);
-  const name = basename3(root);
+  const name = basename2(root);
   const lines = [
     `# Project structure: ${name}`,
     `
@@ -47048,15 +42859,15 @@ function heatForTags(tags) {
   return HEAT_FALLBACK;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/seed-project.js
-var DEFAULT_MAX_FILE_SIZE_KB2 = 64;
-var BYTES_PER_KB2 = 1024;
+// packages/memory/dist/codebase-analysis/handlers/seed-project.js
+var DEFAULT_MAX_FILE_SIZE_KB = 64;
+var BYTES_PER_KB = 1024;
 function parseArgs(args) {
   const raw = args.directory?.trim() || process.cwd();
   const root = resolvePath(raw);
-  const domain = args.domain?.trim() ?? basename4(root);
-  const maxKb = args.max_file_size_kb ?? DEFAULT_MAX_FILE_SIZE_KB2;
-  const maxBytes = maxKb * BYTES_PER_KB2;
+  const domain = args.domain?.trim() ?? basename3(root);
+  const maxKb = args.max_file_size_kb ?? DEFAULT_MAX_FILE_SIZE_KB;
+  const maxBytes = maxKb * BYTES_PER_KB;
   const dryRun = args.dry_run ?? false;
   return { root, domain, maxBytes, dryRun };
 }
@@ -47108,9 +42919,9 @@ async function storeDiscoveriesAsync(discoveries, root, domain, store) {
   }
   return { stored, skipped, memoryIds };
 }
-async function handler6(args, deps) {
+async function handler3(args, deps) {
   const { root, domain, maxBytes, dryRun } = parseArgs(args);
-  if (!existsSync8(root)) {
+  if (!existsSync5(root)) {
     return { seeded: false, reason: `directory not found: ${root}` };
   }
   const allDiscoveries = collectAllDiscoveries(root, maxBytes);
@@ -47140,1457 +42951,185 @@ async function handler6(args, deps) {
     stages: buildStageCounts(allDiscoveries)
   };
 }
-var schema5 = {
+var schema = {
   title: "Seed project",
   description: "Bootstrap the memory store from an existing codebase via a five-stage structural sweep (config extraction, documentation harvesting, entry-point scan, CI/CD detection, structural summary). Each discovery is stored through the standard write gate. Distinct from codebase_analyze (tree-sitter AST per file, much deeper). Returns counts and stored memory IDs."
 };
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/change-impact.js
-var IMPACT_BOOST = 0.15;
-var MAX_HEAT_BUMPS = 20;
-var MAX_MEMORIES_SCANNED = 1e3;
-function extractSymbolsAndFiles(payload) {
-  let rows = [];
-  if (Array.isArray(payload)) {
-    rows = payload.filter((r2) => r2 !== null && typeof r2 === "object");
-  } else if (payload !== null && typeof payload === "object") {
-    const p2 = payload;
-    const inner = p2["changes"] ?? p2["rows"] ?? p2["content"];
-    if (Array.isArray(inner)) {
-      rows = inner.filter((r2) => r2 !== null && typeof r2 === "object");
-    }
-  }
-  const symbols = [];
-  const files = [];
-  const seenS = /* @__PURE__ */ new Set();
-  const seenF = /* @__PURE__ */ new Set();
-  for (const r2 of rows) {
-    const q2 = String(r2["qualified_name"] ?? r2["symbol"] ?? "");
-    const f2 = String(r2["file_path"] ?? r2["file"] ?? "");
-    if (q2 && !seenS.has(q2)) {
-      seenS.add(q2);
-      symbols.push(q2);
-    }
-    if (f2 && !seenF.has(f2)) {
-      seenF.add(f2);
-      files.push(f2);
-    }
-  }
-  return { symbols, files };
-}
-async function collectImpact(pool, graphPath, base, head, expand2) {
-  const rawPayload = await callUpstream("codebase", "detect_changes", { graph_path: graphPath, base, head }, pool);
-  const normalised = normaliseMcpPayload(rawPayload);
-  const { symbols, files } = extractSymbolsAndFiles(normalised);
-  if (!expand2 || symbols.length === 0) {
-    return { symbols, files };
-  }
-  const seen = new Set(symbols);
-  for (const sym of [...symbols]) {
-    let resp;
-    try {
-      resp = await callUpstream("codebase", "get_impact", { graph_path: graphPath, symbol_id: sym }, pool);
-    } catch {
-      continue;
-    }
-    const more = extractSymbolsAndFiles(normaliseMcpPayload(resp));
-    for (const q2 of more.symbols) {
-      if (!seen.has(q2)) {
-        seen.add(q2);
-        symbols.push(q2);
-      }
-    }
-  }
-  return { symbols, files };
-}
-function pathBasename(p2) {
-  if (!p2)
-    return "";
-  return p2.split(/[/\\]/).at(-1) ?? "";
-}
-function tailOfQualname(q2) {
-  return q2.includes(".") ? q2.split(".").at(-1) ?? q2 : q2;
-}
-function matchMemories(impactedSymbols, impactedFiles, memories) {
-  const symTerms = impactedSymbols.filter((q2) => q2).map((q2) => ({ full: q2, tail: tailOfQualname(q2) }));
-  const fileTerms = impactedFiles.filter((p2) => p2).map((p2) => ({ full: p2, base: pathBasename(p2) }));
-  const out = [];
-  for (const mem of memories) {
-    const mid = mem["memory_id"] ?? mem["id"];
-    if (mid == null)
-      continue;
-    const content = String(mem["content"] ?? "").toLowerCase();
-    let rawTags = mem["tags"] ?? [];
-    if (typeof rawTags === "string") {
-      try {
-        rawTags = JSON.parse(rawTags);
-      } catch {
-        rawTags = [];
-      }
-    }
-    const tags = new Set(Array.isArray(rawTags) ? rawTags.map((t2) => String(t2).toLowerCase()) : []);
-    const matchedSymbols = [];
-    for (const { full, tail } of symTerms) {
-      if (content.includes(full.toLowerCase()) || tail && content.includes(tail.toLowerCase())) {
-        matchedSymbols.push(full);
-      }
-    }
-    const matchedFiles = [];
-    for (const { full, base } of fileTerms) {
-      if (content.includes(full.toLowerCase()) || base && content.includes(base.toLowerCase())) {
-        matchedFiles.push(full);
-      } else if (base && tags.has(base.toLowerCase())) {
-        matchedFiles.push(full);
-      }
-    }
-    const total = matchedSymbols.length + matchedFiles.length;
-    if (total === 0)
-      continue;
-    out.push({
-      memory_id: mid,
-      matched_symbols: matchedSymbols,
-      matched_files: matchedFiles,
-      match_count: total
-    });
-  }
-  out.sort((a2, b2) => b2.match_count - a2.match_count || String(a2.memory_id).localeCompare(String(b2.memory_id)));
-  return out;
-}
-function applyHeatBumps(store, matches2) {
-  let bumped = 0;
-  for (const m2 of matches2.slice(0, MAX_HEAT_BUMPS)) {
-    const mid = Number(m2.memory_id);
-    if (!Number.isFinite(mid) || mid <= 0)
-      continue;
-    try {
-      const mem = store.getMemory(mid);
-      if (!mem)
-        continue;
-      const newHeat = Math.min(1, (mem.heat ?? 0) + IMPACT_BOOST);
-      store.bumpHeatRaw(mid, newHeat);
-      bumped++;
-    } catch {
-    }
-  }
-  return bumped;
-}
-async function changeImpactHandler(args, deps) {
-  const { store, mcpClientPool, projectRoot = process.cwd() } = deps;
-  if (mcpClientPool === null) {
-    return {
-      status: "skipped",
-      reason: "ap_disabled",
-      detail: "McpClientPool not injected. Wire a real pool via IngestDeps.mcpClientPool to compute change impact."
-    };
-  }
-  const graphPath = findCachedGraph(store, projectRoot);
-  if (!graphPath) {
-    return {
-      status: "skipped",
-      reason: "graph_path_unset",
-      detail: "No cached graph path found for this project. Run ingest_codebase first to index the codebase, then retry change_impact."
-    };
-  }
-  const base = String(args.base ?? "HEAD~1");
-  const head = String(args.head ?? "HEAD");
-  const expand2 = Boolean(args.expand_impact ?? false);
-  const applyBump = Boolean(args.apply_heat_bump ?? false);
-  let symbols;
-  let files;
+// packages/mcp-servers/memory/dist/tools/management.js
+var VALIDATE_STALENESS_DEFAULT = 0.5;
+var VALIDATE_ERROR_CAP = 10;
+var SEED_MAX_FILE_SIZE_KB = 64;
+var BACKFILL_MAX_FILES_DEFAULT = 20;
+var BACKFILL_MIN_IMPORTANCE = 0.35;
+function loadProfilesRaw() {
+  const profilePath = join5(homedir4(), ".claude", "methodology", "profiles.json");
+  if (!existsSync6(profilePath))
+    return { domains: {} };
   try {
-    const result = await collectImpact(mcpClientPool, graphPath, base, head, expand2);
-    symbols = result.symbols;
-    files = result.files;
-  } catch (err) {
-    return {
-      status: "skipped",
-      reason: "ap_call_failed",
-      detail: String(err instanceof Error ? err.message : err)
-    };
-  }
-  const storeExt = store;
-  const allMemories = (storeExt.getAllMemoriesForDecay?.() ?? []).slice(0, MAX_MEMORIES_SCANNED);
-  const matches2 = matchMemories(symbols, files, allMemories);
-  const bumped = applyBump ? applyHeatBumps(store, matches2) : 0;
-  return {
-    status: "ok",
-    base,
-    head,
-    impact: { symbols, files, expanded: expand2 },
-    matches: matches2,
-    heat_bumped: bumped
-  };
-}
-var schema6 = {
-  title: "Change impact",
-  description: (
-    // source: cortex@ed33435 mcp_server/handlers/change_impact.py — schema description
-    "Report which Cortex memories reference code that changed in a commit. Uses automatised-pipeline's detect_changes and optionally get_impact to compute the symbol/file impact set, then matches against recent memories. Read-only by default; pass apply_heat_bump=true to nudge heat on the top matches. Requires AP enabled (mcpClientPool injected at composition root)."
-  )
-};
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/types.js
-var WikiExists = class extends Error {
-  constructor(path6) {
-    super(`wiki page already exists: ${path6}`);
-    this.name = "WikiExists";
-  }
-};
-var WikiMissing = class extends Error {
-  constructor(path6) {
-    super(`wiki page not found: ${path6}`);
-    this.name = "WikiMissing";
-  }
-};
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/index.js
-init_layout();
-init_pages();
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/templates.js
-var ADR_CONVENTION = {
-  pattern: String.raw`^\d{4}-[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`,
-  description: "ADR: <4-digit>-<kebab-slug>.md (e.g., 0042-prefer-plan-over-list.md)"
-};
-var SPEC_CONVENTION = {
-  pattern: String.raw`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`,
-  description: "Spec: <kebab-slug>.md (e.g., phase-5-pool-admission-design.md)"
-};
-var DEFAULT_CONVENTION = {
-  pattern: String.raw`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`,
-  description: "Page: <kebab-slug>.md \u2014 lowercase alphanum + hyphens, no underscores, no leading/trailing hyphens."
-};
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/rule-engine.js
-var REJECT_TARGETS = /* @__PURE__ */ new Set(["reject", "-", "", null, "none", void 0]);
-function matches(rule, content, tags) {
-  const pattern = rule.pattern ?? "";
-  const kind2 = (rule.pattern_kind ?? "").toLowerCase();
-  if (!pattern)
-    return false;
-  if (kind2 === "prefix") {
-    return content.trimStart().toLowerCase().startsWith(pattern.toLowerCase());
-  }
-  if (kind2 === "substring") {
-    return content.toLowerCase().includes(pattern.toLowerCase());
-  }
-  if (kind2 === "regex") {
-    try {
-      return new RegExp(pattern, "i").test(content);
-    } catch {
-      return false;
-    }
-  }
-  if (kind2 === "tag") {
-    return tags.has(pattern.toLowerCase());
-  }
-  return false;
-}
-function applyRules2(content, tags, rules) {
-  if (!content || !rules.length) {
-    return {
-      matched_rule: null,
-      target_kind: null,
-      rationale: "no content or no rules loaded"
-    };
-  }
-  const tagSet = new Set((tags ?? []).filter((t2) => typeof t2 === "string").map((t2) => t2.toLowerCase()));
-  const candidates = [];
-  for (let idx = 0; idx < rules.length; idx++) {
-    const rule = rules[idx];
-    if (!rule)
-      continue;
-    if (matches(rule, content, tagSet)) {
-      candidates.push([idx, -(rule.weight ?? 1), rule]);
-    }
-  }
-  if (!candidates.length) {
-    return { matched_rule: null, target_kind: null, rationale: "no rule matched" };
-  }
-  candidates.sort((a2, b2) => a2[0] !== b2[0] ? a2[0] - b2[0] : a2[1] - b2[1]);
-  const best = candidates[0][2];
-  const targetNorm = REJECT_TARGETS.has(best.target_kind ?? null) ? null : best.target_kind ?? null;
-  return {
-    matched_rule: best,
-    target_kind: targetNorm,
-    rationale: `rule [${best.pattern_kind}] ${JSON.stringify(best.pattern)} \u2192 ${best.target_kind ?? "reject"}`
-  };
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/index.js
-init_schema_loader();
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/page-classifier.js
-var REJECT_PREFIXES = [
-  "# Tool:",
-  "Tool:",
-  "tool:",
-  "# tool:",
-  "System:",
-  "system:",
-  "<tool_result>",
-  "<result>",
-  "<command-message>",
-  "<command-name>",
-  "# <command-message>",
-  "# <command-name>"
-];
-var REJECT_TITLES = /* @__PURE__ */ new Set([
-  "tool-edit",
-  "tool-bash",
-  "tool-read",
-  "tool-write",
-  "tool-grep",
-  "tool-glob",
-  "tool-search"
-]);
-var REJECT_PATTERNS = [
-  /^#*\s*Implement the following plan/i,
-  /^#*\s*Execute the following/i,
-  /^#*\s*You must respond with only/i,
-  /^#*\s*Perform all verification/i,
-  /^#*\s*Take the code and split/i,
-  /^\s*\{[\s\S]*\}\s*$/,
-  /^\s*\[[\s\S]*\]\s*$/,
-  /<command-(message|name|args)>/i,
-  /^#*\s*Spell:\s*\w+/i,
-  /^#*\s*Shape test content/i
-];
-var ADR_PATTERNS = [
-  /\b(decided to|decision:|the decision is|chose .+ because|rejected .+ (due to|because)|we will use|selected .+ over)\b/i
-];
-var LESSON_PATTERNS = [
-  /\b(the bug was|root cause|lesson learned|mistake was|never again|fix:|fixed by|the issue was|the problem was|turned out)\b/i
-];
-var CONVENTION_PATTERNS = [
-  /\b(always use|never |the canonical|convention:|rule:|standard:|must follow|naming convention|coding standard)\b/i
-];
-var SPEC_TAGS = /* @__PURE__ */ new Set(["spec", "design", "specification", "feature"]);
-var IMPERATIVE_TITLE_PATTERNS = [
-  /^\s*#*\s*(let'?s|lets)\b/i,
-  /^\s*#*\s*(use|fetch|take|give|look at|verify|audit|check|make|do|run|push|remove|rename|adapt|implement|execute|perform|replace|add|delete|update|modify|fix|install|setup|configure|create|build|write|test|sync|import|export|move|copy|ensure|try|go|start|stop|open|close|clean|restart|refactor|migrate|enable|disable|apply|reset|rebuild|regenerate|analyze)\b/i,
-  /^\s*#*\s*you (must|should|need|will|can)\b/i,
-  /^\s*#*\s*(how|what|why|when|where|can|should|is|does)\b[^.]*\?\s*$/
-];
-var FIRST_PERSON_PATTERNS = [
-  /^\s*#*\s*(we|i)\s+(pushed|pulled|did|have|did|tried|ran|found|saw|noticed|got|made|created|added|removed|fixed|broke|updated|changed|deleted|merged|re?-?started|tested|benchmarked|think|need|want|should|re)/i
-];
-var STATUS_PATTERNS = [
-  /^\s*#*\s*(successfully|done|failing|failed|broken|working|not working|finished|completed|in progress|wip|todo|pending)\b/i,
-  /local[-_]command[-_](stdout|stderr|stdin|output)/i,
-  /session[-_]test[-_]session/i,
-  /in domain unknown/i
-];
-var DEIXIS_PATTERNS = [
-  /^\s*#*\s*(just now|just did|previous|earlier|last session|new wip|the one we|like (we|i) (said|did)|yesterday|today|tomorrow|a while ago|recent(ly)?)\b/i
-];
-var PATH_OR_URL_TITLE_PATTERNS = [
-  /^\s*#*\s*[/~]/,
-  /^\s*#*\s*[A-Za-z]:[\\/]/,
-  /^\s*#*\s*(https?|ftp|file|ssh|git):\/\//i,
-  /^\s*#*\s*[\w.-]+\.(pdf|png|jpg|jpeg|svg|gif|zip|tar\.gz|docx?|xlsx?|csv|log|yaml|yml)\b/i
-];
-var AUDIT_TAGS = /* @__PURE__ */ new Set([
-  "_backfill",
-  "imported",
-  "session-summary",
-  "tool-output",
-  "code-review",
-  "stage-1",
-  "stage-2",
-  "stage-3",
-  "stage-4",
-  "stage-5",
-  "stage-6",
-  "stage-7",
-  "stage-8",
-  "stage-9",
-  "stage-10",
-  "stage-11",
-  "audit",
-  "automated",
-  "wip",
-  "progress"
-]);
-var AUDIT_TITLE_PATTERNS = [
-  /\bstage[ -]?\d+\b/i,
-  /\b(code[ -]?review|audit[ -]?report|review[ -]?notes?)\b/i,
-  /\bsession[ -]?(summary|log|report|\d+)\b/i
-];
-function failsHardNegatives(content, firstLine) {
-  for (const pat of IMPERATIVE_TITLE_PATTERNS) {
-    if (pat.test(firstLine))
-      return true;
-  }
-  for (const pat of FIRST_PERSON_PATTERNS) {
-    if (pat.test(firstLine))
-      return true;
-  }
-  const first500 = content.slice(0, 500);
-  for (const pat of STATUS_PATTERNS) {
-    if (pat.test(firstLine))
-      return true;
-    if (pat.test(first500))
-      return true;
-  }
-  for (const pat of DEIXIS_PATTERNS) {
-    if (pat.test(firstLine))
-      return true;
-  }
-  for (const pat of PATH_OR_URL_TITLE_PATTERNS) {
-    if (pat.test(firstLine))
-      return true;
-  }
-  for (const pat of AUDIT_TITLE_PATTERNS) {
-    if (pat.test(firstLine))
-      return true;
-  }
-  return false;
-}
-function failsAuditTagGate(tags) {
-  for (const tag of tags) {
-    if (AUDIT_TAGS.has(tag))
-      return true;
-  }
-  return false;
-}
-var STRUCTURE_HEADING = /^#{1,4}\s+\S/m;
-var STRUCTURE_LIST = /^\s*[-*+]\s+\S/m;
-var STRUCTURE_CODE = /```\w*\n/m;
-var CITATION = /\b(ADR-?\d+|paper|arxiv|doi:|https?:\/\/|\b[A-Z][a-z]+ (et al\.|&) \d{4}|\b[A-Z][a-z]+ \d{4}\b)/;
-var DECLARATIVE = /\b(is|are|means|causes?|because|implies|requires?|enables?|prevents?|produces?|results? in|leads? to|defined? as|consists of)\b/ig;
-var FILE_OR_ENTITY_REF = /\b[a-zA-Z_]\w*\.(py|js|ts|md|json|yaml|sql|go|rs|rb|java)\b|\b[a-z_]+\(\)|\bclass\s+[A-Z]\w+|\bdef\s+[a-z_]\w+/;
-var KNOWLEDGE_TAGS = /* @__PURE__ */ new Set([
-  "decision",
-  "adr",
-  "architecture",
-  "spec",
-  "design",
-  "lesson",
-  "convention",
-  "rule",
-  "standard",
-  "paper",
-  "research",
-  "reference"
-]);
-var POSITIVE_SCORE_THRESHOLD = 4;
-function positiveScore(content, tags) {
-  let score = 0;
-  const length = content.length;
-  const struct = (STRUCTURE_HEADING.test(content) ? 1 : 0) + (STRUCTURE_LIST.test(content) ? 1 : 0) + (STRUCTURE_CODE.test(content) ? 1 : 0);
-  if (struct >= 1)
-    score++;
-  const declarativeMatches = content.match(DECLARATIVE) ?? [];
-  if (declarativeMatches.length >= 2)
-    score++;
-  if (CITATION.test(content))
-    score++;
-  if (length >= 200)
-    score++;
-  for (const tag of tags) {
-    if (KNOWLEDGE_TAGS.has(tag)) {
-      score++;
-      break;
-    }
-  }
-  if (length >= 200 && length <= 3e3)
-    score++;
-  const techTokens = new Set(content.match(/\b(?:[A-Z][a-z]+[A-Z]\w*|[a-z]+_[a-z_]+)\b/g) ?? []);
-  if (techTokens.size >= 3)
-    score++;
-  if (FILE_OR_ENTITY_REF.test(content))
-    score++;
-  return score;
-}
-var userRulesCache = null;
-function loadUserRules(wikiRoot) {
-  if (userRulesCache !== null)
-    return userRulesCache;
-  if (!wikiRoot) {
-    userRulesCache = [];
-    return userRulesCache;
-  }
-  try {
-    const { loadRegistry: loadRegistry2 } = (init_schema_loader(), __toCommonJS(schema_loader_exports));
-    const registry2 = loadRegistry2(wikiRoot);
-    userRulesCache = registry2.rules;
+    return JSON.parse(readFileSync4(profilePath, "utf-8"));
   } catch {
-    userRulesCache = [];
+    return { domains: {} };
   }
-  return userRulesCache;
 }
-function classifyMemory(content, tags, wikiRoot) {
-  if (!content || content.trim().length < 50)
-    return null;
-  const stripped = content.trim();
-  const firstLine = stripped.split("\n")[0]?.trim() ?? "";
-  const tagSetPre = new Set((tags ?? []).map((t2) => t2.toLowerCase()));
-  if (failsAuditTagGate(tagSetPre))
-    return null;
-  const rules = loadUserRules(wikiRoot);
-  if (rules.length > 0) {
-    const match2 = applyRules2(content, tags ?? null, rules);
-    if (match2.matched_rule !== null) {
-      return match2.target_kind;
+function errorText5(tool, err) {
+  const message = err instanceof Error ? err.message : String(err);
+  return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
+}
+function registerManagementTools(server2, deps) {
+  server2.registerTool("validate_memory", {
+    description: "Validate memories against current filesystem state (mark stale if referenced files no longer exist).",
+    inputSchema: {
+      memory_id: external_exports.number().int().optional().describe("Specific memory ID or null for batch"),
+      domain: external_exports.string().optional().describe("Domain filter"),
+      directory: external_exports.string().optional().describe("Directory filter"),
+      base_dir: external_exports.string().default("").describe("Base directory for path resolution"),
+      staleness_threshold: external_exports.number().min(0).max(1).default(VALIDATE_STALENESS_DEFAULT).describe("Heat threshold for stale mark"),
+      dry_run: external_exports.boolean().default(false).describe("Preview without writing")
     }
-  }
-  for (const prefix of REJECT_PREFIXES) {
-    if (stripped.startsWith(prefix))
-      return null;
-  }
-  for (const pattern of REJECT_PATTERNS) {
-    if (pattern.test(stripped))
-      return null;
-  }
-  if (REJECT_TITLES.has(slugify2(firstLine)))
-    return null;
-  if (failsHardNegatives(content, firstLine))
-    return null;
-  const EXPLICIT_KNOWLEDGE_TAGS = /* @__PURE__ */ new Set([
-    "decision",
-    "adr",
-    "architecture",
-    "spec",
-    "design",
-    "lesson",
-    "convention",
-    "rule",
-    "standard",
-    "paper",
-    "research"
-  ]);
-  let hasExplicitTag = false;
-  for (const tag of tagSetPre) {
-    if (EXPLICIT_KNOWLEDGE_TAGS.has(tag)) {
-      hasExplicitTag = true;
-      break;
+  }, async (args) => {
+    try {
+      const allMems = deps.store.getAllMemoriesForDecay();
+      const candidates = args.memory_id !== void 0 ? allMems.filter((m2) => m2["id"] === args.memory_id) : allMems.filter((m2) => {
+        if (args.domain && m2["domain"] !== args.domain)
+          return false;
+        if (args.directory && !String(m2["directory"] ?? "").startsWith(args.directory))
+          return false;
+        return true;
+      });
+      let validated = 0;
+      let staleMarked = 0;
+      const errors = [];
+      for (const mem of candidates) {
+        try {
+          validated++;
+          const heat = mem["heat"] ?? 0;
+          if (heat >= args.staleness_threshold)
+            continue;
+          const tags = mem["tags"] ?? [];
+          const fileRef = tags.find((t2) => t2.startsWith("file:") || t2.startsWith("path:"));
+          if (!fileRef)
+            continue;
+          const filePath = fileRef.replace(/^(?:file:|path:)/, "");
+          const absPath = args.base_dir ? join5(args.base_dir, filePath) : filePath;
+          if (existsSync6(absPath))
+            continue;
+          if (!args.dry_run) {
+            deps.store.markMemoryStale(Number(mem["id"]), true);
+          }
+          staleMarked++;
+        } catch (e2) {
+          errors.push(String(e2));
+        }
+      }
+      return { content: [{ type: "text", text: JSON.stringify({
+        validated,
+        stale_marked: staleMarked,
+        dry_run: args.dry_run,
+        errors: errors.slice(0, VALIDATE_ERROR_CAP)
+      }) }] };
+    } catch (err) {
+      return errorText5("validate_memory", err);
     }
-  }
-  if (!hasExplicitTag) {
-    if (positiveScore(content, tagSetPre) < POSITIVE_SCORE_THRESHOLD)
-      return null;
-  }
-  for (const pat of ADR_PATTERNS) {
-    if (pat.test(content))
-      return "adr";
-  }
-  if (tagSetPre.has("decision") || tagSetPre.has("adr"))
-    return "adr";
-  for (const pat of LESSON_PATTERNS) {
-    if (pat.test(content))
-      return "lesson";
-  }
-  if (tagSetPre.has("lesson") || tagSetPre.has("debugging") || tagSetPre.has("fix") || tagSetPre.has("bug-fix")) {
-    return "lesson";
-  }
-  for (const pat of CONVENTION_PATTERNS) {
-    if (pat.test(content))
-      return "convention";
-  }
-  if (tagSetPre.has("convention") || tagSetPre.has("rule") || tagSetPre.has("standard")) {
-    return "convention";
-  }
-  if (hasTagIn(tagSetPre, SPEC_TAGS) && content.length > 200)
-    return "spec";
-  if ((tagSetPre.has("architecture") || tagSetPre.has("design")) && content.length > 200)
-    return "spec";
-  return "note";
-}
-function hasTagIn(tagSet, candidates) {
-  for (const tag of tagSet) {
-    if (candidates.has(tag))
-      return true;
-  }
-  return false;
-}
-function slugify2(text) {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/links.js
-var RELATIONS = {
-  supersedes: "superseded_by",
-  superseded_by: "supersedes",
-  implements: "implemented_by",
-  implemented_by: "implements",
-  depends_on: "depended_on_by",
-  depended_on_by: "depends_on",
-  derived_from: "derives",
-  derives: "derived_from",
-  see_also: "see_also"
-};
-var RELATED_HEADING = "## Related";
-function inverseOf(relation) {
-  const inv = RELATIONS[relation];
-  if (inv === void 0)
-    throw new Error(`unknown relation: ${relation}`);
-  return inv;
-}
-function formatEntry(entry) {
-  return `- ${entry.relation} \u2192 [${entry.target}](${entry.target})`;
-}
-function parseEntry(line) {
-  const stripped = line.trim();
-  if (!stripped.startsWith("- "))
-    return null;
-  const payload = stripped.slice(2);
-  if (!payload.includes(" \u2192 "))
-    return null;
-  const [relPart, rest] = payload.split(" \u2192 ", 2);
-  const rel = relPart.trim();
-  if (!RELATIONS[rel])
-    return null;
-  let target = rest.trim();
-  if (target.startsWith("[") && target.includes("](") && target.endsWith(")")) {
-    target = target.split("](", 2)[1].slice(0, -1);
-  }
-  return { relation: rel, target };
-}
-function splitBodyAndRelated(body) {
-  const lines = body.split("\n");
-  let headingIdx = null;
-  for (let idx2 = 0; idx2 < lines.length; idx2++) {
-    if (lines[idx2].trim() === RELATED_HEADING) {
-      headingIdx = idx2;
-      break;
-    }
-  }
-  if (headingIdx === null)
-    return [body, []];
-  let before = lines.slice(0, headingIdx);
-  const entries = [];
-  let idx = headingIdx + 1;
-  while (idx < lines.length) {
-    const line = lines[idx];
-    if (line.startsWith("## "))
-      break;
-    const parsed = parseEntry(line);
-    if (parsed !== null)
-      entries.push(parsed);
-    idx++;
-  }
-  const after = lines.slice(idx);
-  while (before.length > 0 && before[before.length - 1] === "") {
-    before = before.slice(0, -1);
-  }
-  let rebuilt = before.join("\n");
-  if (after.length > 0) {
-    rebuilt = (rebuilt ? rebuilt + "\n\n" : "") + after.join("\n");
-  }
-  return [rebuilt, entries];
-}
-function renderRelated(entries) {
-  if (!entries.length)
-    return "";
-  const sorted = [...entries].sort((a2, b2) => {
-    const rc = a2.relation.localeCompare(b2.relation);
-    return rc !== 0 ? rc : a2.target.localeCompare(b2.target);
   });
-  const lines = [RELATED_HEADING, "", ...sorted.map(formatEntry)];
-  return lines.join("\n") + "\n";
-}
-function applyLink(body, entry) {
-  if (!RELATIONS[entry.relation]) {
-    throw new Error(`unknown relation: ${entry.relation}`);
-  }
-  const [base, existing] = splitBodyAndRelated(body);
-  const merged = [...existing];
-  const alreadyPresent = merged.some((e2) => e2.relation === entry.relation && e2.target === entry.target);
-  if (!alreadyPresent)
-    merged.push(entry);
-  const rendered = renderRelated(merged);
-  if (!base)
-    return rendered;
-  const separator = base.endsWith("\n") ? "" : "\n";
-  return `${base}${separator}
-${rendered}`;
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/symbol-extract.js
-var IDENT = String.raw`[A-Za-z_][A-Za-z_0-9]{1,}`;
-var BACKTICK_CALL = /`([A-Za-z_][\w.]*(?:\(\)|\([^`]{0,60}\)))`/g;
-var DOTTED_RE = new RegExp(String.raw`\b(${IDENT}(?:\.${IDENT}){1,})\b`, "g");
-var FILE_SUFFIXES = /* @__PURE__ */ new Set([
-  "py",
-  "js",
-  "ts",
-  "tsx",
-  "jsx",
-  "md",
-  "json",
-  "yaml",
-  "yml",
-  "toml",
-  "sql",
-  "go",
-  "rs",
-  "rb",
-  "java",
-  "cpp",
-  "c",
-  "h",
-  "hpp",
-  "sh",
-  "txt",
-  "csv",
-  "ini",
-  "cfg",
-  "lock",
-  "log"
-]);
-function stripCallArgs(s2) {
-  const idx = s2.indexOf("(");
-  return idx >= 0 ? s2.slice(0, idx) : s2;
-}
-function looksLikeFile(qname) {
-  const tail = qname.split(".").pop()?.toLowerCase() ?? "";
-  return FILE_SUFFIXES.has(tail);
-}
-function extractSymbolRefs(text) {
-  if (!text)
-    return [];
-  const seen = /* @__PURE__ */ new Set();
-  const out = [];
-  const backtickRe = new RegExp(BACKTICK_CALL.source, "g");
-  let m2;
-  while ((m2 = backtickRe.exec(text)) !== null) {
-    const q2 = stripCallArgs(m2[1]);
-    if (q2.includes(".")) {
-      if (looksLikeFile(q2))
-        continue;
+  server2.registerTool("seed_project", {
+    description: "Bootstrap memory from an existing codebase by scanning files and creating structured memories.",
+    inputSchema: {
+      directory: external_exports.string().default("").describe("Project directory to seed from"),
+      domain: external_exports.string().default("").describe("Domain to assign"),
+      max_file_size_kb: external_exports.number().int().min(1).default(SEED_MAX_FILE_SIZE_KB).describe("Max file size in KB"),
+      dry_run: external_exports.boolean().default(false).describe("Preview without writing")
     }
-    if (seen.has(q2))
-      continue;
-    seen.add(q2);
-    out.push(q2);
-  }
-  const dottedRe = new RegExp(DOTTED_RE.source, "g");
-  while ((m2 = dottedRe.exec(text)) !== null) {
-    const q2 = m2[1];
-    if (looksLikeFile(q2))
-      continue;
-    if (seen.has(q2))
-      continue;
-    seen.add(q2);
-    out.push(q2);
-  }
-  return out;
-}
-function harvestPageSymbols(page, claimEvidenceSymbols) {
-  const refs = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const q2 of claimEvidenceSymbols ?? []) {
-    if (q2 && !seen.has(q2)) {
-      seen.add(q2);
-      refs.push(q2);
-    }
-  }
-  function add3(chunk) {
-    for (const q2 of extractSymbolRefs(chunk)) {
-      if (!seen.has(q2)) {
-        seen.add(q2);
-        refs.push(q2);
-      }
-    }
-  }
-  add3(page.lead ?? "");
-  const sections = page.sections;
-  if (sections) {
-    if (Array.isArray(sections)) {
-      for (const s2 of sections)
-        add3(s2.body);
-    } else {
-      for (const body of Object.values(sections))
-        add3(String(body));
-    }
-  }
-  return refs;
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/symbol-verify.js
-var MIN_SYMBOL_REFS = 3;
-var SYMBOL_STALE_THRESHOLD = 0.5;
-function evaluateSymbolStaleness(args) {
-  const { page_id, is_symbol_stale_was, symbol_refs, existence } = args;
-  if (symbol_refs.length < MIN_SYMBOL_REFS) {
-    return {
-      page_id,
-      symbol_refs,
-      missing_refs: [],
-      is_symbol_stale_now: false,
-      is_symbol_stale_was,
-      transitioned: is_symbol_stale_was,
-      rationale: `too few symbol refs (${symbol_refs.length} < ${MIN_SYMBOL_REFS})`
-    };
-  }
-  const missing = symbol_refs.filter((q2) => !existence[q2]);
-  const fraction = missing.length / symbol_refs.length;
-  const isNow = fraction >= SYMBOL_STALE_THRESHOLD;
-  return {
-    page_id,
-    symbol_refs,
-    missing_refs: missing,
-    is_symbol_stale_now: isNow,
-    is_symbol_stale_was,
-    transitioned: isNow !== is_symbol_stale_was,
-    rationale: `${missing.length}/${symbol_refs.length} symbols missing (${Math.round(fraction * 100)}% \u2014 threshold ${Math.round(SYMBOL_STALE_THRESHOLD * 100)}%)`
-  };
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/groomer.js
-init_layout();
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/sync.js
-init_layout();
-init_pages();
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/readme.js
-init_layout();
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-write.js
-async function handler7(args, deps) {
-  const relPath = (args.path ?? "").trim();
-  if (!relPath)
-    return { error: "path is required" };
-  const mode = args.mode ?? "create";
-  const content = args.content;
-  if (!content) {
-    return {
-      error: "content is required \u2014 render the page yourself (e.g. via wiki-adr for ADRs) and pass the final markdown."
-    };
-  }
-  try {
-    const result = await deps.writePage(deps.wikiRoot, relPath, content, mode);
-    const tags = [...args.tags ?? []];
-    if (deps.storePointerMemory) {
-      await deps.storePointerMemory(relPath, content, tags).catch(() => void 0);
-    }
-    return {
-      path: result.path,
-      mode: result.mode,
-      created: result.created,
-      bytes_written: result.bytes_written,
-      root: deps.wikiRoot
-    };
-  } catch (err) {
-    if (err instanceof WikiExists)
-      return { error: `page already exists: ${relPath}` };
-    if (err instanceof WikiMissing)
-      return { error: `page does not exist: ${relPath}` };
-    return { error: `write failed: ${String(err)}` };
-  }
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-read.js
-async function handler8(args, deps) {
-  const relPath = (args.path ?? "").trim();
-  if (!relPath)
-    return { error: "path is required" };
-  try {
-    const content = await deps.readPage(deps.wikiRoot, relPath);
-    if (content === null)
-      return { error: `page not found: ${relPath}` };
-    return { path: relPath, content, root: deps.wikiRoot };
-  } catch (err) {
-    return { error: `read failed: ${String(err)}` };
-  }
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-list.js
-init_layout();
-async function handler9(args, deps) {
-  const kind2 = args.kind ?? null;
-  if (kind2 && !PAGE_KINDS.includes(kind2)) {
-    return { error: `unknown kind: ${kind2}` };
-  }
-  try {
-    const pages = await deps.listPages(deps.wikiRoot, kind2);
-    return { root: deps.wikiRoot, count: pages.length, pages };
-  } catch (err) {
-    return { error: `list failed: ${String(err)}` };
-  }
-}
-var schema7 = {
-  title: "Wiki \u2014 list pages",
-  description: "Enumerate every authored wiki page under ~/.claude/methodology/wiki/, filesystem-walked from the wiki root. Optionally restrict by kind.",
-  inputSchema: {
-    type: "object",
-    required: [],
-    properties: {
-      kind: {
-        type: "string",
-        enum: [...PAGE_KINDS],
-        description: "Restrict the listing to a single page kind."
-      }
-    }
-  }
-};
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-adr.js
-init_layout();
-init_pages();
-async function handler10(args, deps) {
-  const title = (args.title ?? "").trim();
-  const context = (args.context ?? "").trim();
-  const decision = (args.decision ?? "").trim();
-  const consequences = (args.consequences ?? "").trim();
-  const status = args.status ?? "accepted";
-  const tags = [...args.tags ?? []];
-  if (!title || !context || !decision || !consequences) {
-    return { error: "title, context, decision and consequences are required" };
-  }
-  if (!ADR_STATUSES.includes(status)) {
-    return { error: `unknown status: ${status}` };
-  }
-  let number3;
-  try {
-    number3 = await deps.nextAdrNumber(deps.wikiRoot);
-  } catch (err) {
-    return { error: `cannot determine next ADR number: ${String(err)}` };
-  }
-  const slug = slugify(title);
-  const filename = adrFilename(number3, slug);
-  const relPath = pagePath("adr", filename);
-  const content = buildAdr({ number: number3, title, context, decision, consequences, status, tags });
-  try {
-    const result = await deps.writePage(deps.wikiRoot, relPath, content, "create");
-    if (deps.storePointerMemory) {
-      await deps.storePointerMemory(relPath, content, ["wiki", "adr", ...tags]).catch(() => void 0);
-    }
-    return {
-      path: result.path,
-      number: number3,
-      title,
-      status,
-      created: result.created,
-      bytes_written: result.bytes_written,
-      root: deps.wikiRoot
-    };
-  } catch (err) {
-    if (err instanceof WikiExists)
-      return { error: `ADR already exists: ${relPath}` };
-    return { error: `write failed: ${String(err)}` };
-  }
-}
-var schema8 = {
-  description: "Create a numbered ADR (Architecture Decision Record) from structured Context/Decision/Consequences fields. Atomically computes the next free ADR number, renders the standard template, writes wiki/adr/<NNNN>-<slug>.md, and registers a protected pointer memory tagged `wiki`+`adr`.",
-  inputSchema: {
-    type: "object",
-    required: ["title", "context", "decision", "consequences"],
-    properties: {
-      title: { type: "string", description: "Short imperative title of the decision." },
-      context: { type: "string", description: "The forces at play. Markdown allowed." },
-      decision: { type: "string", description: "What was decided, in active voice." },
-      consequences: { type: "string", description: "Resulting consequences." },
-      status: { type: "string", enum: [...ADR_STATUSES], default: "accepted" },
-      tags: { type: "array", items: { type: "string" } }
-    }
-  }
-};
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-link.js
-async function updatePage(relPath, entry, deps) {
-  const current = await deps.readPage(deps.wikiRoot, relPath);
-  if (current === null)
-    throw new WikiMissing(relPath);
-  const updated = applyLink(current, entry);
-  await deps.writePage(deps.wikiRoot, relPath, updated, "replace");
-}
-async function handler11(args, deps) {
-  const fromPath = (args.from_path ?? "").trim();
-  const toPath = (args.to_path ?? "").trim();
-  const relation = (args.relation ?? "").trim();
-  if (!fromPath || !toPath || !relation) {
-    return { error: "from_path, to_path, and relation are required" };
-  }
-  if (!RELATIONS[relation]) {
-    return { error: `unknown relation: ${relation}` };
-  }
-  try {
-    await updatePage(fromPath, { relation, target: toPath }, deps);
-    await updatePage(toPath, { relation: inverseOf(relation), target: fromPath }, deps);
-  } catch (err) {
-    if (err instanceof WikiMissing)
-      return { error: `page not found: ${String(err.message)}` };
-    return { error: `link failed: ${String(err)}` };
-  }
-  return { from_path: fromPath, to_path: toPath, relation, inverse: inverseOf(relation) };
-}
-var schema9 = {
-  title: "Wiki \u2014 link pages",
-  description: "Add a bidirectional link between two wiki pages: write the forward relation into the ## Related section of the source page and the inverse relation into the target page, in one idempotent operation.",
-  inputSchema: {
-    type: "object",
-    required: ["from_path", "to_path", "relation"],
-    properties: {
-      from_path: { type: "string" },
-      to_path: { type: "string" },
-      relation: { type: "string", enum: Object.keys(RELATIONS) }
-    }
-  }
-};
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-reindex.js
-init_layout();
-var BANNER = "<!-- Generated by Cortex wiki-reindex \u2014 the authored pages are the source of truth. -->";
-function renderIndex(grouped) {
-  const lines = [BANNER, "", "# Wiki Index", ""];
-  const total = Object.values(grouped).reduce((s2, ps) => s2 + ps.length, 0);
-  lines.push(`**${total} authored pages across ${PAGE_KINDS.length} kinds.**`);
-  lines.push("");
-  for (const kind2 of PAGE_KINDS) {
-    const pages = grouped[kind2] ?? [];
-    lines.push(`## ${kind2} (${pages.length})`);
-    lines.push("");
-    if (!pages.length) {
-      lines.push("_No pages yet._");
-      lines.push("");
-      continue;
-    }
-    for (const rel of pages) {
-      const name = rel.split("/").pop() ?? rel;
-      lines.push(`- [${name}](../${rel})`);
-    }
-    lines.push("");
-  }
-  return lines.join("\n");
-}
-async function handler12(_args, deps) {
-  const grouped = {};
-  for (const kind2 of PAGE_KINDS) {
+  }, async (args) => {
     try {
-      grouped[kind2] = await deps.listPages(deps.wikiRoot, kind2);
-    } catch {
-      grouped[kind2] = [];
+      const response = await handler3({
+        directory: args.directory,
+        domain: args.domain,
+        max_file_size_kb: args.max_file_size_kb,
+        dry_run: args.dry_run
+      }, { store: deps.store });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText5("seed_project", err);
     }
-  }
-  const content = renderIndex(grouped);
-  const target = deps.joinPath(deps.wikiRoot, indexPath());
-  const dir = target.split("/").slice(0, -1).join("/");
-  try {
-    await deps.ensureDir(dir);
-    await deps.writeFile(target, content);
-  } catch (err) {
-    return { error: `reindex failed: ${String(err)}` };
-  }
-  return {
-    path: indexPath(),
-    total_pages: Object.values(grouped).reduce((s2, ps) => s2 + ps.length, 0),
-    by_kind: Object.fromEntries(Object.entries(grouped).map(([k2, v2]) => [k2, v2.length])),
-    root: deps.wikiRoot
-  };
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-purge.js
-init_pages();
-var PAGE_DIRS = /* @__PURE__ */ new Set(["adr", "conventions", "guides", "journal", "lessons", "notes", "reference", "specs"]);
-function parseTags2(raw) {
-  if (Array.isArray(raw))
-    return raw.map(String);
-  if (typeof raw !== "string")
-    return [];
-  const stripped = raw.trim().replace(/^\[|\]$/g, "");
-  return stripped.split(",").map((t2) => t2.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean);
-}
-function evaluatePage(content) {
-  const doc = parsePage(content);
-  const tags = parseTags2(doc.frontmatter["tags"]);
-  let body = doc.body;
-  const lines = body.trim().split("\n");
-  const bodyLines = lines[0]?.startsWith("# ") ? lines.slice(1) : lines;
-  const bodyText = bodyLines.join("\n").trim() || String(doc.frontmatter["title"] ?? "");
-  return [classifyMemory(bodyText, tags), tags];
-}
-async function handler13(args, deps) {
-  const apply = args.apply ?? false;
-  const kindFilter = args.kind ?? null;
-  if (!deps.wikiRoot)
-    return { error: "wiki root not configured" };
-  let entries;
-  try {
-    entries = await deps.listAllMarkdownFiles(deps.wikiRoot, kindFilter);
-  } catch (err) {
-    return { error: `wiki root does not exist or cannot be listed: ${String(err)}` };
-  }
-  const kept = [];
-  const purged = [];
-  const errors = [];
-  for (const { relPath, content } of entries) {
-    const firstSegment = relPath.split("/")[0] ?? "";
-    if (!PAGE_DIRS.has(firstSegment))
-      continue;
+  });
+  server2.registerTool("backfill_memories", {
+    description: "Auto-import prior Claude Code conversation JSONL files, applying Ebbinghaus-decay initial heat.",
+    inputSchema: {
+      project: external_exports.string().default("").describe("Project identifier"),
+      max_files: external_exports.number().int().min(1).default(BACKFILL_MAX_FILES_DEFAULT).describe("Max JSONL files to process"),
+      // source: Ebbinghaus retention curve — min_importance threshold of 0.35
+      // per MCP_TOOLS.md §backfill_memories default
+      min_importance: external_exports.number().min(0).max(1).default(BACKFILL_MIN_IMPORTANCE).describe("Minimum importance score"),
+      dry_run: external_exports.boolean().default(false).describe("Preview without writing"),
+      force_reprocess: external_exports.boolean().default(false).describe("Reprocess already-imported files")
+    }
+  }, async (args) => {
     try {
-      const [decision] = evaluatePage(content);
-      if (decision === null) {
-        purged.push(relPath);
-        if (apply) {
-          await deps.deleteFile(`${deps.wikiRoot}/${relPath}`).catch((err) => {
-            errors.push(`${relPath}: ${String(err)}`);
+      const rememberFn = (rawArgs) => {
+        const result = remember(rawArgs, deps.store);
+        return Promise.resolve(result.stored ? { stored: true } : null);
+      };
+      const response = await importHandler({
+        project: args.project,
+        domain: "",
+        min_importance: args.min_importance,
+        max_sessions: args.max_files,
+        dry_run: args.dry_run
+      }, rememberFn);
+      return { content: [{ type: "text", text: JSON.stringify({
+        backfilled: response.imported,
+        skipped: response.skipped,
+        files_processed: response.total_files,
+        dry_run: args.dry_run
+      }) }] };
+    } catch (err) {
+      return errorText5("backfill_memories", err);
+    }
+  });
+  server2.registerTool("get_methodology_graph", {
+    description: "Returns methodology map as graph data for 3D visualisation.",
+    inputSchema: {
+      domain: external_exports.string().optional().describe("Domain to visualise")
+    }
+  }, async (args) => {
+    try {
+      const profiles = loadProfilesRaw();
+      const domains = profiles["domains"] ?? {};
+      const nodes = [];
+      const edges = [];
+      let edgeId = 0;
+      for (const [id2, domain] of Object.entries(domains)) {
+        if (args.domain && id2 !== args.domain)
+          continue;
+        nodes.push({
+          id: id2,
+          label: domain["label"] ?? id2,
+          session_count: domain["sessionCount"] ?? 0,
+          confidence: domain["confidence"] ?? 0
+        });
+        const bridges = domain["connectionBridges"] ?? [];
+        for (const bridge of bridges) {
+          const target = bridge["targetDomain"];
+          if (!target)
+            continue;
+          edges.push({
+            id: edgeId++,
+            source: id2,
+            target,
+            bridge_type: bridge["bridgeType"] ?? "unknown",
+            strength: bridge["strength"] ?? 0
           });
         }
-      } else {
-        kept.push(relPath);
       }
+      return { content: [{ type: "text", text: JSON.stringify({ nodes, edges }) }] };
     } catch (err) {
-      errors.push(`${relPath}: ${String(err)}`);
+      return errorText5("get_methodology_graph", err);
     }
-  }
-  if (apply && purged.length && deps.removeEmptyDirs) {
-    await deps.removeEmptyDirs(deps.wikiRoot).catch(() => void 0);
-  }
-  return {
-    applied: apply,
-    scanned: kept.length + purged.length,
-    kept: kept.length,
-    purged: purged.length,
-    purged_paths: purged,
-    errors,
-    root: deps.wikiRoot
-  };
-}
-var schema10 = {
-  title: "Wiki \u2014 purge stale",
-  description: "Re-evaluate every authored wiki page against the current classifier and delete the ones that no longer pass the admission gate. Defaults to dry-run; pass apply=true to actually delete.",
-  inputSchema: {
-    type: "object",
-    required: [],
-    properties: {
-      apply: { type: "boolean", default: false },
-      kind: { type: "string", enum: [...PAGE_DIRS] }
-    }
-  }
-};
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-verify.js
-function parseLeadAndSections(md) {
-  const lines = md.split("\n");
-  const leadLines = [];
-  const sections = {};
-  let current = null;
-  const buf = [];
-  for (const line of lines) {
-    if (line.startsWith("## ")) {
-      if (current !== null) {
-        sections[current] = buf.join("\n").trim();
-      } else {
-        leadLines.push(...buf);
-      }
-      current = line.slice(3).trim();
-      buf.length = 0;
-    } else {
-      buf.push(line);
-    }
-  }
-  if (current !== null) {
-    sections[current] = buf.join("\n").trim();
-  } else {
-    leadLines.push(...buf);
-  }
-  return { lead: leadLines.join("\n").trim(), sections };
-}
-async function verifyOne(path6, deps) {
-  const content = await deps.readPage(deps.wikiRoot, path6);
-  if (content === null) {
-    return { page: path6, symbol_refs: [], missing_refs: [], is_symbol_stale: false, rationale: "page not found", error: "page not found" };
-  }
-  const pageStruct = parseLeadAndSections(content);
-  const symbolRefs = harvestPageSymbols(pageStruct).slice(0, 200);
-  const existence = symbolRefs.length > 0 ? await deps.verifySymbols(symbolRefs) : {};
-  const verdict = evaluateSymbolStaleness({
-    page_id: path6,
-    is_symbol_stale_was: false,
-    symbol_refs: symbolRefs,
-    existence
   });
-  return {
-    page: path6,
-    symbol_refs: verdict.symbol_refs,
-    missing_refs: verdict.missing_refs,
-    is_symbol_stale: verdict.is_symbol_stale_now,
-    rationale: verdict.rationale
-  };
-}
-async function handler14(args, deps) {
-  if (!deps.isApEnabled()) {
-    return {
-      status: "skipped",
-      reason: "ap_disabled",
-      detail: "AP is disabled. Set CORTEX_MEMORY_AP_ENABLED=1 in your MCP config (default) and install automatised-pipeline to run symbol verification."
-    };
-  }
-  const target = (args.path ?? "").trim();
-  if (target) {
-    const result = await verifyOne(target, deps);
-    return {
-      status: "ok",
-      results: [result],
-      threshold: SYMBOL_STALE_THRESHOLD,
-      min_refs: MIN_SYMBOL_REFS
-    };
-  }
-  const pages = await deps.listPages(deps.wikiRoot);
-  const results = await Promise.all(pages.map((p2) => verifyOne(p2, deps)));
-  const stale = results.filter((r2) => r2.is_symbol_stale);
-  return {
-    status: "ok",
-    results,
-    summary: {
-      total: results.length,
-      stale: stale.length,
-      threshold: SYMBOL_STALE_THRESHOLD,
-      min_refs: MIN_SYMBOL_REFS
-    }
-  };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-handlers.js
-init_schema_loader();
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-curate-handler.js
-init_schema_loader();
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-compile-handler.js
-init_layout();
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-export-handler.js
-import * as childProcess from "node:child_process";
-import { promisify } from "node:util";
-var execFile2 = promisify(childProcess.execFile);
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/storage/wiki-store.js
-init_layout();
-import * as fs3 from "node:fs";
-import * as path2 from "node:path";
-function safeJoin(root, relPath) {
-  if (!relPath || relPath.includes("\0")) {
-    throw new Error("invalid wiki path: empty or contains null byte");
-  }
-  if (path2.isAbsolute(relPath)) {
-    throw new Error(`absolute paths are not allowed: ${JSON.stringify(relPath)}`);
-  }
-  const rootResolved = fs3.realpathSync(root);
-  let candidate;
-  try {
-    candidate = fs3.realpathSync(path2.join(rootResolved, relPath));
-  } catch {
-    candidate = path2.resolve(rootResolved, relPath);
-  }
-  const rel = path2.relative(rootResolved, candidate);
-  if (rel.startsWith("..") || path2.isAbsolute(rel)) {
-    throw new Error(`path escapes wiki root: ${JSON.stringify(relPath)}`);
-  }
-  return candidate;
-}
-function readPage(root, relPath) {
-  if (!relPath || relPath.includes("\0") || path2.isAbsolute(relPath)) {
-    return null;
-  }
-  let fullPath;
-  try {
-    fullPath = safeJoin(root, relPath);
-  } catch {
-    return null;
-  }
-  if (!fs3.existsSync(fullPath))
-    return null;
-  return fs3.readFileSync(fullPath, "utf-8");
-}
-function atomicWriteString(safePath, content) {
-  const dir = path2.dirname(safePath);
-  if (dir && !fs3.existsSync(dir)) {
-    fs3.mkdirSync(dir, { recursive: true });
-  }
-  const tmp = safePath + ".tmp";
-  const data = Buffer.from(content, "utf-8");
-  fs3.writeFileSync(tmp, data);
-  fs3.renameSync(tmp, safePath);
-  return data.byteLength;
-}
-function writePage(root, relPath, content, mode = "create") {
-  const safePath = safeJoin(root, relPath);
-  const existed = fs3.existsSync(safePath);
-  let written;
-  if (mode === "create") {
-    if (existed)
-      throw new WikiExists(relPath);
-    written = atomicWriteString(safePath, content);
-  } else if (mode === "replace") {
-    written = atomicWriteString(safePath, content);
-  } else if (mode === "append") {
-    if (!existed)
-      throw new WikiMissing(relPath);
-    let current = fs3.readFileSync(safePath, "utf-8");
-    if (current && !current.endsWith("\n"))
-      current += "\n";
-    let merged = current + "\n" + content;
-    if (!merged.endsWith("\n"))
-      merged += "\n";
-    written = atomicWriteString(safePath, merged);
-  } else {
-    throw new Error(`unknown write mode: ${mode}`);
-  }
-  return { path: relPath, mode, created: !existed, bytes_written: written };
-}
-function listPages(root, kind2) {
-  if (!fs3.existsSync(root))
-    return [];
-  const kinds = kind2 ? [kind2] : [...PAGE_KINDS];
-  const results = [];
-  for (const k2 of kinds) {
-    if (!PAGE_KINDS.includes(k2))
-      continue;
-    const kindDir = path2.join(root, k2);
-    if (!fs3.existsSync(kindDir))
-      continue;
-    walkMd(kindDir, root, results);
-  }
-  return results.sort();
-}
-function walkMd(dir, root, out) {
-  let entries;
-  try {
-    entries = fs3.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    const full = path2.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      walkMd(full, root, out);
-    } else if (entry.isFile() && entry.name.endsWith(".md")) {
-      out.push(path2.relative(root, full).replace(/\\/g, "/"));
-    }
-  }
-}
-function nextAdrNumber(root) {
-  const pages = listPages(root, "adr");
-  let maxSeen = 0;
-  for (const rel of pages) {
-    const name = rel.split("/").pop() ?? "";
-    const head = name.split("-")[0] ?? "";
-    const num = parseInt(head, 10);
-    if (!isNaN(num) && num > maxSeen)
-      maxSeen = num;
-  }
-  return maxSeen + 1;
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-migrate-handler.js
-init_pages();
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-api-handler.js
-init_pages();
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/metacognition-analysis.js
-var RECENCY_THRESHOLDS_MS = [
-  [1 * 24 * 3600 * 1e3, 1],
-  // 1 day
-  [7 * 24 * 3600 * 1e3, 0.7],
-  // 7 days
-  [30 * 24 * 3600 * 1e3, 0.4]
-  // 30 days
-];
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/narrative/types.js
-var MemoryRecordSchema = external_exports.object({
-  content: external_exports.string(),
-  tags: external_exports.union([external_exports.array(external_exports.string()), external_exports.string()]).default([]),
-  importance: external_exports.number().min(0).max(1).default(0.5),
-  heat: external_exports.number().min(0).max(1).default(0),
-  timestamp: external_exports.string().default(""),
-  session_id: external_exports.string().default("")
-});
-var SessionRecordSchema = external_exports.object({
-  type: external_exports.enum(["user", "assistant", "system"]).optional(),
-  sessionId: external_exports.string().optional(),
-  cwd: external_exports.string().optional(),
-  timestamp: external_exports.string().optional(),
-  isMeta: external_exports.boolean().optional(),
-  toolUseResult: external_exports.unknown().optional(),
-  message: external_exports.object({
-    content: external_exports.union([
-      external_exports.string(),
-      external_exports.array(external_exports.object({
-        type: external_exports.string(),
-        text: external_exports.string().optional(),
-        name: external_exports.string().optional()
-      }))
-    ]).optional()
-  }).optional()
-});
-var MemorableItemSchema = external_exports.object({
-  content: external_exports.string(),
-  tags: external_exports.array(external_exports.string()),
-  importance: external_exports.number().min(0).max(1),
-  timestamp: external_exports.string(),
-  session_id: external_exports.string()
-});
-var SessionSummarySchema = external_exports.object({
-  session_id: external_exports.string(),
-  cwd: external_exports.string(),
-  first_message: external_exports.string(),
-  user_count: external_exports.number().int().nonnegative(),
-  tools_used: external_exports.array(external_exports.string()),
-  start_time: external_exports.string(),
-  end_time: external_exports.string()
-});
-var NarrativeFunctionTypeSchema = external_exports.enum([
-  "orientation",
-  "complication",
-  "resolution"
-]);
-var NarrativeFunctionSchema = external_exports.object({
-  /** Structural function type — what this step DOES in the arc. */
-  type: NarrativeFunctionTypeSchema,
-  /** The memory items that realise this function. */
-  items: external_exports.array(external_exports.string()),
-  /** Whether this function was derived from explicit signal or inferred. */
-  inferred: external_exports.boolean().default(false)
-});
-var NarrativeArcSchema = external_exports.object({
-  orientation: NarrativeFunctionSchema.optional(),
-  complication: NarrativeFunctionSchema.optional(),
-  resolution: NarrativeFunctionSchema.optional()
-});
-var NarrativeRequestSchema = external_exports.object({
-  /** Absolute project directory to narrate. Mutually exclusive with domain. */
-  directory: external_exports.string().optional(),
-  /** Domain identifier (e.g. 'cortex', 'auth-service'). */
-  domain: external_exports.string().optional(),
-  /**
-   * If true, return a one-paragraph executive summary instead of the
-   * full multi-section narrative.
-   */
-  brief: external_exports.boolean().default(false)
-});
-var NarrativeResponseSchema = external_exports.object({
-  /** Full formatted narrative string (absent when brief=true). */
-  narrative: external_exports.string().optional(),
-  /** One-paragraph brief summary (present when brief=true). */
-  summary: external_exports.string().optional(),
-  /** Extracted decision statements. */
-  decisions: external_exports.array(external_exports.string()).default([]),
-  /** Extracted event statements. */
-  events: external_exports.array(external_exports.string()).default([]),
-  /** Top entity names by frequency. */
-  entities: external_exports.array(external_exports.string()).default([]),
-  /** High-heat focus topics. */
-  topics: external_exports.array(external_exports.string()).default([]),
-  /** Structural narrative arc (Proppian function sequence). */
-  arc: NarrativeArcSchema.optional(),
-  /** Total memories analysed. */
-  memory_count: external_exports.number().int().nonnegative()
-});
-var SessionEventSchema = external_exports.object({
-  id: external_exports.string(),
-  type: NarrativeFunctionTypeSchema,
-  content: external_exports.string(),
-  importance: external_exports.number().min(0).max(1).default(0.5),
-  timestamp: external_exports.string().default("")
-});
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/narrative/narrative-builder.js
+// packages/memory/dist/narrative/narrative-builder.js
 var CONTENT_TRUNCATION_CHARS = 150;
 var TOPIC_CONTENT_CHARS = 100;
 var BRIEF_SUMMARY_MAX_CHARS = 300;
@@ -48832,7 +43371,105 @@ function generateBriefSummary(memories, maxChars = BRIEF_SUMMARY_MAX_CHARS) {
   return truncated + "...";
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/narrative/handlers/narrative.js
+// packages/memory/dist/narrative/types.js
+var MemoryRecordSchema = external_exports.object({
+  content: external_exports.string(),
+  tags: external_exports.union([external_exports.array(external_exports.string()), external_exports.string()]).default([]),
+  importance: external_exports.number().min(0).max(1).default(0.5),
+  heat: external_exports.number().min(0).max(1).default(0),
+  timestamp: external_exports.string().default(""),
+  session_id: external_exports.string().default("")
+});
+var SessionRecordSchema = external_exports.object({
+  type: external_exports.enum(["user", "assistant", "system"]).optional(),
+  sessionId: external_exports.string().optional(),
+  cwd: external_exports.string().optional(),
+  timestamp: external_exports.string().optional(),
+  isMeta: external_exports.boolean().optional(),
+  toolUseResult: external_exports.unknown().optional(),
+  message: external_exports.object({
+    content: external_exports.union([
+      external_exports.string(),
+      external_exports.array(external_exports.object({
+        type: external_exports.string(),
+        text: external_exports.string().optional(),
+        name: external_exports.string().optional()
+      }))
+    ]).optional()
+  }).optional()
+});
+var MemorableItemSchema = external_exports.object({
+  content: external_exports.string(),
+  tags: external_exports.array(external_exports.string()),
+  importance: external_exports.number().min(0).max(1),
+  timestamp: external_exports.string(),
+  session_id: external_exports.string()
+});
+var SessionSummarySchema = external_exports.object({
+  session_id: external_exports.string(),
+  cwd: external_exports.string(),
+  first_message: external_exports.string(),
+  user_count: external_exports.number().int().nonnegative(),
+  tools_used: external_exports.array(external_exports.string()),
+  start_time: external_exports.string(),
+  end_time: external_exports.string()
+});
+var NarrativeFunctionTypeSchema = external_exports.enum([
+  "orientation",
+  "complication",
+  "resolution"
+]);
+var NarrativeFunctionSchema = external_exports.object({
+  /** Structural function type — what this step DOES in the arc. */
+  type: NarrativeFunctionTypeSchema,
+  /** The memory items that realise this function. */
+  items: external_exports.array(external_exports.string()),
+  /** Whether this function was derived from explicit signal or inferred. */
+  inferred: external_exports.boolean().default(false)
+});
+var NarrativeArcSchema = external_exports.object({
+  orientation: NarrativeFunctionSchema.optional(),
+  complication: NarrativeFunctionSchema.optional(),
+  resolution: NarrativeFunctionSchema.optional()
+});
+var NarrativeRequestSchema = external_exports.object({
+  /** Absolute project directory to narrate. Mutually exclusive with domain. */
+  directory: external_exports.string().optional(),
+  /** Domain identifier (e.g. 'cortex', 'auth-service'). */
+  domain: external_exports.string().optional(),
+  /**
+   * If true, return a one-paragraph executive summary instead of the
+   * full multi-section narrative.
+   */
+  brief: external_exports.boolean().default(false)
+});
+var NarrativeResponseSchema = external_exports.object({
+  /** Full formatted narrative string (absent when brief=true). */
+  narrative: external_exports.string().optional(),
+  /** One-paragraph brief summary (present when brief=true). */
+  summary: external_exports.string().optional(),
+  /** Extracted decision statements. */
+  decisions: external_exports.array(external_exports.string()).default([]),
+  /** Extracted event statements. */
+  events: external_exports.array(external_exports.string()).default([]),
+  /** Top entity names by frequency. */
+  entities: external_exports.array(external_exports.string()).default([]),
+  /** High-heat focus topics. */
+  topics: external_exports.array(external_exports.string()).default([]),
+  /** Structural narrative arc (Proppian function sequence). */
+  arc: NarrativeArcSchema.optional(),
+  /** Total memories analysed. */
+  memory_count: external_exports.number().int().nonnegative()
+});
+var SessionEventSchema = external_exports.object({
+  id: external_exports.string(),
+  type: NarrativeFunctionTypeSchema,
+  content: external_exports.string(),
+  importance: external_exports.number().min(0).max(1).default(0.5),
+  timestamp: external_exports.string().default("")
+});
+
+// packages/memory/dist/narrative/handlers/narrative.js
 var MEMORY_FETCH_LIMIT = 200;
 var HOT_MEMORY_MIN_HEAT = 0.1;
 var NARRATIVE_POLISH_MAX_TOKENS = 1024;
@@ -48879,7 +43516,7 @@ async function narrativeHandler(store, rawArgs, llmClient2 = null) {
   return result;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/narrative/handlers/get-project-story.js
+// packages/memory/dist/narrative/handlers/get-project-story.js
 var GET_PROJECT_STORY_DEFAULT_LIMIT = 50;
 var HOT_MEMORY_HEAT_THRESHOLD = 0.5;
 var GET_PROJECT_STORY_MAX_TOPICS = 10;
@@ -48894,7 +43531,7 @@ function getProjectStoryHandler(store, args) {
   return { domain, memoriesFound: memories.length, summary, hotTopics: uniqueTopics, sessionCount: 0 };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/narrative/handlers/unified-search.js
+// packages/memory/dist/narrative/handlers/unified-search.js
 var MEMORY_FETCH_LIMIT2 = 200;
 var HOT_MEMORY_MIN_HEAT2 = 0.1;
 var AP_SEARCH_LIMIT = 20;
@@ -48990,228 +43627,116 @@ async function unifiedSearchHandler(deps, rawArgs) {
   };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/workflow-graph/schema-enums.js
-var NodeKind = {
-  DOMAIN: "domain",
-  SKILL: "skill",
-  COMMAND: "command",
-  HOOK: "hook",
-  AGENT: "agent",
-  TOOL_HUB: "tool_hub",
-  FILE: "file",
-  MEMORY: "memory",
-  DISCUSSION: "discussion",
-  // ENTITY — projects a knowledge-graph entity (entities table row)
-  // into the workflow graph. Linked to memories via the about_entity edge.
-  ENTITY: "entity",
-  MCP: "mcp",
-  // SYMBOL — function / class / module / import extracted from the
-  // AST by the automatised-pipeline sibling plugin (ADR-0046).
-  // symbol_type on the node body carries the sub-kind.
-  SYMBOL: "symbol"
-};
-var ToolKind = {
-  EDIT: "Edit",
-  READ: "Read",
-  GREP: "Grep",
-  BASH: "Bash",
-  GLOB: "Glob",
-  WRITE: "Write",
-  TASK: "Task"
-};
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/workflow-graph/schema.js
-var WorkflowNodeSchema = external_exports.object({
-  id: external_exports.string(),
-  kind: external_exports.string(),
-  // NodeKind value
-  label: external_exports.string().default(""),
-  color: external_exports.string().default("#999999"),
-  domain_id: external_exports.string().default(""),
-  size: external_exports.number().default(1),
-  tool: external_exports.string().nullable().optional(),
-  primary_cluster: external_exports.string().nullable().optional(),
-  path: external_exports.string().nullable().optional(),
-  stage: external_exports.string().nullable().optional(),
-  extra_domain_ids: external_exports.array(external_exports.string()).default([]),
-  body: external_exports.string().nullable().optional(),
-  session_id: external_exports.string().nullable().optional(),
-  heat: external_exports.number().nullable().optional(),
-  tags: external_exports.array(external_exports.string()).default([]),
-  count: external_exports.number().int().nullable().optional(),
-  event: external_exports.string().nullable().optional(),
-  subagent_type: external_exports.string().nullable().optional(),
-  created_at: external_exports.string().nullable().optional(),
-  // AST-derived fields (ADR-0046)
-  symbol_type: external_exports.string().nullable().optional(),
-  signature: external_exports.string().nullable().optional(),
-  language: external_exports.string().nullable().optional(),
-  line: external_exports.number().int().nullable().optional()
-}).passthrough();
-var WorkflowEdgeSchema = external_exports.object({
-  source: external_exports.string(),
-  target: external_exports.string(),
-  kind: external_exports.string(),
-  // EdgeKind value
-  weight: external_exports.number().default(1),
-  label: external_exports.string().nullable().optional(),
-  // ge=0.0, le=1.0 is a contract the renderer relies on.
-  confidence: external_exports.number().min(0).max(1).nullable().optional(),
-  reason: external_exports.string().nullable().optional()
-});
-var _MULTI_DOMAIN_KINDS = /* @__PURE__ */ new Set([
-  NodeKind.FILE,
-  NodeKind.MCP,
-  NodeKind.SKILL
-]);
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/workflow-graph/builder.js
-var _MEMORY_SCIENTIFIC_KEYS = "heat_base arousal emotional_valence dominant_emotion importance surprise_score confidence access_count useful_count replay_count reconsolidation_count plasticity stability excitability hippocampal_dependency schema_match_score schema_id separation_index interference_score encoding_strength hours_in_stage stage_entered_at last_accessed no_decay is_protected is_stale is_benchmark is_global store_type compression_level compressed".split(" ");
-var _TOOL_NAME_TO_ENUM = {};
-var _TOOL_NAME_LOWER = {};
-for (const t2 of Object.values(ToolKind)) {
-  _TOOL_NAME_TO_ENUM[t2] = t2;
-  _TOOL_NAME_LOWER[t2.toLowerCase()] = t2;
+// packages/mcp-servers/memory/dist/tools/narrative.js
+var MAX_CHAPTERS_MAX = 20;
+var MAX_CHAPTERS_DEFAULT = 5;
+var MAX_RESULTS_MAX = 50;
+var MAX_RESULTS_DEFAULT2 = 10;
+var RRF_K_DEFAULT = 60;
+function errorText6(tool, err) {
+  const message = err instanceof Error ? err.message : String(err);
+  return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
 }
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/workflow-graph/sources/source-jsonl.js
-import { join as join13 } from "node:path";
-import { homedir as homedir5 } from "node:os";
-var CLAUDE_DIR2 = join13(homedir5(), ".claude");
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/workflow-graph/sources/source-pg.js
-var _MEMORY_PASSTHROUGH_KEYS = "heat_base arousal emotional_valence dominant_emotion importance surprise_score confidence access_count useful_count replay_count reconsolidation_count plasticity stability excitability hippocampal_dependency schema_match_score schema_id separation_index interference_score encoding_strength hours_in_stage stage_entered_at no_decay is_protected is_stale is_benchmark is_global store_type last_accessed created_at compression_level compressed tags".split(" ");
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/workflow-graph/handlers/query-workflow-graph.js
-var _DEFAULT_LIMIT = 500;
-var _MAX_LIMIT = 5e3;
-function asSet(value) {
-  if (value == null)
-    return null;
-  if (typeof value === "string")
-    return value ? /* @__PURE__ */ new Set([value]) : null;
-  if (Array.isArray(value)) {
-    const out = new Set(value.map(String).filter(Boolean));
-    return out.size > 0 ? out : null;
-  }
-  return null;
-}
-function edgeKindOf(e2) {
-  return String(e2["kind"] ?? e2["type"] ?? "");
-}
-function nodeKindOf(n3) {
-  return String(n3["kind"] ?? n3["type"] ?? "");
-}
-function edgeEndpoints(e2) {
-  const s2 = e2["source"];
-  const t2 = e2["target"];
-  const sId = typeof s2 === "object" && s2 !== null ? String(s2["id"] ?? "") : String(s2 ?? "");
-  const tId = typeof t2 === "object" && t2 !== null ? String(t2["id"] ?? "") : String(t2 ?? "");
-  return [sId, tId];
-}
-function bfsNeighbourhood(nodes, edges, seed, depth) {
-  if (depth < 1)
-    return [/* @__PURE__ */ new Set([seed]), []];
-  const adj = /* @__PURE__ */ new Map();
-  for (const e2 of edges) {
-    const [s2, t2] = edgeEndpoints(e2);
-    if (!s2 || !t2)
-      continue;
-    if (!adj.has(s2))
-      adj.set(s2, []);
-    if (!adj.has(t2))
-      adj.set(t2, []);
-    adj.get(s2).push(t2);
-    adj.get(t2).push(s2);
-  }
-  let frontier = /* @__PURE__ */ new Set([seed]);
-  const reached = /* @__PURE__ */ new Set([seed]);
-  for (let i2 = 0; i2 < depth; i2++) {
-    const nextFrontier = /* @__PURE__ */ new Set();
-    for (const nid of frontier) {
-      for (const other of adj.get(nid) ?? []) {
-        if (!reached.has(other))
-          nextFrontier.add(other);
-      }
+function registerNarrativeTools(server2, deps = null) {
+  const narrativeDeps = deps !== null && typeof deps === "object" && "store" in deps ? deps : null;
+  const llmClient2 = narrativeDeps?.llmClient ?? (deps !== null && typeof deps === "object" && !("store" in deps) ? deps : null);
+  server2.registerTool("narrative", {
+    description: "Generate project narrative from stored memories (structured summary).",
+    inputSchema: {
+      directory: external_exports.string().optional().describe("Directory scope"),
+      domain: external_exports.string().optional().describe("Domain scope"),
+      brief: external_exports.boolean().default(false).describe("Brief mode (condensed output)")
     }
-    for (const n3 of nextFrontier)
-      reached.add(n3);
-    if (nextFrontier.size === 0)
-      break;
-    frontier = nextFrontier;
-  }
-  const keptEdges = edges.filter((e2) => {
-    const [s2, t2] = edgeEndpoints(e2);
-    return reached.has(s2) && reached.has(t2);
+  }, async (args) => {
+    try {
+      if (!narrativeDeps) {
+        return { content: [{ type: "text", text: JSON.stringify({
+          narrative: "",
+          memory_count: 0,
+          note: "no MemoryStore configured \u2014 configure CORTEX_DB_PATH"
+        }) }] };
+      }
+      const response = await narrativeHandler(narrativeDeps.store, {
+        directory: args.directory,
+        domain: args.domain,
+        brief: args.brief
+      }, llmClient2);
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText6("narrative", err);
+    }
   });
-  return [reached, keptEdges];
-}
-function pruneDanglingEdges(edges, nodeIds) {
-  return edges.filter((e2) => {
-    const [s2, t2] = edgeEndpoints(e2);
-    return nodeIds.has(s2) && nodeIds.has(t2);
+  server2.registerTool("get_project_story", {
+    description: "Generate a period-based autobiographical narrative (week/month/all).",
+    inputSchema: {
+      directory: external_exports.string().optional().describe("Directory scope"),
+      domain: external_exports.string().optional().describe("Domain scope"),
+      period: external_exports.enum(["day", "week", "month", "all"]).default("week").describe("Time period"),
+      max_chapters: external_exports.number().int().min(1).max(MAX_CHAPTERS_MAX).default(MAX_CHAPTERS_DEFAULT).describe("Max chapters")
+    }
+  }, async (args) => {
+    try {
+      if (!narrativeDeps) {
+        return { content: [{ type: "text", text: JSON.stringify({
+          chapters: [],
+          period: args.period,
+          note: "no MemoryStore configured"
+        }) }] };
+      }
+      const response = getProjectStoryHandler(narrativeDeps.store, {
+        directory: args.directory,
+        domain: args.domain,
+        period: args.period,
+        max_chapters: args.max_chapters
+      });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText6("get_project_story", err);
+    }
   });
-}
-function capNodesByHeat(nodes, edges, limit) {
-  if (nodes.length <= limit)
-    return [nodes, edges, 0];
-  const sorted = [...nodes].sort((a2, b2) => (parseFloat(String(b2["heat"] ?? b2["size"] ?? 0)) || 0) - (parseFloat(String(a2["heat"] ?? a2["size"] ?? 0)) || 0));
-  const truncated = nodes.length - limit;
-  const kept = sorted.slice(0, limit);
-  const keptIds = new Set(kept.map((n3) => String(n3["id"] ?? "")));
-  return [kept, pruneDanglingEdges(edges, keptIds), truncated];
-}
-function buildMeta(graph, opts) {
-  const meta = { ...graph.meta ?? {} };
-  meta["filtered"] = true;
-  meta["filter"] = {
-    node_kind: opts.nodeKinds ? [...opts.nodeKinds].sort() : null,
-    edge_kind: opts.edgeKinds ? [...opts.edgeKinds].sort() : null,
-    neighbour_of: opts.neighbourOf,
-    depth: opts.neighbourOf ? opts.depth : null,
-    limit_nodes: opts.limitNodes
-  };
-  if (opts.truncated > 0) {
-    meta["truncated_nodes"] = opts.truncated;
-  }
-  return meta;
-}
-function applyFilters(graph, opts) {
-  let nodes = [...graph.nodes ?? []];
-  let edges = [
-    ...graph.edges ?? graph.links ?? []
-  ];
-  if (opts.neighbourOf) {
-    const [reached, keptEdges] = bfsNeighbourhood(nodes, edges, opts.neighbourOf, opts.depth);
-    nodes = nodes.filter((n3) => reached.has(String(n3["id"] ?? "")));
-    edges = keptEdges;
-  }
-  if (opts.edgeKinds !== null) {
-    edges = edges.filter((e2) => opts.edgeKinds.has(edgeKindOf(e2)));
-  }
-  if (opts.nodeKinds !== null) {
-    nodes = nodes.filter((n3) => opts.nodeKinds.has(nodeKindOf(n3)));
-    edges = pruneDanglingEdges(edges, new Set(nodes.map((n3) => String(n3["id"] ?? ""))));
-  }
-  const [cappedNodes, cappedEdges, truncated] = capNodesByHeat(nodes, edges, opts.limitNodes);
-  const meta = buildMeta(graph, { ...opts, truncated });
-  return { nodes: cappedNodes, edges: cappedEdges, links: cappedEdges, meta };
-}
-function queryWorkflowGraph(graph, args = {}) {
-  const depthRaw = args.depth;
-  const depth = depthRaw != null ? Math.max(1, Math.min(2, Math.trunc(Number(depthRaw)))) : 1;
-  const limitRaw = args.limit_nodes;
-  const limitNodes = Math.max(1, Math.min(_MAX_LIMIT, limitRaw != null ? Math.trunc(Number(limitRaw)) : _DEFAULT_LIMIT));
-  return applyFilters(graph, {
-    nodeKinds: asSet(args.node_kind),
-    edgeKinds: asSet(args.edge_kind),
-    neighbourOf: args.neighbour_of ?? null,
-    depth,
-    limitNodes
+  server2.registerTool("unified_search", {
+    description: (
+      // source: docs/ADR/0046 — unified search design
+      "RRF-fuse Cortex memory recall with AP code search (ADR-0046 P3)."
+    ),
+    inputSchema: {
+      query: external_exports.string().min(1).describe("Search query"),
+      domain: external_exports.string().optional().describe("Domain filter"),
+      max_results: external_exports.number().int().min(1).max(MAX_RESULTS_MAX).default(MAX_RESULTS_DEFAULT2).describe("Max results"),
+      // source: Cormack & Clarke (2009) "Reciprocal Rank Fusion" — k=60 canonical value
+      k: external_exports.number().int().min(1).default(RRF_K_DEFAULT).describe("RRF k parameter")
+    }
+  }, async (args) => {
+    try {
+      if (!narrativeDeps) {
+        return { content: [{ type: "text", text: JSON.stringify({
+          results: [],
+          query: args.query,
+          note: "no MemoryStore configured"
+        }) }] };
+      }
+      const response = unifiedSearchHandler(
+        // source: packages/memory/src/narrative/handlers/unified-search.ts::UnifiedSearchDeps
+        { memoryPort: narrativeDeps.store },
+        {
+          query: args.query,
+          domain: args.domain,
+          max_results: args.max_results,
+          k: args.k
+        }
+      );
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText6("unified_search", err);
+    }
   });
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/automation/types.js
+// packages/memory/dist/automation/handlers/sync-to-claude-md.js
+import { promises as fs2 } from "node:fs";
+import path from "node:path";
+
+// packages/memory/dist/automation/types.js
 var TriggerTypeSchema = external_exports.enum([
   "keyword",
   "time",
@@ -49357,6 +43882,169 @@ var AutomationRequestSchema = external_exports.discriminatedUnion("operation", [
     params: SyncInstructionsRequestSchema
   })
 ]);
+
+// packages/memory/dist/automation/handlers/sync-to-claude-md.js
+var SECTION_START = "<!-- cortex:memory-insights:start -->";
+var SECTION_END = "<!-- cortex:memory-insights:end -->";
+var DECISION_RE5 = /\b(decided|chose|switching|migrated|using|adopted|went with|replaced)\b/i;
+function extractInsights(memories, maxInsights) {
+  const decisions = memories.filter((m2) => DECISION_RE5.test(m2.content ?? ""));
+  const others = memories.filter((m2) => !DECISION_RE5.test(m2.content ?? ""));
+  const ordered = [
+    ...decisions.sort((a2, b2) => (b2.heat ?? 0) - (a2.heat ?? 0)),
+    ...others.sort((a2, b2) => (b2.importance ?? 0) - (a2.importance ?? 0))
+  ];
+  const insights = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const mem of ordered.slice(0, maxInsights * 2)) {
+    const text = (mem.content ?? "").trim();
+    if (!text)
+      continue;
+    const bullet = text.slice(0, 120).replace(/\n/g, " ");
+    if (seen.has(bullet))
+      continue;
+    seen.add(bullet);
+    insights.push(bullet);
+    if (insights.length >= maxInsights)
+      break;
+  }
+  return insights;
+}
+function buildSection(insights) {
+  const lines = [
+    SECTION_START,
+    "## Memory Insights",
+    "",
+    "Auto-synced from Cortex memory. Do not edit manually.",
+    "",
+    ...insights.map((i2) => `- ${i2}`),
+    "",
+    SECTION_END
+  ];
+  return lines.join("\n");
+}
+async function updateClaudeMd(claudeMdPath, section, dryRun) {
+  let exists = false;
+  try {
+    await fs2.access(claudeMdPath);
+    exists = true;
+  } catch {
+  }
+  if (!exists) {
+    if (dryRun) {
+      return { action: "would_create", path: claudeMdPath };
+    }
+    await fs2.writeFile(claudeMdPath, section + "\n", "utf-8");
+    return { action: "created", path: claudeMdPath };
+  }
+  const original = await fs2.readFile(claudeMdPath, "utf-8");
+  const startIdx = original.indexOf(SECTION_START);
+  const endIdx = original.indexOf(SECTION_END);
+  let updated;
+  let action;
+  if (startIdx !== -1 && endIdx !== -1) {
+    const before = original.slice(0, startIdx);
+    const after = original.slice(endIdx + SECTION_END.length);
+    updated = before + section + after;
+    action = "updated";
+  } else {
+    updated = original.trimEnd() + "\n\n" + section + "\n";
+    action = "appended";
+  }
+  if (dryRun) {
+    return { action: `would_${action}`, path: claudeMdPath, preview: section };
+  }
+  await fs2.writeFile(claudeMdPath, updated, "utf-8");
+  return { action, path: claudeMdPath };
+}
+async function findClaudeMd(directory) {
+  const resolved = path.resolve(directory);
+  const candidate = path.join(resolved, "CLAUDE.md");
+  try {
+    await fs2.access(candidate);
+    return candidate;
+  } catch {
+    const parent = path.join(path.dirname(resolved), "CLAUDE.md");
+    try {
+      await fs2.access(parent);
+      return parent;
+    } catch {
+      return candidate;
+    }
+  }
+}
+async function syncInstructionsHandler(rawArgs, store) {
+  const parseResult = SyncInstructionsRequestSchema.safeParse(rawArgs ?? {});
+  const args = parseResult.success ? parseResult.data : { directory: void 0, max_insights: 10, min_heat: 0.3, dry_run: false };
+  const directory = args.directory ?? process.cwd();
+  const maxInsights = args.max_insights;
+  const minHeat = args.min_heat;
+  const dryRun = args.dry_run;
+  let memories = await store.getMemoriesForDirectory(directory, { min_heat: minHeat });
+  if (memories.length === 0) {
+    memories = await store.getHotMemories({ min_heat: minHeat, limit: 50 });
+  }
+  if (memories.length === 0) {
+    return { synced: false, reason: "no_memories_found", directory };
+  }
+  const insights = extractInsights(memories, maxInsights);
+  if (insights.length === 0) {
+    return {
+      synced: false,
+      reason: "no_insights_extracted",
+      memory_count: memories.length
+    };
+  }
+  const claudeMdPath = await findClaudeMd(directory);
+  const section = buildSection(insights);
+  const result = await updateClaudeMd(claudeMdPath, section, dryRun);
+  return {
+    synced: true,
+    action: result.action,
+    path: result.path,
+    preview: result.preview,
+    insights_count: insights.length,
+    memory_count: memories.length,
+    dry_run: dryRun
+  };
+}
+
+// packages/memory/dist/automation/handlers/create-trigger.js
+async function createTriggerHandler(rawArgs, store) {
+  const parseResult = CreateTriggerRequestSchema.safeParse(rawArgs);
+  if (!parseResult.success) {
+    return {
+      created: false,
+      reason: parseResult.error.issues[0]?.message ?? "invalid arguments"
+    };
+  }
+  const args = parseResult.data;
+  const validTypes = TriggerTypeSchema.options;
+  if (!validTypes.includes(args.trigger_type)) {
+    return {
+      created: false,
+      reason: `invalid trigger_type: ${args.trigger_type}`
+    };
+  }
+  const triggerId = await store.insertProspectiveMemory({
+    content: args.content,
+    trigger_condition: args.trigger_condition,
+    trigger_type: args.trigger_type,
+    target_directory: args.target_directory ?? null,
+    is_active: true,
+    triggered_count: 0
+  });
+  const activeCount = await store.countActiveTriggers();
+  return {
+    created: true,
+    trigger_id: triggerId,
+    trigger_type: args.trigger_type,
+    trigger_condition: args.trigger_condition,
+    content: args.content,
+    target_directory: args.target_directory ?? null,
+    active_triggers: activeCount
+  };
+}
 
 // node_modules/.pnpm/balanced-match@4.0.4/node_modules/balanced-match/dist/esm/index.js
 var balanced = (a2, b2, str) => {
@@ -50410,11 +45098,11 @@ var qmarksTestNoExtDot = ([$0]) => {
   return (f2) => f2.length === len && f2 !== "." && f2 !== "..";
 };
 var defaultPlatform = typeof process === "object" && process ? typeof process.env === "object" && process.env && process.env.__MINIMATCH_TESTING_PLATFORM__ || process.platform : "posix";
-var path3 = {
+var path2 = {
   win32: { sep: "\\" },
   posix: { sep: "/" }
 };
-var sep = defaultPlatform === "win32" ? path3.win32.sep : path3.posix.sep;
+var sep = defaultPlatform === "win32" ? path2.win32.sep : path2.posix.sep;
 minimatch.sep = sep;
 var GLOBSTAR = /* @__PURE__ */ Symbol("globstar **");
 minimatch.GLOBSTAR = GLOBSTAR;
@@ -51160,7 +45848,7 @@ minimatch.Minimatch = Minimatch;
 minimatch.escape = escape2;
 minimatch.unescape = unescape2;
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/automation/rule-engine.js
+// packages/memory/dist/automation/rule-engine.js
 function parseCondition(condition) {
   const notContainsSplit = condition.split(" not_contains ", 2);
   if (notContainsSplit.length === 2) {
@@ -51235,7 +45923,7 @@ function validateRule(ruleType, condition, action) {
   return errors;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/automation/handlers/add-rule.js
+// packages/memory/dist/automation/handlers/add-rule.js
 function validateArgs(args) {
   const { condition, action, rule_type, scope, scope_value } = args;
   const ruleErrors = validateRule(rule_type, condition, action);
@@ -51281,44 +45969,7 @@ async function addRuleHandler(rawArgs, store) {
   };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/automation/handlers/create-trigger.js
-async function createTriggerHandler(rawArgs, store) {
-  const parseResult = CreateTriggerRequestSchema.safeParse(rawArgs);
-  if (!parseResult.success) {
-    return {
-      created: false,
-      reason: parseResult.error.issues[0]?.message ?? "invalid arguments"
-    };
-  }
-  const args = parseResult.data;
-  const validTypes = TriggerTypeSchema.options;
-  if (!validTypes.includes(args.trigger_type)) {
-    return {
-      created: false,
-      reason: `invalid trigger_type: ${args.trigger_type}`
-    };
-  }
-  const triggerId = await store.insertProspectiveMemory({
-    content: args.content,
-    trigger_condition: args.trigger_condition,
-    trigger_type: args.trigger_type,
-    target_directory: args.target_directory ?? null,
-    is_active: true,
-    triggered_count: 0
-  });
-  const activeCount = await store.countActiveTriggers();
-  return {
-    created: true,
-    trigger_id: triggerId,
-    trigger_type: args.trigger_type,
-    trigger_condition: args.trigger_condition,
-    content: args.content,
-    target_directory: args.target_directory ?? null,
-    active_triggers: activeCount
-  };
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/automation/handlers/get-rules.js
+// packages/memory/dist/automation/handlers/get-rules.js
 var getRulesInputSchema = external_exports.object({
   scope: RuleScopeSchema.optional(),
   rule_type: RuleTypeSchema.optional(),
@@ -51349,135 +46000,6172 @@ async function getRulesHandler(rawArgs, store) {
   return { total: rules.length, rules, by_scope: byScope };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/automation/handlers/sync-to-claude-md.js
-import { promises as fs4 } from "node:fs";
-import path4 from "node:path";
-var SECTION_START = "<!-- cortex:memory-insights:start -->";
-var SECTION_END = "<!-- cortex:memory-insights:end -->";
-var DECISION_RE5 = /\b(decided|chose|switching|migrated|using|adopted|went with|replaced)\b/i;
-function extractInsights(memories, maxInsights) {
-  const decisions = memories.filter((m2) => DECISION_RE5.test(m2.content ?? ""));
-  const others = memories.filter((m2) => !DECISION_RE5.test(m2.content ?? ""));
-  const ordered = [
-    ...decisions.sort((a2, b2) => (b2.heat ?? 0) - (a2.heat ?? 0)),
-    ...others.sort((a2, b2) => (b2.importance ?? 0) - (a2.importance ?? 0))
-  ];
-  const insights = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const mem of ordered.slice(0, maxInsights * 2)) {
-    const text = (mem.content ?? "").trim();
-    if (!text)
+// packages/memory/dist/workflow-graph/handlers/query-workflow-graph.js
+var _DEFAULT_LIMIT = 500;
+var _MAX_LIMIT = 5e3;
+function asSet(value) {
+  if (value == null)
+    return null;
+  if (typeof value === "string")
+    return value ? /* @__PURE__ */ new Set([value]) : null;
+  if (Array.isArray(value)) {
+    const out = new Set(value.map(String).filter(Boolean));
+    return out.size > 0 ? out : null;
+  }
+  return null;
+}
+function edgeKindOf(e2) {
+  return String(e2["kind"] ?? e2["type"] ?? "");
+}
+function nodeKindOf(n3) {
+  return String(n3["kind"] ?? n3["type"] ?? "");
+}
+function edgeEndpoints(e2) {
+  const s2 = e2["source"];
+  const t2 = e2["target"];
+  const sId = typeof s2 === "object" && s2 !== null ? String(s2["id"] ?? "") : String(s2 ?? "");
+  const tId = typeof t2 === "object" && t2 !== null ? String(t2["id"] ?? "") : String(t2 ?? "");
+  return [sId, tId];
+}
+function bfsNeighbourhood(nodes, edges, seed, depth) {
+  if (depth < 1)
+    return [/* @__PURE__ */ new Set([seed]), []];
+  const adj = /* @__PURE__ */ new Map();
+  for (const e2 of edges) {
+    const [s2, t2] = edgeEndpoints(e2);
+    if (!s2 || !t2)
       continue;
-    const bullet = text.slice(0, 120).replace(/\n/g, " ");
-    if (seen.has(bullet))
-      continue;
-    seen.add(bullet);
-    insights.push(bullet);
-    if (insights.length >= maxInsights)
+    if (!adj.has(s2))
+      adj.set(s2, []);
+    if (!adj.has(t2))
+      adj.set(t2, []);
+    adj.get(s2).push(t2);
+    adj.get(t2).push(s2);
+  }
+  let frontier = /* @__PURE__ */ new Set([seed]);
+  const reached = /* @__PURE__ */ new Set([seed]);
+  for (let i2 = 0; i2 < depth; i2++) {
+    const nextFrontier = /* @__PURE__ */ new Set();
+    for (const nid of frontier) {
+      for (const other of adj.get(nid) ?? []) {
+        if (!reached.has(other))
+          nextFrontier.add(other);
+      }
+    }
+    for (const n3 of nextFrontier)
+      reached.add(n3);
+    if (nextFrontier.size === 0)
       break;
+    frontier = nextFrontier;
   }
-  return insights;
+  const keptEdges = edges.filter((e2) => {
+    const [s2, t2] = edgeEndpoints(e2);
+    return reached.has(s2) && reached.has(t2);
+  });
+  return [reached, keptEdges];
 }
-function buildSection(insights) {
-  const lines = [
-    SECTION_START,
-    "## Memory Insights",
-    "",
-    "Auto-synced from Cortex memory. Do not edit manually.",
-    "",
-    ...insights.map((i2) => `- ${i2}`),
-    "",
-    SECTION_END
+function pruneDanglingEdges(edges, nodeIds) {
+  return edges.filter((e2) => {
+    const [s2, t2] = edgeEndpoints(e2);
+    return nodeIds.has(s2) && nodeIds.has(t2);
+  });
+}
+function capNodesByHeat(nodes, edges, limit) {
+  if (nodes.length <= limit)
+    return [nodes, edges, 0];
+  const sorted = [...nodes].sort((a2, b2) => (parseFloat(String(b2["heat"] ?? b2["size"] ?? 0)) || 0) - (parseFloat(String(a2["heat"] ?? a2["size"] ?? 0)) || 0));
+  const truncated = nodes.length - limit;
+  const kept = sorted.slice(0, limit);
+  const keptIds = new Set(kept.map((n3) => String(n3["id"] ?? "")));
+  return [kept, pruneDanglingEdges(edges, keptIds), truncated];
+}
+function buildMeta(graph, opts) {
+  const meta = { ...graph.meta ?? {} };
+  meta["filtered"] = true;
+  meta["filter"] = {
+    node_kind: opts.nodeKinds ? [...opts.nodeKinds].sort() : null,
+    edge_kind: opts.edgeKinds ? [...opts.edgeKinds].sort() : null,
+    neighbour_of: opts.neighbourOf,
+    depth: opts.neighbourOf ? opts.depth : null,
+    limit_nodes: opts.limitNodes
+  };
+  if (opts.truncated > 0) {
+    meta["truncated_nodes"] = opts.truncated;
+  }
+  return meta;
+}
+function applyFilters(graph, opts) {
+  let nodes = [...graph.nodes ?? []];
+  let edges = [
+    ...graph.edges ?? graph.links ?? []
   ];
-  return lines.join("\n");
-}
-async function updateClaudeMd(claudeMdPath, section, dryRun) {
-  let exists = false;
-  try {
-    await fs4.access(claudeMdPath);
-    exists = true;
-  } catch {
+  if (opts.neighbourOf) {
+    const [reached, keptEdges] = bfsNeighbourhood(nodes, edges, opts.neighbourOf, opts.depth);
+    nodes = nodes.filter((n3) => reached.has(String(n3["id"] ?? "")));
+    edges = keptEdges;
   }
-  if (!exists) {
-    if (dryRun) {
-      return { action: "would_create", path: claudeMdPath };
+  if (opts.edgeKinds !== null) {
+    edges = edges.filter((e2) => opts.edgeKinds.has(edgeKindOf(e2)));
+  }
+  if (opts.nodeKinds !== null) {
+    nodes = nodes.filter((n3) => opts.nodeKinds.has(nodeKindOf(n3)));
+    edges = pruneDanglingEdges(edges, new Set(nodes.map((n3) => String(n3["id"] ?? ""))));
+  }
+  const [cappedNodes, cappedEdges, truncated] = capNodesByHeat(nodes, edges, opts.limitNodes);
+  const meta = buildMeta(graph, { ...opts, truncated });
+  return { nodes: cappedNodes, edges: cappedEdges, links: cappedEdges, meta };
+}
+function queryWorkflowGraph(graph, args = {}) {
+  const depthRaw = args.depth;
+  const depth = depthRaw != null ? Math.max(1, Math.min(2, Math.trunc(Number(depthRaw)))) : 1;
+  const limitRaw = args.limit_nodes;
+  const limitNodes = Math.max(1, Math.min(_MAX_LIMIT, limitRaw != null ? Math.trunc(Number(limitRaw)) : _DEFAULT_LIMIT));
+  return applyFilters(graph, {
+    nodeKinds: asSet(args.node_kind),
+    edgeKinds: asSet(args.edge_kind),
+    neighbourOf: args.neighbour_of ?? null,
+    depth,
+    limitNodes
+  });
+}
+
+// packages/mcp-servers/memory/dist/tools/advanced.js
+var SYNC_MAX_INSIGHTS_DEFAULT = 10;
+var SYNC_MIN_HEAT_DEFAULT = 0.3;
+var ASSESS_STALE_DAYS_DEFAULT = 14;
+var MS_PER_DAY = 864e5;
+var COVERAGE_LOW_THRESHOLD = 0.5;
+var STALE_HEAT_THRESHOLD = 0.1;
+var ROUNDING_FACTOR_2DP = 100;
+function toMemoryReadStore(store) {
+  return {
+    // getMemoriesForDirectory is on MemoryStoreExt — no escape-hatch needed.
+    getMemoriesForDirectory: async (dir, opts) => {
+      const raw = store.getMemoriesForDirectory(dir, opts.min_heat);
+      return raw.map((m2) => m2);
+    },
+    // getHotMemories is on MemoryStoreExt — no escape-hatch needed.
+    getHotMemories: async (opts) => {
+      const raw = store.getHotMemories(opts.min_heat, opts.limit);
+      return raw.map((m2) => m2);
     }
-    await fs4.writeFile(claudeMdPath, section + "\n", "utf-8");
-    return { action: "created", path: claudeMdPath };
-  }
-  const original = await fs4.readFile(claudeMdPath, "utf-8");
-  const startIdx = original.indexOf(SECTION_START);
-  const endIdx = original.indexOf(SECTION_END);
-  let updated;
-  let action;
-  if (startIdx !== -1 && endIdx !== -1) {
-    const before = original.slice(0, startIdx);
-    const after = original.slice(endIdx + SECTION_END.length);
-    updated = before + section + after;
-    action = "updated";
-  } else {
-    updated = original.trimEnd() + "\n\n" + section + "\n";
-    action = "appended";
-  }
-  if (dryRun) {
-    return { action: `would_${action}`, path: claudeMdPath, preview: section };
-  }
-  await fs4.writeFile(claudeMdPath, updated, "utf-8");
-  return { action, path: claudeMdPath };
+  };
 }
-async function findClaudeMd(directory) {
-  const resolved = path4.resolve(directory);
-  const candidate = path4.join(resolved, "CLAUDE.md");
-  try {
-    await fs4.access(candidate);
-    return candidate;
-  } catch {
-    const parent = path4.join(path4.dirname(resolved), "CLAUDE.md");
+function toProspectiveMemoryStore(store) {
+  const pgStore = store;
+  return {
+    insertProspectiveMemory: async (record3) => {
+      const id2 = pgStore.insertProspectiveMemoryAsync != null ? await pgStore.insertProspectiveMemoryAsync(record3) : store.insertProspectiveMemory(record3);
+      return String(id2);
+    },
+    countActiveTriggers: async () => {
+      return pgStore.countActiveTriggersAsync != null ? pgStore.countActiveTriggersAsync() : Promise.resolve(store.countActiveTriggers());
+    }
+  };
+}
+function toRuleStore(store) {
+  const pgStore = store;
+  return {
+    insertRule: async (rule) => {
+      return pgStore.insertRuleAsync != null ? pgStore.insertRuleAsync(rule) : Promise.resolve(store.insertRule(rule));
+    }
+  };
+}
+function toRuleReadStore(store) {
+  const pgStore = store;
+  return {
+    getAllActiveRules: () => pgStore.getAllActiveRulesAsync != null ? pgStore.getAllActiveRulesAsync() : Promise.resolve(store.getAllActiveRules()),
+    getRulesForScope: (scope) => pgStore.getRulesForScopeAsync != null ? pgStore.getRulesForScopeAsync(scope) : Promise.resolve(store.getRulesForScope(scope)),
+    getAllRulesIncludingInactive: () => pgStore.getAllRulesIncludingInactiveAsync != null ? pgStore.getAllRulesIncludingInactiveAsync() : Promise.resolve(store.getAllRulesIncludingInactive())
+  };
+}
+function errorText7(tool, err) {
+  const message = err instanceof Error ? err.message : String(err);
+  return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
+}
+function registerAdvancedTools(server2, deps) {
+  server2.registerTool("sync_instructions", {
+    description: "Push top memory insights into CLAUDE.md (or similar instruction file).",
+    inputSchema: {
+      directory: external_exports.string().default("").describe("Directory containing CLAUDE.md"),
+      max_insights: external_exports.number().int().min(1).default(SYNC_MAX_INSIGHTS_DEFAULT).describe("Max insights to include"),
+      min_heat: external_exports.number().min(0).max(1).default(SYNC_MIN_HEAT_DEFAULT).describe("Min heat for insight inclusion"),
+      dry_run: external_exports.boolean().default(false).describe("Preview without writing")
+    }
+  }, async (args) => {
     try {
-      await fs4.access(parent);
-      return parent;
-    } catch {
-      return candidate;
+      const response = await syncInstructionsHandler({
+        directory: args.directory,
+        max_insights: args.max_insights,
+        min_heat: args.min_heat,
+        dry_run: args.dry_run
+      }, toMemoryReadStore(deps.store));
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText7("sync_instructions", err);
     }
-  }
+  });
+  server2.registerTool("create_trigger", {
+    description: "Create a prospective memory trigger (stored in prospective_memories table).",
+    inputSchema: {
+      content: external_exports.string().min(1).describe("Trigger content"),
+      trigger_condition: external_exports.string().min(1).describe("Condition that fires the trigger"),
+      trigger_type: external_exports.string().default("keyword").describe("Trigger type"),
+      target_directory: external_exports.string().optional().describe("Directory scope for trigger")
+    }
+  }, async (args) => {
+    try {
+      const response = await createTriggerHandler(args, toProspectiveMemoryStore(deps.store));
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText7("create_trigger", err);
+    }
+  });
+  server2.registerTool("add_rule", {
+    description: "Add a neuro-symbolic rule to the memory store.",
+    inputSchema: {
+      condition: external_exports.string().min(1).describe("Rule condition"),
+      action: external_exports.string().min(1).describe("Rule action"),
+      rule_type: external_exports.enum(["soft", "hard"]).default("soft").describe("Rule type"),
+      scope: external_exports.enum(["global", "domain", "directory"]).default("global").describe("Rule scope"),
+      scope_value: external_exports.string().optional().describe("Scope value (domain name or directory)"),
+      priority: external_exports.number().int().default(0).describe("Rule priority (higher = earlier)")
+    }
+  }, async (args) => {
+    try {
+      const response = await addRuleHandler(args, toRuleStore(deps.store));
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText7("add_rule", err);
+    }
+  });
+  server2.registerTool("get_rules", {
+    description: "List active neuro-symbolic rules.",
+    inputSchema: {
+      scope: external_exports.string().optional().describe("Filter by scope"),
+      rule_type: external_exports.string().optional().describe("Filter by type"),
+      include_inactive: external_exports.boolean().default(false).describe("Include inactive rules")
+    }
+  }, async (args) => {
+    try {
+      const response = await getRulesHandler(args, toRuleReadStore(deps.store));
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText7("get_rules", err);
+    }
+  });
+  server2.registerTool("assess_coverage", {
+    description: "Evaluate knowledge coverage completeness for the current domain/directory.",
+    inputSchema: {
+      directory: external_exports.string().default("").describe("Directory scope"),
+      domain: external_exports.string().default("").describe("Domain scope"),
+      stale_days: external_exports.number().int().min(1).default(ASSESS_STALE_DAYS_DEFAULT).describe("Days before a memory is stale")
+    }
+  }, async (args) => {
+    try {
+      const allMems = deps.store.getAllMemoriesForDecay();
+      const scoped = allMems.filter((m2) => {
+        if (args.domain && m2["domain"] !== args.domain)
+          return false;
+        if (args.directory && !String(m2["directory"] ?? "").startsWith(args.directory))
+          return false;
+        return true;
+      });
+      const now = Date.now();
+      const staleMs = args.stale_days * MS_PER_DAY;
+      const stale = scoped.filter((m2) => {
+        const heat = m2["heat"] ?? 0;
+        const createdAt = m2["created_at"];
+        if (heat < STALE_HEAT_THRESHOLD)
+          return true;
+        if (createdAt && now - new Date(createdAt).getTime() > staleMs)
+          return true;
+        return false;
+      }).length;
+      const total = scoped.length;
+      const coverageScore = total === 0 ? 0 : Math.round((total - stale) / total * ROUNDING_FACTOR_2DP) / ROUNDING_FACTOR_2DP;
+      const gaps = [];
+      if (stale > 0)
+        gaps.push(`${stale} stale memories (heat < 0.1 or older than ${args.stale_days} days)`);
+      if (total === 0)
+        gaps.push("no memories found for this scope");
+      const recommendations = [];
+      if (coverageScore < COVERAGE_LOW_THRESHOLD)
+        recommendations.push("Run consolidate to decay + refresh stale memories.");
+      if (total === 0)
+        recommendations.push("Run codebase_analyze or backfill_memories to seed coverage.");
+      return { content: [{ type: "text", text: JSON.stringify({
+        coverage_score: coverageScore,
+        total_memories: total,
+        stale_count: stale,
+        gaps,
+        recommendations,
+        directory: args.directory,
+        domain: args.domain
+      }) }] };
+    } catch (err) {
+      return errorText7("assess_coverage", err);
+    }
+  });
+  server2.registerTool("query_workflow_graph", {
+    description: "Return a typed subgraph of the unified workflow graph.",
+    inputSchema: {
+      node_kind: external_exports.union([external_exports.string(), external_exports.array(external_exports.string())]).optional().describe("Node kind filter"),
+      edge_kind: external_exports.union([external_exports.string(), external_exports.array(external_exports.string())]).optional().describe("Edge kind filter"),
+      neighbour_of: external_exports.string().optional().describe("Node ID to find neighbours of"),
+      depth: external_exports.number().int().optional().describe("Traversal depth"),
+      domain: external_exports.string().optional().describe("Domain filter"),
+      limit_nodes: external_exports.number().int().optional().describe("Max nodes to return")
+    }
+  }, async (args) => {
+    try {
+      const emptyGraph = {
+        nodes: [],
+        edges: [],
+        links: [],
+        meta: { node_count: 0, edge_count: 0, built_at: (/* @__PURE__ */ new Date()).toISOString() }
+      };
+      const response = queryWorkflowGraph(emptyGraph, {
+        node_kind: args.node_kind,
+        edge_kind: args.edge_kind,
+        neighbour_of: args.neighbour_of,
+        depth: args.depth,
+        domain: args.domain,
+        limit_nodes: args.limit_nodes
+      });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText7("query_workflow_graph", err);
+    }
+  });
 }
-async function syncInstructionsHandler(rawArgs, store) {
-  const parseResult = SyncInstructionsRequestSchema.safeParse(rawArgs ?? {});
-  const args = parseResult.success ? parseResult.data : { directory: void 0, max_insights: 10, min_heat: 0.3, dry_run: false };
-  const directory = args.directory ?? process.cwd();
-  const maxInsights = args.max_insights;
-  const minHeat = args.min_heat;
-  const dryRun = args.dry_run;
-  let memories = await store.getMemoriesForDirectory(directory, { min_heat: minHeat });
-  if (memories.length === 0) {
-    memories = await store.getHotMemories({ min_heat: minHeat, limit: 50 });
+
+// packages/mcp-servers/memory/dist/tools/wiki.js
+import { mkdirSync as mkdirSync3, writeFileSync as writeFileSync3, rmSync } from "node:fs";
+import { join as join8, resolve as resolve2, dirname as dirname2 } from "node:path";
+import { homedir as homedir5 } from "node:os";
+
+// packages/memory/dist/wiki/types.js
+var WikiExists = class extends Error {
+  constructor(path6) {
+    super(`wiki page already exists: ${path6}`);
+    this.name = "WikiExists";
   }
-  if (memories.length === 0) {
-    return { synced: false, reason: "no_memories_found", directory };
+};
+var WikiMissing = class extends Error {
+  constructor(path6) {
+    super(`wiki page not found: ${path6}`);
+    this.name = "WikiMissing";
   }
-  const insights = extractInsights(memories, maxInsights);
-  if (insights.length === 0) {
+};
+
+// packages/memory/dist/wiki/handlers/wiki-write.js
+async function handler4(args, deps) {
+  const relPath = (args.path ?? "").trim();
+  if (!relPath)
+    return { error: "path is required" };
+  const mode = args.mode ?? "create";
+  const content = args.content;
+  if (!content) {
     return {
-      synced: false,
-      reason: "no_insights_extracted",
-      memory_count: memories.length
+      error: "content is required \u2014 render the page yourself (e.g. via wiki-adr for ADRs) and pass the final markdown."
     };
   }
-  const claudeMdPath = await findClaudeMd(directory);
-  const section = buildSection(insights);
-  const result = await updateClaudeMd(claudeMdPath, section, dryRun);
+  try {
+    const result = await deps.writePage(deps.wikiRoot, relPath, content, mode);
+    const tags = [...args.tags ?? []];
+    if (deps.storePointerMemory) {
+      await deps.storePointerMemory(relPath, content, tags).catch(() => void 0);
+    }
+    return {
+      path: result.path,
+      mode: result.mode,
+      created: result.created,
+      bytes_written: result.bytes_written,
+      root: deps.wikiRoot
+    };
+  } catch (err) {
+    if (err instanceof WikiExists)
+      return { error: `page already exists: ${relPath}` };
+    if (err instanceof WikiMissing)
+      return { error: `page does not exist: ${relPath}` };
+    return { error: `write failed: ${String(err)}` };
+  }
+}
+
+// packages/memory/dist/wiki/handlers/wiki-read.js
+async function handler5(args, deps) {
+  const relPath = (args.path ?? "").trim();
+  if (!relPath)
+    return { error: "path is required" };
+  try {
+    const content = await deps.readPage(deps.wikiRoot, relPath);
+    if (content === null)
+      return { error: `page not found: ${relPath}` };
+    return { path: relPath, content, root: deps.wikiRoot };
+  } catch (err) {
+    return { error: `read failed: ${String(err)}` };
+  }
+}
+
+// packages/memory/dist/wiki/handlers/wiki-list.js
+init_layout();
+async function handler6(args, deps) {
+  const kind2 = args.kind ?? null;
+  if (kind2 && !PAGE_KINDS.includes(kind2)) {
+    return { error: `unknown kind: ${kind2}` };
+  }
+  try {
+    const pages = await deps.listPages(deps.wikiRoot, kind2);
+    return { root: deps.wikiRoot, count: pages.length, pages };
+  } catch (err) {
+    return { error: `list failed: ${String(err)}` };
+  }
+}
+var schema2 = {
+  title: "Wiki \u2014 list pages",
+  description: "Enumerate every authored wiki page under ~/.claude/methodology/wiki/, filesystem-walked from the wiki root. Optionally restrict by kind.",
+  inputSchema: {
+    type: "object",
+    required: [],
+    properties: {
+      kind: {
+        type: "string",
+        enum: [...PAGE_KINDS],
+        description: "Restrict the listing to a single page kind."
+      }
+    }
+  }
+};
+
+// packages/memory/dist/wiki/links.js
+var RELATIONS = {
+  supersedes: "superseded_by",
+  superseded_by: "supersedes",
+  implements: "implemented_by",
+  implemented_by: "implements",
+  depends_on: "depended_on_by",
+  depended_on_by: "depends_on",
+  derived_from: "derives",
+  derives: "derived_from",
+  see_also: "see_also"
+};
+var RELATED_HEADING = "## Related";
+function inverseOf(relation) {
+  const inv = RELATIONS[relation];
+  if (inv === void 0)
+    throw new Error(`unknown relation: ${relation}`);
+  return inv;
+}
+function formatEntry(entry) {
+  return `- ${entry.relation} \u2192 [${entry.target}](${entry.target})`;
+}
+function parseEntry(line) {
+  const stripped = line.trim();
+  if (!stripped.startsWith("- "))
+    return null;
+  const payload = stripped.slice(2);
+  if (!payload.includes(" \u2192 "))
+    return null;
+  const [relPart, rest] = payload.split(" \u2192 ", 2);
+  const rel = relPart.trim();
+  if (!RELATIONS[rel])
+    return null;
+  let target = rest.trim();
+  if (target.startsWith("[") && target.includes("](") && target.endsWith(")")) {
+    target = target.split("](", 2)[1].slice(0, -1);
+  }
+  return { relation: rel, target };
+}
+function splitBodyAndRelated(body) {
+  const lines = body.split("\n");
+  let headingIdx = null;
+  for (let idx2 = 0; idx2 < lines.length; idx2++) {
+    if (lines[idx2].trim() === RELATED_HEADING) {
+      headingIdx = idx2;
+      break;
+    }
+  }
+  if (headingIdx === null)
+    return [body, []];
+  let before = lines.slice(0, headingIdx);
+  const entries = [];
+  let idx = headingIdx + 1;
+  while (idx < lines.length) {
+    const line = lines[idx];
+    if (line.startsWith("## "))
+      break;
+    const parsed = parseEntry(line);
+    if (parsed !== null)
+      entries.push(parsed);
+    idx++;
+  }
+  const after = lines.slice(idx);
+  while (before.length > 0 && before[before.length - 1] === "") {
+    before = before.slice(0, -1);
+  }
+  let rebuilt = before.join("\n");
+  if (after.length > 0) {
+    rebuilt = (rebuilt ? rebuilt + "\n\n" : "") + after.join("\n");
+  }
+  return [rebuilt, entries];
+}
+function renderRelated(entries) {
+  if (!entries.length)
+    return "";
+  const sorted = [...entries].sort((a2, b2) => {
+    const rc = a2.relation.localeCompare(b2.relation);
+    return rc !== 0 ? rc : a2.target.localeCompare(b2.target);
+  });
+  const lines = [RELATED_HEADING, "", ...sorted.map(formatEntry)];
+  return lines.join("\n") + "\n";
+}
+function applyLink(body, entry) {
+  if (!RELATIONS[entry.relation]) {
+    throw new Error(`unknown relation: ${entry.relation}`);
+  }
+  const [base, existing] = splitBodyAndRelated(body);
+  const merged = [...existing];
+  const alreadyPresent = merged.some((e2) => e2.relation === entry.relation && e2.target === entry.target);
+  if (!alreadyPresent)
+    merged.push(entry);
+  const rendered = renderRelated(merged);
+  if (!base)
+    return rendered;
+  const separator = base.endsWith("\n") ? "" : "\n";
+  return `${base}${separator}
+${rendered}`;
+}
+
+// packages/memory/dist/wiki/handlers/wiki-link.js
+async function updatePage(relPath, entry, deps) {
+  const current = await deps.readPage(deps.wikiRoot, relPath);
+  if (current === null)
+    throw new WikiMissing(relPath);
+  const updated = applyLink(current, entry);
+  await deps.writePage(deps.wikiRoot, relPath, updated, "replace");
+}
+async function handler7(args, deps) {
+  const fromPath = (args.from_path ?? "").trim();
+  const toPath = (args.to_path ?? "").trim();
+  const relation = (args.relation ?? "").trim();
+  if (!fromPath || !toPath || !relation) {
+    return { error: "from_path, to_path, and relation are required" };
+  }
+  if (!RELATIONS[relation]) {
+    return { error: `unknown relation: ${relation}` };
+  }
+  try {
+    await updatePage(fromPath, { relation, target: toPath }, deps);
+    await updatePage(toPath, { relation: inverseOf(relation), target: fromPath }, deps);
+  } catch (err) {
+    if (err instanceof WikiMissing)
+      return { error: `page not found: ${String(err.message)}` };
+    return { error: `link failed: ${String(err)}` };
+  }
+  return { from_path: fromPath, to_path: toPath, relation, inverse: inverseOf(relation) };
+}
+var schema3 = {
+  title: "Wiki \u2014 link pages",
+  description: "Add a bidirectional link between two wiki pages: write the forward relation into the ## Related section of the source page and the inverse relation into the target page, in one idempotent operation.",
+  inputSchema: {
+    type: "object",
+    required: ["from_path", "to_path", "relation"],
+    properties: {
+      from_path: { type: "string" },
+      to_path: { type: "string" },
+      relation: { type: "string", enum: Object.keys(RELATIONS) }
+    }
+  }
+};
+
+// packages/memory/dist/wiki/handlers/wiki-adr.js
+init_layout();
+init_pages();
+async function handler8(args, deps) {
+  const title = (args.title ?? "").trim();
+  const context = (args.context ?? "").trim();
+  const decision = (args.decision ?? "").trim();
+  const consequences = (args.consequences ?? "").trim();
+  const status = args.status ?? "accepted";
+  const tags = [...args.tags ?? []];
+  if (!title || !context || !decision || !consequences) {
+    return { error: "title, context, decision and consequences are required" };
+  }
+  if (!ADR_STATUSES.includes(status)) {
+    return { error: `unknown status: ${status}` };
+  }
+  let number3;
+  try {
+    number3 = await deps.nextAdrNumber(deps.wikiRoot);
+  } catch (err) {
+    return { error: `cannot determine next ADR number: ${String(err)}` };
+  }
+  const slug = slugify(title);
+  const filename = adrFilename(number3, slug);
+  const relPath = pagePath("adr", filename);
+  const content = buildAdr({ number: number3, title, context, decision, consequences, status, tags });
+  try {
+    const result = await deps.writePage(deps.wikiRoot, relPath, content, "create");
+    if (deps.storePointerMemory) {
+      await deps.storePointerMemory(relPath, content, ["wiki", "adr", ...tags]).catch(() => void 0);
+    }
+    return {
+      path: result.path,
+      number: number3,
+      title,
+      status,
+      created: result.created,
+      bytes_written: result.bytes_written,
+      root: deps.wikiRoot
+    };
+  } catch (err) {
+    if (err instanceof WikiExists)
+      return { error: `ADR already exists: ${relPath}` };
+    return { error: `write failed: ${String(err)}` };
+  }
+}
+var schema4 = {
+  description: "Create a numbered ADR (Architecture Decision Record) from structured Context/Decision/Consequences fields. Atomically computes the next free ADR number, renders the standard template, writes wiki/adr/<NNNN>-<slug>.md, and registers a protected pointer memory tagged `wiki`+`adr`.",
+  inputSchema: {
+    type: "object",
+    required: ["title", "context", "decision", "consequences"],
+    properties: {
+      title: { type: "string", description: "Short imperative title of the decision." },
+      context: { type: "string", description: "The forces at play. Markdown allowed." },
+      decision: { type: "string", description: "What was decided, in active voice." },
+      consequences: { type: "string", description: "Resulting consequences." },
+      status: { type: "string", enum: [...ADR_STATUSES], default: "accepted" },
+      tags: { type: "array", items: { type: "string" } }
+    }
+  }
+};
+
+// packages/memory/dist/wiki/handlers/wiki-reindex.js
+init_layout();
+var BANNER = "<!-- Generated by Cortex wiki-reindex \u2014 the authored pages are the source of truth. -->";
+function renderIndex(grouped) {
+  const lines = [BANNER, "", "# Wiki Index", ""];
+  const total = Object.values(grouped).reduce((s2, ps) => s2 + ps.length, 0);
+  lines.push(`**${total} authored pages across ${PAGE_KINDS.length} kinds.**`);
+  lines.push("");
+  for (const kind2 of PAGE_KINDS) {
+    const pages = grouped[kind2] ?? [];
+    lines.push(`## ${kind2} (${pages.length})`);
+    lines.push("");
+    if (!pages.length) {
+      lines.push("_No pages yet._");
+      lines.push("");
+      continue;
+    }
+    for (const rel of pages) {
+      const name = rel.split("/").pop() ?? rel;
+      lines.push(`- [${name}](../${rel})`);
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+async function handler9(_args, deps) {
+  const grouped = {};
+  for (const kind2 of PAGE_KINDS) {
+    try {
+      grouped[kind2] = await deps.listPages(deps.wikiRoot, kind2);
+    } catch {
+      grouped[kind2] = [];
+    }
+  }
+  const content = renderIndex(grouped);
+  const target = deps.joinPath(deps.wikiRoot, indexPath());
+  const dir = target.split("/").slice(0, -1).join("/");
+  try {
+    await deps.ensureDir(dir);
+    await deps.writeFile(target, content);
+  } catch (err) {
+    return { error: `reindex failed: ${String(err)}` };
+  }
   return {
-    synced: true,
-    action: result.action,
-    path: result.path,
-    preview: result.preview,
-    insights_count: insights.length,
-    memory_count: memories.length,
-    dry_run: dryRun
+    path: indexPath(),
+    total_pages: Object.values(grouped).reduce((s2, ps) => s2 + ps.length, 0),
+    by_kind: Object.fromEntries(Object.entries(grouped).map(([k2, v2]) => [k2, v2.length])),
+    root: deps.wikiRoot
   };
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/types.js
+// packages/memory/dist/wiki/rule-engine.js
+var REJECT_TARGETS = /* @__PURE__ */ new Set(["reject", "-", "", null, "none", void 0]);
+function matches(rule, content, tags) {
+  const pattern = rule.pattern ?? "";
+  const kind2 = (rule.pattern_kind ?? "").toLowerCase();
+  if (!pattern)
+    return false;
+  if (kind2 === "prefix") {
+    return content.trimStart().toLowerCase().startsWith(pattern.toLowerCase());
+  }
+  if (kind2 === "substring") {
+    return content.toLowerCase().includes(pattern.toLowerCase());
+  }
+  if (kind2 === "regex") {
+    try {
+      return new RegExp(pattern, "i").test(content);
+    } catch {
+      return false;
+    }
+  }
+  if (kind2 === "tag") {
+    return tags.has(pattern.toLowerCase());
+  }
+  return false;
+}
+function applyRules2(content, tags, rules) {
+  if (!content || !rules.length) {
+    return {
+      matched_rule: null,
+      target_kind: null,
+      rationale: "no content or no rules loaded"
+    };
+  }
+  const tagSet = new Set((tags ?? []).filter((t2) => typeof t2 === "string").map((t2) => t2.toLowerCase()));
+  const candidates = [];
+  for (let idx = 0; idx < rules.length; idx++) {
+    const rule = rules[idx];
+    if (!rule)
+      continue;
+    if (matches(rule, content, tagSet)) {
+      candidates.push([idx, -(rule.weight ?? 1), rule]);
+    }
+  }
+  if (!candidates.length) {
+    return { matched_rule: null, target_kind: null, rationale: "no rule matched" };
+  }
+  candidates.sort((a2, b2) => a2[0] !== b2[0] ? a2[0] - b2[0] : a2[1] - b2[1]);
+  const best = candidates[0][2];
+  const targetNorm = REJECT_TARGETS.has(best.target_kind ?? null) ? null : best.target_kind ?? null;
+  return {
+    matched_rule: best,
+    target_kind: targetNorm,
+    rationale: `rule [${best.pattern_kind}] ${JSON.stringify(best.pattern)} \u2192 ${best.target_kind ?? "reject"}`
+  };
+}
+
+// packages/memory/dist/wiki/page-classifier.js
+var REJECT_PREFIXES = [
+  "# Tool:",
+  "Tool:",
+  "tool:",
+  "# tool:",
+  "System:",
+  "system:",
+  "<tool_result>",
+  "<result>",
+  "<command-message>",
+  "<command-name>",
+  "# <command-message>",
+  "# <command-name>"
+];
+var REJECT_TITLES = /* @__PURE__ */ new Set([
+  "tool-edit",
+  "tool-bash",
+  "tool-read",
+  "tool-write",
+  "tool-grep",
+  "tool-glob",
+  "tool-search"
+]);
+var REJECT_PATTERNS = [
+  /^#*\s*Implement the following plan/i,
+  /^#*\s*Execute the following/i,
+  /^#*\s*You must respond with only/i,
+  /^#*\s*Perform all verification/i,
+  /^#*\s*Take the code and split/i,
+  /^\s*\{[\s\S]*\}\s*$/,
+  /^\s*\[[\s\S]*\]\s*$/,
+  /<command-(message|name|args)>/i,
+  /^#*\s*Spell:\s*\w+/i,
+  /^#*\s*Shape test content/i
+];
+var ADR_PATTERNS = [
+  /\b(decided to|decision:|the decision is|chose .+ because|rejected .+ (due to|because)|we will use|selected .+ over)\b/i
+];
+var LESSON_PATTERNS = [
+  /\b(the bug was|root cause|lesson learned|mistake was|never again|fix:|fixed by|the issue was|the problem was|turned out)\b/i
+];
+var CONVENTION_PATTERNS = [
+  /\b(always use|never |the canonical|convention:|rule:|standard:|must follow|naming convention|coding standard)\b/i
+];
+var SPEC_TAGS = /* @__PURE__ */ new Set(["spec", "design", "specification", "feature"]);
+var IMPERATIVE_TITLE_PATTERNS = [
+  /^\s*#*\s*(let'?s|lets)\b/i,
+  /^\s*#*\s*(use|fetch|take|give|look at|verify|audit|check|make|do|run|push|remove|rename|adapt|implement|execute|perform|replace|add|delete|update|modify|fix|install|setup|configure|create|build|write|test|sync|import|export|move|copy|ensure|try|go|start|stop|open|close|clean|restart|refactor|migrate|enable|disable|apply|reset|rebuild|regenerate|analyze)\b/i,
+  /^\s*#*\s*you (must|should|need|will|can)\b/i,
+  /^\s*#*\s*(how|what|why|when|where|can|should|is|does)\b[^.]*\?\s*$/
+];
+var FIRST_PERSON_PATTERNS = [
+  /^\s*#*\s*(we|i)\s+(pushed|pulled|did|have|did|tried|ran|found|saw|noticed|got|made|created|added|removed|fixed|broke|updated|changed|deleted|merged|re?-?started|tested|benchmarked|think|need|want|should|re)/i
+];
+var STATUS_PATTERNS = [
+  /^\s*#*\s*(successfully|done|failing|failed|broken|working|not working|finished|completed|in progress|wip|todo|pending)\b/i,
+  /local[-_]command[-_](stdout|stderr|stdin|output)/i,
+  /session[-_]test[-_]session/i,
+  /in domain unknown/i
+];
+var DEIXIS_PATTERNS = [
+  /^\s*#*\s*(just now|just did|previous|earlier|last session|new wip|the one we|like (we|i) (said|did)|yesterday|today|tomorrow|a while ago|recent(ly)?)\b/i
+];
+var PATH_OR_URL_TITLE_PATTERNS = [
+  /^\s*#*\s*[/~]/,
+  /^\s*#*\s*[A-Za-z]:[\\/]/,
+  /^\s*#*\s*(https?|ftp|file|ssh|git):\/\//i,
+  /^\s*#*\s*[\w.-]+\.(pdf|png|jpg|jpeg|svg|gif|zip|tar\.gz|docx?|xlsx?|csv|log|yaml|yml)\b/i
+];
+var AUDIT_TAGS = /* @__PURE__ */ new Set([
+  "_backfill",
+  "imported",
+  "session-summary",
+  "tool-output",
+  "code-review",
+  "stage-1",
+  "stage-2",
+  "stage-3",
+  "stage-4",
+  "stage-5",
+  "stage-6",
+  "stage-7",
+  "stage-8",
+  "stage-9",
+  "stage-10",
+  "stage-11",
+  "audit",
+  "automated",
+  "wip",
+  "progress"
+]);
+var AUDIT_TITLE_PATTERNS = [
+  /\bstage[ -]?\d+\b/i,
+  /\b(code[ -]?review|audit[ -]?report|review[ -]?notes?)\b/i,
+  /\bsession[ -]?(summary|log|report|\d+)\b/i
+];
+function failsHardNegatives(content, firstLine) {
+  for (const pat of IMPERATIVE_TITLE_PATTERNS) {
+    if (pat.test(firstLine))
+      return true;
+  }
+  for (const pat of FIRST_PERSON_PATTERNS) {
+    if (pat.test(firstLine))
+      return true;
+  }
+  const first500 = content.slice(0, 500);
+  for (const pat of STATUS_PATTERNS) {
+    if (pat.test(firstLine))
+      return true;
+    if (pat.test(first500))
+      return true;
+  }
+  for (const pat of DEIXIS_PATTERNS) {
+    if (pat.test(firstLine))
+      return true;
+  }
+  for (const pat of PATH_OR_URL_TITLE_PATTERNS) {
+    if (pat.test(firstLine))
+      return true;
+  }
+  for (const pat of AUDIT_TITLE_PATTERNS) {
+    if (pat.test(firstLine))
+      return true;
+  }
+  return false;
+}
+function failsAuditTagGate(tags) {
+  for (const tag of tags) {
+    if (AUDIT_TAGS.has(tag))
+      return true;
+  }
+  return false;
+}
+var STRUCTURE_HEADING = /^#{1,4}\s+\S/m;
+var STRUCTURE_LIST = /^\s*[-*+]\s+\S/m;
+var STRUCTURE_CODE = /```\w*\n/m;
+var CITATION = /\b(ADR-?\d+|paper|arxiv|doi:|https?:\/\/|\b[A-Z][a-z]+ (et al\.|&) \d{4}|\b[A-Z][a-z]+ \d{4}\b)/;
+var DECLARATIVE = /\b(is|are|means|causes?|because|implies|requires?|enables?|prevents?|produces?|results? in|leads? to|defined? as|consists of)\b/ig;
+var FILE_OR_ENTITY_REF = /\b[a-zA-Z_]\w*\.(py|js|ts|md|json|yaml|sql|go|rs|rb|java)\b|\b[a-z_]+\(\)|\bclass\s+[A-Z]\w+|\bdef\s+[a-z_]\w+/;
+var KNOWLEDGE_TAGS = /* @__PURE__ */ new Set([
+  "decision",
+  "adr",
+  "architecture",
+  "spec",
+  "design",
+  "lesson",
+  "convention",
+  "rule",
+  "standard",
+  "paper",
+  "research",
+  "reference"
+]);
+var POSITIVE_SCORE_THRESHOLD = 4;
+function positiveScore(content, tags) {
+  let score = 0;
+  const length = content.length;
+  const struct = (STRUCTURE_HEADING.test(content) ? 1 : 0) + (STRUCTURE_LIST.test(content) ? 1 : 0) + (STRUCTURE_CODE.test(content) ? 1 : 0);
+  if (struct >= 1)
+    score++;
+  const declarativeMatches = content.match(DECLARATIVE) ?? [];
+  if (declarativeMatches.length >= 2)
+    score++;
+  if (CITATION.test(content))
+    score++;
+  if (length >= 200)
+    score++;
+  for (const tag of tags) {
+    if (KNOWLEDGE_TAGS.has(tag)) {
+      score++;
+      break;
+    }
+  }
+  if (length >= 200 && length <= 3e3)
+    score++;
+  const techTokens = new Set(content.match(/\b(?:[A-Z][a-z]+[A-Z]\w*|[a-z]+_[a-z_]+)\b/g) ?? []);
+  if (techTokens.size >= 3)
+    score++;
+  if (FILE_OR_ENTITY_REF.test(content))
+    score++;
+  return score;
+}
+var userRulesCache = null;
+function loadUserRules(wikiRoot) {
+  if (userRulesCache !== null)
+    return userRulesCache;
+  if (!wikiRoot) {
+    userRulesCache = [];
+    return userRulesCache;
+  }
+  try {
+    const { loadRegistry: loadRegistry2 } = (init_schema_loader(), __toCommonJS(schema_loader_exports));
+    const registry2 = loadRegistry2(wikiRoot);
+    userRulesCache = registry2.rules;
+  } catch {
+    userRulesCache = [];
+  }
+  return userRulesCache;
+}
+function classifyMemory(content, tags, wikiRoot) {
+  if (!content || content.trim().length < 50)
+    return null;
+  const stripped = content.trim();
+  const firstLine = stripped.split("\n")[0]?.trim() ?? "";
+  const tagSetPre = new Set((tags ?? []).map((t2) => t2.toLowerCase()));
+  if (failsAuditTagGate(tagSetPre))
+    return null;
+  const rules = loadUserRules(wikiRoot);
+  if (rules.length > 0) {
+    const match2 = applyRules2(content, tags ?? null, rules);
+    if (match2.matched_rule !== null) {
+      return match2.target_kind;
+    }
+  }
+  for (const prefix of REJECT_PREFIXES) {
+    if (stripped.startsWith(prefix))
+      return null;
+  }
+  for (const pattern of REJECT_PATTERNS) {
+    if (pattern.test(stripped))
+      return null;
+  }
+  if (REJECT_TITLES.has(slugify2(firstLine)))
+    return null;
+  if (failsHardNegatives(content, firstLine))
+    return null;
+  const EXPLICIT_KNOWLEDGE_TAGS = /* @__PURE__ */ new Set([
+    "decision",
+    "adr",
+    "architecture",
+    "spec",
+    "design",
+    "lesson",
+    "convention",
+    "rule",
+    "standard",
+    "paper",
+    "research"
+  ]);
+  let hasExplicitTag = false;
+  for (const tag of tagSetPre) {
+    if (EXPLICIT_KNOWLEDGE_TAGS.has(tag)) {
+      hasExplicitTag = true;
+      break;
+    }
+  }
+  if (!hasExplicitTag) {
+    if (positiveScore(content, tagSetPre) < POSITIVE_SCORE_THRESHOLD)
+      return null;
+  }
+  for (const pat of ADR_PATTERNS) {
+    if (pat.test(content))
+      return "adr";
+  }
+  if (tagSetPre.has("decision") || tagSetPre.has("adr"))
+    return "adr";
+  for (const pat of LESSON_PATTERNS) {
+    if (pat.test(content))
+      return "lesson";
+  }
+  if (tagSetPre.has("lesson") || tagSetPre.has("debugging") || tagSetPre.has("fix") || tagSetPre.has("bug-fix")) {
+    return "lesson";
+  }
+  for (const pat of CONVENTION_PATTERNS) {
+    if (pat.test(content))
+      return "convention";
+  }
+  if (tagSetPre.has("convention") || tagSetPre.has("rule") || tagSetPre.has("standard")) {
+    return "convention";
+  }
+  if (hasTagIn(tagSetPre, SPEC_TAGS) && content.length > 200)
+    return "spec";
+  if ((tagSetPre.has("architecture") || tagSetPre.has("design")) && content.length > 200)
+    return "spec";
+  return "note";
+}
+function hasTagIn(tagSet, candidates) {
+  for (const tag of tagSet) {
+    if (candidates.has(tag))
+      return true;
+  }
+  return false;
+}
+function slugify2(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
+}
+
+// packages/memory/dist/wiki/handlers/wiki-purge.js
+init_pages();
+var PAGE_DIRS = /* @__PURE__ */ new Set(["adr", "conventions", "guides", "journal", "lessons", "notes", "reference", "specs"]);
+function parseTags2(raw) {
+  if (Array.isArray(raw))
+    return raw.map(String);
+  if (typeof raw !== "string")
+    return [];
+  const stripped = raw.trim().replace(/^\[|\]$/g, "");
+  return stripped.split(",").map((t2) => t2.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean);
+}
+function evaluatePage(content) {
+  const doc = parsePage(content);
+  const tags = parseTags2(doc.frontmatter["tags"]);
+  let body = doc.body;
+  const lines = body.trim().split("\n");
+  const bodyLines = lines[0]?.startsWith("# ") ? lines.slice(1) : lines;
+  const bodyText = bodyLines.join("\n").trim() || String(doc.frontmatter["title"] ?? "");
+  return [classifyMemory(bodyText, tags), tags];
+}
+async function handler10(args, deps) {
+  const apply = args.apply ?? false;
+  const kindFilter = args.kind ?? null;
+  if (!deps.wikiRoot)
+    return { error: "wiki root not configured" };
+  let entries;
+  try {
+    entries = await deps.listAllMarkdownFiles(deps.wikiRoot, kindFilter);
+  } catch (err) {
+    return { error: `wiki root does not exist or cannot be listed: ${String(err)}` };
+  }
+  const kept = [];
+  const purged = [];
+  const errors = [];
+  for (const { relPath, content } of entries) {
+    const firstSegment = relPath.split("/")[0] ?? "";
+    if (!PAGE_DIRS.has(firstSegment))
+      continue;
+    try {
+      const [decision] = evaluatePage(content);
+      if (decision === null) {
+        purged.push(relPath);
+        if (apply) {
+          await deps.deleteFile(`${deps.wikiRoot}/${relPath}`).catch((err) => {
+            errors.push(`${relPath}: ${String(err)}`);
+          });
+        }
+      } else {
+        kept.push(relPath);
+      }
+    } catch (err) {
+      errors.push(`${relPath}: ${String(err)}`);
+    }
+  }
+  if (apply && purged.length && deps.removeEmptyDirs) {
+    await deps.removeEmptyDirs(deps.wikiRoot).catch(() => void 0);
+  }
+  return {
+    applied: apply,
+    scanned: kept.length + purged.length,
+    kept: kept.length,
+    purged: purged.length,
+    purged_paths: purged,
+    errors,
+    root: deps.wikiRoot
+  };
+}
+var schema5 = {
+  title: "Wiki \u2014 purge stale",
+  description: "Re-evaluate every authored wiki page against the current classifier and delete the ones that no longer pass the admission gate. Defaults to dry-run; pass apply=true to actually delete.",
+  inputSchema: {
+    type: "object",
+    required: [],
+    properties: {
+      apply: { type: "boolean", default: false },
+      kind: { type: "string", enum: [...PAGE_DIRS] }
+    }
+  }
+};
+
+// packages/memory/dist/wiki/symbol-extract.js
+var IDENT = String.raw`[A-Za-z_][A-Za-z_0-9]{1,}`;
+var BACKTICK_CALL = /`([A-Za-z_][\w.]*(?:\(\)|\([^`]{0,60}\)))`/g;
+var DOTTED_RE = new RegExp(String.raw`\b(${IDENT}(?:\.${IDENT}){1,})\b`, "g");
+var FILE_SUFFIXES = /* @__PURE__ */ new Set([
+  "py",
+  "js",
+  "ts",
+  "tsx",
+  "jsx",
+  "md",
+  "json",
+  "yaml",
+  "yml",
+  "toml",
+  "sql",
+  "go",
+  "rs",
+  "rb",
+  "java",
+  "cpp",
+  "c",
+  "h",
+  "hpp",
+  "sh",
+  "txt",
+  "csv",
+  "ini",
+  "cfg",
+  "lock",
+  "log"
+]);
+function stripCallArgs(s2) {
+  const idx = s2.indexOf("(");
+  return idx >= 0 ? s2.slice(0, idx) : s2;
+}
+function looksLikeFile(qname) {
+  const tail = qname.split(".").pop()?.toLowerCase() ?? "";
+  return FILE_SUFFIXES.has(tail);
+}
+function extractSymbolRefs(text) {
+  if (!text)
+    return [];
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  const backtickRe = new RegExp(BACKTICK_CALL.source, "g");
+  let m2;
+  while ((m2 = backtickRe.exec(text)) !== null) {
+    const q2 = stripCallArgs(m2[1]);
+    if (q2.includes(".")) {
+      if (looksLikeFile(q2))
+        continue;
+    }
+    if (seen.has(q2))
+      continue;
+    seen.add(q2);
+    out.push(q2);
+  }
+  const dottedRe = new RegExp(DOTTED_RE.source, "g");
+  while ((m2 = dottedRe.exec(text)) !== null) {
+    const q2 = m2[1];
+    if (looksLikeFile(q2))
+      continue;
+    if (seen.has(q2))
+      continue;
+    seen.add(q2);
+    out.push(q2);
+  }
+  return out;
+}
+function harvestPageSymbols(page, claimEvidenceSymbols) {
+  const refs = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const q2 of claimEvidenceSymbols ?? []) {
+    if (q2 && !seen.has(q2)) {
+      seen.add(q2);
+      refs.push(q2);
+    }
+  }
+  function add3(chunk) {
+    for (const q2 of extractSymbolRefs(chunk)) {
+      if (!seen.has(q2)) {
+        seen.add(q2);
+        refs.push(q2);
+      }
+    }
+  }
+  add3(page.lead ?? "");
+  const sections = page.sections;
+  if (sections) {
+    if (Array.isArray(sections)) {
+      for (const s2 of sections)
+        add3(s2.body);
+    } else {
+      for (const body of Object.values(sections))
+        add3(String(body));
+    }
+  }
+  return refs;
+}
+
+// packages/memory/dist/wiki/symbol-verify.js
+var MIN_SYMBOL_REFS = 3;
+var SYMBOL_STALE_THRESHOLD = 0.5;
+function evaluateSymbolStaleness(args) {
+  const { page_id, is_symbol_stale_was, symbol_refs, existence } = args;
+  if (symbol_refs.length < MIN_SYMBOL_REFS) {
+    return {
+      page_id,
+      symbol_refs,
+      missing_refs: [],
+      is_symbol_stale_now: false,
+      is_symbol_stale_was,
+      transitioned: is_symbol_stale_was,
+      rationale: `too few symbol refs (${symbol_refs.length} < ${MIN_SYMBOL_REFS})`
+    };
+  }
+  const missing = symbol_refs.filter((q2) => !existence[q2]);
+  const fraction = missing.length / symbol_refs.length;
+  const isNow = fraction >= SYMBOL_STALE_THRESHOLD;
+  return {
+    page_id,
+    symbol_refs,
+    missing_refs: missing,
+    is_symbol_stale_now: isNow,
+    is_symbol_stale_was,
+    transitioned: isNow !== is_symbol_stale_was,
+    rationale: `${missing.length}/${symbol_refs.length} symbols missing (${Math.round(fraction * 100)}% \u2014 threshold ${Math.round(SYMBOL_STALE_THRESHOLD * 100)}%)`
+  };
+}
+
+// packages/memory/dist/wiki/handlers/wiki-verify.js
+function parseLeadAndSections(md) {
+  const lines = md.split("\n");
+  const leadLines = [];
+  const sections = {};
+  let current = null;
+  const buf = [];
+  for (const line of lines) {
+    if (line.startsWith("## ")) {
+      if (current !== null) {
+        sections[current] = buf.join("\n").trim();
+      } else {
+        leadLines.push(...buf);
+      }
+      current = line.slice(3).trim();
+      buf.length = 0;
+    } else {
+      buf.push(line);
+    }
+  }
+  if (current !== null) {
+    sections[current] = buf.join("\n").trim();
+  } else {
+    leadLines.push(...buf);
+  }
+  return { lead: leadLines.join("\n").trim(), sections };
+}
+async function verifyOne(path6, deps) {
+  const content = await deps.readPage(deps.wikiRoot, path6);
+  if (content === null) {
+    return { page: path6, symbol_refs: [], missing_refs: [], is_symbol_stale: false, rationale: "page not found", error: "page not found" };
+  }
+  const pageStruct = parseLeadAndSections(content);
+  const symbolRefs = harvestPageSymbols(pageStruct).slice(0, 200);
+  const existence = symbolRefs.length > 0 ? await deps.verifySymbols(symbolRefs) : {};
+  const verdict = evaluateSymbolStaleness({
+    page_id: path6,
+    is_symbol_stale_was: false,
+    symbol_refs: symbolRefs,
+    existence
+  });
+  return {
+    page: path6,
+    symbol_refs: verdict.symbol_refs,
+    missing_refs: verdict.missing_refs,
+    is_symbol_stale: verdict.is_symbol_stale_now,
+    rationale: verdict.rationale
+  };
+}
+async function handler11(args, deps) {
+  if (!deps.isApEnabled()) {
+    return {
+      status: "skipped",
+      reason: "ap_disabled",
+      detail: "AP is disabled. Set CORTEX_MEMORY_AP_ENABLED=1 in your MCP config (default) and install automatised-pipeline to run symbol verification."
+    };
+  }
+  const target = (args.path ?? "").trim();
+  if (target) {
+    const result = await verifyOne(target, deps);
+    return {
+      status: "ok",
+      results: [result],
+      threshold: SYMBOL_STALE_THRESHOLD,
+      min_refs: MIN_SYMBOL_REFS
+    };
+  }
+  const pages = await deps.listPages(deps.wikiRoot);
+  const results = await Promise.all(pages.map((p2) => verifyOne(p2, deps)));
+  const stale = results.filter((r2) => r2.is_symbol_stale);
+  return {
+    status: "ok",
+    results,
+    summary: {
+      total: results.length,
+      stale: stale.length,
+      threshold: SYMBOL_STALE_THRESHOLD,
+      min_refs: MIN_SYMBOL_REFS
+    }
+  };
+}
+
+// packages/memory/dist/wiki/storage/wiki-store.js
+init_layout();
+import * as fs4 from "node:fs";
+import * as path4 from "node:path";
+function safeJoin(root, relPath) {
+  if (!relPath || relPath.includes("\0")) {
+    throw new Error("invalid wiki path: empty or contains null byte");
+  }
+  if (path4.isAbsolute(relPath)) {
+    throw new Error(`absolute paths are not allowed: ${JSON.stringify(relPath)}`);
+  }
+  const rootResolved = fs4.realpathSync(root);
+  let candidate;
+  try {
+    candidate = fs4.realpathSync(path4.join(rootResolved, relPath));
+  } catch {
+    candidate = path4.resolve(rootResolved, relPath);
+  }
+  const rel = path4.relative(rootResolved, candidate);
+  if (rel.startsWith("..") || path4.isAbsolute(rel)) {
+    throw new Error(`path escapes wiki root: ${JSON.stringify(relPath)}`);
+  }
+  return candidate;
+}
+function readPage(root, relPath) {
+  if (!relPath || relPath.includes("\0") || path4.isAbsolute(relPath)) {
+    return null;
+  }
+  let fullPath;
+  try {
+    fullPath = safeJoin(root, relPath);
+  } catch {
+    return null;
+  }
+  if (!fs4.existsSync(fullPath))
+    return null;
+  return fs4.readFileSync(fullPath, "utf-8");
+}
+function atomicWriteString(safePath, content) {
+  const dir = path4.dirname(safePath);
+  if (dir && !fs4.existsSync(dir)) {
+    fs4.mkdirSync(dir, { recursive: true });
+  }
+  const tmp = safePath + ".tmp";
+  const data = Buffer.from(content, "utf-8");
+  fs4.writeFileSync(tmp, data);
+  fs4.renameSync(tmp, safePath);
+  return data.byteLength;
+}
+function writePage(root, relPath, content, mode = "create") {
+  const safePath = safeJoin(root, relPath);
+  const existed = fs4.existsSync(safePath);
+  let written;
+  if (mode === "create") {
+    if (existed)
+      throw new WikiExists(relPath);
+    written = atomicWriteString(safePath, content);
+  } else if (mode === "replace") {
+    written = atomicWriteString(safePath, content);
+  } else if (mode === "append") {
+    if (!existed)
+      throw new WikiMissing(relPath);
+    let current = fs4.readFileSync(safePath, "utf-8");
+    if (current && !current.endsWith("\n"))
+      current += "\n";
+    let merged = current + "\n" + content;
+    if (!merged.endsWith("\n"))
+      merged += "\n";
+    written = atomicWriteString(safePath, merged);
+  } else {
+    throw new Error(`unknown write mode: ${mode}`);
+  }
+  return { path: relPath, mode, created: !existed, bytes_written: written };
+}
+function listPages(root, kind2) {
+  if (!fs4.existsSync(root))
+    return [];
+  const kinds = kind2 ? [kind2] : [...PAGE_KINDS];
+  const results = [];
+  for (const k2 of kinds) {
+    if (!PAGE_KINDS.includes(k2))
+      continue;
+    const kindDir = path4.join(root, k2);
+    if (!fs4.existsSync(kindDir))
+      continue;
+    walkMd(kindDir, root, results);
+  }
+  return results.sort();
+}
+function walkMd(dir, root, out) {
+  let entries;
+  try {
+    entries = fs4.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const full = path4.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkMd(full, root, out);
+    } else if (entry.isFile() && entry.name.endsWith(".md")) {
+      out.push(path4.relative(root, full).replace(/\\/g, "/"));
+    }
+  }
+}
+function nextAdrNumber(root) {
+  const pages = listPages(root, "adr");
+  let maxSeen = 0;
+  for (const rel of pages) {
+    const name = rel.split("/").pop() ?? "";
+    const head = name.split("-")[0] ?? "";
+    const num = parseInt(head, 10);
+    if (!isNaN(num) && num > maxSeen)
+      maxSeen = num;
+  }
+  return maxSeen + 1;
+}
+
+// packages/mcp-servers/memory/dist/tools/wiki.js
+var WIKI_ROOT = process.env["CORTEX_WIKI_ROOT"] ?? join8(homedir5(), ".claude", "methodology", "wiki");
+async function asyncReadPage(root, relPath) {
+  return Promise.resolve(readPage(root, relPath));
+}
+async function asyncWritePage(root, relPath, content, mode) {
+  return Promise.resolve(writePage(root, relPath, content, mode));
+}
+async function asyncListPages(root, kind2) {
+  return Promise.resolve(listPages(root, kind2));
+}
+async function asyncNextAdrNumber(root) {
+  return Promise.resolve(nextAdrNumber(root));
+}
+async function asyncWriteFile(absPath, content) {
+  const dir = dirname2(resolve2(absPath));
+  mkdirSync3(dir, { recursive: true });
+  writeFileSync3(absPath, content, "utf-8");
+}
+async function asyncEnsureDir(absDir) {
+  mkdirSync3(absDir, { recursive: true });
+}
+async function asyncListAllMarkdownFiles(root, kindFilter) {
+  const paths = await asyncListPages(root, kindFilter);
+  const entries = [];
+  for (const relPath of paths) {
+    const content = await asyncReadPage(root, relPath);
+    if (content !== null)
+      entries.push({ relPath, content });
+  }
+  return entries;
+}
+async function asyncDeleteFile(absPath) {
+  try {
+    rmSync(absPath);
+  } catch {
+  }
+}
+var AP_ENABLED = false;
+function errorText8(tool, err) {
+  const message = err instanceof Error ? err.message : String(err);
+  return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
+}
+function registerWikiTools(server2) {
+  server2.registerTool("wiki_write", {
+    description: "Author a wiki page (create/append/replace) with provided Markdown.",
+    inputSchema: {
+      path: external_exports.string().min(1).describe("Wiki page path (relative)"),
+      content: external_exports.string().min(1).describe("Markdown content"),
+      mode: external_exports.enum(["create", "append", "replace"]).default("create").describe("Write mode"),
+      tags: external_exports.array(external_exports.string()).default([]).describe("Page tags")
+    }
+  }, async (args) => {
+    try {
+      const response = await handler4({ path: args.path, content: args.content, mode: args.mode, tags: args.tags }, { wikiRoot: WIKI_ROOT, writePage: asyncWritePage });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText8("wiki_write", err);
+    }
+  });
+  server2.registerTool("wiki_read", {
+    description: "Read the raw Markdown of a wiki page by relative path.",
+    inputSchema: {
+      path: external_exports.string().min(1).describe("Wiki page path")
+    }
+  }, async (args) => {
+    try {
+      const response = await handler5({ path: args.path }, { wikiRoot: WIKI_ROOT, readPage: asyncReadPage });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText8("wiki_read", err);
+    }
+  });
+  server2.registerTool("wiki_list", {
+    description: "List authored wiki pages, optionally filtered by kind.",
+    inputSchema: {
+      kind: external_exports.string().optional().describe("Page kind filter")
+    }
+  }, async (args) => {
+    try {
+      const response = await handler6({ kind: args.kind }, { wikiRoot: WIKI_ROOT, listPages: asyncListPages });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText8("wiki_list", err);
+    }
+  });
+  server2.registerTool("wiki_link", {
+    description: "Add a bidirectional link between two wiki pages (creates Related section entry).",
+    inputSchema: {
+      from_path: external_exports.string().min(1).describe("Source page path"),
+      to_path: external_exports.string().min(1).describe("Target page path"),
+      relation: external_exports.string().min(1).describe("Relationship label")
+    }
+  }, async (args) => {
+    try {
+      const response = await handler7({ from_path: args.from_path, to_path: args.to_path, relation: args.relation }, { wikiRoot: WIKI_ROOT, readPage: asyncReadPage, writePage: asyncWritePage });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText8("wiki_link", err);
+    }
+  });
+  server2.registerTool("wiki_adr", {
+    description: "Create a numbered ADR (Architecture Decision Record) with auto-incremented sequence.",
+    inputSchema: {
+      title: external_exports.string().min(1).describe("ADR title"),
+      context: external_exports.string().min(1).describe("Problem context"),
+      decision: external_exports.string().min(1).describe("Decision made"),
+      consequences: external_exports.string().min(1).describe("Consequences"),
+      status: external_exports.enum(["proposed", "accepted", "deprecated", "superseded"]).default("accepted").describe("ADR status"),
+      tags: external_exports.array(external_exports.string()).default([]).describe("Tags")
+    }
+  }, async (args) => {
+    try {
+      const response = await handler8({
+        title: args.title,
+        context: args.context,
+        decision: args.decision,
+        consequences: args.consequences,
+        status: args.status,
+        tags: args.tags
+      }, {
+        wikiRoot: WIKI_ROOT,
+        nextAdrNumber: asyncNextAdrNumber,
+        writePage: asyncWritePage
+      });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText8("wiki_adr", err);
+    }
+  });
+  server2.registerTool("wiki_reindex", {
+    description: "Regenerate the wiki table of contents at .generated/INDEX.md.",
+    inputSchema: {}
+  }, async (_args) => {
+    try {
+      const response = await handler9({}, {
+        wikiRoot: WIKI_ROOT,
+        listPages: asyncListPages,
+        writeFile: asyncWriteFile,
+        ensureDir: asyncEnsureDir,
+        joinPath: join8
+      });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText8("wiki_reindex", err);
+    }
+  });
+  server2.registerTool("wiki_purge", {
+    description: "Re-evaluate and purge wiki pages that fail the current classifier.",
+    inputSchema: {
+      apply: external_exports.boolean().default(false).describe("Apply purge (false = preview only)"),
+      kind: external_exports.string().optional().describe("Page kind to target")
+    }
+  }, async (args) => {
+    try {
+      const response = await handler10({
+        apply: args.apply,
+        kind: args.kind
+      }, {
+        wikiRoot: WIKI_ROOT,
+        wikiRoot_string: WIKI_ROOT,
+        listAllMarkdownFiles: asyncListAllMarkdownFiles,
+        deleteFile: asyncDeleteFile
+      });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText8("wiki_purge", err);
+    }
+  });
+  server2.registerTool("wiki_verify", {
+    description: "Verify wiki-page symbol citations against AP's code graph (ADR-0046 Phase 2).",
+    // source: docs/ADR/0046-change-impact-analysis.md §Phase 2
+    inputSchema: {
+      path: external_exports.string().optional().describe("Page path (null = all pages)")
+    }
+  }, async (args) => {
+    try {
+      const response = await handler11({ path: args.path ?? null }, {
+        wikiRoot: WIKI_ROOT,
+        isApEnabled: () => AP_ENABLED,
+        readPage: asyncReadPage,
+        listPages: asyncListPages,
+        // source: docs/ADR/0046-change-impact-analysis.md §Phase 2 — stub until AP live
+        verifySymbols: async (_symbols) => ({})
+      });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText8("wiki_verify", err);
+    }
+  });
+}
+
+// packages/memory/dist/shared/types.js
+var ConversationMetaSchema = external_exports.object({
+  sessionId: external_exports.string(),
+  slug: external_exports.string().nullable().optional(),
+  project: external_exports.string().default(""),
+  cwd: external_exports.string().nullable().optional(),
+  firstMessage: external_exports.string().nullable().optional(),
+  allText: external_exports.string().nullable().optional(),
+  keywords: external_exports.array(external_exports.string()).default([]),
+  startedAt: external_exports.string().nullable().optional(),
+  endedAt: external_exports.string().nullable().optional(),
+  messageCount: external_exports.number().int().default(0),
+  userCount: external_exports.number().int().default(0),
+  assistantCount: external_exports.number().int().default(0),
+  turnCount: external_exports.number().int().default(0),
+  toolsUsed: external_exports.array(external_exports.string()).default([]),
+  duration: external_exports.number().nullable().optional(),
+  fileSize: external_exports.number().int().nullable().optional()
+});
+var MemoryMetaSchema = external_exports.object({
+  file: external_exports.string().default(""),
+  path: external_exports.string().default(""),
+  project: external_exports.string().default(""),
+  name: external_exports.string().default(""),
+  description: external_exports.string().default(""),
+  type: external_exports.string().default(""),
+  body: external_exports.string().default(""),
+  modifiedAt: external_exports.string().default(""),
+  createdAt: external_exports.string().nullable().optional()
+});
+var GraphNodeSchema = external_exports.object({
+  id: external_exports.string(),
+  type: external_exports.enum(["domain", "entry-point", "recurring-pattern", "tool-preference"]),
+  label: external_exports.string().default(""),
+  domain: external_exports.string().default(""),
+  confidence: external_exports.number().nullable().optional(),
+  frequency: external_exports.number().int().nullable().optional(),
+  ratio: external_exports.number().nullable().optional(),
+  color: external_exports.string().default("#999999"),
+  size: external_exports.number().default(1)
+});
+var GraphEdgeSchema = external_exports.object({
+  source: external_exports.string(),
+  target: external_exports.string(),
+  type: external_exports.enum(["has-entry", "has-pattern", "uses-tool", "bridge"]),
+  weight: external_exports.number().default(1),
+  label: external_exports.string().nullable().optional()
+});
+var GraphDataSchema = external_exports.object({
+  nodes: external_exports.array(GraphNodeSchema).default([]),
+  edges: external_exports.array(GraphEdgeSchema).default([]),
+  blindSpotRegions: external_exports.array(external_exports.record(external_exports.unknown())).default([])
+});
+var TopSignalSchema = external_exports.object({
+  signal: external_exports.string(),
+  weight: external_exports.number()
+});
+var BehavioralFeatureSchema = external_exports.object({
+  index: external_exports.number().int(),
+  label: external_exports.string().default(""),
+  description: external_exports.string().default(""),
+  direction: external_exports.array(external_exports.number()).default([]),
+  topSignals: external_exports.array(TopSignalSchema).default([])
+});
+var SparseActivationSchema = external_exports.object({
+  weights: external_exports.record(external_exports.number()).default({}),
+  reconstructionError: external_exports.number().default(0)
+});
+var AttributionNodeSchema = external_exports.object({
+  id: external_exports.string(),
+  label: external_exports.string().default(""),
+  layer: external_exports.enum(["input", "extractor", "classifier", "feature", "aggregator", "output"]),
+  activation: external_exports.number().default(0)
+});
+var AttributionEdgeSchema = external_exports.object({
+  source: external_exports.string(),
+  target: external_exports.string(),
+  weight: external_exports.number().default(0)
+});
+var AttributionGraphSchema = external_exports.object({
+  nodes: external_exports.array(AttributionNodeSchema).default([]),
+  edges: external_exports.array(AttributionEdgeSchema).default([])
+});
+var PersonaVectorSchema = external_exports.object({
+  activeReflective: external_exports.number().default(0),
+  sensingIntuitive: external_exports.number().default(0),
+  sequentialGlobal: external_exports.number().default(0),
+  thoroughness: external_exports.number().default(0),
+  autonomy: external_exports.number().default(0),
+  verbosity: external_exports.number().default(0),
+  riskTolerance: external_exports.number().default(0),
+  focusScope: external_exports.number().default(0),
+  iterationSpeed: external_exports.number().default(0)
+});
+var PersistentFeatureSchema = external_exports.object({
+  label: external_exports.string(),
+  persistence: external_exports.number().default(0),
+  consistency: external_exports.number().default(0),
+  domains: external_exports.array(external_exports.string()).default([])
+});
+var FeatureDictionarySchema = external_exports.object({
+  K: external_exports.number().int(),
+  D: external_exports.number().int(),
+  sparsity: external_exports.number().int().default(0),
+  signalNames: external_exports.array(external_exports.string()).default([]),
+  features: external_exports.array(BehavioralFeatureSchema).default([]),
+  learnedFromSessions: external_exports.number().int().default(0)
+});
+
+// packages/memory/dist/shared/types-profiles.js
+var EntryPointSchema = external_exports.object({
+  pattern: external_exports.string(),
+  frequency: external_exports.number().int().default(0),
+  confidence: external_exports.number().default(0),
+  exampleMessages: external_exports.array(external_exports.string()).default([])
+});
+var RecurringPatternSchema = external_exports.object({
+  pattern: external_exports.string(),
+  ngramSignature: external_exports.array(external_exports.string()).default([]),
+  frequency: external_exports.number().int().default(0),
+  sessionsObserved: external_exports.number().int().default(0),
+  confidence: external_exports.number().default(0)
+});
+var ToolPreferenceSchema = external_exports.object({
+  ratio: external_exports.number().default(0),
+  avgPerSession: external_exports.number().default(0)
+});
+var SessionShapeSchema = external_exports.object({
+  avgDuration: external_exports.number().default(0),
+  avgTurns: external_exports.number().default(0),
+  avgMessages: external_exports.number().default(0),
+  burstRatio: external_exports.number().default(0),
+  explorationRatio: external_exports.number().default(0),
+  dominantMode: external_exports.enum(["burst", "exploration", "mixed"]).default("mixed")
+});
+var CognitiveStyleSchema = external_exports.object({
+  activeReflective: external_exports.number().default(0),
+  sensingIntuitive: external_exports.number().default(0),
+  sequentialGlobal: external_exports.number().default(0),
+  problemDecomposition: external_exports.enum(["top-down", "bottom-up"]).default("top-down"),
+  explorationStyle: external_exports.enum(["depth-first", "breadth-first"]).default("depth-first"),
+  verificationBehavior: external_exports.enum(["test-first", "test-after", "no-test"]).default("no-test")
+});
+var GlobalStyleSchema = external_exports.object({
+  activeReflective: external_exports.number().default(0),
+  sensingIntuitive: external_exports.number().default(0),
+  sequentialGlobal: external_exports.number().default(0),
+  confidence: external_exports.number().default(0),
+  sessionCount: external_exports.number().int().default(0)
+});
+var BridgeSchema = external_exports.object({
+  toDomain: external_exports.string(),
+  pattern: external_exports.string().default(""),
+  weight: external_exports.number().default(0),
+  examples: external_exports.array(external_exports.record(external_exports.unknown())).default([]),
+  edgeCount: external_exports.number().int().default(0)
+});
+var BlindSpotSchema = external_exports.object({
+  type: external_exports.enum(["category", "tool", "pattern"]),
+  value: external_exports.string(),
+  severity: external_exports.enum(["high", "medium", "low"]).default("medium"),
+  description: external_exports.string().default(""),
+  suggestion: external_exports.string().default("")
+});
+var DetectionContextSchema = external_exports.object({
+  cwd: external_exports.string().nullable().optional(),
+  project: external_exports.string().nullable().optional(),
+  firstMessage: external_exports.string().nullable().optional()
+});
+var AlternativeDomainSchema = external_exports.object({
+  id: external_exports.string(),
+  confidence: external_exports.number().default(0)
+});
+var DetectionResultSchema = external_exports.object({
+  coldStart: external_exports.boolean().default(false),
+  domain: external_exports.string().nullable().optional(),
+  confidence: external_exports.number().default(0),
+  isNew: external_exports.boolean().default(false),
+  alternativeDomains: external_exports.array(AlternativeDomainSchema).default([]),
+  context: external_exports.string().nullable().optional()
+});
+var DomainProfileSchema = external_exports.object({
+  id: external_exports.string(),
+  label: external_exports.string().default(""),
+  projects: external_exports.array(external_exports.string()).default([]),
+  categories: external_exports.record(external_exports.number()).default({}),
+  topKeywords: external_exports.array(external_exports.string()).default([]),
+  entryPoints: external_exports.array(EntryPointSchema).default([]),
+  recurringPatterns: external_exports.array(RecurringPatternSchema).default([]),
+  toolPreferences: external_exports.record(ToolPreferenceSchema).default({}),
+  sessionShape: SessionShapeSchema.nullable().optional(),
+  connectionBridges: external_exports.array(BridgeSchema).default([]),
+  blindSpots: external_exports.array(BlindSpotSchema).default([]),
+  metacognitive: CognitiveStyleSchema.nullable().optional(),
+  confidence: external_exports.number().default(0),
+  sessionCount: external_exports.number().int().default(0),
+  lastUpdated: external_exports.string().nullable().optional(),
+  firstSeen: external_exports.string().nullable().optional()
+});
+var ProfilesV2Schema = external_exports.object({
+  version: external_exports.number().int().default(2),
+  updatedAt: external_exports.string().nullable().optional(),
+  globalStyle: GlobalStyleSchema.nullable().optional(),
+  domains: external_exports.record(DomainProfileSchema).default({})
+});
+var SessionLogEntrySchema = external_exports.object({
+  sessionId: external_exports.string(),
+  domain: external_exports.string().default(""),
+  timestamp: external_exports.string().default(""),
+  project: external_exports.string().nullable().optional(),
+  cwd: external_exports.string().nullable().optional(),
+  duration: external_exports.number().nullable().optional(),
+  turnCount: external_exports.number().int().default(0),
+  toolsUsed: external_exports.array(external_exports.string()).default([]),
+  category: external_exports.string().default(""),
+  entryKeywords: external_exports.array(external_exports.string()).default([])
+});
+var SessionLogSchema = external_exports.object({
+  sessions: external_exports.array(SessionLogEntrySchema).default([])
+});
+
+// packages/memory/dist/shared/memory-types.js
+var MemorySchema = external_exports.object({
+  id: external_exports.number().int().nullable().optional(),
+  content: external_exports.string(),
+  embedding: external_exports.instanceof(Uint8Array).nullable().optional(),
+  tags: external_exports.array(external_exports.string()).default([]),
+  source: external_exports.string().default(""),
+  // "session", "tool", "user", "consolidation"
+  domain: external_exports.string().default(""),
+  directoryContext: external_exports.string().default(""),
+  createdAt: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
+  lastAccessed: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
+  // Thermodynamic properties
+  heat: external_exports.number().default(1),
+  surpriseScore: external_exports.number().default(0),
+  importance: external_exports.number().default(0.5),
+  emotionalValence: external_exports.number().default(0),
+  confidence: external_exports.number().default(1),
+  // Access tracking (metamemory)
+  accessCount: external_exports.number().int().default(0),
+  usefulCount: external_exports.number().int().default(0),
+  // Reconsolidation state
+  plasticity: external_exports.number().default(1),
+  stability: external_exports.number().default(0),
+  reconsolidationCount: external_exports.number().int().default(0),
+  lastReconsolidated: external_exports.string().datetime().nullable().optional(),
+  // Store type (CLS dual-store)
+  storeType: external_exports.enum(["episodic", "semantic"]).default("episodic"),
+  // Compression
+  compressed: external_exports.boolean().default(false),
+  compressionLevel: external_exports.number().int().default(0),
+  // 0=full, 1=gist, 2=tag
+  originalContent: external_exports.string().nullable().optional(),
+  // Protection
+  isProtected: external_exports.boolean().default(false),
+  isStale: external_exports.boolean().default(false),
+  isGlobal: external_exports.boolean().default(false),
+  // Visible to all projects when True
+  // Engram allocation
+  slotIndex: external_exports.number().int().nullable().optional(),
+  excitability: external_exports.number().default(1),
+  // Consolidation cascade (Kandel 2001, Dudai 2012)
+  consolidationStage: external_exports.string().default("labile"),
+  // labile/early_ltp/late_ltp/consolidated/reconsolidating
+  hoursInStage: external_exports.number().default(0),
+  replayCount: external_exports.number().int().default(0),
+  // Oscillatory context (Hasselmo 2005, Buzsaki 2015)
+  thetaPhaseAtEncoding: external_exports.number().default(0),
+  encodingStrength: external_exports.number().default(1),
+  // Pattern separation (Leutgeb 2007, Yassa & Stark 2011)
+  separationIndex: external_exports.number().default(0),
+  interferenceScore: external_exports.number().default(0),
+  // Schema integration (Tse 2007, Gilboa & Marlatte 2017)
+  schemaMatchScore: external_exports.number().default(0),
+  schemaId: external_exports.string().nullable().optional(),
+  // Hippocampal dependency (McClelland 1995)
+  hippocampalDependency: external_exports.number().default(1)
+});
+var EntitySchema = external_exports.object({
+  id: external_exports.number().int().nullable().optional(),
+  name: external_exports.string(),
+  type: external_exports.enum([
+    "file",
+    "function",
+    "variable",
+    "dependency",
+    "decision",
+    "error",
+    "solution",
+    "domain",
+    "pattern"
+  ]),
+  domain: external_exports.string().default(""),
+  createdAt: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
+  lastAccessed: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
+  heat: external_exports.number().default(1),
+  archived: external_exports.boolean().default(false)
+});
+var RelationshipSchema = external_exports.object({
+  id: external_exports.number().int().nullable().optional(),
+  sourceEntityId: external_exports.number().int(),
+  targetEntityId: external_exports.number().int(),
+  relationshipType: external_exports.string(),
+  // co_occurrence, imports, calls, caused_by, resolved_by, etc.
+  weight: external_exports.number().default(1),
+  isCausal: external_exports.boolean().default(false),
+  confidence: external_exports.number().default(1),
+  createdAt: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
+  lastReinforced: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
+  // Stochastic synaptic transmission (Markram 1998, Abbott & Regehr 2004)
+  releaseProbability: external_exports.number().default(0.5),
+  // p(transmission) per access [0,1]
+  facilitation: external_exports.number().default(0),
+  // Short-term facilitation accumulator
+  depression: external_exports.number().default(0)
+  // Short-term depression accumulator
+});
+var ProspectiveTriggerSchema = external_exports.object({
+  id: external_exports.number().int().nullable().optional(),
+  content: external_exports.string(),
+  triggerCondition: external_exports.string(),
+  triggerType: external_exports.enum(["directory_match", "keyword_match", "entity_match", "time_based"]),
+  targetDirectory: external_exports.string().nullable().optional(),
+  isActive: external_exports.boolean().default(true),
+  createdAt: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
+  triggeredAt: external_exports.string().datetime().nullable().optional(),
+  triggeredCount: external_exports.number().int().default(0)
+});
+var CheckpointSchema = external_exports.object({
+  id: external_exports.number().int().nullable().optional(),
+  sessionId: external_exports.string().default("default"),
+  directoryContext: external_exports.string().default(""),
+  currentTask: external_exports.string().default(""),
+  filesBeingEdited: external_exports.array(external_exports.string()).default([]),
+  keyDecisions: external_exports.array(external_exports.string()).default([]),
+  openQuestions: external_exports.array(external_exports.string()).default([]),
+  nextSteps: external_exports.array(external_exports.string()).default([]),
+  activeErrors: external_exports.array(external_exports.string()).default([]),
+  customContext: external_exports.string().default(""),
+  epoch: external_exports.number().int().default(0),
+  createdAt: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
+  isActive: external_exports.boolean().default(true)
+});
+var MemoryArchiveSchema = external_exports.object({
+  id: external_exports.number().int().nullable().optional(),
+  originalMemoryId: external_exports.number().int(),
+  content: external_exports.string(),
+  embedding: external_exports.instanceof(Uint8Array).nullable().optional(),
+  archivedAt: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
+  mismatchScore: external_exports.number().default(0),
+  archiveReason: external_exports.string().default("")
+  // "reconsolidation", "compression", "extinction"
+});
+var ConsolidationLogSchema = external_exports.object({
+  id: external_exports.number().int().nullable().optional(),
+  timestamp: external_exports.string().datetime().default(() => (/* @__PURE__ */ new Date()).toISOString()),
+  memoriesAdded: external_exports.number().int().default(0),
+  memoriesUpdated: external_exports.number().int().default(0),
+  memoriesArchived: external_exports.number().int().default(0),
+  durationMs: external_exports.number().int().default(0)
+});
+var MemoryStatsSchema = external_exports.object({
+  totalMemories: external_exports.number().int().default(0),
+  episodicCount: external_exports.number().int().default(0),
+  semanticCount: external_exports.number().int().default(0),
+  activeCount: external_exports.number().int().default(0),
+  archivedCount: external_exports.number().int().default(0),
+  staleCount: external_exports.number().int().default(0),
+  protectedCount: external_exports.number().int().default(0),
+  avgHeat: external_exports.number().default(0),
+  totalEntities: external_exports.number().int().default(0),
+  totalRelationships: external_exports.number().int().default(0),
+  activeTriggers: external_exports.number().int().default(0),
+  lastConsolidation: external_exports.string().datetime().nullable().optional(),
+  // Consolidation stage distribution
+  labileCount: external_exports.number().int().default(0),
+  earlyLtpCount: external_exports.number().int().default(0),
+  lateLtpCount: external_exports.number().int().default(0),
+  consolidatedCount: external_exports.number().int().default(0),
+  reconsolidatingCount: external_exports.number().int().default(0),
+  avgInterferenceScore: external_exports.number().default(0),
+  schemaCount: external_exports.number().int().default(0),
+  distributionHealth: external_exports.number().default(0)
+});
+var RecallResultSchema2 = external_exports.object({
+  memoryId: external_exports.number().int(),
+  content: external_exports.string(),
+  score: external_exports.number().default(0),
+  heat: external_exports.number().default(0),
+  domain: external_exports.string().default(""),
+  tags: external_exports.array(external_exports.string()).default([]),
+  storeType: external_exports.string().default("episodic"),
+  createdAt: external_exports.string().default(""),
+  signals: external_exports.record(external_exports.number()).default({})
+});
+
+// packages/memory/dist/shared/wiki-ir.js
+var ClaimTypeSchema = external_exports.enum([
+  "assertion",
+  "decision",
+  "observation",
+  "question",
+  "method",
+  "result",
+  "limitation",
+  "reference"
+]);
+var EvidenceRefSchema = external_exports.object({
+  kind: external_exports.enum(["file", "commit", "paper", "memory", "claim", "benchmark", "url"]),
+  target: external_exports.string(),
+  context: external_exports.string().nullable().optional()
+});
+var ClaimEventSchema = external_exports.object({
+  id: external_exports.number().int().nullable().optional(),
+  memoryId: external_exports.number().int().nullable().optional(),
+  sessionId: external_exports.string().default(""),
+  text: external_exports.string().min(1).max(2e3),
+  claimType: ClaimTypeSchema.default("assertion"),
+  entityIds: external_exports.array(external_exports.number().int()).default([]),
+  evidenceRefs: external_exports.array(EvidenceRefSchema).default([]),
+  confidence: external_exports.number().min(0).max(1).default(0.5),
+  supersedes: external_exports.number().int().nullable().optional(),
+  extractedAt: external_exports.string().datetime().nullable().optional()
+});
+var ConceptStatusSchema = external_exports.enum([
+  "candidate",
+  "saturating",
+  "promoted",
+  "merged",
+  "split",
+  "abandoned"
+]);
+var AxialSlotsSchema = external_exports.object({
+  conditions: external_exports.array(external_exports.string()).default([]),
+  context: external_exports.array(external_exports.string()).default([]),
+  strategies: external_exports.array(external_exports.string()).default([]),
+  consequences: external_exports.array(external_exports.string()).default([])
+});
+var ConceptSchema = external_exports.object({
+  id: external_exports.number().int().nullable().optional(),
+  label: external_exports.string().min(1).max(200),
+  status: ConceptStatusSchema.default("candidate"),
+  entityIds: external_exports.array(external_exports.number().int()).default([]),
+  groundingMemoryIds: external_exports.array(external_exports.number().int()).default([]),
+  groundingClaimIds: external_exports.array(external_exports.number().int()).default([]),
+  properties: external_exports.record(external_exports.array(external_exports.string())).default({}),
+  axialSlots: AxialSlotsSchema.default({}),
+  saturationRate: external_exports.number().default(1),
+  saturationStreak: external_exports.number().int().default(0),
+  firstSeenAt: external_exports.string().datetime().nullable().optional(),
+  lastPropertyAt: external_exports.string().datetime().nullable().optional(),
+  promotedPageId: external_exports.number().int().nullable().optional(),
+  mergedIntoId: external_exports.number().int().nullable().optional(),
+  splitIntoIds: external_exports.array(external_exports.number().int()).default([])
+});
+var DraftStatusSchema = external_exports.enum(["pending", "approved", "rejected", "published"]);
+var SectionSchema = external_exports.object({
+  heading: external_exports.string(),
+  body: external_exports.string(),
+  claimIds: external_exports.array(external_exports.number().int()).default([])
+});
+var ProvenanceSchema = external_exports.object({
+  sourceType: external_exports.enum(["concept", "memory", "user", "claim-set"]).default("concept"),
+  sourceIds: external_exports.array(external_exports.number().int()).default([]),
+  synthesisModel: external_exports.string().nullable().optional(),
+  synthesisPromptHash: external_exports.string().nullable().optional(),
+  generatedAt: external_exports.string().datetime().nullable().optional()
+});
+var DraftPageSchema = external_exports.object({
+  id: external_exports.number().int().nullable().optional(),
+  conceptId: external_exports.number().int().nullable().optional(),
+  memoryId: external_exports.number().int().nullable().optional(),
+  title: external_exports.string().min(1).max(300),
+  kind: external_exports.string(),
+  lead: external_exports.string().max(500).default(""),
+  sections: external_exports.array(SectionSchema).default([]),
+  frontmatter: external_exports.record(external_exports.unknown()).default({}),
+  provenance: ProvenanceSchema.default({}),
+  confidence: external_exports.number().min(0).max(1).default(0.5),
+  status: DraftStatusSchema.default("pending")
+});
+var PageStatusSchema = external_exports.enum(["seedling", "budding", "evergreen"]);
+var LifecycleStateSchema = external_exports.enum(["active", "area", "archived", "evergreen"]);
+var ApprovedPageSchema = external_exports.object({
+  id: external_exports.number().int().nullable().optional(),
+  memoryId: external_exports.number().int().nullable().optional(),
+  conceptId: external_exports.number().int().nullable().optional(),
+  relPath: external_exports.string(),
+  slug: external_exports.string(),
+  kind: external_exports.string(),
+  title: external_exports.string(),
+  domain: external_exports.string().default(""),
+  domains: external_exports.array(external_exports.string()).default([]),
+  tags: external_exports.array(external_exports.string()).default([]),
+  audience: external_exports.array(external_exports.string()).default([]),
+  requires: external_exports.array(external_exports.string()).default([]),
+  status: PageStatusSchema.default("seedling"),
+  lifecycleState: LifecycleStateSchema.default("active"),
+  supersedes: external_exports.string().nullable().optional(),
+  supersededBy: external_exports.string().nullable().optional(),
+  verified: external_exports.string().nullable().optional(),
+  lead: external_exports.string(),
+  sections: external_exports.array(SectionSchema).default([]),
+  bodyHash: external_exports.string().default(""),
+  // thermodynamic survival state
+  heat: external_exports.number().min(0).max(1).default(1),
+  accessCount: external_exports.number().int().default(0),
+  citationCount: external_exports.number().int().default(0),
+  backlinkCount: external_exports.number().int().default(0),
+  isStale: external_exports.boolean().default(false),
+  planted: external_exports.string().datetime().nullable().optional(),
+  tended: external_exports.string().datetime().nullable().optional()
+});
+var MemoSubjectSchema = external_exports.enum(["concept", "draft", "page", "claim"]);
+var CurationMemoSchema = external_exports.object({
+  id: external_exports.number().int().nullable().optional(),
+  subjectType: MemoSubjectSchema,
+  subjectId: external_exports.number().int(),
+  decision: external_exports.string(),
+  rationale: external_exports.string().default(""),
+  alternatives: external_exports.array(external_exports.record(external_exports.unknown())).default([]),
+  inputs: external_exports.record(external_exports.unknown()).default({}),
+  confidence: external_exports.number().min(0).max(1).default(0.5),
+  author: external_exports.string().default("system"),
+  createdAt: external_exports.string().datetime().nullable().optional()
+});
+
+// packages/memory/dist/shared/categorizer.js
+var CATEGORY_RULES = {
+  "bug-fix": ["fix", "bug", "broken", "crash", "error", "issue", "regression", "failing"],
+  feature: ["add", "implement", "new", "build", "create", "introduce", "support"],
+  refactor: ["refactor", "restructure", "clean up", "simplify", "extract", "rename"],
+  research: ["research", "investigate", "explore", "evaluate", "compare", "analyze"],
+  config: ["config", "setup", "install", "environment", "settings", "dependency"],
+  docs: ["document", "readme", "changelog", "comment", "guide", "tutorial"],
+  debug: ["debug", "log", "trace", "inspect", "diagnose", "why is"],
+  architecture: ["architecture", "design", "pattern", "system", "module", "protocol"],
+  deployment: ["deploy", "ci/cd", "pipeline", "release", "docker", "publish", "production"],
+  testing: ["test", "spec", "assert", "mock", "coverage", "unit test"]
+};
+var SIGNAL_PATTERNS = (() => {
+  const map = /* @__PURE__ */ new Map();
+  for (const [cat, signals] of Object.entries(CATEGORY_RULES)) {
+    const compiled = signals.map((signal) => {
+      if (signal.includes(" ")) {
+        return { signal, weight: 1.5, regex: null };
+      }
+      return {
+        signal,
+        weight: 1,
+        regex: new RegExp(`\\b${signal}\\b`, "i")
+      };
+    });
+    map.set(cat, compiled);
+  }
+  return map;
+})();
+
+// packages/memory/dist/shared/content-hardening.js
+var CONTENT_MAX_BYTES = 1 * 1024 * 1024;
+var BIDI_OVERRIDES = "\u202A\u202B\u202C\u202D\u202E\u2066\u2067\u2068\u2069";
+var STRIP_RE = new RegExp(`[\0-\b\v\f-\x7F-\x9F\uFEFF${BIDI_OVERRIDES}]`, "g");
+
+// packages/memory/dist/recall/reranker.js
+import { tmpdir } from "os";
+var FLASHRANK_CACHE_DIR = process.env["FLASHRANK_CACHE_DIR"] ?? tmpdir();
+
+// packages/memory/dist/recall/retrieval-dispatch.js
+var _SIMPLE_INTENTS = /* @__PURE__ */ new Set([
+  QueryIntent.GENERAL,
+  QueryIntent.SEMANTIC,
+  QueryIntent.TEMPORAL,
+  QueryIntent.CAUSAL,
+  QueryIntent.KNOWLEDGE_UPDATE
+]);
+var MIXED_INTENTS = /* @__PURE__ */ new Set([QueryIntent.MULTI_HOP]);
+var DEEP_INTENTS = /* @__PURE__ */ new Set([
+  QueryIntent.ENTITY,
+  QueryIntent.INSTRUCTION
+]);
+
+// packages/memory/dist/recall/recall-pipeline-stages.js
+function envFloat(name, defaultVal) {
+  if (typeof process === "undefined")
+    return defaultVal;
+  const raw = process.env[name];
+  if (raw === void 0 || raw === null)
+    return defaultVal;
+  const n3 = parseFloat(raw);
+  return isNaN(n3) ? defaultVal : n3;
+}
+var _HOPFIELD_BETA = envFloat("CORTEX_HOPFIELD_BETA", 0.3);
+var _HDC_BETA = envFloat("CORTEX_HDC_BETA", 0.2);
+var _SA_BETA = envFloat("CORTEX_SA_BETA", 0.25);
+var _DENDRITIC_DELTA = envFloat("CORTEX_DENDRITIC_DELTA", 0.1);
+
+// packages/memory/dist/recall/recall-pipeline.js
+function envFloat2(name, defaultVal) {
+  if (typeof process === "undefined")
+    return defaultVal;
+  const raw = process.env[name];
+  if (raw === void 0 || raw === null)
+    return defaultVal;
+  const n3 = parseFloat(raw);
+  return isNaN(n3) ? defaultVal : n3;
+}
+var _EMOTIONAL_RETRIEVAL_BETA = envFloat2("CORTEX_EMOTIONAL_RETRIEVAL_BETA", 0.2);
+var _MOOD_CONGRUENT_BETA = envFloat2("CORTEX_MOOD_CONGRUENT_BETA", 0.15);
+
+// packages/memory/dist/recall/pg-recall-weights.js
+var _PG_INTENT_OVERRIDES = {
+  [QueryIntent.TEMPORAL]: {
+    heat: 0.6,
+    recency: 0.2
+  },
+  [QueryIntent.KNOWLEDGE_UPDATE]: {
+    recency: 0.5,
+    heat: 0.5
+  },
+  [QueryIntent.EVENT_ORDER]: {
+    heat: 0.4,
+    recency: 0.3,
+    fts: 0.6
+  },
+  [QueryIntent.SUMMARIZATION]: {
+    heat: 0.5,
+    fts: 0.7
+  },
+  [QueryIntent.PREFERENCE]: {
+    fts: 0.8,
+    heat: 0.5
+  }
+};
+
+// packages/memory/dist/recall/pg-recall.js
+var _TYPE_INTENTS = {
+  [QueryIntent.INSTRUCTION]: "instruction",
+  [QueryIntent.PREFERENCE]: "preference"
+};
+
+// packages/memory/dist/codebase-analysis/index.js
+var codebase_analysis_exports = {};
+__export(codebase_analysis_exports, {
+  CODE_GRAPH_TAG_PREFIX: () => CODE_GRAPH_TAG_PREFIX,
+  EXT_TO_LANG: () => EXT_TO_LANG,
+  HEAT_BY_TYPE: () => HEAT_BY_TYPE,
+  IMPORT_EXTRACTORS: () => IMPORT_EXTRACTORS,
+  McpConnectionError: () => McpConnectionError2,
+  SYMBOL_EXTRACTORS: () => SYMBOL_EXTRACTORS,
+  accommodateSchema: () => accommodateSchema,
+  buildCallEdges: () => buildCallEdges,
+  buildConversationRecord: () => buildConversationRecord,
+  buildMemoryContent: () => buildMemoryContent,
+  buildResolvedCallEdges: () => buildResolvedCallEdges,
+  buildTypeIndex: () => buildTypeIndex,
+  callUpstream: () => callUpstream,
+  changeImpactHandler: () => changeImpactHandler,
+  changeImpactSchema: () => schema10,
+  classifySchemaMatch: () => classifySchemaMatch,
+  codeGraphTag: () => codeGraphTag,
+  codebaseAnalyzeHandler: () => handler12,
+  codebaseAnalyzeSchema: () => schema7,
+  collectAllDiscoveries: () => collectAllDiscoveries,
+  computeDuration: () => computeDuration,
+  computeImpact: () => computeImpact,
+  computePredictionError: () => computePredictionError,
+  computeSchemaFreeEnergy: () => computeSchemaFreeEnergy,
+  computeSchemaMatch: () => computeSchemaMatch,
+  detectCommunities: () => detectCommunities,
+  detectLanguage: () => detectLanguage,
+  discoverAllMemories: () => discoverAllMemories,
+  discoverConversations: () => discoverConversations,
+  extractCallsGeneric: () => extractCallsGeneric,
+  extractCallsPerFunction: () => extractCallsPerFunction,
+  extractDocstring: () => extractDocstring,
+  extractGoDefinitions: () => extractGoDefinitions,
+  extractGoImports: () => extractGoImports,
+  extractImportsGo: () => extractImportsGo,
+  extractImportsJs: () => extractImportsJs,
+  extractImportsPython: () => extractImportsPython,
+  extractImportsRust: () => extractImportsRust,
+  extractImportsSwift: () => extractImportsSwift,
+  extractInheritance: () => extractInheritance,
+  extractJsDefinitions: () => extractJsDefinitions,
+  extractJsImports: () => extractJsImports,
+  extractMessageStats: () => extractMessageStats,
+  extractMetadataFields: () => extractMetadataFields,
+  extractPythonDefinitions: () => extractPythonDefinitions,
+  extractPythonImports: () => extractPythonImports,
+  extractRustDefinitions: () => extractRustDefinitions,
+  extractRustImports: () => extractRustImports,
+  extractSchemaFromCluster: () => extractSchemaFromCluster,
+  extractSwiftDefinitions: () => extractSwiftDefinitions,
+  extractSwiftImports: () => extractSwiftImports,
+  extractSymbolsGo: () => extractSymbolsGo,
+  extractSymbolsJs: () => extractSymbolsJs,
+  extractSymbolsPython: () => extractSymbolsPython,
+  extractSymbolsRust: () => extractSymbolsRust,
+  extractSymbolsSwift: () => extractSymbolsSwift,
+  extractUserText: () => extractUserText,
+  findBestMatchingSchema: () => findBestMatchingSchema,
+  findCachedGraph: () => findCachedGraph,
+  findChildren: () => findChildren,
+  generateLabel: () => generateLabel,
+  generatePredictions: () => generatePredictions,
+  groupByProject: () => groupByProject,
+  heatForTags: () => heatForTags,
+  ingestCodebaseHandler: () => handler13,
+  ingestCodebaseSchema: () => schema8,
+  ingestPrdHandler: () => handler14,
+  ingestPrdSchema: () => schema9,
+  isAvailable: () => isAvailable,
+  iterToolUses: () => iterToolUses,
+  makeImportInfo: () => makeImportInfo,
+  makeSchema: () => makeSchema,
+  makeSymbolDef: () => makeSymbolDef,
+  memoiseGraphPath: () => memoiseGraphPath,
+  mergeSchemas: () => mergeSchemas,
+  nodeText: () => nodeText,
+  normaliseMcpPayload: () => normaliseMcpPayload,
+  parseFile: () => parseFile,
+  parseFileAst: () => parseFileAst,
+  projectKey: () => projectKey,
+  readHeadTail: () => readHeadTail2,
+  resolveAllImports: () => resolveAllImports,
+  resolveImportToFile: () => resolveImportToFile,
+  resolveTypeReferences: () => resolveTypeReferences,
+  schemaFromDict: () => schemaFromDict,
+  schemaToDict: () => schemaToDict,
+  seedProjectHandler: () => handler3,
+  seedProjectSchema: () => schema,
+  shouldMergeSchemas: () => shouldMergeSchemas,
+  shouldReviseSchema: () => shouldReviseSchema,
+  stageCicd: () => stageCicd,
+  stageConfigs: () => stageConfigs,
+  stageDocs: () => stageDocs,
+  stageEntryPoints: () => stageEntryPoints,
+  stageStructuralSummary: () => stageStructuralSummary,
+  walkType: () => walkType
+});
+
+// packages/memory/dist/codebase-analysis/types.js
+function makeImportInfo(module2, names = [], isRelative = false) {
+  return { module: module2, names, isRelative };
+}
+function makeSymbolDef(name, kind2, signature = "", docstring = "") {
+  return { name, kind: kind2, signature, docstring };
+}
+
+// packages/memory/dist/codebase-analysis/codebase-parser.js
+import { createHash as createHash2 } from "node:crypto";
+
+// packages/memory/dist/codebase-analysis/codebase-extractors.js
+var codebase_extractors_exports = {};
+__export(codebase_extractors_exports, {
+  IMPORT_EXTRACTORS: () => IMPORT_EXTRACTORS,
+  SYMBOL_EXTRACTORS: () => SYMBOL_EXTRACTORS,
+  extractDocstring: () => extractDocstring,
+  extractImportsGo: () => extractImportsGo,
+  extractImportsJs: () => extractImportsJs,
+  extractImportsPython: () => extractImportsPython,
+  extractImportsRust: () => extractImportsRust,
+  extractImportsSwift: () => extractImportsSwift,
+  extractSymbolsGo: () => extractSymbolsGo,
+  extractSymbolsJs: () => extractSymbolsJs,
+  extractSymbolsPython: () => extractSymbolsPython,
+  extractSymbolsRust: () => extractSymbolsRust,
+  extractSymbolsSwift: () => extractSymbolsSwift
+});
+var PY_IMPORT = /^import\s+([\w.]+)/gm;
+var PY_FROM_IMPORT = /^from\s+([\w.]+)\s+import\s+(.+?)$/gm;
+var JS_IMPORT = /^import\s+(?:\{[^}]*\}|[\w*]+(?:\s+as\s+\w+)?)\s+from\s+['"]([^'"]+)['"]/gm;
+var JS_REQUIRE = /require\s*\(\s*['"]([^'"]+)['"]\s*\)/g;
+var GO_IMPORT_SINGLE = /^import\s+"([^"]+)"/gm;
+var GO_IMPORT_BLOCK = /^import\s*\(([\s\S]*?)\)/gm;
+var GO_IMPORT_LINE = /"([^"]+)"/g;
+var RUST_USE = /^use\s+([\w:]+(?:::\{[^}]+\})?)/gm;
+var SWIFT_IMPORT = /^import\s+(\w+)/gm;
+var PY_DEF = /^\s*(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)/gm;
+var PY_CLASS = /^\s*class\s+(\w+)(?:\(([^)]*)\))?/gm;
+var JS_FUNC = /^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)/gm;
+var JS_CLASS = /^(?:export\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?/gm;
+var JS_INTERFACE = /^(?:export\s+)?interface\s+(\w+)/gm;
+var JS_TYPE = /^(?:export\s+)?type\s+(\w+)\s*=/gm;
+var GO_FUNC = /^func\s+(?:\([^)]*\)\s+)?(\w+)\s*\(([^)]*)\)/gm;
+var GO_TYPE = /^type\s+(\w+)\s+(struct|interface)\b/gm;
+var RUST_FN = /^(?:pub\s+)?(?:async\s+)?fn\s+(\w+)\s*(?:<[^>]*)?\s*\(([^)]*)\)/gm;
+var RUST_STRUCT = /^(?:pub\s+)?struct\s+(\w+)/gm;
+var RUST_ENUM = /^(?:pub\s+)?enum\s+(\w+)/gm;
+var RUST_TRAIT = /^(?:pub\s+)?trait\s+(\w+)/gm;
+var SWIFT_FUNC = /^\s*(?:public\s+|private\s+|internal\s+|open\s+|static\s+)*func\s+(\w+)\s*\(([^)]*)\)/gm;
+var SWIFT_CLASS = /^\s*(?:public\s+|private\s+|open\s+|final\s+)*class\s+(\w+)/gm;
+var SWIFT_STRUCT = /^\s*(?:public\s+|private\s+)*struct\s+(\w+)/gm;
+var SWIFT_PROTOCOL = /^\s*(?:public\s+|private\s+)*protocol\s+(\w+)/gm;
+var SWIFT_ENUM = /^\s*(?:public\s+|private\s+)*enum\s+(\w+)/gm;
+var PY_MODULE_DOC = /^(?:"""([\s\S]*?)"""|'''([\s\S]*?)''')/;
+var JS_MODULE_DOC = /^\/\*\*([\s\S]*?)\*\//;
+function allMatches(re2, content) {
+  const results = [];
+  const g2 = new RegExp(re2.source, re2.flags.includes("g") ? re2.flags : re2.flags + "g");
+  let m2;
+  while ((m2 = g2.exec(content)) !== null)
+    results.push(m2);
+  return results;
+}
+function extractImportsPython(content) {
+  const imports = [];
+  for (const m2 of allMatches(PY_IMPORT, content)) {
+    imports.push(makeImportInfo(m2[1]));
+  }
+  for (const m2 of allMatches(PY_FROM_IMPORT, content)) {
+    const module2 = m2[1];
+    const names = m2[2].split(",").map((n3) => n3.trim());
+    imports.push(makeImportInfo(module2, names, module2.startsWith(".")));
+  }
+  return imports;
+}
+function extractImportsJs(content) {
+  const imports = [];
+  for (const m2 of allMatches(JS_IMPORT, content)) {
+    const mod = m2[1];
+    imports.push(makeImportInfo(mod, [], mod.startsWith(".")));
+  }
+  for (const m2 of allMatches(JS_REQUIRE, content)) {
+    const mod = m2[1];
+    imports.push(makeImportInfo(mod, [], mod.startsWith(".")));
+  }
+  return imports;
+}
+function extractImportsGo(content) {
+  const imports = [];
+  for (const m2 of allMatches(GO_IMPORT_SINGLE, content)) {
+    imports.push(makeImportInfo(m2[1]));
+  }
+  for (const m2 of allMatches(GO_IMPORT_BLOCK, content)) {
+    const block = m2[1];
+    for (const lm of allMatches(GO_IMPORT_LINE, block)) {
+      imports.push(makeImportInfo(lm[1]));
+    }
+  }
+  return imports;
+}
+function extractImportsRust(content) {
+  return allMatches(RUST_USE, content).map((m2) => makeImportInfo(m2[1]));
+}
+function extractImportsSwift(content) {
+  return allMatches(SWIFT_IMPORT, content).map((m2) => makeImportInfo(m2[1]));
+}
+function extractSymbolsPython(content) {
+  const defs = [];
+  for (const m2 of allMatches(PY_DEF, content)) {
+    defs.push(makeSymbolDef(m2[1], "function", (m2[2] ?? "").slice(0, 120)));
+  }
+  for (const m2 of allMatches(PY_CLASS, content)) {
+    defs.push(makeSymbolDef(m2[1], "class", m2[2] ?? ""));
+  }
+  return defs;
+}
+function extractSymbolsJs(content) {
+  const defs = [];
+  for (const m2 of allMatches(JS_FUNC, content)) {
+    defs.push(makeSymbolDef(m2[1], "function", (m2[2] ?? "").slice(0, 120)));
+  }
+  for (const m2 of allMatches(JS_CLASS, content)) {
+    defs.push(makeSymbolDef(m2[1], "class", m2[2] ?? ""));
+  }
+  for (const m2 of allMatches(JS_INTERFACE, content)) {
+    defs.push(makeSymbolDef(m2[1], "interface"));
+  }
+  for (const m2 of allMatches(JS_TYPE, content)) {
+    defs.push(makeSymbolDef(m2[1], "type"));
+  }
+  return defs;
+}
+function extractSymbolsGo(content) {
+  const defs = [];
+  for (const m2 of allMatches(GO_FUNC, content)) {
+    defs.push(makeSymbolDef(m2[1], "function", (m2[2] ?? "").slice(0, 120)));
+  }
+  for (const m2 of allMatches(GO_TYPE, content)) {
+    defs.push(makeSymbolDef(m2[1], m2[2]));
+  }
+  return defs;
+}
+function extractSymbolsRust(content) {
+  const defs = [];
+  for (const m2 of allMatches(RUST_FN, content)) {
+    defs.push(makeSymbolDef(m2[1], "function", (m2[2] ?? "").slice(0, 120)));
+  }
+  for (const m2 of allMatches(RUST_STRUCT, content)) {
+    defs.push(makeSymbolDef(m2[1], "class"));
+  }
+  for (const m2 of allMatches(RUST_ENUM, content)) {
+    defs.push(makeSymbolDef(m2[1], "enum"));
+  }
+  for (const m2 of allMatches(RUST_TRAIT, content)) {
+    defs.push(makeSymbolDef(m2[1], "trait"));
+  }
+  return defs;
+}
+function extractSymbolsSwift(content) {
+  const defs = [];
+  for (const m2 of allMatches(SWIFT_FUNC, content)) {
+    defs.push(makeSymbolDef(m2[1], "function", (m2[2] ?? "").slice(0, 120)));
+  }
+  for (const m2 of allMatches(SWIFT_CLASS, content)) {
+    defs.push(makeSymbolDef(m2[1], "class"));
+  }
+  for (const m2 of allMatches(SWIFT_STRUCT, content)) {
+    defs.push(makeSymbolDef(m2[1], "class"));
+  }
+  for (const m2 of allMatches(SWIFT_PROTOCOL, content)) {
+    defs.push(makeSymbolDef(m2[1], "protocol"));
+  }
+  for (const m2 of allMatches(SWIFT_ENUM, content)) {
+    defs.push(makeSymbolDef(m2[1], "enum"));
+  }
+  return defs;
+}
+function extractDocstring(content, language2) {
+  if (language2 === "python") {
+    const m2 = PY_MODULE_DOC.exec(content);
+    if (m2)
+      return (m2[1] ?? m2[2] ?? "").trim().slice(0, 200);
+  } else if (language2 === "javascript" || language2 === "typescript") {
+    const m2 = JS_MODULE_DOC.exec(content);
+    if (m2) {
+      const text = m2[1].trim().replace(/^\s*\*\s?/gm, "");
+      return text.trim().slice(0, 200);
+    }
+  }
+  for (const line of content.split("\n").slice(0, 5)) {
+    const stripped = line.trim();
+    if (stripped.startsWith("#") && !stripped.startsWith("#!")) {
+      return stripped.replace(/^#+\s*/, "").trim().slice(0, 200);
+    }
+    if (stripped.startsWith("//")) {
+      return stripped.replace(/^\/+\s*/, "").trim().slice(0, 200);
+    }
+  }
+  return "";
+}
+var IMPORT_EXTRACTORS = {
+  python: extractImportsPython,
+  javascript: extractImportsJs,
+  typescript: extractImportsJs,
+  go: extractImportsGo,
+  rust: extractImportsRust,
+  swift: extractImportsSwift
+};
+var SYMBOL_EXTRACTORS = {
+  python: extractSymbolsPython,
+  javascript: extractSymbolsJs,
+  typescript: extractSymbolsJs,
+  go: extractSymbolsGo,
+  rust: extractSymbolsRust,
+  swift: extractSymbolsSwift
+};
+
+// packages/memory/dist/codebase-analysis/codebase-parser.js
+var EXT_TO_LANG = {
+  ".py": "python",
+  ".js": "javascript",
+  ".ts": "typescript",
+  ".tsx": "typescript",
+  ".jsx": "javascript",
+  ".go": "go",
+  ".rs": "rust",
+  ".swift": "swift",
+  ".java": "java",
+  ".kt": "kotlin",
+  ".rb": "ruby",
+  ".cs": "csharp",
+  ".c": "c",
+  ".cpp": "cpp",
+  ".h": "c",
+  ".m": "objc"
+};
+function detectLanguage(path6) {
+  for (const [ext2, lang] of Object.entries(EXT_TO_LANG)) {
+    if (path6.endsWith(ext2))
+      return lang;
+  }
+  return "unknown";
+}
+function parseFile(path6, content) {
+  const { IMPORT_EXTRACTORS: IMPORT_EXTRACTORS2, SYMBOL_EXTRACTORS: SYMBOL_EXTRACTORS2, extractDocstring: extractDocstring2 } = codebase_extractors_exports;
+  const language2 = detectLanguage(path6);
+  const contentHash = createHash2("sha256").update(content, "utf8").digest("hex").slice(0, 16);
+  const importExtractor = IMPORT_EXTRACTORS2[language2] ?? ((_2) => []);
+  const symbolExtractor = SYMBOL_EXTRACTORS2[language2] ?? ((_2) => []);
+  const imports = importExtractor(content);
+  const definitions = symbolExtractor(content);
+  const docstring = extractDocstring2(content, language2);
+  return {
+    path: path6,
+    language: language2,
+    contentHash,
+    imports,
+    definitions,
+    docstring,
+    lineCount: content.split("\n").length,
+    callsPerFunction: {}
+  };
+}
+function buildMemoryContent(analysis) {
+  const parts = [`# File: ${analysis.path}`, `Language: ${analysis.language}`];
+  if (analysis.docstring) {
+    parts.push(`Purpose: ${analysis.docstring}`);
+  }
+  if (analysis.imports.length > 0) {
+    parts.push("", "## Imports");
+    for (const imp of analysis.imports.slice(0, 20)) {
+      if (imp.names.length > 0) {
+        parts.push(`- from ${imp.module} import ${imp.names.slice(0, 5).join(", ")}`);
+      } else {
+        parts.push(`- ${imp.module}`);
+      }
+    }
+  }
+  if (analysis.definitions.length > 0) {
+    parts.push("", "## Definitions");
+    for (const sym of analysis.definitions.slice(0, 30)) {
+      const sig = sym.signature ? `(${sym.signature})` : "";
+      parts.push(`- ${sym.kind}: ${sym.name}${sig}`);
+    }
+  }
+  parts.push(`
+${analysis.lineCount} lines`);
+  return parts.join("\n");
+}
+
+// packages/memory/dist/codebase-analysis/codebase-graph.js
+import { posix } from "node:path";
+function resolveImportToFile(module2, importingFile, knownFiles, isRelative = false) {
+  const candidates = _buildCandidates(module2, importingFile, isRelative);
+  for (const candidate of candidates) {
+    const normalized = posix.normalize(candidate);
+    if (knownFiles.has(normalized))
+      return normalized;
+  }
+  return null;
+}
+function _buildCandidates(module2, importingFile, isRelative) {
+  const candidates = [];
+  if (isRelative) {
+    const baseDir = posix.dirname(importingFile);
+    const clean = module2.replace(/^\.+/, "");
+    if (clean) {
+      const rel = clean.replace(/\./g, "/");
+      candidates.push(`${baseDir}/${rel}.py`);
+      candidates.push(`${baseDir}/${rel}/__init__.py`);
+    }
+  } else {
+    const asPath = module2.replace(/\./g, "/");
+    _addPathVariants(candidates, asPath);
+    const parts = asPath.split("/");
+    for (let i2 = 1; i2 < parts.length; i2++) {
+      _addPathVariants(candidates, parts.slice(i2).join("/"));
+    }
+  }
+  return candidates;
+}
+function _addPathVariants(candidates, base) {
+  candidates.push(`${base}.py`);
+  candidates.push(`${base}/__init__.py`);
+  candidates.push(`${base}.ts`);
+  candidates.push(`${base}.tsx`);
+  candidates.push(`${base}.js`);
+}
+function resolveAllImports(analyses) {
+  const knownFiles = new Set(analyses.map((a2) => a2.path));
+  const edges = [];
+  for (const analysis of analyses) {
+    for (const imp of analysis.imports) {
+      const target = resolveImportToFile(imp.module, analysis.path, knownFiles, imp.isRelative);
+      if (target && target !== analysis.path) {
+        edges.push([analysis.path, target]);
+      }
+    }
+  }
+  return edges;
+}
+function extractInheritance(analyses) {
+  const edges = [];
+  for (const analysis of analyses) {
+    for (const sym of analysis.definitions) {
+      if (sym.kind === "class" && sym.signature) {
+        const parents = _parseParentClasses(sym.signature);
+        for (const parent of parents) {
+          edges.push([sym.name, parent]);
+        }
+      }
+    }
+  }
+  return edges;
+}
+function _parseParentClasses(signature) {
+  const clean = signature.replace(/^\(|\)$/g, "");
+  if (!clean)
+    return [];
+  const parents = [];
+  for (const part of clean.split(",")) {
+    const name = part.trim().split("[")[0].trim();
+    if (name && !["object", "ABC", "Protocol"].includes(name)) {
+      parents.push(name);
+    }
+  }
+  return parents;
+}
+function buildCallEdges(analyses, callSites) {
+  const symbolToFile = /* @__PURE__ */ new Map();
+  for (const analysis of analyses) {
+    for (const sym of analysis.definitions) {
+      const baseName = sym.name.split(".").at(-1);
+      if (!symbolToFile.has(baseName)) {
+        symbolToFile.set(baseName, analysis.path);
+      }
+    }
+  }
+  const edges = [];
+  for (const [filePath, calls] of callSites) {
+    for (const callName of calls) {
+      const base = callName.split(".").at(-1).split("(")[0];
+      const targetFile = symbolToFile.get(base);
+      if (targetFile && targetFile !== filePath) {
+        edges.push([filePath, base, targetFile]);
+      }
+    }
+  }
+  return edges;
+}
+function buildResolvedCallEdges(analyses) {
+  const symbolToQname = /* @__PURE__ */ new Map();
+  for (const analysis of analyses) {
+    for (const sym of analysis.definitions) {
+      const base = sym.name.split(".").at(-1);
+      if (!symbolToQname.has(base)) {
+        symbolToQname.set(base, [analysis.path, sym.name]);
+      }
+    }
+  }
+  const edges = [];
+  for (const analysis of analyses) {
+    const perFn = analysis.callsPerFunction ?? {};
+    for (const [callerQname, callees] of Object.entries(perFn)) {
+      const seenPair = /* @__PURE__ */ new Set();
+      for (const callName of callees) {
+        let base = callName.split(".").at(-1) ?? "";
+        for (const c2 of ["(", "[", "<"]) {
+          const idx = base.indexOf(c2);
+          if (idx >= 0)
+            base = base.slice(0, idx);
+        }
+        base = base.trim();
+        if (!base)
+          continue;
+        const hit = symbolToQname.get(base);
+        if (!hit)
+          continue;
+        const [targetFile, targetQname] = hit;
+        const key = `${targetFile}::${targetQname}`;
+        if (seenPair.has(key))
+          continue;
+        seenPair.add(key);
+        edges.push([analysis.path, callerQname, targetFile, targetQname]);
+      }
+    }
+  }
+  return edges;
+}
+function detectCommunities(fileEdges, callEdges) {
+  const adj = _buildAdjacency(fileEdges, callEdges);
+  const nodes = /* @__PURE__ */ new Set();
+  for (const [a2, neighbors] of adj) {
+    nodes.add(a2);
+    for (const b2 of neighbors)
+      nodes.add(b2);
+  }
+  if (nodes.size < 2) {
+    const result = /* @__PURE__ */ new Map();
+    for (const n3 of nodes)
+      result.set(n3, 0);
+    return result;
+  }
+  return _labelPropagation(adj, nodes);
+}
+function _buildAdjacency(fileEdges, callEdges) {
+  const adj = /* @__PURE__ */ new Map();
+  function addEdge(a2, b2) {
+    if (!adj.has(a2))
+      adj.set(a2, /* @__PURE__ */ new Set());
+    if (!adj.has(b2))
+      adj.set(b2, /* @__PURE__ */ new Set());
+    adj.get(a2).add(b2);
+    adj.get(b2).add(a2);
+  }
+  for (const [src, tgt] of fileEdges)
+    addEdge(src, tgt);
+  for (const [src, , tgt] of callEdges)
+    addEdge(src, tgt);
+  return adj;
+}
+function _labelPropagation(adj, nodes) {
+  const label = /* @__PURE__ */ new Map();
+  let nextLabel = 0;
+  const sorted = [...nodes].sort();
+  for (const node of sorted) {
+    if (label.has(node))
+      continue;
+    const queue = [node];
+    const lbl = nextLabel++;
+    while (queue.length > 0) {
+      const cur = queue.pop();
+      if (label.has(cur))
+        continue;
+      label.set(cur, lbl);
+      for (const neighbor of adj.get(cur) ?? []) {
+        if (!label.has(neighbor))
+          queue.push(neighbor);
+      }
+    }
+  }
+  return label;
+}
+function computeImpact(targetFile, fileEdges, callEdges, maxDepth = 3) {
+  const dependents = /* @__PURE__ */ new Map();
+  const dependencies = /* @__PURE__ */ new Map();
+  function add3(map, k2, v2) {
+    if (!map.has(k2))
+      map.set(k2, /* @__PURE__ */ new Set());
+    map.get(k2).add(v2);
+  }
+  for (const [src, tgt] of fileEdges) {
+    add3(dependents, tgt, src);
+    add3(dependencies, src, tgt);
+  }
+  for (const [src, , tgt] of callEdges) {
+    add3(dependents, tgt, src);
+    add3(dependencies, src, tgt);
+  }
+  const upstream = _bfs(targetFile, dependents, maxDepth);
+  const downstream = _bfs(targetFile, dependencies, maxDepth);
+  return {
+    upstream: [...upstream].filter((f2) => f2 !== targetFile).sort(),
+    downstream: [...downstream].filter((f2) => f2 !== targetFile).sort()
+  };
+}
+function _bfs(start, adj, maxDepth) {
+  const visited = /* @__PURE__ */ new Set([start]);
+  let frontier = [start];
+  for (let depth = 0; depth < maxDepth; depth++) {
+    const next = [];
+    for (const node of frontier) {
+      for (const neighbor of adj.get(node) ?? []) {
+        if (!visited.has(neighbor)) {
+          visited.add(neighbor);
+          next.push(neighbor);
+        }
+      }
+    }
+    frontier = next;
+    if (frontier.length === 0)
+      break;
+  }
+  return visited;
+}
+
+// packages/memory/dist/codebase-analysis/codebase-type-resolver.js
+var _NOISE_TYPES = /* @__PURE__ */ new Set([
+  "Self",
+  "self",
+  "Any",
+  "String",
+  "Int",
+  "Bool",
+  "Double",
+  "Float",
+  "Array",
+  "Dictionary",
+  "Set",
+  "Optional",
+  "Result",
+  "Error",
+  "Void",
+  "View",
+  "Body",
+  "some",
+  "Type",
+  "Data",
+  "URL",
+  "Date",
+  "UUID",
+  "True",
+  "False",
+  "None",
+  "nil",
+  "List",
+  "Dict",
+  "Tuple",
+  "object",
+  "str",
+  "int",
+  "float",
+  "bool",
+  "bytes",
+  "dict",
+  "list",
+  "tuple",
+  "set",
+  "type",
+  "cls",
+  "args",
+  "kwargs"
+]);
+var _TYPE_KINDS = /* @__PURE__ */ new Set([
+  "class",
+  "protocol",
+  "enum",
+  "interface",
+  "trait",
+  "struct",
+  "type"
+]);
+var MIN_TYPE_NAME_LENGTH = 3;
+function buildTypeIndex(analyses) {
+  const index = /* @__PURE__ */ new Map();
+  for (const analysis of analyses) {
+    for (const sym of analysis.definitions) {
+      if (!_TYPE_KINDS.has(sym.kind))
+        continue;
+      const base = sym.name.split(".").at(-1);
+      if (_NOISE_TYPES.has(base) || base.length < MIN_TYPE_NAME_LENGTH)
+        continue;
+      if (!index.has(base))
+        index.set(base, analysis.path);
+    }
+  }
+  return index;
+}
+function resolveTypeReferences(analyses, fileContents) {
+  const typeIndex = buildTypeIndex(analyses);
+  const edges = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const analysis of analyses) {
+    const content = fileContents.get(analysis.path) ?? "";
+    if (!content)
+      continue;
+    for (const [typeName2, defFile] of typeIndex) {
+      if (defFile === analysis.path)
+        continue;
+      const re2 = new RegExp(`\\b${escapeRegex2(typeName2)}\\b`);
+      if (re2.test(content)) {
+        const key = `${analysis.path}::${defFile}`;
+        if (!seen.has(key)) {
+          edges.push([analysis.path, defFile]);
+          seen.add(key);
+        }
+      }
+    }
+  }
+  return edges;
+}
+function escapeRegex2(s2) {
+  return s2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// packages/memory/dist/codebase-analysis/schema-extraction.js
+var _MIN_FORMATION_COUNT = 5;
+var _ENTITY_FREQUENCY_THRESHOLD = 0.4;
+var _HIGH_MATCH_THRESHOLD = 0.7;
+var _SCHEMA_MERGE_THRESHOLD = 0.6;
+var _RELATIONSHIP_FREQUENCY_THRESHOLD = 0.3;
+function makeSchema(overrides = {}) {
+  return {
+    schemaId: "",
+    domain: "",
+    label: "",
+    entitySignature: {},
+    relationshipTypes: [],
+    tagSignature: {},
+    consistencyThreshold: _HIGH_MATCH_THRESHOLD,
+    formationCount: 0,
+    assimilationCount: 0,
+    violationCount: 0,
+    lastUpdatedHours: 0,
+    ...overrides
+  };
+}
+function extractSchemaFromCluster(clusterMemories, domain = "", schemaId = "", entityThreshold = _ENTITY_FREQUENCY_THRESHOLD, minMemories = _MIN_FORMATION_COUNT) {
+  if (clusterMemories.length < minMemories)
+    return null;
+  const n3 = clusterMemories.length;
+  const entitySignature = _extractEntitySignature(clusterMemories, n3, entityThreshold);
+  const tagSignature = _extractTagSignature(clusterMemories, n3, entityThreshold);
+  const frequentPatterns = _extractRelationshipPatterns(clusterMemories, n3);
+  if (Object.keys(entitySignature).length === 0 && Object.keys(tagSignature).length === 0) {
+    return null;
+  }
+  return makeSchema({
+    schemaId,
+    domain,
+    label: generateLabel(entitySignature, tagSignature),
+    entitySignature,
+    relationshipTypes: frequentPatterns,
+    tagSignature,
+    formationCount: n3
+  });
+}
+function _extractEntitySignature(memories, n3, threshold) {
+  const entityCounts = /* @__PURE__ */ new Map();
+  for (const mem of memories) {
+    const seen = /* @__PURE__ */ new Set();
+    const entities = mem["entities"] ?? [];
+    for (const ent of entities) {
+      const name = typeof ent === "string" ? ent : ent["name"] ?? "";
+      if (name && !seen.has(name)) {
+        entityCounts.set(name, (entityCounts.get(name) ?? 0) + 1);
+        seen.add(name);
+      }
+    }
+  }
+  const result = {};
+  for (const [name, count] of entityCounts) {
+    if (count / n3 >= threshold)
+      result[name] = count / n3;
+  }
+  return result;
+}
+function _extractTagSignature(memories, n3, threshold) {
+  const tagCounts = /* @__PURE__ */ new Map();
+  for (const mem of memories) {
+    for (const tag of mem["tags"] ?? []) {
+      tagCounts.set(tag, (tagCounts.get(tag) ?? 0) + 1);
+    }
+  }
+  const result = {};
+  for (const [tag, count] of tagCounts) {
+    if (count / n3 >= threshold)
+      result[tag] = count / n3;
+  }
+  return result;
+}
+function _extractRelationshipPatterns(memories, n3) {
+  const relPatterns = /* @__PURE__ */ new Map();
+  for (const mem of memories) {
+    for (const rel of mem["relationships"] ?? []) {
+      if (typeof rel === "object" && rel !== null) {
+        const pattern = [
+          rel["source_type"] ?? "",
+          rel["relationship_type"] ?? "",
+          rel["target_type"] ?? ""
+        ];
+        if (pattern.every(Boolean)) {
+          const key = pattern.join("|");
+          relPatterns.set(key, (relPatterns.get(key) ?? 0) + 1);
+        }
+      }
+    }
+  }
+  const result = [];
+  for (const [key, count] of relPatterns) {
+    if (count / n3 >= _RELATIONSHIP_FREQUENCY_THRESHOLD) {
+      result.push(key.split("|"));
+    }
+  }
+  return result;
+}
+function generateLabel(entitySig, tagSig) {
+  const topEntities = Object.entries(entitySig).sort((a2, b2) => b2[1] - a2[1]).slice(0, 3);
+  const topTags = Object.entries(tagSig).sort((a2, b2) => b2[1] - a2[1]).slice(0, 2);
+  const parts = topEntities.map(([name]) => name);
+  if (topTags.length > 0) {
+    parts.push(`[${topTags.map(([t2]) => t2).join(", ")}]`);
+  }
+  return parts.length > 0 ? parts.join(" + ") : "unnamed_schema";
+}
+function jaccardSimilarity4(a2, b2) {
+  if (a2.size === 0 && b2.size === 0)
+    return 0;
+  let intersection2 = 0;
+  for (const item of a2)
+    if (b2.has(item))
+      intersection2++;
+  return intersection2 / (a2.size + b2.size - intersection2);
+}
+function shouldMergeSchemas(schemaA, schemaB) {
+  const entitiesA = new Set(Object.keys(schemaA.entitySignature));
+  const entitiesB = new Set(Object.keys(schemaB.entitySignature));
+  return jaccardSimilarity4(entitiesA, entitiesB) >= _SCHEMA_MERGE_THRESHOLD;
+}
+function _computeMergeWeights(schemaA, schemaB) {
+  const total = schemaA.formationCount + schemaB.formationCount || 1;
+  return [schemaA.formationCount / total, schemaB.formationCount / total, total];
+}
+function mergeSchemas(schemaA, schemaB, mergedId = "") {
+  const [wA, wB, total] = _computeMergeWeights(schemaA, schemaB);
+  const mergedEntities = _weightedMergeDicts(schemaA.entitySignature, schemaB.entitySignature, wA, wB);
+  const mergedTags = _weightedMergeDicts(schemaA.tagSignature, schemaB.tagSignature, wA, wB);
+  const allRels = [
+    .../* @__PURE__ */ new Set([
+      ...schemaA.relationshipTypes.map((r2) => r2.join("|")),
+      ...schemaB.relationshipTypes.map((r2) => r2.join("|"))
+    ])
+  ].map((s2) => s2.split("|"));
+  return makeSchema({
+    schemaId: mergedId || `merged_${schemaA.schemaId}_${schemaB.schemaId}`,
+    domain: schemaA.domain || schemaB.domain,
+    label: generateLabel(mergedEntities, mergedTags),
+    entitySignature: mergedEntities,
+    relationshipTypes: allRels,
+    tagSignature: mergedTags,
+    consistencyThreshold: Math.min(schemaA.consistencyThreshold, schemaB.consistencyThreshold),
+    formationCount: total,
+    assimilationCount: schemaA.assimilationCount + schemaB.assimilationCount,
+    violationCount: 0
+  });
+}
+function _weightedMergeDicts(dictA, dictB, wA, wB) {
+  const allKeys = /* @__PURE__ */ new Set([...Object.keys(dictA), ...Object.keys(dictB)]);
+  const result = {};
+  for (const key of allKeys) {
+    result[key] = (dictA[key] ?? 0) * wA + (dictB[key] ?? 0) * wB;
+  }
+  return result;
+}
+function schemaToDict(schema12) {
+  return {
+    schema_id: schema12.schemaId,
+    domain: schema12.domain,
+    label: schema12.label,
+    entity_signature: schema12.entitySignature,
+    relationship_types: schema12.relationshipTypes.map((r2) => [...r2]),
+    tag_signature: schema12.tagSignature,
+    consistency_threshold: schema12.consistencyThreshold,
+    formation_count: schema12.formationCount,
+    assimilation_count: schema12.assimilationCount,
+    violation_count: schema12.violationCount,
+    last_updated_hours: schema12.lastUpdatedHours
+  };
+}
+function schemaFromDict(data) {
+  return makeSchema({
+    schemaId: data["schema_id"] ?? "",
+    domain: data["domain"] ?? "",
+    label: data["label"] ?? "",
+    entitySignature: data["entity_signature"] ?? {},
+    relationshipTypes: (data["relationship_types"] ?? []).map((r2) => r2),
+    tagSignature: data["tag_signature"] ?? {},
+    consistencyThreshold: data["consistency_threshold"] ?? _HIGH_MATCH_THRESHOLD,
+    formationCount: data["formation_count"] ?? 0,
+    assimilationCount: data["assimilation_count"] ?? 0,
+    violationCount: data["violation_count"] ?? 0,
+    lastUpdatedHours: data["last_updated_hours"] ?? 0
+  });
+}
+
+// packages/memory/dist/codebase-analysis/schema-engine.js
+var _HIGH_MATCH_THRESHOLD2 = 0.7;
+var _MEDIUM_MATCH_THRESHOLD = 0.3;
+var _MAX_VIOLATIONS_BEFORE_REVISION = 10;
+var _SCHEMA_EMA_ALPHA = 0.1;
+function jaccardSimilarity5(a2, b2) {
+  if (a2.size === 0 && b2.size === 0)
+    return 0;
+  let intersection2 = 0;
+  for (const item of a2)
+    if (b2.has(item))
+      intersection2++;
+  return intersection2 / (a2.size + b2.size - intersection2);
+}
+function computeSchemaMatch(memoryEntities, memoryTags, schema12) {
+  if (Object.keys(schema12.entitySignature).length === 0 && Object.keys(schema12.tagSignature).length === 0) {
+    return 0;
+  }
+  const scores = [];
+  if (Object.keys(schema12.entitySignature).length > 0) {
+    const entityScore = _computeEntityMatch(memoryEntities, schema12);
+    scores.push(entityScore * 0.7);
+  }
+  if (Object.keys(schema12.tagSignature).length > 0) {
+    const tagJaccard = jaccardSimilarity5(new Set(memoryTags), new Set(Object.keys(schema12.tagSignature)));
+    scores.push(tagJaccard * 0.3);
+  }
+  return Math.min(1, scores.reduce((a2, b2) => a2 + b2, 0));
+}
+function _computeEntityMatch(memoryEntities, schema12) {
+  const memoryEntitySet = new Set(memoryEntities);
+  const schemaEntities = new Set(Object.keys(schema12.entitySignature));
+  if (memoryEntitySet.size === 0 && schemaEntities.size === 0)
+    return 0;
+  const overlap = [...memoryEntitySet].filter((e2) => schemaEntities.has(e2));
+  const weightedOverlap = overlap.reduce((sum, e2) => sum + (schema12.entitySignature[e2] ?? 0), 0);
+  const totalWeight = Object.values(schema12.entitySignature).reduce((a2, b2) => a2 + b2, 0);
+  return weightedOverlap / Math.max(totalWeight, 1e-10);
+}
+function classifySchemaMatch(matchScore) {
+  if (matchScore >= _HIGH_MATCH_THRESHOLD2)
+    return "assimilate";
+  if (matchScore >= _MEDIUM_MATCH_THRESHOLD)
+    return "normal";
+  return "accommodate";
+}
+function findBestMatchingSchema(memoryEntities, memoryTags, schemas) {
+  let bestSchema = null;
+  let bestScore = 0;
+  for (const schema12 of schemas) {
+    const score = computeSchemaMatch(memoryEntities, memoryTags, schema12);
+    if (score > bestScore) {
+      bestScore = score;
+      bestSchema = schema12;
+    }
+  }
+  if (bestScore < 0.1)
+    return [null, 0];
+  return [bestSchema, bestScore];
+}
+function accommodateSchema(schema12, newEntities, newTags, alpha = _SCHEMA_EMA_ALPHA) {
+  const updatedEntities = _emaUpdateSignature(schema12.entitySignature, newEntities, alpha);
+  const updatedTags = _emaUpdateSignature(schema12.tagSignature, newTags, alpha);
+  return makeSchema({
+    ...schema12,
+    label: generateLabel(updatedEntities, updatedTags),
+    entitySignature: updatedEntities,
+    tagSignature: updatedTags,
+    violationCount: schema12.violationCount + 1,
+    lastUpdatedHours: 0
+  });
+}
+function _emaUpdateSignature(current, observed, alpha) {
+  const updated = { ...current };
+  const observedSet = new Set(observed);
+  for (const item of observed) {
+    if (item in updated) {
+      updated[item] = (1 - alpha) * updated[item] + alpha * 1;
+    } else {
+      updated[item] = alpha;
+    }
+  }
+  for (const item of Object.keys(updated)) {
+    if (!observedSet.has(item)) {
+      updated[item] = updated[item] * (1 - alpha * 0.5);
+      if (updated[item] < 0.05)
+        delete updated[item];
+    }
+  }
+  return updated;
+}
+function shouldReviseSchema(schema12) {
+  const totalUsage = schema12.formationCount + schema12.assimilationCount;
+  if (totalUsage === 0)
+    return false;
+  const violationRatio = schema12.violationCount / Math.max(totalUsage, 1);
+  return schema12.violationCount >= _MAX_VIOLATIONS_BEFORE_REVISION || violationRatio > 0.4;
+}
+function generatePredictions(schema12) {
+  return { ...schema12.entitySignature };
+}
+function computePredictionError(predictions, observedEntities) {
+  const observedSet = new Set(observedEntities);
+  const errors = {};
+  for (const [entity, prob] of Object.entries(predictions)) {
+    if (!observedSet.has(entity))
+      errors[entity] = prob;
+  }
+  for (const entity of observedEntities) {
+    if (!(entity in predictions))
+      errors[entity] = -0.5;
+  }
+  return errors;
+}
+function computeSchemaFreeEnergy(predictionErrors) {
+  return Object.values(predictionErrors).reduce((sum, e2) => sum + e2 * e2, 0);
+}
+
+// packages/memory/dist/codebase-analysis/ast-extractors.js
+function nodeText(node, source) {
+  return source.slice(node.startIndex, node.endIndex).toString("utf8");
+}
+function findChildren(node, ...types2) {
+  return (node.children ?? []).filter((c2) => types2.includes(c2.type));
+}
+function walkType(node, nodeType) {
+  const results = [];
+  if (node.type === nodeType)
+    results.push(node);
+  for (const child of node.children ?? []) {
+    results.push(...walkType(child, nodeType));
+  }
+  return results;
+}
+function extractPythonImports(root, source) {
+  const imports = [];
+  for (const node of root.children ?? []) {
+    if (node.type === "import_statement") {
+      for (const nameNode of findChildren(node, "dotted_name")) {
+        imports.push(makeImportInfo(nodeText(nameNode, source)));
+      }
+    } else if (node.type === "import_from_statement") {
+      const modNode = node.childForFieldName("module_name");
+      const module2 = modNode ? nodeText(modNode, source) : "";
+      const names = findChildren(node, "dotted_name", "aliased_import").filter((n3) => n3 !== modNode).map((n3) => nodeText(n3, source));
+      const isRelative = module2.startsWith(".");
+      imports.push(makeImportInfo(module2, names, isRelative));
+    }
+  }
+  return imports;
+}
+function extractPythonDefinitions(root, source, parentClass = "") {
+  const defs = [];
+  for (const node of root.children ?? []) {
+    if (node.type === "function_definition") {
+      _extractPythonFunc(node, source, defs, parentClass);
+    } else if (node.type === "decorated_definition") {
+      _extractPythonDecorated(node, source, defs, parentClass);
+    } else if (node.type === "class_definition") {
+      _extractPythonClass(node, source, defs);
+    }
+  }
+  return defs;
+}
+function _extractPythonFunc(node, source, defs, parent) {
+  const nameNode = node.childForFieldName("name");
+  const paramsNode = node.childForFieldName("parameters");
+  const name = nameNode ? nodeText(nameNode, source) : "";
+  const sig = paramsNode ? nodeText(paramsNode, source).slice(0, 120) : "";
+  const kind2 = parent ? "method" : "function";
+  const fullName = parent ? `${parent}.${name}` : name;
+  defs.push(makeSymbolDef(fullName, kind2, sig));
+}
+function _extractPythonDecorated(node, source, defs, parent) {
+  for (const child of node.children ?? []) {
+    if (child.type === "function_definition" || child.type === "class_definition") {
+      const fake = { children: [child] };
+      defs.push(...extractPythonDefinitions(fake, source, parent));
+    }
+  }
+}
+function _extractPythonClass(node, source, defs) {
+  const nameNode = node.childForFieldName("name");
+  const superclassNode = node.childForFieldName("superclasses");
+  const clsName = nameNode ? nodeText(nameNode, source) : "";
+  const sig = superclassNode ? nodeText(superclassNode, source).slice(0, 120) : "";
+  defs.push(makeSymbolDef(clsName, "class", sig));
+  const body = node.childForFieldName("body");
+  if (body) {
+    defs.push(...extractPythonDefinitions(body, source, clsName));
+  }
+}
+function extractJsImports(root, source) {
+  const imports = [];
+  for (const node of walkType(root, "import_statement")) {
+    const src = node.childForFieldName("source");
+    if (src) {
+      const mod = nodeText(src, source).replace(/^['"]|['"]$/g, "");
+      imports.push(makeImportInfo(mod, [], mod.startsWith(".")));
+    }
+  }
+  return imports;
+}
+function extractJsDefinitions(root, source) {
+  const defs = [];
+  for (const node of root.children ?? []) {
+    _extractJsNode(node, source, defs, "");
+  }
+  return defs;
+}
+function _extractJsNode(node, source, defs, parent) {
+  const type = node.type;
+  if (type === "function_declaration" || type === "function") {
+    _extractJsFunc(node, source, defs, parent);
+  } else if (type === "class_declaration") {
+    _extractJsClass(node, source, defs);
+  } else if (type === "interface_declaration") {
+    const name = node.childForFieldName("name");
+    if (name)
+      defs.push(makeSymbolDef(nodeText(name, source), "interface"));
+  } else if (type === "type_alias_declaration") {
+    const name = node.childForFieldName("name");
+    if (name)
+      defs.push(makeSymbolDef(nodeText(name, source), "type"));
+  } else if (type === "export_statement") {
+    for (const child of node.children ?? []) {
+      _extractJsNode(child, source, defs, parent);
+    }
+  } else if (type === "method_definition") {
+    const name = node.childForFieldName("name");
+    if (name) {
+      const text = nodeText(name, source);
+      const full = parent ? `${parent}.${text}` : text;
+      defs.push(makeSymbolDef(full, "method"));
+    }
+  }
+}
+function _extractJsFunc(node, source, defs, parent) {
+  const nameNode = node.childForFieldName("name");
+  const paramsNode = node.childForFieldName("parameters");
+  if (nameNode) {
+    const name = nodeText(nameNode, source);
+    const full = parent ? `${parent}.${name}` : name;
+    const sig = paramsNode ? nodeText(paramsNode, source).slice(0, 120) : "";
+    defs.push(makeSymbolDef(full, "function", sig));
+  }
+}
+function _extractJsClass(node, source, defs) {
+  const nameNode = node.childForFieldName("name");
+  if (!nameNode)
+    return;
+  const clsName = nodeText(nameNode, source);
+  defs.push(makeSymbolDef(clsName, "class"));
+  const body = node.childForFieldName("body");
+  if (body) {
+    for (const child of body.children ?? []) {
+      _extractJsNode(child, source, defs, clsName);
+    }
+  }
+}
+var _CALL_NODE_TYPES = ["call", "call_expression"];
+function extractCallsGeneric(root, source) {
+  const calls = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const callType of _CALL_NODE_TYPES) {
+    for (const node of walkType(root, callType)) {
+      const func = node.childForFieldName("function");
+      if (!func)
+        continue;
+      const name = nodeText(func, source).trim();
+      if (name && !seen.has(name) && name.length < 100) {
+        calls.push(name);
+        seen.add(name);
+      }
+    }
+  }
+  return calls;
+}
+var _FUNCTION_NODE_TYPES = /* @__PURE__ */ new Set([
+  "function_definition",
+  // Python, Rust, Swift
+  "function_declaration",
+  // JS, TS, Go, Swift
+  "method_definition",
+  // JS, TS (class bodies)
+  "method_declaration",
+  // TS interfaces, Go method receivers
+  "function_signature"
+  // TS interfaces, Swift protocols
+]);
+var _CLASS_NODE_TYPES = /* @__PURE__ */ new Set([
+  "class_definition",
+  // Python
+  "class_declaration",
+  // JS, TS, Java, Kotlin
+  "impl_item"
+  // Rust impl ClassName { ... }
+]);
+function _calleeBasename(callNode, source) {
+  const fnRef = callNode.childForFieldName("function");
+  if (!fnRef)
+    return "";
+  let text = nodeText(fnRef, source).trim();
+  const dotIdx = text.lastIndexOf(".");
+  let base = dotIdx >= 0 ? text.slice(dotIdx + 1) : text;
+  for (const c2 of ["(", "[", "<"]) {
+    const idx = base.indexOf(c2);
+    if (idx >= 0)
+      base = base.slice(0, idx);
+  }
+  return base.trim();
+}
+function extractCallsPerFunction(root, source) {
+  const out = {};
+  function walk(node, classScope) {
+    for (const child of node.children ?? []) {
+      const ntype = child.type;
+      if (_CLASS_NODE_TYPES.has(ntype)) {
+        const nameNode = child.childForFieldName("name");
+        const cls = nameNode ? nodeText(nameNode, source) : classScope;
+        const body = child.childForFieldName("body") ?? child;
+        walk(body, cls || classScope);
+      } else if (ntype === "decorated_definition") {
+        walk(child, classScope);
+      } else if (_FUNCTION_NODE_TYPES.has(ntype)) {
+        const nameNode = child.childForFieldName("name");
+        const fnName = nameNode ? nodeText(nameNode, source) : "";
+        const body = child.childForFieldName("body") ?? child;
+        if (fnName) {
+          const qname = classScope ? `${classScope}.${fnName}` : fnName;
+          const calls = [];
+          const seen = /* @__PURE__ */ new Set();
+          for (const callType of _CALL_NODE_TYPES) {
+            for (const callNode of walkType(body, callType)) {
+              const base = _calleeBasename(callNode, source);
+              if (base && !seen.has(base) && base.length < 100) {
+                calls.push(base);
+                seen.add(base);
+              }
+            }
+          }
+          out[qname] = calls;
+        }
+        walk(body, classScope);
+      } else {
+        walk(child, classScope);
+      }
+    }
+  }
+  walk(root, "");
+  return out;
+}
+
+// packages/memory/dist/codebase-analysis/ast-extractors-extra.js
+function extractGoImports(root, source) {
+  const imports = [];
+  for (const node of walkType(root, "import_spec")) {
+    const pathNode = node.childForFieldName("path");
+    if (pathNode) {
+      const mod = nodeText(pathNode, source).replace(/^"|"$/g, "");
+      imports.push(makeImportInfo(mod));
+    }
+  }
+  return imports;
+}
+function extractGoDefinitions(root, source) {
+  const defs = [];
+  for (const node of root.children ?? []) {
+    if (node.type === "function_declaration") {
+      const name = node.childForFieldName("name");
+      const params = node.childForFieldName("parameters");
+      if (name) {
+        const sig = params ? nodeText(params, source).slice(0, 120) : "";
+        defs.push(makeSymbolDef(nodeText(name, source), "function", sig));
+      }
+    } else if (node.type === "method_declaration") {
+      const name = node.childForFieldName("name");
+      const receiver = node.childForFieldName("receiver");
+      if (name) {
+        const recv = _extractGoReceiver(receiver, source);
+        const full = recv ? `${recv}.${nodeText(name, source)}` : nodeText(name, source);
+        defs.push(makeSymbolDef(full, "method"));
+      }
+    } else if (node.type === "type_declaration") {
+      for (const spec of findChildren(node, "type_spec")) {
+        const n3 = spec.childForFieldName("name");
+        const t2 = spec.childForFieldName("type");
+        if (n3) {
+          const kind2 = t2 && (t2.type === "struct_type" || t2.type === "interface_type") ? t2.type.replace("_type", "") : "type";
+          defs.push(makeSymbolDef(nodeText(n3, source), kind2));
+        }
+      }
+    }
+  }
+  return defs;
+}
+function _extractGoReceiver(receiver, source) {
+  if (!receiver)
+    return "";
+  for (const child of walkType(receiver, "type_identifier")) {
+    return nodeText(child, source);
+  }
+  return "";
+}
+function extractSwiftImports(root, source) {
+  return walkType(root, "import_declaration").map((n3) => makeImportInfo(nodeText(n3, source).replace(/^import\s+/, "").trim()));
+}
+function extractSwiftDefinitions(root, source) {
+  const defs = [];
+  _extractSwiftNode(root, source, defs, "");
+  return defs;
+}
+var _SWIFT_KIND_MAP = {
+  class_declaration: "class",
+  struct_declaration: "class",
+  protocol_declaration: "protocol",
+  enum_declaration: "enum"
+};
+function _extractSwiftNode(node, source, defs, parent) {
+  const type = node.type;
+  if (type === "function_declaration") {
+    const name = node.childForFieldName("name");
+    if (name) {
+      const n3 = nodeText(name, source);
+      const full = parent ? `${parent}.${n3}` : n3;
+      defs.push(makeSymbolDef(full, parent ? "method" : "function"));
+    }
+  } else if (_SWIFT_KIND_MAP[type]) {
+    const name = node.childForFieldName("name");
+    if (name) {
+      const n3 = nodeText(name, source);
+      defs.push(makeSymbolDef(n3, _SWIFT_KIND_MAP[type]));
+      const body = node.childForFieldName("body");
+      if (body) {
+        for (const child of body.children ?? []) {
+          _extractSwiftNode(child, source, defs, n3);
+        }
+      }
+    }
+  } else {
+    for (const child of node.children ?? []) {
+      _extractSwiftNode(child, source, defs, parent);
+    }
+  }
+}
+function extractRustImports(root, source) {
+  return walkType(root, "use_declaration").map((n3) => makeImportInfo(nodeText(n3, source).replace(/^use\s+/, "").replace(/;$/, "").trim()));
+}
+function extractRustDefinitions(root, source) {
+  const defs = [];
+  for (const node of root.children ?? []) {
+    _extractRustNode(node, source, defs);
+  }
+  return defs;
+}
+function _extractRustNode(node, source, defs) {
+  const type = node.type;
+  if (type === "function_item") {
+    const name = node.childForFieldName("name");
+    if (name)
+      defs.push(makeSymbolDef(nodeText(name, source), "function"));
+  } else if (type === "struct_item") {
+    const name = node.childForFieldName("name");
+    if (name)
+      defs.push(makeSymbolDef(nodeText(name, source), "class"));
+  } else if (type === "enum_item") {
+    const name = node.childForFieldName("name");
+    if (name)
+      defs.push(makeSymbolDef(nodeText(name, source), "enum"));
+  } else if (type === "trait_item") {
+    const name = node.childForFieldName("name");
+    if (name)
+      defs.push(makeSymbolDef(nodeText(name, source), "trait"));
+  } else if (type === "impl_item") {
+    _extractRustImpl(node, source, defs);
+  }
+}
+function _extractRustImpl(node, source, defs) {
+  const typeNode = node.childForFieldName("type");
+  if (!typeNode)
+    return;
+  const implName = nodeText(typeNode, source);
+  const body = node.childForFieldName("body");
+  if (!body)
+    return;
+  for (const child of body.children ?? []) {
+    if (child.type === "function_item") {
+      const fnName = child.childForFieldName("name");
+      if (fnName) {
+        const full = `${implName}.${nodeText(fnName, source)}`;
+        defs.push(makeSymbolDef(full, "method"));
+      }
+    }
+  }
+}
+
+// packages/memory/dist/codebase-analysis/ast-parser.js
+import { createHash as createHash3 } from "node:crypto";
+var AST_SUPPORTED = /* @__PURE__ */ new Set(["python", "typescript", "javascript", "go", "rust", "swift"]);
+var CONTENT_HASH_HEX_CHARS = 16;
+var DOCSTRING_MAX_CHARS = 200;
+var _treeSitterChecked = false;
+var _treeSitterAvailable = false;
+function isAvailable() {
+  if (_treeSitterChecked)
+    return _treeSitterAvailable;
+  _treeSitterChecked = true;
+  try {
+    require_tree_sitter();
+    _treeSitterAvailable = true;
+  } catch {
+    _treeSitterAvailable = false;
+  }
+  return _treeSitterAvailable;
+}
+function parseFileAst(path6, content) {
+  const language2 = detectLanguage(path6);
+  const contentHash = createHash3("sha256").update(content).digest("hex").slice(0, CONTENT_HASH_HEX_CHARS);
+  const text = content.toString("utf8");
+  const extractorAndTree = _getExtractorAndTree(language2, content);
+  if (!extractorAndTree) {
+    return parseFile(path6, text);
+  }
+  const { extractor, tree } = extractorAndTree;
+  const root = tree.rootNode;
+  const { imports, definitions } = extractor(root, content);
+  const docstring = _extractModuleDoc(root, language2, content);
+  const callsPerFunction = extractCallsPerFunction(root, content);
+  return {
+    path: path6,
+    language: language2,
+    contentHash,
+    imports,
+    definitions,
+    docstring,
+    lineCount: text.split("\n").length,
+    callsPerFunction
+  };
+}
+function _getExtractorAndTree(language2, content) {
+  if (!AST_SUPPORTED.has(language2))
+    return null;
+  const extractor = _EXTRACTORS[language2];
+  if (!extractor)
+    return null;
+  if (!isAvailable())
+    return null;
+  try {
+    const TreeSitter = require_tree_sitter();
+    const parser = new TreeSitter();
+    const grammar = _loadGrammar(language2);
+    if (!grammar)
+      return null;
+    parser.setLanguage(grammar);
+    const tree = parser.parse(content);
+    return { extractor, tree };
+  } catch {
+    return null;
+  }
+}
+function _loadGrammar(language2) {
+  const pkgMap = {
+    python: "tree-sitter-python",
+    javascript: "tree-sitter-javascript",
+    typescript: "tree-sitter-typescript/typescript",
+    go: "tree-sitter-go",
+    rust: "tree-sitter-rust",
+    swift: "tree-sitter-swift"
+  };
+  const pkg = pkgMap[language2];
+  if (!pkg)
+    return null;
+  try {
+    return __require(pkg);
+  } catch {
+    return null;
+  }
+}
+function nodeText2(node, source) {
+  return source.slice(node.startIndex, node.endIndex).toString("utf8");
+}
+function _extractModuleDoc(root, language2, source) {
+  const children = root.children ?? [];
+  if (children.length === 0)
+    return "";
+  const first = children[0];
+  if (first === void 0)
+    return "";
+  if (language2 === "python") {
+    let target = first;
+    if (first.type === "expression_statement" && (first.children ?? []).length > 0) {
+      const child0 = first.children[0];
+      if (child0 !== void 0)
+        target = child0;
+    }
+    if (target.type === "string") {
+      return nodeText2(target, source).replace(/^["']+|["']+$/g, "").trim().slice(0, DOCSTRING_MAX_CHARS);
+    }
+  }
+  if (first.type === "comment") {
+    return nodeText2(first, source).replace(/^[/#* ]+/, "").trim().slice(0, DOCSTRING_MAX_CHARS);
+  }
+  return "";
+}
+function _extractPython(root, source) {
+  return {
+    imports: extractPythonImports(root, source),
+    definitions: extractPythonDefinitions(root, source),
+    calls: extractCallsGeneric(root, source)
+  };
+}
+function _extractJs(root, source) {
+  return {
+    imports: extractJsImports(root, source),
+    definitions: extractJsDefinitions(root, source),
+    calls: extractCallsGeneric(root, source)
+  };
+}
+function _extractGo(root, source) {
+  return {
+    imports: extractGoImports(root, source),
+    definitions: extractGoDefinitions(root, source),
+    calls: extractCallsGeneric(root, source)
+  };
+}
+function _extractSwift(root, source) {
+  return {
+    imports: extractSwiftImports(root, source),
+    definitions: extractSwiftDefinitions(root, source),
+    calls: extractCallsGeneric(root, source)
+  };
+}
+function _extractRust(root, source) {
+  return {
+    imports: extractRustImports(root, source),
+    definitions: extractRustDefinitions(root, source),
+    calls: extractCallsGeneric(root, source)
+  };
+}
+var _EXTRACTORS = {
+  python: _extractPython,
+  javascript: _extractJs,
+  typescript: _extractJs,
+  go: _extractGo,
+  swift: _extractSwift,
+  rust: _extractRust
+};
+
+// packages/memory/dist/codebase-analysis/scanner-parse.js
+import { statSync as statSync4 } from "node:fs";
+function extractUserText(content) {
+  if (typeof content === "string")
+    return content;
+  if (Array.isArray(content)) {
+    return content.filter((b2) => typeof b2 === "object" && b2 !== null).filter((b2) => b2["type"] === "text").map((b2) => b2["text"] ?? "").join(" ");
+  }
+  return "";
+}
+function extractMetadataFields(rawRecords) {
+  let sessionId = null;
+  let slug = null;
+  let cwd = null;
+  let firstTimestamp = null;
+  let lastTimestamp = null;
+  for (const rec of rawRecords) {
+    if (rec["sessionId"] && !sessionId)
+      sessionId = rec["sessionId"];
+    if (rec["slug"] && !slug)
+      slug = rec["slug"];
+    if (rec["cwd"] && !cwd)
+      cwd = rec["cwd"];
+    const ts = rec["timestamp"];
+    if (ts) {
+      if (!firstTimestamp || ts < firstTimestamp)
+        firstTimestamp = ts;
+      if (!lastTimestamp || ts > lastTimestamp)
+        lastTimestamp = ts;
+    }
+  }
+  return { sessionId, slug, cwd, firstTimestamp, lastTimestamp };
+}
+function _extractToolsFromContent(content, toolsUsed) {
+  if (!Array.isArray(content))
+    return;
+  for (const block of content) {
+    if (typeof block === "object" && block !== null && block["type"] === "tool_use" && block["name"]) {
+      toolsUsed.add(block["name"]);
+    }
+  }
+}
+function extractMessageStats(rawRecords) {
+  let userCount = 0;
+  let assistantCount = 0;
+  const toolsUsed = /* @__PURE__ */ new Set();
+  let firstMessage = null;
+  const allTextParts = [];
+  let allTextLen = 0;
+  for (const rec of rawRecords) {
+    if (rec["type"] === "user") {
+      userCount++;
+      const msg = rec["message"] ?? {};
+      const content = msg["content"];
+      if (content && !rec["isMeta"] && !rec["toolUseResult"]) {
+        const text = extractUserText(content);
+        if (text && !text.startsWith("[Request interrupted")) {
+          if (!firstMessage)
+            firstMessage = text;
+          if (allTextLen < 4e3) {
+            const chunk = text.slice(0, 4e3 - allTextLen);
+            allTextParts.push(chunk);
+            allTextLen += chunk.length;
+          }
+        }
+      }
+    }
+    if (rec["type"] === "assistant") {
+      assistantCount++;
+      _extractToolsFromContent((rec["message"] ?? {})["content"], toolsUsed);
+    }
+  }
+  return {
+    userCount,
+    assistantCount,
+    toolsUsed,
+    firstMessage,
+    allText: allTextParts.join(" ") || null
+  };
+}
+function computeDuration(firstTs, lastTs) {
+  if (!firstTs || !lastTs)
+    return null;
+  try {
+    const t1 = new Date(firstTs).getTime();
+    const t2 = new Date(lastTs).getTime();
+    return t2 - t1;
+  } catch {
+    return null;
+  }
+}
+function _extractKeywords(text) {
+  const seen = /* @__PURE__ */ new Set();
+  const words = [];
+  for (const word of text.toLowerCase().split(/\W+/)) {
+    if (word.length >= 4 && !seen.has(word)) {
+      seen.add(word);
+      words.push(word);
+    }
+  }
+  return words.slice(0, 20);
+}
+function buildConversationRecord(meta, stats, filePath, projectName, fallbackId) {
+  const sessionId = meta.sessionId ?? fallbackId;
+  const allText = stats.allText;
+  let fileSize = null;
+  try {
+    fileSize = statSync4(filePath).size;
+  } catch {
+    fileSize = null;
+  }
+  return {
+    sessionId,
+    slug: meta.slug,
+    project: projectName,
+    cwd: meta.cwd,
+    firstMessage: stats.firstMessage,
+    allText,
+    keywords: _extractKeywords(allText ?? ""),
+    startedAt: meta.firstTimestamp,
+    endedAt: meta.lastTimestamp,
+    messageCount: stats.userCount + stats.assistantCount,
+    userCount: stats.userCount,
+    assistantCount: stats.assistantCount,
+    turnCount: stats.assistantCount,
+    toolsUsed: [...stats.toolsUsed],
+    duration: computeDuration(meta.firstTimestamp, meta.lastTimestamp),
+    fileSize
+  };
+}
+
+// packages/memory/dist/codebase-analysis/scanner.js
+import { existsSync as existsSync9, openSync as openSync2, readdirSync as readdirSync5, readSync as readSync2, statSync as statSync5 } from "node:fs";
+import { join as join9 } from "node:path";
+var HEAD_BYTES2 = 32768;
+var TAIL_BYTES2 = 8192;
+function _parseJsonlLines(lines) {
+  const records = [];
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (!trimmed)
+      continue;
+    try {
+      records.push(JSON.parse(trimmed));
+    } catch {
+    }
+  }
+  return records;
+}
+function readHeadTail2(filePath) {
+  if (!existsSync9(filePath))
+    return [];
+  try {
+    const stat = statSync5(filePath);
+    const fileSize = stat.size;
+    const fd = openSync2(filePath, "r");
+    const headSize = Math.min(HEAD_BYTES2, fileSize);
+    const headBuf = Buffer.alloc(headSize);
+    readSync2(fd, headBuf, 0, headSize, 0);
+    const headStr = headBuf.toString("utf8");
+    const headLines = headStr.split("\n");
+    if (headSize < fileSize)
+      headLines.pop();
+    let records = _parseJsonlLines(headLines);
+    if (fileSize > HEAD_BYTES2 + TAIL_BYTES2) {
+      const tailBuf = Buffer.alloc(TAIL_BYTES2);
+      readSync2(fd, tailBuf, 0, TAIL_BYTES2, fileSize - TAIL_BYTES2);
+      const tailStr = tailBuf.toString("utf8");
+      const tailLines = tailStr.split("\n");
+      tailLines.shift();
+      records = records.concat(_parseJsonlLines(tailLines));
+    }
+    try {
+      const { closeSync: closeSync2 } = __require("node:fs");
+      closeSync2(fd);
+    } catch {
+    }
+    return records;
+  } catch {
+    return [];
+  }
+}
+function* iterToolUses(filePath) {
+  if (!existsSync9(filePath))
+    return;
+  const { readFileSync: readFileSync13 } = __require("node:fs");
+  let content;
+  try {
+    content = readFileSync13(filePath, "utf8");
+  } catch {
+    return;
+  }
+  const lines = content.split("\n");
+  for (let lineNo = 0; lineNo < lines.length; lineNo++) {
+    const s2 = (lines[lineNo] ?? "").trim();
+    if (!s2)
+      continue;
+    let rec;
+    try {
+      rec = JSON.parse(s2);
+    } catch {
+      continue;
+    }
+    if (rec["type"] !== "assistant")
+      continue;
+    const msgContent = (rec["message"] ?? {})["content"];
+    if (!Array.isArray(msgContent))
+      continue;
+    for (const block of msgContent) {
+      if (typeof block !== "object" || block === null || block["type"] !== "tool_use")
+        continue;
+      const b2 = block;
+      yield {
+        name: b2["name"] ?? "",
+        input: b2["input"] ?? {},
+        line: lineNo + 1
+      };
+    }
+  }
+}
+function _formatTimestamp(ms) {
+  return new Date(ms).toISOString().replace("+00:00", "Z");
+}
+function _parseMemoryFile(filePath, projectName, fileName) {
+  let content;
+  try {
+    content = __require("node:fs").readFileSync(filePath, "utf8");
+  } catch {
+    return null;
+  }
+  if (!content)
+    return null;
+  const { meta, body } = _parseYamlFrontmatter(content);
+  let modifiedAt = null;
+  let createdAt = null;
+  try {
+    const st2 = statSync5(filePath);
+    modifiedAt = _formatTimestamp(st2.mtimeMs);
+    createdAt = _formatTimestamp(st2.birthtimeMs ?? st2.ctimeMs);
+  } catch {
+  }
+  return {
+    file: fileName,
+    path: filePath,
+    project: projectName,
+    name: meta["name"] ?? fileName.replace(".md", ""),
+    description: meta["description"] ?? "",
+    type: meta["type"] ?? "unknown",
+    body,
+    modifiedAt,
+    createdAt
+  };
+}
+function _parseYamlFrontmatter(content) {
+  if (!content.startsWith("---"))
+    return { meta: {}, body: content };
+  const end = content.indexOf("\n---", 3);
+  if (end < 0)
+    return { meta: {}, body: content };
+  const frontmatter = content.slice(3, end).trim();
+  const body = content.slice(end + 4).trim();
+  const meta = {};
+  for (const line of frontmatter.split("\n")) {
+    const colon = line.indexOf(":");
+    if (colon < 0)
+      continue;
+    const key = line.slice(0, colon).trim();
+    const val = line.slice(colon + 1).trim();
+    meta[key] = val;
+  }
+  return { meta, body };
+}
+function discoverAllMemories(claudeDir) {
+  const projectsDir = join9(claudeDir, "projects");
+  const memories = [];
+  let projectEntries;
+  try {
+    projectEntries = readdirSync5(projectsDir);
+  } catch {
+    return [];
+  }
+  for (const pdirName of projectEntries) {
+    const pdirPath = join9(projectsDir, pdirName);
+    try {
+      if (!statSync5(pdirPath).isDirectory())
+        continue;
+    } catch {
+      continue;
+    }
+    const memoryDir = join9(pdirPath, "memory");
+    let files;
+    try {
+      files = readdirSync5(memoryDir);
+    } catch {
+      continue;
+    }
+    for (const fileName of files) {
+      if (!fileName.endsWith(".md") || fileName === "MEMORY.md")
+        continue;
+      try {
+        const result = _parseMemoryFile(join9(memoryDir, fileName), pdirName, fileName);
+        if (result)
+          memories.push(result);
+      } catch (e2) {
+        process.stderr.write(`[methodology-agent] Failed to read ${join9(memoryDir, fileName)}: ${e2}
+`);
+      }
+    }
+  }
+  return memories;
+}
+function _parseConversationFile(filePath, projectName, fallbackId) {
+  const rawRecords = readHeadTail2(filePath);
+  if (rawRecords.length === 0)
+    return null;
+  const meta = extractMetadataFields(rawRecords);
+  const stats = extractMessageStats(rawRecords);
+  if (stats.userCount + stats.assistantCount === 0)
+    return null;
+  return buildConversationRecord(meta, stats, filePath, projectName, fallbackId);
+}
+function discoverConversations(claudeDir) {
+  const projectsDir = join9(claudeDir, "projects");
+  const conversations = [];
+  let projectEntries;
+  try {
+    projectEntries = readdirSync5(projectsDir);
+  } catch {
+    return [];
+  }
+  for (const pdirName of projectEntries) {
+    const pdirPath = join9(projectsDir, pdirName);
+    try {
+      if (!statSync5(pdirPath).isDirectory())
+        continue;
+    } catch {
+      continue;
+    }
+    let projEntries;
+    try {
+      projEntries = readdirSync5(pdirPath);
+    } catch {
+      continue;
+    }
+    for (const entryName of projEntries) {
+      if (!entryName.endsWith(".jsonl"))
+        continue;
+      if (entryName.includes("subagent"))
+        continue;
+      const filePath = join9(pdirPath, entryName);
+      if (filePath.includes("subagents"))
+        continue;
+      try {
+        const record3 = _parseConversationFile(filePath, pdirName, entryName.replace(".jsonl", ""));
+        if (record3)
+          conversations.push(record3);
+      } catch (e2) {
+        process.stderr.write(`[methodology-agent] Failed to read conversation ${filePath}: ${e2}
+`);
+      }
+    }
+  }
+  return conversations;
+}
+function groupByProject(conversations) {
+  const groups = {};
+  for (const conv of conversations) {
+    const proj = conv.project ?? "";
+    if (!groups[proj])
+      groups[proj] = [];
+    groups[proj].push(conv);
+  }
+  return groups;
+}
+
+// packages/memory/dist/codebase-analysis/handlers/ingest-helpers.js
+import { createHash as createHash4 } from "node:crypto";
+import { resolve as resolve3, basename as basename5 } from "node:path";
+var CODE_GRAPH_TAG_PREFIX = "_code_graph:";
+var PROJECT_KEY_HASH_LENGTH = 8;
+function projectKey(projectPath) {
+  const p2 = resolve3(projectPath);
+  const digest = createHash4("sha256").update(p2, "utf8").digest("hex").slice(0, PROJECT_KEY_HASH_LENGTH);
+  return `${basename5(p2)}-${digest}`;
+}
+function codeGraphTag(projectPath) {
+  return `${CODE_GRAPH_TAG_PREFIX}${projectKey(projectPath)}`;
+}
+function findCachedGraph(store, projectPath) {
+  const tag = codeGraphTag(projectPath);
+  let mems;
+  try {
+    mems = store.getAllMemoriesForDecay();
+  } catch {
+    return null;
+  }
+  for (const mem of mems) {
+    let rawTags = mem["tags"] ?? [];
+    if (typeof rawTags === "string") {
+      try {
+        rawTags = JSON.parse(rawTags);
+      } catch {
+        rawTags = [];
+      }
+    }
+    if (!Array.isArray(rawTags) || !rawTags.includes(tag))
+      continue;
+    const content = mem["content"] ?? "";
+    if (content.startsWith("graph_path=")) {
+      return content.slice("graph_path=".length).trim();
+    }
+  }
+  return null;
+}
+function memoiseGraphPath(store, projectPath, graphPath) {
+  const tag = codeGraphTag(projectPath);
+  const record3 = {
+    content: `graph_path=${graphPath}`,
+    tags: [tag, "_ingest", "code-graph"],
+    source: "ingest_codebase",
+    domain: "cortex-ingest",
+    directory_context: resolve3(projectPath),
+    is_protected: true,
+    importance: 1,
+    heat: 1
+  };
+  try {
+    return store.insertMemory(record3);
+  } catch {
+    return null;
+  }
+}
+async function callUpstream(serverName, toolName, args, pool = null) {
+  if (pool === null) {
+    throw new McpConnectionError2(`callUpstream(${serverName}, ${toolName}) \u2014 McpClientPool not injected. Wire a real pool via the deps object at the composition root.`);
+  }
+  return pool.call(serverName, toolName, args);
+}
+function normaliseMcpPayload(payload) {
+  if (typeof payload !== "object" || payload === null)
+    return payload;
+  const p2 = payload;
+  if (!("content" in p2))
+    return payload;
+  const content = p2["content"];
+  if (!Array.isArray(content) || content.length === 0)
+    return payload;
+  const first = content[0];
+  if (first["type"] !== "text")
+    return payload;
+  const text = first["text"] ?? "";
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { text };
+  }
+}
+var McpConnectionError2 = class extends Error {
+  constructor(message) {
+    super(message);
+    this.name = "McpConnectionError";
+  }
+};
+
+// packages/memory/dist/codebase-analysis/handlers/codebase-analyze.js
+import { existsSync as existsSync10, readFileSync as readFileSync7, statSync as statSync7 } from "node:fs";
+import { extname as extname2 } from "node:path";
+
+// packages/memory/dist/codebase-analysis/handlers/codebase-analyze-helpers.js
+import { readdirSync as readdirSync6, statSync as statSync6 } from "node:fs";
+import { join as join10, relative as relative4 } from "node:path";
+var CODEBASE_AGENT_CONTEXT = "codebase";
+var FILE_TAG_PREFIX = "file:";
+var HASH_TAG_PREFIX = "hash:";
+var CANDIDATE_MULTIPLIER = 10;
+var IGNORE_DIRS2 = /* @__PURE__ */ new Set([
+  ".git",
+  "node_modules",
+  "__pycache__",
+  ".venv",
+  "venv",
+  "dist",
+  "build",
+  ".next",
+  ".nuxt",
+  "target",
+  ".cargo",
+  "vendor",
+  ".tox",
+  "coverage",
+  ".mypy_cache",
+  ".pytest_cache"
+]);
+function* _walkDir(root) {
+  let entries;
+  try {
+    entries = readdirSync6(root, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (IGNORE_DIRS2.has(entry.name))
+      continue;
+    const fullPath = join10(root, entry.name);
+    if (entry.isDirectory()) {
+      yield* _walkDir(fullPath);
+    } else if (entry.isFile()) {
+      yield fullPath;
+    }
+  }
+}
+function collectSourceFiles(root, languages, maxFiles, maxBytes) {
+  const langFilter = languages && languages.length > 0 ? new Set(languages) : null;
+  const candidateCap = Math.max(maxFiles * CANDIDATE_MULTIPLIER, maxFiles);
+  const candidates = [];
+  for (const p2 of _walkDir(root)) {
+    candidates.push(p2);
+    if (candidates.length >= candidateCap)
+      break;
+  }
+  candidates.sort();
+  const files = [];
+  for (const p2 of candidates) {
+    if (files.length >= maxFiles)
+      break;
+    const ext2 = p2.slice(p2.lastIndexOf(".")).toLowerCase();
+    const lang = EXT_TO_LANG[ext2];
+    if (!lang)
+      continue;
+    if (langFilter && !langFilter.has(lang))
+      continue;
+    try {
+      const st2 = statSync6(p2);
+      if (st2.size > maxBytes)
+        continue;
+    } catch {
+      continue;
+    }
+    files.push(p2);
+  }
+  return files;
+}
+function _parseTags(raw) {
+  if (Array.isArray(raw))
+    return raw;
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw);
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+function _extractFileHash(tags) {
+  let filePath = "";
+  let contentHash = "";
+  for (const tag of tags) {
+    if (typeof tag === "string") {
+      if (tag.startsWith(FILE_TAG_PREFIX))
+        filePath = tag.slice(FILE_TAG_PREFIX.length);
+      else if (tag.startsWith(HASH_TAG_PREFIX))
+        contentHash = tag.slice(HASH_TAG_PREFIX.length);
+    }
+  }
+  return [filePath, contentHash];
+}
+function loadExistingHashes(store) {
+  const hashes = /* @__PURE__ */ new Map();
+  try {
+    const rows = store.getMemoriesByAgentContext(CODEBASE_AGENT_CONTEXT);
+    for (const row of rows) {
+      const memId = row.id;
+      const tags = _parseTags(row.tags);
+      const [fp, ch] = _extractFileHash(tags);
+      if (fp && ch)
+        hashes.set(fp, [memId, ch]);
+    }
+  } catch {
+  }
+  return hashes;
+}
+function markStale(store, memoryIds) {
+  if (memoryIds.length === 0)
+    return 0;
+  try {
+    for (const mid of memoryIds) {
+      store.markMemoryStale(mid, true);
+    }
+    return memoryIds.length;
+  } catch {
+    return 0;
+  }
+}
+var VALID_KINDS = /* @__PURE__ */ new Set([
+  "function",
+  "class",
+  "interface",
+  "type",
+  "enum",
+  "trait",
+  "protocol",
+  "constant",
+  "struct"
+]);
+async function _getOrCreateEntity(store, name, entityType, domain) {
+  try {
+    const existing = store.getEntityByNameAsync ? await store.getEntityByNameAsync(name) : store.getEntityByName(name);
+    if (existing)
+      return existing["id"];
+  } catch {
+  }
+  if (store.upsertEntityAsync) {
+    return store.upsertEntityAsync(name, entityType, domain);
+  }
+  return store.upsertEntity(name, entityType, domain);
+}
+async function _persistSymbolEntities(store, analysis, fileEid, domain) {
+  let entities = 0;
+  let relationships = 0;
+  for (const sym of analysis.definitions) {
+    const kind2 = VALID_KINDS.has(sym.kind) ? sym.kind : "function";
+    const symEid = await _getOrCreateEntity(store, sym.name, kind2, domain);
+    entities++;
+    try {
+      if (store.insertRelationshipAsync) {
+        await store.insertRelationshipAsync({
+          source_entity_id: fileEid,
+          target_entity_id: symEid,
+          relationship_type: "defines",
+          weight: 1
+        });
+      } else {
+        store.insertRelationship({
+          source_entity_id: fileEid,
+          target_entity_id: symEid,
+          relationship_type: "defines",
+          weight: 1
+        });
+      }
+      relationships++;
+    } catch (err) {
+      process.stderr.write(`[codebase-analyze] _persistSymbolEntities failed for ${sym.name}: ${err.message}
+`);
+    }
+  }
+  return [entities, relationships];
+}
+async function _persistImportEntities(store, analysis, fileEid, domain) {
+  let entities = 0;
+  let relationships = 0;
+  for (const imp of analysis.imports) {
+    const depEid = await _getOrCreateEntity(store, imp.module, "dependency", domain);
+    entities++;
+    try {
+      if (store.insertRelationshipAsync) {
+        await store.insertRelationshipAsync({
+          source_entity_id: fileEid,
+          target_entity_id: depEid,
+          relationship_type: "imports",
+          weight: 1
+        });
+      } else {
+        store.insertRelationship({
+          source_entity_id: fileEid,
+          target_entity_id: depEid,
+          relationship_type: "imports",
+          weight: 1
+        });
+      }
+      relationships++;
+    } catch (err) {
+      process.stderr.write(`[codebase-analyze] _persistImportEntities failed for ${imp.module}: ${err.message}
+`);
+    }
+  }
+  return [entities, relationships];
+}
+async function persistEntities(store, analysis, _memoryId, domain) {
+  let entities = 0;
+  let relationships = 0;
+  try {
+    const fileEid = await _getOrCreateEntity(store, analysis.path, "file", domain);
+    entities++;
+    const [se2, sr2] = await _persistSymbolEntities(store, analysis, fileEid, domain);
+    entities += se2;
+    relationships += sr2;
+    const [ie2, ir2] = await _persistImportEntities(store, analysis, fileEid, domain);
+    entities += ie2;
+    relationships += ir2;
+  } catch (err) {
+    process.stderr.write(`[codebase-analyze] persistEntities failed for ${analysis.path}: ${err.message}
+`);
+  }
+  return [entities, relationships];
+}
+async function persistFileEdge(store, edges, domain) {
+  let count = 0;
+  for (const [srcPath, tgtPath] of edges) {
+    try {
+      const srcEid = await _getOrCreateEntity(store, srcPath, "file", domain);
+      const tgtEid = await _getOrCreateEntity(store, tgtPath, "file", domain);
+      if (store.insertRelationshipAsync) {
+        await store.insertRelationshipAsync({
+          source_entity_id: srcEid,
+          target_entity_id: tgtEid,
+          relationship_type: "imports",
+          weight: 1
+        });
+      } else {
+        store.insertRelationship({
+          source_entity_id: srcEid,
+          target_entity_id: tgtEid,
+          relationship_type: "imports",
+          weight: 1
+        });
+      }
+      count++;
+    } catch (err) {
+      process.stderr.write(`[codebase-analyze] persistFileEdge failed for ${srcPath}\u2192${tgtPath}: ${err.message}
+`);
+    }
+  }
+  return count;
+}
+async function persistInheritanceEdge(store, edges, domain) {
+  let count = 0;
+  for (const [child, parent] of edges) {
+    try {
+      const childEid = await _getOrCreateEntity(store, child, "class", domain);
+      const parentEid = await _getOrCreateEntity(store, parent, "class", domain);
+      if (store.insertRelationshipAsync) {
+        await store.insertRelationshipAsync({
+          source_entity_id: childEid,
+          target_entity_id: parentEid,
+          relationship_type: "extends",
+          weight: 1
+        });
+      } else {
+        store.insertRelationship({
+          source_entity_id: childEid,
+          target_entity_id: parentEid,
+          relationship_type: "extends",
+          weight: 1
+        });
+      }
+      count++;
+    } catch (err) {
+      process.stderr.write(`[codebase-analyze] persistInheritanceEdge failed for ${child}\u2192${parent}: ${err.message}
+`);
+    }
+  }
+  return count;
+}
+async function persistCommunityTags(store, communities) {
+  if (communities.size === 0)
+    return;
+  const allCodebaseMemories = (() => {
+    try {
+      return store.getMemoriesByAgentContext(CODEBASE_AGENT_CONTEXT);
+    } catch {
+      return [];
+    }
+  })();
+  for (const [filePath, clusterId] of communities) {
+    try {
+      const rows = allCodebaseMemories.filter((r2) => typeof r2.tags === "string" && r2.tags.includes(filePath) || store.getMemory?.(r2.id)?.content?.includes(filePath));
+      for (const row of rows) {
+        const tags = _parseTags(row.tags);
+        const tag = `cluster:${clusterId}`;
+        if (!tags.includes(tag)) {
+          tags.push(tag);
+          const mem = store.getMemory(row.id);
+          if (mem)
+            store.updateMemoryContent(row.id, mem.content, tags);
+        }
+      }
+    } catch {
+    }
+  }
+}
+function resolveRelativePath(sourcePath, root) {
+  try {
+    return relative4(root, sourcePath) || sourcePath;
+  } catch {
+    return sourcePath;
+  }
+}
+
+// packages/memory/dist/codebase-analysis/handlers/codebase-analyze.js
+var schema7 = {
+  title: "Codebase analyze",
+  description: "Walk a codebase and store its structure as memories using tree-sitter AST parsing (with regex fallback for unsupported languages). One memory per file, with symbols as entities and imports as relationships; then cross-file symbol resolution, call-graph extraction, and community detection over the call graph. Incremental \u2014 only re-processes files whose content hash changed since last run (tracked via HASH_TAG_PREFIX tags). Use this on first onboarding to a serious codebase, or after a major refactor that invalidates symbol assumptions. Distinct from `seed_project` (5-stage shallow structural sweep, no AST), `backfill_memories` (Claude Code conversations, not source files), `wiki_seed_codebase` (seeds wiki pages from .md docs), and `ingest_codebase` (downstream PRD-generator consumer). Mutates memories + entities + relationships tables.",
+  inputSchema: {
+    type: "object",
+    required: [],
+    properties: {
+      directory: {
+        type: "string",
+        description: "Root directory of the codebase to analyze.",
+        examples: ["/Users/alice/code/cortex"]
+      },
+      languages: {
+        type: "array",
+        description: "Restrict analysis to specific languages.",
+        items: { type: "string" },
+        default: []
+      },
+      max_files: {
+        type: "integer",
+        description: "Maximum number of files to process per call.",
+        default: 500,
+        // source: cortex mcp_server/handlers/codebase_analyze.py — max_files default=500
+        minimum: 1,
+        maximum: 5e4
+        // source: cortex mcp_server/handlers/codebase_analyze.py — max_files max=50000
+      },
+      max_file_size_kb: {
+        type: "integer",
+        description: "Skip files larger than this many kilobytes.",
+        default: 100,
+        // source: cortex mcp_server/handlers/codebase_analyze.py — max_file_size_kb default=100
+        minimum: 1,
+        maximum: 4096
+        // source: 4096 KB = standard 4 MB file-size upper bound (in exempt list)
+      },
+      incremental: {
+        type: "boolean",
+        description: "Only re-process files whose content hash changed.",
+        default: true
+      },
+      dry_run: {
+        type: "boolean",
+        description: "Report what would be analyzed without writing memories.",
+        default: false
+      },
+      domain: {
+        type: "string",
+        description: "Cognitive domain to tag analysis memories with.",
+        examples: ["cortex", "auth-service"]
+      }
+    }
+  }
+};
+var CODEBASE_SOURCE = "codebase_analyze";
+var CODEBASE_TAG = "codebase";
+var LANG_TAG_PREFIX = "lang:";
+var DEFAULT_MAX_FILES = 5e4;
+var DEFAULT_MAX_FILE_SIZE_KB2 = 100;
+var MAX_SYMBOL_TAGS_PER_FILE = 10;
+var BYTES_PER_KB2 = 1024;
+function _parseArgs(args) {
+  const a2 = args ?? {};
+  const directory = (a2["directory"] ?? process.cwd()).trim() || process.cwd();
+  const languages = a2["languages"] ?? null;
+  const maxFiles = Number(a2["max_files"] ?? DEFAULT_MAX_FILES);
+  const maxKb = Number(a2["max_file_size_kb"] ?? DEFAULT_MAX_FILE_SIZE_KB2);
+  const incremental = a2["incremental"] ?? true;
+  const dryRun = a2["dry_run"] ?? false;
+  const domain = a2["domain"] ?? "";
+  return { directory, languages, maxFiles, maxBytes: maxKb * BYTES_PER_KB2, incremental, dryRun, domain };
+}
+function _buildTags(relPath, analysis) {
+  const tags = [
+    CODEBASE_TAG,
+    `${FILE_TAG_PREFIX}${relPath}`,
+    `${HASH_TAG_PREFIX}${analysis.contentHash}`,
+    `${LANG_TAG_PREFIX}${analysis.language}`
+  ];
+  for (const sym of analysis.definitions.slice(0, MAX_SYMBOL_TAGS_PER_FILE)) {
+    tags.push(`symbol:${sym.name}`);
+  }
+  return tags;
+}
+function _parseOneFile(path6, content) {
+  if (isAvailable()) {
+    return parseFileAst(path6, Buffer.from(content, "utf8"));
+  }
+  return parseFile(path6, content);
+}
+async function _storeFile(root, relPath, analysis, domain, store) {
+  const content = buildMemoryContent(analysis);
+  const tags = _buildTags(relPath, analysis);
+  const insertData = {
+    content,
+    tags,
+    directory_context: root,
+    domain,
+    source: CODEBASE_SOURCE,
+    agent_context: CODEBASE_AGENT_CONTEXT
+  };
+  let memoryId = null;
+  try {
+    if (store.insertMemoryAsync) {
+      memoryId = await store.insertMemoryAsync(insertData);
+    } else {
+      memoryId = store.insertMemory(insertData);
+    }
+  } catch {
+    return [null, 0, 0];
+  }
+  if (memoryId === null)
+    return [null, 0, 0];
+  const [ents, rels] = await persistEntities(store, analysis, memoryId, domain || "code");
+  return [memoryId, ents, rels];
+}
+async function _processFiles(sourceFiles, root, existing, incremental, domain, store) {
+  let newCount = 0;
+  let updatedCount = 0;
+  let unchangedCount = 0;
+  let totalEntities = 0;
+  let totalRelationships = 0;
+  const seenPaths = /* @__PURE__ */ new Set();
+  const allAnalyses = [];
+  const fileContents = /* @__PURE__ */ new Map();
+  for (const sourcePath of sourceFiles) {
+    const relPath = resolveRelativePath(sourcePath, root);
+    seenPaths.add(relPath);
+    let content;
+    try {
+      content = readFileSync7(sourcePath, "utf8");
+    } catch {
+      continue;
+    }
+    fileContents.set(relPath, content);
+    const analysis = _parseOneFile(relPath, content);
+    allAnalyses.push(analysis);
+    if (incremental && existing.has(relPath)) {
+      const existingEntry = existing.get(relPath);
+      if (existingEntry !== void 0 && existingEntry[1] === analysis.contentHash) {
+        unchangedCount++;
+        continue;
+      }
+      updatedCount++;
+    } else {
+      newCount++;
+    }
+    const [, ents, rels] = await _storeFile(root, relPath, analysis, domain, store);
+    totalEntities += ents;
+    totalRelationships += rels;
+  }
+  return {
+    newCount,
+    updatedCount,
+    unchangedCount,
+    totalEntities,
+    totalRelationships,
+    seenPaths,
+    allAnalyses,
+    fileContents
+  };
+}
+async function _runGraphAnalysis(analyses, fileContents, store, domain) {
+  const importEdges = resolveAllImports(analyses);
+  const typeRefEdges = resolveTypeReferences(analyses, fileContents);
+  const allFileEdgesMap = /* @__PURE__ */ new Map();
+  for (const e2 of [...importEdges, ...typeRefEdges]) {
+    allFileEdgesMap.set(`${e2[0]}::${e2[1]}`, e2);
+  }
+  const allFileEdges = [...allFileEdgesMap.values()];
+  const inheritEdges = extractInheritance(analyses);
+  const communities = detectCommunities(allFileEdges, []);
+  const fileRels = await persistFileEdge(store, allFileEdges, domain);
+  const inheritRels = await persistInheritanceEdge(store, inheritEdges, domain);
+  await persistCommunityTags(store, communities);
+  return {
+    import_edges: importEdges.length,
+    type_ref_edges: typeRefEdges.length,
+    total_file_edges: allFileEdges.length,
+    inheritance_edges: inheritEdges.length,
+    communities: new Set(communities.values()).size,
+    file_edges_stored: fileRels,
+    inherit_edges_stored: inheritRels
+  };
+}
+async function handler12(args, deps) {
+  const { directory: root, languages, maxFiles, maxBytes, incremental, dryRun, domain } = _parseArgs(args);
+  if (!existsSync10(root) || !statSync7(root).isDirectory()) {
+    return { analyzed: false, reason: `directory not found: ${root}` };
+  }
+  process.stderr.write(`[codebase-analyze] scanning ${root} (max_files=${maxFiles}, incremental=${incremental})
+`);
+  const sourceFiles = collectSourceFiles(root, languages, maxFiles, maxBytes);
+  process.stderr.write(`[codebase-analyze] found ${sourceFiles.length} source files
+`);
+  if (dryRun) {
+    const langs = [
+      ...new Set(sourceFiles.map((f2) => EXT_TO_LANG[extname2(f2).toLowerCase()] ?? "?"))
+    ];
+    return {
+      analyzed: false,
+      dry_run: true,
+      directory: root,
+      source_files: sourceFiles.length,
+      languages: langs
+    };
+  }
+  const store = deps.store;
+  const existing = incremental ? loadExistingHashes(store) : /* @__PURE__ */ new Map();
+  if (incremental) {
+    process.stderr.write(`[codebase-analyze] loaded ${existing.size} existing file hashes
+`);
+  }
+  const { newCount, updatedCount, unchangedCount, totalEntities, totalRelationships, seenPaths, allAnalyses, fileContents } = await _processFiles(sourceFiles, root, existing, incremental, domain, store);
+  const stale = _markDeleted(existing, seenPaths, store, incremental);
+  const graphStats = await _runGraphAnalysis(allAnalyses, fileContents, store, domain || "code");
+  process.stderr.write(`[codebase-analyze] done: ${newCount} new, ${updatedCount} updated, ${unchangedCount} unchanged, ${stale} stale
+`);
+  return {
+    analyzed: true,
+    directory: root,
+    source_files: sourceFiles.length,
+    new: newCount,
+    updated: updatedCount,
+    unchanged: unchangedCount,
+    stale_marked: stale,
+    entities: totalEntities,
+    relationships: totalRelationships,
+    graph: graphStats,
+    languages: [
+      ...new Set(sourceFiles.map((f2) => EXT_TO_LANG[extname2(f2).toLowerCase()] ?? "?"))
+    ]
+  };
+}
+function _markDeleted(existing, seenPaths, store, incremental) {
+  if (!incremental)
+    return 0;
+  const deletedIds = [];
+  for (const [path6, [mid]] of existing) {
+    if (!seenPaths.has(path6))
+      deletedIds.push(mid);
+  }
+  return markStale(store, deletedIds);
+}
+
+// packages/memory/dist/codebase-analysis/handlers/ingest-codebase.js
+import { homedir as homedir6 } from "node:os";
+import { join as join13 } from "node:path";
+
+// packages/memory/dist/codebase-analysis/handlers/ingest-codebase-cypher.js
+var _UPSTREAM_SERVER = "codebase";
+var _SYMBOL_LABELS = [
+  ["Function", "Function"],
+  ["Method", "Method"],
+  ["Struct", "Struct"]
+];
+function isTransportError(e2) {
+  return e2 instanceof McpConnectionError2 || e2 instanceof TypeError || e2 instanceof RangeError || e2 instanceof SyntaxError;
+}
+var _CODE_EXTS = [".py", ".ts", ".tsx", ".rs", ".js"];
+var _MAX_RUST_QN_DROP = 3;
+function filePathFromQn(qn) {
+  if (!qn || !qn.includes("::"))
+    return [];
+  const candidates = [];
+  const head = qn.split("::", 2)[0] ?? "";
+  if (!head)
+    return [];
+  const headIsPath = head.includes("/") || _CODE_EXTS.some((ext2) => head.endsWith(ext2));
+  const headIsDottedModule = !headIsPath && head.includes(".") && !head.includes("/") && !_CODE_EXTS.some((ext2) => head.endsWith(ext2));
+  if (headIsPath) {
+    candidates.push(head);
+    return candidates;
+  }
+  if (headIsDottedModule) {
+    candidates.push(head.replaceAll(".", "/") + ".py");
+    return candidates;
+  }
+  const parts = qn.split("::");
+  for (let drop = 1; drop <= _MAX_RUST_QN_DROP; drop++) {
+    if (parts.length - drop < 1)
+      break;
+    const prefix = parts.slice(0, parts.length - drop);
+    if (prefix.length === 0)
+      continue;
+    const cand = prefix.join("/") + ".py";
+    if (!candidates.includes(cand))
+      candidates.push(cand);
+  }
+  return candidates;
+}
+async function _runQuery(graphPath, cypher) {
+  const payload = await callUpstream(_UPSTREAM_SERVER, "query_graph", {
+    graph_path: graphPath,
+    query: cypher
+  });
+  const result = normaliseMcpPayload(payload);
+  if (typeof result === "object" && result !== null) {
+    const r2 = result;
+    if (r2["status"] === "error") {
+      return [null, String(r2["message"] ?? "<unknown upstream error>")];
+    }
+    return [r2, null];
+  }
+  return [null, `unexpected payload type: ${typeof result}`];
+}
+async function fetchTopSymbols(graphPath, limit) {
+  const rows = [];
+  const diagnostics = [];
+  const perLabel = limit !== null && limit > 0 ? Math.max(1, Math.floor(limit / _SYMBOL_LABELS.length)) : null;
+  for (const [label, kind2] of _SYMBOL_LABELS) {
+    const clauses = [
+      `MATCH (n:${label})`,
+      "RETURN n.qualified_name AS qualified_name, n.name AS name, n.start_line AS start_line, n.end_line AS end_line, n.visibility AS visibility"
+    ];
+    if (perLabel !== null) {
+      clauses.push("ORDER BY (n.end_line - n.start_line) DESC");
+      clauses.push(`LIMIT ${perLabel}`);
+    } else {
+      clauses.push("ORDER BY n.qualified_name");
+    }
+    const cypher = clauses.join(" ");
+    let result;
+    let err;
+    try {
+      [result, err] = await _runQuery(graphPath, cypher);
+    } catch (e2) {
+      if (isTransportError(e2)) {
+        diagnostics.push(`${label}: ${e2.constructor.name}: ${e2.message}`);
+        continue;
+      }
+      throw e2;
+    }
+    if (err !== null) {
+      diagnostics.push(`${label}: ${err}`);
+      continue;
+    }
+    const columns = result["columns"] ?? [
+      "qualified_name",
+      "name",
+      "start_line",
+      "end_line",
+      "visibility"
+    ];
+    for (const row of result["rows"] ?? []) {
+      const record3 = {};
+      columns.forEach((col, i2) => {
+        record3[col] = row[i2];
+      });
+      const qn = record3["qualified_name"] ?? record3["name"];
+      if (!qn)
+        continue;
+      rows.push({
+        qualified_name: qn,
+        name: record3["name"] ?? qn,
+        kind: kind2,
+        // file assigned later from containment edges
+        file: null,
+        start_line: record3["start_line"] ?? null,
+        end_line: record3["end_line"] ?? null,
+        visibility: record3["visibility"] ?? null
+      });
+    }
+  }
+  const finalRows = limit !== null && limit > 0 ? rows.slice(0, limit) : rows;
+  return [finalRows, diagnostics];
+}
+async function fetchCallEdges(graphPath, known) {
+  if (known.size === 0)
+    return [[], []];
+  const edges = [];
+  const seen = /* @__PURE__ */ new Set();
+  const diagnostics = [];
+  for (const srcLabel of ["Function", "Method", "Struct"]) {
+    const cypher = `MATCH (a:${srcLabel})-[]->(b:Function|Method|Struct) RETURN a.qualified_name AS src, b.qualified_name AS dst`;
+    let result;
+    let err;
+    try {
+      [result, err] = await _runQuery(graphPath, cypher);
+    } catch (e2) {
+      if (isTransportError(e2)) {
+        diagnostics.push(`call-edges/${srcLabel}: ${e2.constructor.name}: ${e2.message}`);
+        continue;
+      }
+      throw e2;
+    }
+    if (err !== null) {
+      diagnostics.push(`call-edges/${srcLabel}: ${err}`);
+      continue;
+    }
+    for (const row of result["rows"] ?? []) {
+      if (row.length < 2)
+        continue;
+      const src = row[0];
+      const dst = row[1];
+      if (!src || !dst)
+        continue;
+      if (!known.has(src) || !known.has(dst) || src === dst)
+        continue;
+      const key = `${src}::${dst}`;
+      if (seen.has(key))
+        continue;
+      seen.add(key);
+      edges.push([src, dst]);
+    }
+  }
+  return [edges, diagnostics];
+}
+async function fetchFileContainment(graphPath, knownFiles, knownSymbols) {
+  if (knownFiles.size === 0 || knownSymbols.size === 0)
+    return [[], []];
+  const edges = [];
+  const seen = /* @__PURE__ */ new Set();
+  const diagnostics = [];
+  const cypher = "MATCH (f:File)-[]->(n:Function|Method|Struct) RETURN f.path AS file_path, n.qualified_name AS qn";
+  let result;
+  let err;
+  try {
+    [result, err] = await _runQuery(graphPath, cypher);
+  } catch (e2) {
+    if (isTransportError(e2)) {
+      diagnostics.push(`file-containment: ${e2.constructor.name}: ${e2.message}`);
+      return [edges, diagnostics];
+    }
+    throw e2;
+  }
+  if (err !== null) {
+    diagnostics.push(`file-containment: ${err}`);
+    return [edges, diagnostics];
+  }
+  for (const row of result["rows"] ?? []) {
+    if (row.length < 2)
+      continue;
+    const f2 = row[0];
+    const qn = row[1];
+    if (!f2 || !qn)
+      continue;
+    if (!knownFiles.has(f2) || !knownSymbols.has(qn))
+      continue;
+    const key = `${f2}::${qn}`;
+    if (seen.has(key))
+      continue;
+    seen.add(key);
+    edges.push([f2, qn]);
+  }
+  return [edges, diagnostics];
+}
+async function fetchFiles(graphPath, limit) {
+  const clauses = [
+    "MATCH (f:File)",
+    "RETURN f.path AS path, f.name AS name, f.extension AS extension, f.size_bytes AS size_bytes",
+    "ORDER BY f.path"
+  ];
+  if (limit !== null && limit > 0)
+    clauses.push(`LIMIT ${limit}`);
+  const cypher = clauses.join(" ");
+  let result;
+  let err;
+  try {
+    [result, err] = await _runQuery(graphPath, cypher);
+  } catch (e2) {
+    if (isTransportError(e2)) {
+      return [
+        [],
+        [`files: ${e2.constructor.name}: ${e2.message}`]
+      ];
+    }
+    throw e2;
+  }
+  if (err !== null)
+    return [[], [`files: ${err}`]];
+  const rows = [];
+  for (const row of result["rows"] ?? []) {
+    if (row.length < 1 || !row[0])
+      continue;
+    const [fPath, fName, fExt, fSize] = row;
+    rows.push({
+      path: fPath,
+      name: fName ?? null,
+      extension: fExt ?? null,
+      size_bytes: fSize ?? null
+    });
+  }
+  return [rows, []];
+}
+
+// packages/memory/dist/codebase-analysis/handlers/ingest-codebase-graph.js
+import { existsSync as existsSync11, rmSync as rmSync2, statSync as statSync8 } from "node:fs";
+import { join as join11, resolve as resolve4 } from "node:path";
+var _UPSTREAM_SERVER2 = "codebase";
+function silentCleanStaleGraphSlot(outputDir) {
+  const slot = join11(outputDir, "graph");
+  try {
+    if (existsSync11(slot) && !statSync8(slot).isDirectory()) {
+      rmSync2(slot);
+    }
+  } catch {
+  }
+}
+async function _callAnalyze(projectPath, outputDir, language2, pool) {
+  return callUpstream(_UPSTREAM_SERVER2, "analyze_codebase", {
+    path: resolve4(projectPath),
+    output_dir: resolve4(outputDir),
+    language: language2
+  }, pool);
+}
+async function ensureGraph(store, projectPath, outputDir, language2, forceReindex, pool = null) {
+  if (!forceReindex) {
+    const cached2 = findCachedGraph(store, projectPath);
+    if (cached2)
+      return [cached2, { reused_cached: true, graph_path: cached2 }];
+  }
+  silentCleanStaleGraphSlot(outputDir);
+  let payload = await _callAnalyze(projectPath, outputDir, language2, pool);
+  let result = normaliseMcpPayload(payload);
+  if (typeof result === "object" && result !== null && result["status"] === "error" && String(result["message"] ?? "").includes("Not a directory")) {
+    silentCleanStaleGraphSlot(outputDir);
+    payload = await _callAnalyze(projectPath, outputDir, language2, pool);
+    result = normaliseMcpPayload(payload);
+  }
+  if (typeof result === "object" && result !== null && result["status"] === "error") {
+    throw new McpConnectionError2(`upstream analyze_codebase failed: ${result["message"] ?? "<no message>"}`);
+  }
+  const graphPath = result["graph_path"] ?? join11(resolve4(outputDir), "graph");
+  memoiseGraphPath(store, projectPath, graphPath);
+  result["graph_path"] = graphPath;
+  result["reused_cached"] = false;
+  return [graphPath, result];
+}
+
+// packages/memory/dist/codebase-analysis/handlers/ingest-codebase-pages.js
+import { mkdirSync as mkdirSync4, writeFileSync as writeFileSync4 } from "node:fs";
+import { dirname as dirname3, join as join12 } from "node:path";
+function _slug(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+}
+function renderProcessPage(process3) {
+  const entry = process3["entry_point"] ?? process3["name"] ?? "unknown";
+  const kind2 = process3["entry_kind"] ?? "entry";
+  const depth = process3["bfs_depth"] ?? process3["depth"] ?? 0;
+  const symbols = process3["symbols"] ?? [];
+  const symbolCount = process3["symbol_count"] ?? symbols.length;
+  const slug = _slug(entry) || "process";
+  const relPath = `reference/codebase/${slug}.md`;
+  const lines = [
+    "---",
+    `title: Process \u2014 ${entry}`,
+    "kind: reference",
+    `tags: [code-reference, process, ${kind2}]`,
+    "---",
+    "",
+    `# Process \u2014 \`${entry}\``,
+    "",
+    `- **Entry kind:** ${kind2}`,
+    `- **BFS depth:** ${depth}`,
+    `- **Symbols in flow:** ${symbolCount}`,
+    ""
+  ];
+  if (symbols.length > 0) {
+    lines.push("## Symbols reached");
+    for (const sym of symbols.slice(0, 50)) {
+      const qn = typeof sym === "string" ? sym : sym["qualified_name"] ?? "";
+      if (qn)
+        lines.push(`- \`${qn}\``);
+    }
+    if (symbols.length > 50)
+      lines.push(`- \u2026 and ${symbols.length - 50} more.`);
+    lines.push("");
+  }
+  return [relPath, lines.join("\n")];
+}
+function writeProcessPages(processes, wikiRoot) {
+  const written = [];
+  for (const proc of processes) {
+    try {
+      const [relPath, markdown] = renderProcessPage(proc);
+      const fullPath = join12(wikiRoot, relPath);
+      mkdirSync4(dirname3(fullPath), { recursive: true });
+      writeFileSync4(fullPath, markdown, "utf8");
+      written.push(relPath);
+    } catch {
+    }
+  }
+  return written;
+}
+
+// packages/memory/dist/codebase-analysis/handlers/ingest-codebase-schema.js
+var schema8 = {
+  description: "Ingest a codebase analysis from the upstream ai-automatised-pipeline MCP server into Cortex's store. Triggers `analyze_codebase` upstream (or reuses a cached graph_path memo), pulls every Function/Method/Struct + every call edge + every File\u2192symbol containment edge via Cypher, then materialises them as memories + KG entities + edges, plus a wiki reference page per detected process entry point. Use this to seed the Wiki / Board / Knowledge / Graph views from a freshly-indexed or re-indexed codebase. Distinct from `codebase_analyze` (Cortex's OWN tree-sitter analyzer, no upstream MCP), `seed_project` (5-stage shallow sweep, no AST), and `wiki_seed_codebase` (consumes existing .md docs, not analysis). Mutates wiki/, memories, entities, relationships. Latency varies (10s-5min depending on cache hit). Cortex only consumes upstream analysis \u2014 it does not drive the pipeline. Returns counts and the wiki paths written.",
+  inputSchema: {
+    type: "object",
+    required: ["project_path"],
+    properties: {
+      project_path: {
+        type: "string",
+        description: "Absolute path to the codebase root to analyse. Used both as the pipeline input and to memoise the resulting graph path so subsequent ingests are idempotent.",
+        examples: ["/Users/alice/code/cortex"]
+      },
+      output_dir: {
+        type: "string",
+        description: "Directory where the code graph is stored. Defaults to ~/.cache/cortex/code-graphs/<project-key>/.",
+        examples: ["/Users/alice/.cache/cortex/code-graphs/cortex-ab12cd34"]
+      },
+      language: {
+        type: "string",
+        description: "Language filter passed to analyze_codebase.",
+        enum: ["auto", "rust", "python", "typescript"],
+        default: "auto"
+      },
+      force_reindex: {
+        type: "boolean",
+        description: "If true, call analyze_codebase even when a cached graph path exists for this project.",
+        default: false
+      },
+      top_symbols: {
+        type: ["integer", "null"],
+        description: "Optional explicit cap on symbols materialised as memories + KG nodes. Default null = pull every Function/Method/Struct in the graph (full chain hierarchy).",
+        default: null,
+        minimum: 0,
+        examples: [null, 200, 1e3]
+      },
+      top_processes: {
+        type: ["integer", "null"],
+        description: "Optional explicit cap on processes materialised as wiki pages. Default null = pull every entry-point process.",
+        default: null,
+        minimum: 0,
+        examples: [null, 25, 100]
+      }
+    }
+  }
+};
+
+// packages/memory/dist/codebase-analysis/handlers/ingest-codebase-writers.js
+function _shortSymbolSummary(sym) {
+  const qn = sym.qualified_name ?? sym.name ?? "<anon>";
+  const kind2 = sym.kind ?? "symbol";
+  const community = sym["community"];
+  const process3 = sym["process"];
+  const parts = [`${kind2} ${qn}`];
+  if (community !== void 0 && community !== null)
+    parts.push(`community=${community}`);
+  if (process3)
+    parts.push(`process=${process3}`);
+  return parts.join(" | ");
+}
+function writeSymbolMemories(store, symbols, projectPath, domain) {
+  const ids = [];
+  for (const sym of symbols) {
+    const qn = sym.qualified_name ?? sym.name;
+    if (!qn)
+      continue;
+    const summary = _shortSymbolSummary(sym);
+    let content = `Code symbol: ${qn}
+
+${summary}`;
+    if (sym.file)
+      content += `
+File: ${sym.file}`;
+    const record3 = {
+      content,
+      tags: ["code-reference", "ingest", sym.kind ?? "symbol"],
+      source: "ingest_codebase",
+      domain,
+      directory_context: projectPath,
+      importance: Number(sym["relevance_score"] ?? 0.5) || 0.5,
+      heat: 0.8,
+      is_protected: false
+    };
+    try {
+      ids.push(store.insertMemory(record3));
+    } catch {
+    }
+  }
+  return ids;
+}
+function writeSymbolEntities(store, symbols, domain) {
+  const nameToId = /* @__PURE__ */ new Map();
+  const collisions = /* @__PURE__ */ new Map();
+  for (const sym of symbols) {
+    const qn = sym.qualified_name ?? sym.name;
+    if (!qn)
+      continue;
+    if (nameToId.has(qn)) {
+      collisions.set(qn, (collisions.get(qn) ?? 1) + 1);
+      continue;
+    }
+    try {
+      const eid = store.insertEntity({
+        name: qn,
+        type: sym.kind ?? "symbol",
+        domain,
+        heat: 0.8
+      });
+      nameToId.set(qn, eid);
+    } catch {
+    }
+  }
+  const diagnostics = [];
+  if (collisions.size > 0) {
+    const total = [...collisions.values()].reduce((a2, b2) => a2 + b2, 0);
+    const sample = [...collisions.keys()].sort().slice(0, 3).join(", ");
+    diagnostics.push(`qn-collision: ${collisions.size} qualified_names had ${total} duplicate symbols (kept first). sample: ${sample}`);
+  }
+  return [nameToId, diagnostics];
+}
+function writeSymbolRelationships(store, edges, nameToId) {
+  let written = 0;
+  for (const [srcName, targetName] of edges) {
+    const srcId = nameToId.get(srcName);
+    const dstId = nameToId.get(targetName);
+    if (srcId === void 0 || dstId === void 0 || srcId === dstId)
+      continue;
+    try {
+      store.insertRelationship({
+        source_entity_id: srcId,
+        target_entity_id: dstId,
+        relationship_type: "calls",
+        weight: 1,
+        confidence: 0.9
+      });
+      written++;
+    } catch {
+    }
+  }
+  return written;
+}
+function writeFileMemories(store, files, projectPath, domain) {
+  const ids = [];
+  for (const f2 of files) {
+    if (!f2.path)
+      continue;
+    const ext2 = f2.extension ?? "";
+    const size = f2.size_bytes ?? 0;
+    const record3 = {
+      content: `Code file: ${f2.path}
+
+extension=${ext2} | size_bytes=${size}`,
+      tags: ["code-reference", "ingest", "file"],
+      source: "ingest_codebase",
+      domain,
+      directory_context: projectPath,
+      importance: 0.4,
+      heat: 0.6,
+      is_protected: false
+    };
+    try {
+      ids.push(store.insertMemory(record3));
+    } catch {
+    }
+  }
+  return ids;
+}
+function writeFileEntities(store, files, domain) {
+  const nameToId = /* @__PURE__ */ new Map();
+  for (const f2 of files) {
+    if (!f2.path || nameToId.has(f2.path))
+      continue;
+    try {
+      const eid = store.insertEntity({
+        name: f2.path,
+        type: "file",
+        domain,
+        heat: 0.6
+      });
+      nameToId.set(f2.path, eid);
+    } catch {
+    }
+  }
+  return nameToId;
+}
+function writeFileRelationships(store, edges, fileToId, symbolToId) {
+  let written = 0;
+  for (const [filePath, symbolQn] of edges) {
+    const srcId = fileToId.get(filePath);
+    const dstId = symbolToId.get(symbolQn);
+    if (srcId === void 0 || dstId === void 0)
+      continue;
+    try {
+      store.insertRelationship({
+        source_entity_id: srcId,
+        target_entity_id: dstId,
+        relationship_type: "contains",
+        weight: 1,
+        confidence: 0.95
+      });
+      written++;
+    } catch {
+    }
+  }
+  return written;
+}
+
+// packages/memory/dist/codebase-analysis/handlers/ingest-codebase.js
+var _UPSTREAM_SERVER3 = "codebase";
+var _DEFAULT_TOP_SYMBOLS = null;
+var _DEFAULT_TOP_PROCESSES = null;
+function _defaultOutputDir(projectPath) {
+  return join13(homedir6(), ".cache", "cortex", "code-graphs", projectKey(projectPath));
+}
+function _parseIntOrNull(raw) {
+  if (raw === null || raw === void 0)
+    return null;
+  const n3 = Number(raw);
+  return Number.isFinite(n3) ? n3 : null;
+}
+function _attributeFilesToSymbols(symbols, fileEdges, knownFiles) {
+  const qnToFile = new Map(fileEdges.map(([f2, qn]) => [qn, f2]));
+  let fallbackUsed = 0;
+  let fallbackUnverified = 0;
+  for (const sym of symbols) {
+    const qn = sym.qualified_name;
+    if (!qn)
+      continue;
+    const authoritative = qnToFile.get(qn);
+    if (authoritative !== void 0) {
+      sym.file = authoritative;
+      continue;
+    }
+    const candidates = filePathFromQn(qn);
+    const match2 = candidates.find((c2) => knownFiles.has(c2)) ?? null;
+    if (match2 !== null) {
+      sym.file = match2;
+      fallbackUsed++;
+    } else {
+      sym.file = null;
+      if (candidates.length > 0)
+        fallbackUnverified++;
+    }
+  }
+  const diagnostics = [];
+  if (fallbackUsed > 0) {
+    diagnostics.push(`file-attribution: ${fallbackUsed} symbols had no (:File)-[]->(:symbol) edge; used qn-split fallback (verified against known files)`);
+  }
+  if (fallbackUnverified > 0) {
+    diagnostics.push(`file-attribution: ${fallbackUnverified} symbols had no containment edge AND the qn-split fallback didn't match a known file (likely non-Python indexer); file=null`);
+  }
+  return diagnostics;
+}
+async function _pullSymbolsAndFiles(graphPath, topSymbols) {
+  const diagnostics = [];
+  const [symbols, symDiag] = await fetchTopSymbols(graphPath, topSymbols);
+  diagnostics.push(...symDiag);
+  const [files, fileDiag] = await fetchFiles(graphPath, null);
+  diagnostics.push(...fileDiag);
+  let callEdges = [];
+  let fileEdges = [];
+  if (symbols.length > 0) {
+    const knownSymbols = new Set(symbols.map((s2) => s2.qualified_name).filter(Boolean));
+    const [ce2, ceDiag] = await fetchCallEdges(graphPath, knownSymbols);
+    callEdges = ce2;
+    diagnostics.push(...ceDiag);
+    const knownFiles = new Set(files.map((f2) => f2.path).filter(Boolean));
+    if (knownFiles.size > 0) {
+      const [fe2, feDiag] = await fetchFileContainment(graphPath, knownFiles, knownSymbols);
+      fileEdges = fe2;
+      diagnostics.push(...feDiag);
+    }
+    diagnostics.push(..._attributeFilesToSymbols(symbols, fileEdges, knownFiles));
+  }
+  return { symbols, files, callEdges, fileEdges, diagnostics };
+}
+async function _pullProcesses(graphPath, topProcesses, pool) {
+  try {
+    const procPayload = await callUpstream(_UPSTREAM_SERVER3, "get_processes", {
+      graph_path: graphPath
+    }, pool);
+    const procResult = normaliseMcpPayload(procPayload);
+    const allProcs = procResult["processes"] ?? [];
+    return topProcesses === null ? allProcs : allProcs.slice(0, topProcesses);
+  } catch {
+    return [];
+  }
+}
+async function handler13(args, deps) {
+  const a2 = args ?? {};
+  const projectPath = (a2["project_path"] ?? "").trim();
+  if (!projectPath)
+    return { ingested: false, reason: "project_path is required" };
+  const outputDir = a2["output_dir"] ?? _defaultOutputDir(projectPath);
+  const language2 = a2["language"] ?? "auto";
+  const forceReindex = Boolean(a2["force_reindex"] ?? false);
+  const topSymbols = _parseIntOrNull(a2["top_symbols"] ?? _DEFAULT_TOP_SYMBOLS);
+  const topProcesses = _parseIntOrNull(a2["top_processes"] ?? _DEFAULT_TOP_PROCESSES);
+  const store = deps.store;
+  let graphPath;
+  let analyzeStats;
+  try {
+    [graphPath, analyzeStats] = await ensureGraph(store, projectPath, outputDir, language2, forceReindex, deps.mcpClientPool);
+  } catch (e2) {
+    if (e2 instanceof McpConnectionError2) {
+      return { ingested: false, reason: "upstream_mcp_unreachable", error: String(e2) };
+    }
+    return {
+      ingested: false,
+      reason: "analyze_failed",
+      error: `${e2.constructor.name}: ${e2.message}`
+    };
+  }
+  let symbols = [];
+  let files = [];
+  let callEdges = [];
+  let fileEdges = [];
+  let diagnostics = [];
+  if (topSymbols === null || topSymbols > 0) {
+    ({ symbols, files, callEdges, fileEdges, diagnostics } = await _pullSymbolsAndFiles(graphPath, topSymbols));
+  }
+  const processes = topProcesses === null || topProcesses > 0 ? await _pullProcesses(graphPath, topProcesses, deps.mcpClientPool) : [];
+  const symMem = writeSymbolMemories(store, symbols, projectPath, `code:${projectPath.split("/").pop()}`);
+  const domain = `code:${projectPath.split("/").pop() ?? "unknown"}`;
+  const fileMem = writeFileMemories(store, files, projectPath, domain);
+  const [symEnt, entDiag] = writeSymbolEntities(store, symbols, domain);
+  diagnostics.push(...entDiag);
+  const fileEnt = writeFileEntities(store, files, domain);
+  const callCount = writeSymbolRelationships(store, callEdges, symEnt);
+  const containCount = writeFileRelationships(store, fileEdges, fileEnt, symEnt);
+  const wikiPaths = writeProcessPages(processes, deps.wikiRoot);
+  const response = {
+    ingested: true,
+    graph_path: graphPath,
+    analyze: analyzeStats,
+    memories_written: symMem.length + fileMem.length,
+    entities_written: symEnt.size + fileEnt.size,
+    edges_written: callCount + containCount,
+    wiki_pages_written: wikiPaths,
+    symbol_count_seen: symbols.length,
+    file_count_seen: files.length,
+    process_count_seen: processes.length
+  };
+  if (diagnostics.length > 0)
+    response["diagnostics"] = diagnostics;
+  return response;
+}
+
+// packages/memory/dist/codebase-analysis/handlers/ingest-prd.js
+import { mkdirSync as mkdirSync5, readFileSync as readFileSync8, writeFileSync as writeFileSync5 } from "node:fs";
+import { dirname as dirname4, join as join14, resolve as resolve5 } from "node:path";
+var _UPSTREAM_SERVER4 = "prd-gen";
+var BULLET_MIN_LENGTH = 8;
+var SLUG_MAX_LENGTH = 80;
+var DECISION_IMPORTANCE = 0.7;
+var REQUIREMENT_IMPORTANCE = 0.5;
+var INGEST_HEAT = 0.8;
+var SUMMARY_IMPORTANCE = 0.8;
+var SUMMARY_HEAT = 0.9;
+var schema9 = {
+  description: "Ingest a PRD (Product Requirements Document) into Cortex's store. Source: a file path, raw markdown, or a prd-gen pipeline state id (fetched via upstream MCP). Writes the PRD as a wiki spec page under specs/<slug>.md, extracts decisions and requirements as separate tagged memories (`decision`, `requirement`), and optionally routes the document through prd-gen's `validate_prd_document` to capture quality signals. Use this after a PRD is authored or generated so Cortex's Wiki/Board/Knowledge views reflect it. Distinct from `wiki_write` (manual single-page write, no decision/requirement extraction), `ingest_codebase` (code symbols, not requirement documents), and `remember` (one memory, no wiki page or structured extraction). Mutates wiki/specs/ + memories table. Latency varies (~500ms-3s depending on validation flag). Returns {wiki_path, memories_created: {summary, decisions, requirements}, validation?: stats}.",
+  inputSchema: {
+    type: "object",
+    required: [],
+    properties: {
+      path: {
+        type: "string",
+        description: "Absolute path to a markdown PRD file. Mutually exclusive with content/pipeline_id.",
+        examples: ["/Users/alice/code/myapp/docs/prd-auth-v2.md"]
+      },
+      content: {
+        type: "string",
+        description: "Raw PRD markdown. Mutually exclusive with path/pipeline_id."
+      },
+      pipeline_id: {
+        type: "string",
+        description: "prd-gen pipeline state id. When supplied, Cortex calls get_pipeline_state to fetch the rendered PRD.",
+        examples: ["prd-pipeline-12345"]
+        // source: illustrative example id from cortex prd-gen docs
+      },
+      title: {
+        type: "string",
+        description: "Override the PRD title (otherwise parsed from the first # heading or filename).",
+        examples: ["Auth v2 redesign"]
+      },
+      validate: {
+        type: "boolean",
+        description: "If true, call prd-gen's validate_prd_document and attach validation stats to the ingestion summary.",
+        default: false
+      },
+      domain: {
+        type: "string",
+        description: "Cognitive domain to tag the ingested memories with.",
+        examples: ["myapp", "auth-service"]
+      }
+    }
+  }
+};
+async function _fetchPrd(args, pool) {
+  const path6 = (args["path"] ?? "").trim();
+  const content = args["content"] ?? "";
+  const pipelineId = (args["pipeline_id"] ?? "").trim();
+  const provided = [Boolean(path6), Boolean(content), Boolean(pipelineId)];
+  if (provided.filter(Boolean).length !== 1) {
+    throw new Error("exactly one of path / content / pipeline_id must be supplied");
+  }
+  if (path6)
+    return [readFileSync8(resolve5(path6), "utf8"), "path"];
+  if (content)
+    return [content, "content"];
+  const payload = await callUpstream(_UPSTREAM_SERVER4, "get_pipeline_state", {
+    pipeline_id: pipelineId
+  }, pool);
+  const result = normaliseMcpPayload(payload);
+  const prdText = result["rendered_prd"] ?? result["prd"] ?? result["text"];
+  if (!prdText) {
+    throw new Error(`prd-gen returned no rendered PRD for pipeline_id=${pipelineId}`);
+  }
+  return [prdText, "pipeline_id"];
+}
+function _extractTitle(text, override) {
+  if (override)
+    return override.trim();
+  for (const line of text.split("\n")) {
+    const trimmed = line.trim();
+    if (trimmed.startsWith("# "))
+      return trimmed.slice(2).trim();
+  }
+  return "Untitled PRD";
+}
+var _SECTION_RE = /^#{2,3}\s+(.+?)\s*$/gm;
+function _splitSections(text) {
+  const matches2 = [...text.matchAll(_SECTION_RE)];
+  const sections = [];
+  for (let i2 = 0; i2 < matches2.length; i2++) {
+    const m2 = matches2[i2];
+    if (!m2)
+      continue;
+    const heading = (m2[1] ?? "").trim();
+    const start = (m2.index ?? 0) + m2[0].length;
+    const nextMatch = matches2[i2 + 1];
+    const end = nextMatch !== void 0 ? nextMatch.index ?? text.length : text.length;
+    const body = text.slice(start, end).trim();
+    if (heading && body)
+      sections.push([heading, body]);
+  }
+  return sections;
+}
+var _DECISION_HEADINGS = /* @__PURE__ */ new Set([
+  "decisions",
+  "decision",
+  "architecture decisions"
+]);
+var _REQUIREMENT_HEADINGS = /* @__PURE__ */ new Set([
+  "requirements",
+  "functional requirements",
+  "non-functional requirements",
+  "acceptance criteria",
+  "user stories"
+]);
+function _extractBullets(body) {
+  const out = [];
+  for (const line of body.split("\n")) {
+    const stripped = line.trim();
+    if (stripped.startsWith("- ") || stripped.startsWith("* ")) {
+      out.push(stripped.slice(2).trim());
+    } else {
+      const numbered = /^\d+[.)]\s+(.+)/.exec(stripped);
+      if (numbered?.[1])
+        out.push(numbered[1].trim());
+    }
+  }
+  return out.filter((b2) => b2.length >= BULLET_MIN_LENGTH);
+}
+function _slugify(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, SLUG_MAX_LENGTH) || "prd";
+}
+function _nowIso() {
+  return (/* @__PURE__ */ new Date()).toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+function _renderPrdSpecPage(title, text, source) {
+  const slug = _slugify(title);
+  const relPath = `specs/${slug}.md`;
+  const frontmatter = [
+    "---",
+    `title: ${title}`,
+    "kind: spec",
+    "tags: [prd, spec, ingest]",
+    `source: ${source}`,
+    `updated: ${_nowIso()}`,
+    "---",
+    ""
+  ];
+  const body = text.trimStart().startsWith("# ") ? text.trim() : `# ${title}
+
+${text.trim()}`;
+  return [relPath, frontmatter.join("\n") + "\n" + body + "\n"];
+}
+function _writePage(wikiRoot, relPath, markdown) {
+  const fullPath = join14(wikiRoot, relPath);
+  mkdirSync5(dirname4(fullPath), { recursive: true });
+  writeFileSync5(fullPath, markdown, "utf8");
+}
+function _writeBulletMemories(store, bullets, tag, title, domain, directory) {
+  const ids = [];
+  for (const bullet of bullets) {
+    const content = `${tag.charAt(0).toUpperCase() + tag.slice(1)} (from PRD '${title}'): ${bullet}`;
+    const record3 = {
+      content,
+      tags: [tag, "prd", "ingest"],
+      source: "ingest_prd",
+      domain,
+      directory_context: directory,
+      importance: tag === "decision" ? DECISION_IMPORTANCE : REQUIREMENT_IMPORTANCE,
+      heat: INGEST_HEAT,
+      is_protected: tag === "decision"
+    };
+    try {
+      ids.push(store.insertMemory(record3));
+    } catch {
+    }
+  }
+  return ids;
+}
+async function _maybeValidate(text, pool) {
+  try {
+    const payload = await callUpstream(_UPSTREAM_SERVER4, "validate_prd_document", {
+      content: text
+    }, pool);
+    return normaliseMcpPayload(payload);
+  } catch (e2) {
+    if (e2 instanceof McpConnectionError2) {
+      return { skipped: true, reason: "upstream_unreachable" };
+    }
+    return { skipped: true, reason: e2.constructor.name };
+  }
+}
+async function handler14(args, deps) {
+  const a2 = args ?? {};
+  let text;
+  let source;
+  try {
+    [text, source] = await _fetchPrd(a2, deps.mcpClientPool);
+  } catch (e2) {
+    if (e2 instanceof McpConnectionError2) {
+      return { ingested: false, reason: "prd_gen_unreachable", error: String(e2) };
+    }
+    const err = e2;
+    if (err.message?.includes("ENOENT") || err.message?.includes("not found")) {
+      return { ingested: false, reason: `prd file not found: ${err.message}` };
+    }
+    return { ingested: false, reason: String(err.message ?? err) };
+  }
+  const title = _extractTitle(text, a2["title"]);
+  const domain = (a2["domain"] ?? "prd").trim() || "prd";
+  const rawPath = a2["path"] ?? ".";
+  const directory = dirname4(resolve5(rawPath));
+  const [relPath, markdown] = _renderPrdSpecPage(title, text, source);
+  let wikiPath = relPath;
+  try {
+    _writePage(deps.wikiRoot, relPath, markdown);
+  } catch {
+    wikiPath = null;
+  }
+  const store = deps.store;
+  const decisionBullets = [];
+  const requirementBullets = [];
+  for (const [heading, body] of _splitSections(text)) {
+    const h2 = heading.toLowerCase();
+    if (_DECISION_HEADINGS.has(h2) || [..._DECISION_HEADINGS].some((k2) => h2.includes(k2))) {
+      decisionBullets.push(..._extractBullets(body));
+    } else if (_REQUIREMENT_HEADINGS.has(h2) || [..._REQUIREMENT_HEADINGS].some((k2) => h2.includes(k2))) {
+      requirementBullets.push(..._extractBullets(body));
+    }
+  }
+  const decisionIds = _writeBulletMemories(store, decisionBullets, "decision", title, domain, directory);
+  const requirementIds = _writeBulletMemories(store, requirementBullets, "requirement", title, domain, directory);
+  const summaryRecord = {
+    content: `PRD ingested: '${title}' (${decisionBullets.length} decisions, ${requirementBullets.length} requirements).`,
+    tags: ["prd", "ingest", "summary"],
+    source: "ingest_prd",
+    domain,
+    directory_context: directory,
+    importance: SUMMARY_IMPORTANCE,
+    heat: SUMMARY_HEAT,
+    is_protected: true
+  };
+  let summaryId = null;
+  try {
+    summaryId = store.insertMemory(summaryRecord);
+  } catch {
+  }
+  let validation = null;
+  if (a2["validate"]) {
+    validation = await _maybeValidate(text, deps.mcpClientPool);
+  }
+  return {
+    ingested: true,
+    title,
+    source,
+    wiki_path: wikiPath,
+    summary_memory_id: summaryId,
+    decision_count: decisionIds.length,
+    requirement_count: requirementIds.length,
+    validation
+  };
+}
+
+// packages/memory/dist/codebase-analysis/handlers/change-impact.js
+var IMPACT_BOOST = 0.15;
+var MAX_HEAT_BUMPS = 20;
+var MAX_MEMORIES_SCANNED = 1e3;
+function extractSymbolsAndFiles(payload) {
+  let rows = [];
+  if (Array.isArray(payload)) {
+    rows = payload.filter((r2) => r2 !== null && typeof r2 === "object");
+  } else if (payload !== null && typeof payload === "object") {
+    const p2 = payload;
+    const inner = p2["changes"] ?? p2["rows"] ?? p2["content"];
+    if (Array.isArray(inner)) {
+      rows = inner.filter((r2) => r2 !== null && typeof r2 === "object");
+    }
+  }
+  const symbols = [];
+  const files = [];
+  const seenS = /* @__PURE__ */ new Set();
+  const seenF = /* @__PURE__ */ new Set();
+  for (const r2 of rows) {
+    const q2 = String(r2["qualified_name"] ?? r2["symbol"] ?? "");
+    const f2 = String(r2["file_path"] ?? r2["file"] ?? "");
+    if (q2 && !seenS.has(q2)) {
+      seenS.add(q2);
+      symbols.push(q2);
+    }
+    if (f2 && !seenF.has(f2)) {
+      seenF.add(f2);
+      files.push(f2);
+    }
+  }
+  return { symbols, files };
+}
+async function collectImpact(pool, graphPath, base, head, expand2) {
+  const rawPayload = await callUpstream("codebase", "detect_changes", { graph_path: graphPath, base, head }, pool);
+  const normalised = normaliseMcpPayload(rawPayload);
+  const { symbols, files } = extractSymbolsAndFiles(normalised);
+  if (!expand2 || symbols.length === 0) {
+    return { symbols, files };
+  }
+  const seen = new Set(symbols);
+  for (const sym of [...symbols]) {
+    let resp;
+    try {
+      resp = await callUpstream("codebase", "get_impact", { graph_path: graphPath, symbol_id: sym }, pool);
+    } catch {
+      continue;
+    }
+    const more = extractSymbolsAndFiles(normaliseMcpPayload(resp));
+    for (const q2 of more.symbols) {
+      if (!seen.has(q2)) {
+        seen.add(q2);
+        symbols.push(q2);
+      }
+    }
+  }
+  return { symbols, files };
+}
+function pathBasename(p2) {
+  if (!p2)
+    return "";
+  return p2.split(/[/\\]/).at(-1) ?? "";
+}
+function tailOfQualname(q2) {
+  return q2.includes(".") ? q2.split(".").at(-1) ?? q2 : q2;
+}
+function matchMemories(impactedSymbols, impactedFiles, memories) {
+  const symTerms = impactedSymbols.filter((q2) => q2).map((q2) => ({ full: q2, tail: tailOfQualname(q2) }));
+  const fileTerms = impactedFiles.filter((p2) => p2).map((p2) => ({ full: p2, base: pathBasename(p2) }));
+  const out = [];
+  for (const mem of memories) {
+    const mid = mem["memory_id"] ?? mem["id"];
+    if (mid == null)
+      continue;
+    const content = String(mem["content"] ?? "").toLowerCase();
+    let rawTags = mem["tags"] ?? [];
+    if (typeof rawTags === "string") {
+      try {
+        rawTags = JSON.parse(rawTags);
+      } catch {
+        rawTags = [];
+      }
+    }
+    const tags = new Set(Array.isArray(rawTags) ? rawTags.map((t2) => String(t2).toLowerCase()) : []);
+    const matchedSymbols = [];
+    for (const { full, tail } of symTerms) {
+      if (content.includes(full.toLowerCase()) || tail && content.includes(tail.toLowerCase())) {
+        matchedSymbols.push(full);
+      }
+    }
+    const matchedFiles = [];
+    for (const { full, base } of fileTerms) {
+      if (content.includes(full.toLowerCase()) || base && content.includes(base.toLowerCase())) {
+        matchedFiles.push(full);
+      } else if (base && tags.has(base.toLowerCase())) {
+        matchedFiles.push(full);
+      }
+    }
+    const total = matchedSymbols.length + matchedFiles.length;
+    if (total === 0)
+      continue;
+    out.push({
+      memory_id: mid,
+      matched_symbols: matchedSymbols,
+      matched_files: matchedFiles,
+      match_count: total
+    });
+  }
+  out.sort((a2, b2) => b2.match_count - a2.match_count || String(a2.memory_id).localeCompare(String(b2.memory_id)));
+  return out;
+}
+function applyHeatBumps(store, matches2) {
+  let bumped = 0;
+  for (const m2 of matches2.slice(0, MAX_HEAT_BUMPS)) {
+    const mid = Number(m2.memory_id);
+    if (!Number.isFinite(mid) || mid <= 0)
+      continue;
+    try {
+      const mem = store.getMemory(mid);
+      if (!mem)
+        continue;
+      const newHeat = Math.min(1, (mem.heat ?? 0) + IMPACT_BOOST);
+      store.bumpHeatRaw(mid, newHeat);
+      bumped++;
+    } catch {
+    }
+  }
+  return bumped;
+}
+async function changeImpactHandler(args, deps) {
+  const { store, mcpClientPool, projectRoot = process.cwd() } = deps;
+  if (mcpClientPool === null) {
+    return {
+      status: "skipped",
+      reason: "ap_disabled",
+      detail: "McpClientPool not injected. Wire a real pool via IngestDeps.mcpClientPool to compute change impact."
+    };
+  }
+  const graphPath = findCachedGraph(store, projectRoot);
+  if (!graphPath) {
+    return {
+      status: "skipped",
+      reason: "graph_path_unset",
+      detail: "No cached graph path found for this project. Run ingest_codebase first to index the codebase, then retry change_impact."
+    };
+  }
+  const base = String(args.base ?? "HEAD~1");
+  const head = String(args.head ?? "HEAD");
+  const expand2 = Boolean(args.expand_impact ?? false);
+  const applyBump = Boolean(args.apply_heat_bump ?? false);
+  let symbols;
+  let files;
+  try {
+    const result = await collectImpact(mcpClientPool, graphPath, base, head, expand2);
+    symbols = result.symbols;
+    files = result.files;
+  } catch (err) {
+    return {
+      status: "skipped",
+      reason: "ap_call_failed",
+      detail: String(err instanceof Error ? err.message : err)
+    };
+  }
+  const storeExt = store;
+  const allMemories = (storeExt.getAllMemoriesForDecay?.() ?? []).slice(0, MAX_MEMORIES_SCANNED);
+  const matches2 = matchMemories(symbols, files, allMemories);
+  const bumped = applyBump ? applyHeatBumps(store, matches2) : 0;
+  return {
+    status: "ok",
+    base,
+    head,
+    impact: { symbols, files, expanded: expand2 },
+    matches: matches2,
+    heat_bumped: bumped
+  };
+}
+var schema10 = {
+  title: "Change impact",
+  description: (
+    // source: cortex@ed33435 mcp_server/handlers/change_impact.py — schema description
+    "Report which Cortex memories reference code that changed in a commit. Uses automatised-pipeline's detect_changes and optionally get_impact to compute the symbol/file impact set, then matches against recent memories. Read-only by default; pass apply_heat_bump=true to nudge heat on the top matches. Requires AP enabled (mcpClientPool injected at composition root)."
+  )
+};
+
+// packages/memory/dist/wiki/index.js
+init_layout();
+init_pages();
+
+// packages/memory/dist/wiki/templates.js
+var ADR_CONVENTION = {
+  pattern: String.raw`^\d{4}-[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`,
+  description: "ADR: <4-digit>-<kebab-slug>.md (e.g., 0042-prefer-plan-over-list.md)"
+};
+var SPEC_CONVENTION = {
+  pattern: String.raw`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`,
+  description: "Spec: <kebab-slug>.md (e.g., phase-5-pool-admission-design.md)"
+};
+var DEFAULT_CONVENTION = {
+  pattern: String.raw`^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`,
+  description: "Page: <kebab-slug>.md \u2014 lowercase alphanum + hyphens, no underscores, no leading/trailing hyphens."
+};
+
+// packages/memory/dist/wiki/index.js
+init_schema_loader();
+
+// packages/memory/dist/wiki/groomer.js
+init_layout();
+
+// packages/memory/dist/wiki/sync.js
+init_layout();
+init_pages();
+
+// packages/memory/dist/wiki/readme.js
+init_layout();
+
+// packages/memory/dist/wiki/handlers/wiki-handlers.js
+init_schema_loader();
+
+// packages/memory/dist/wiki/handlers/wiki-curate-handler.js
+init_schema_loader();
+
+// packages/memory/dist/wiki/handlers/wiki-compile-handler.js
+init_layout();
+
+// packages/memory/dist/wiki/handlers/wiki-export-handler.js
+import * as childProcess from "node:child_process";
+import { promisify } from "node:util";
+var execFile2 = promisify(childProcess.execFile);
+
+// packages/memory/dist/wiki/handlers/wiki-migrate-handler.js
+init_pages();
+
+// packages/memory/dist/wiki/handlers/wiki-api-handler.js
+init_pages();
+
+// packages/memory/dist/methodology/metacognition-analysis.js
+var RECENCY_THRESHOLDS_MS = [
+  [1 * 24 * 3600 * 1e3, 1],
+  // 1 day
+  [7 * 24 * 3600 * 1e3, 0.7],
+  // 7 days
+  [30 * 24 * 3600 * 1e3, 0.4]
+  // 30 days
+];
+
+// packages/memory/dist/workflow-graph/schema-enums.js
+var NodeKind = {
+  DOMAIN: "domain",
+  SKILL: "skill",
+  COMMAND: "command",
+  HOOK: "hook",
+  AGENT: "agent",
+  TOOL_HUB: "tool_hub",
+  FILE: "file",
+  MEMORY: "memory",
+  DISCUSSION: "discussion",
+  // ENTITY — projects a knowledge-graph entity (entities table row)
+  // into the workflow graph. Linked to memories via the about_entity edge.
+  ENTITY: "entity",
+  MCP: "mcp",
+  // SYMBOL — function / class / module / import extracted from the
+  // AST by the automatised-pipeline sibling plugin (ADR-0046).
+  // symbol_type on the node body carries the sub-kind.
+  SYMBOL: "symbol"
+};
+var ToolKind = {
+  EDIT: "Edit",
+  READ: "Read",
+  GREP: "Grep",
+  BASH: "Bash",
+  GLOB: "Glob",
+  WRITE: "Write",
+  TASK: "Task"
+};
+
+// packages/memory/dist/workflow-graph/schema.js
+var WorkflowNodeSchema = external_exports.object({
+  id: external_exports.string(),
+  kind: external_exports.string(),
+  // NodeKind value
+  label: external_exports.string().default(""),
+  color: external_exports.string().default("#999999"),
+  domain_id: external_exports.string().default(""),
+  size: external_exports.number().default(1),
+  tool: external_exports.string().nullable().optional(),
+  primary_cluster: external_exports.string().nullable().optional(),
+  path: external_exports.string().nullable().optional(),
+  stage: external_exports.string().nullable().optional(),
+  extra_domain_ids: external_exports.array(external_exports.string()).default([]),
+  body: external_exports.string().nullable().optional(),
+  session_id: external_exports.string().nullable().optional(),
+  heat: external_exports.number().nullable().optional(),
+  tags: external_exports.array(external_exports.string()).default([]),
+  count: external_exports.number().int().nullable().optional(),
+  event: external_exports.string().nullable().optional(),
+  subagent_type: external_exports.string().nullable().optional(),
+  created_at: external_exports.string().nullable().optional(),
+  // AST-derived fields (ADR-0046)
+  symbol_type: external_exports.string().nullable().optional(),
+  signature: external_exports.string().nullable().optional(),
+  language: external_exports.string().nullable().optional(),
+  line: external_exports.number().int().nullable().optional()
+}).passthrough();
+var WorkflowEdgeSchema = external_exports.object({
+  source: external_exports.string(),
+  target: external_exports.string(),
+  kind: external_exports.string(),
+  // EdgeKind value
+  weight: external_exports.number().default(1),
+  label: external_exports.string().nullable().optional(),
+  // ge=0.0, le=1.0 is a contract the renderer relies on.
+  confidence: external_exports.number().min(0).max(1).nullable().optional(),
+  reason: external_exports.string().nullable().optional()
+});
+var _MULTI_DOMAIN_KINDS = /* @__PURE__ */ new Set([
+  NodeKind.FILE,
+  NodeKind.MCP,
+  NodeKind.SKILL
+]);
+
+// packages/memory/dist/workflow-graph/builder.js
+var _MEMORY_SCIENTIFIC_KEYS = "heat_base arousal emotional_valence dominant_emotion importance surprise_score confidence access_count useful_count replay_count reconsolidation_count plasticity stability excitability hippocampal_dependency schema_match_score schema_id separation_index interference_score encoding_strength hours_in_stage stage_entered_at last_accessed no_decay is_protected is_stale is_benchmark is_global store_type compression_level compressed".split(" ");
+var _TOOL_NAME_TO_ENUM = {};
+var _TOOL_NAME_LOWER = {};
+for (const t2 of Object.values(ToolKind)) {
+  _TOOL_NAME_TO_ENUM[t2] = t2;
+  _TOOL_NAME_LOWER[t2.toLowerCase()] = t2;
+}
+
+// packages/memory/dist/workflow-graph/sources/source-jsonl.js
+import { join as join15 } from "node:path";
+import { homedir as homedir7 } from "node:os";
+var CLAUDE_DIR2 = join15(homedir7(), ".claude");
+
+// packages/memory/dist/workflow-graph/sources/source-pg.js
+var _MEMORY_PASSTHROUGH_KEYS = "heat_base arousal emotional_valence dominant_emotion importance surprise_score confidence access_count useful_count replay_count reconsolidation_count plasticity stability excitability hippocampal_dependency schema_match_score schema_id separation_index interference_score encoding_strength hours_in_stage stage_entered_at no_decay is_protected is_stale is_benchmark is_global store_type last_accessed created_at compression_level compressed tags".split(" ");
+
+// packages/memory/dist/hooks/types.js
 var BaseEventSchema = external_exports.object({
   session_id: external_exports.string().optional(),
   cwd: external_exports.string().optional()
@@ -51551,13 +52239,13 @@ var HOOK_TIMEOUTS_MS = {
   // Detached — no budget
 };
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/session-start.js
-import { existsSync as existsSync11, readdirSync as readdirSync7, statSync as statSync9 } from "node:fs";
-import { homedir as homedir6 } from "node:os";
-import { join as join14, basename as basename6 } from "node:path";
+// packages/memory/dist/hooks/session-start.js
+import { existsSync as existsSync12, readdirSync as readdirSync7, statSync as statSync9 } from "node:fs";
+import { homedir as homedir8 } from "node:os";
+import { join as join16, basename as basename6 } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/db.js
+// packages/memory/dist/hooks/db.js
 async function openConnection(databaseUrl) {
   try {
     const { default: pg } = await import("pg");
@@ -51807,7 +52495,7 @@ async function bumpHeatBySymbols(databaseUrl, symbolNames, boost, maxBumps) {
   }
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/session-start-context.js
+// packages/memory/dist/hooks/session-start-context.js
 var MAX_CONTENT_LENGTH = 120;
 function shorten(text, maxLen = MAX_CONTENT_LENGTH) {
   const flat = text.trim().replace(/\n/g, " ");
@@ -51933,7 +52621,7 @@ function formatExternalSources(sources) {
   return lines.join("\n");
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/session-start.js
+// packages/memory/dist/hooks/session-start.js
 var LOG_PREFIX = "[session-start-hook]";
 var PYTHON_BIN = process.env["CORTEX_PYTHON_BIN"] ?? (process.platform === "win32" ? "python" : "python3");
 function log(msg) {
@@ -52017,11 +52705,11 @@ function maybeBackgroundReanalyze() {
     const pluginRoot = config2.pluginRoot;
     if (!pluginRoot)
       return;
-    const launcherPath = join14(pluginRoot, "scripts", "launcher.py");
-    if (!existsSync11(launcherPath))
+    const launcherPath = join16(pluginRoot, "scripts", "launcher.py");
+    if (!existsSync12(launcherPath))
       return;
-    const logDir = join14(homedir6(), ".claude", "methodology");
-    const logPath = join14(logDir, "pipeline_reanalyze.log");
+    const logDir = join16(homedir8(), ".claude", "methodology");
+    const logPath = join16(logDir, "pipeline_reanalyze.log");
     const child = spawn(PYTHON_BIN, [launcherPath, "mcp_server.hooks.ingest_codebase_background", config2.projectRoot], {
       detached: true,
       stdio: ["ignore", "ignore", "ignore"]
@@ -52033,13 +52721,13 @@ function maybeBackgroundReanalyze() {
   }
 }
 function countSessionFiles() {
-  const projectsDir = join14(homedir6(), ".claude", "projects");
-  if (!existsSync11(projectsDir))
+  const projectsDir = join16(homedir8(), ".claude", "projects");
+  if (!existsSync12(projectsDir))
     return 0;
   let count = 0;
   try {
     for (const entry of readdirSync7(projectsDir)) {
-      const fullPath = join14(projectsDir, entry);
+      const fullPath = join16(projectsDir, entry);
       if (statSync9(fullPath).isDirectory()) {
         for (const f2 of readdirSync7(fullPath)) {
           if (f2.endsWith(".jsonl"))
@@ -52053,12 +52741,12 @@ function countSessionFiles() {
 }
 function detectExternalSources() {
   const sources = [];
-  const claudeMemDb = join14(homedir6(), ".claude-mem", "claude-mem.db");
-  if (existsSync11(claudeMemDb)) {
+  const claudeMemDb = join16(homedir8(), ".claude-mem", "claude-mem.db");
+  if (existsSync12(claudeMemDb)) {
     sources.push({ name: "claude-mem", count: 0, path: claudeMemDb });
   }
-  const cursorDir = join14(homedir6(), ".cursor");
-  if (existsSync11(cursorDir)) {
+  const cursorDir = join16(homedir8(), ".cursor");
+  if (existsSync12(cursorDir)) {
     try {
       const files = readdirSync7(cursorDir, { recursive: true });
       const jsonlFiles = files.filter((f2) => basename6(f2).endsWith(".jsonl"));
@@ -52068,8 +52756,8 @@ function detectExternalSources() {
     } catch {
     }
   }
-  const downloads = join14(homedir6(), "Downloads");
-  if (existsSync11(downloads)) {
+  const downloads = join16(homedir8(), "Downloads");
+  if (existsSync12(downloads)) {
     try {
       const conversationFiles = readdirSync7(downloads, { recursive: true });
       const chatGptFiles = conversationFiles.filter((f2) => basename6(f2) === "conversations.json");
@@ -52077,7 +52765,7 @@ function detectExternalSources() {
         sources.push({
           name: "ChatGPT",
           count: chatGptFiles.length,
-          path: join14(downloads, chatGptFiles[0] ?? "")
+          path: join16(downloads, chatGptFiles[0] ?? "")
         });
       }
     } catch {
@@ -52140,7 +52828,7 @@ if (process.argv[1]?.endsWith("session-start.js") === true) {
   });
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/auto-recall.js
+// packages/memory/dist/hooks/auto-recall.js
 var LOG_PREFIX2 = "[cortex-auto-recall]";
 var MAX_MEMORIES = 3;
 var MIN_HEAT2 = 0.15;
@@ -52250,7 +52938,7 @@ if (process.argv[1]?.endsWith("auto-recall.js") === true) {
   main2().catch(() => process.exit(1));
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/post-tool-capture.js
+// packages/memory/dist/hooks/post-tool-capture.js
 var LOG_PREFIX3 = "[cortex-post-tool-capture]";
 var HIGH_VALUE_TOOLS = /* @__PURE__ */ new Set([
   "Edit",
@@ -52484,10 +53172,10 @@ if (process.argv[1]?.endsWith("post-tool-capture.js") === true) {
   main3().catch(() => process.exit(0));
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/agent-briefing.js
-import { existsSync as existsSync12, readdirSync as readdirSync8, readFileSync as readFileSync8 } from "node:fs";
-import { homedir as homedir7 } from "node:os";
-import { join as join15 } from "node:path";
+// packages/memory/dist/hooks/agent-briefing.js
+import { existsSync as existsSync13, readdirSync as readdirSync8, readFileSync as readFileSync9 } from "node:fs";
+import { homedir as homedir9 } from "node:os";
+import { join as join17 } from "node:path";
 var LOG_PREFIX4 = "[cortex-agent-briefing]";
 var MAX_MEMORIES2 = 3;
 var MIN_HEAT3 = 0.2;
@@ -52510,7 +53198,7 @@ function log4(msg) {
 }
 function parseFrontmatterName(filePath) {
   try {
-    const head = readFileSync8(filePath, "utf-8").slice(0, 4096);
+    const head = readFileSync9(filePath, "utf-8").slice(0, 4096);
     const m2 = YAML_NAME_RE.exec(head);
     return m2?.[1]?.trim() ?? null;
   } catch {
@@ -52518,18 +53206,18 @@ function parseFrontmatterName(filePath) {
   }
 }
 function loadSpecialistAgents() {
-  const agentsDir = join15(homedir7(), ".claude", "agents");
-  if (!existsSync12(agentsDir))
+  const agentsDir = join17(homedir9(), ".claude", "agents");
+  if (!existsSync13(agentsDir))
     return FALLBACK_AGENTS;
   const names = /* @__PURE__ */ new Set();
   try {
-    for (const pattern of [agentsDir, join15(agentsDir, "genius")]) {
-      if (!existsSync12(pattern))
+    for (const pattern of [agentsDir, join17(agentsDir, "genius")]) {
+      if (!existsSync13(pattern))
         continue;
       for (const entry of readdirSync8(pattern)) {
         if (entry === "INDEX.md" || !entry.endsWith(".md"))
           continue;
-        const name = parseFrontmatterName(join15(pattern, entry));
+        const name = parseFrontmatterName(join17(pattern, entry));
         if (name)
           names.add(name);
       }
@@ -52686,7 +53374,7 @@ if (process.argv[1]?.endsWith("agent-briefing.js") === true) {
   main4().catch(() => process.exit(0));
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/compaction-checkpoint.js
+// packages/memory/dist/hooks/compaction-checkpoint.js
 var LOG_PREFIX5 = "[methodology-compaction-hook]";
 function log5(msg) {
   process.stderr.write(`${LOG_PREFIX5} ${msg}
@@ -52760,10 +53448,10 @@ if (process.argv[1]?.endsWith("compaction-checkpoint.js") === true) {
   main5().catch(() => process.exit(0));
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/session-lifecycle.js
-import { readFileSync as readFileSync9, writeFileSync as writeFileSync5, existsSync as existsSync13, mkdirSync as mkdirSync5 } from "node:fs";
-import { homedir as homedir8 } from "node:os";
-import { join as join16 } from "node:path";
+// packages/memory/dist/hooks/session-lifecycle.js
+import { readFileSync as readFileSync10, writeFileSync as writeFileSync6, existsSync as existsSync14, mkdirSync as mkdirSync6 } from "node:fs";
+import { homedir as homedir10 } from "node:os";
+import { join as join18 } from "node:path";
 var LOG_PREFIX6 = "[methodology-hook]";
 var MAX_SESSION_LOG_ENTRIES = 1e3;
 function log6(msg) {
@@ -52771,43 +53459,43 @@ function log6(msg) {
 `);
 }
 function methodologyDir3() {
-  return join16(homedir8(), ".claude", "methodology");
+  return join18(homedir10(), ".claude", "methodology");
 }
 function loadProfiles3() {
-  const profilePath = join16(methodologyDir3(), "profiles.json");
-  if (!existsSync13(profilePath))
+  const profilePath = join18(methodologyDir3(), "profiles.json");
+  if (!existsSync14(profilePath))
     return {};
   try {
-    return JSON.parse(readFileSync9(profilePath, "utf-8"));
+    return JSON.parse(readFileSync10(profilePath, "utf-8"));
   } catch {
     return {};
   }
 }
 function saveProfile(domainId, profile) {
   const dir = methodologyDir3();
-  mkdirSync5(dir, { recursive: true });
-  const profilePath = join16(dir, "profiles.json");
+  mkdirSync6(dir, { recursive: true });
+  const profilePath = join18(dir, "profiles.json");
   const profiles = loadProfiles3();
   const domains = profiles["domains"] ?? {};
   domains[domainId] = profile;
   profiles["domains"] = domains;
-  writeFileSync5(profilePath, JSON.stringify(profiles, null, 2), "utf-8");
+  writeFileSync6(profilePath, JSON.stringify(profiles, null, 2), "utf-8");
 }
 function loadSessionLog() {
-  const logPath = join16(methodologyDir3(), "session_log.json");
-  if (!existsSync13(logPath))
+  const logPath = join18(methodologyDir3(), "session_log.json");
+  if (!existsSync14(logPath))
     return { sessions: [] };
   try {
-    return JSON.parse(readFileSync9(logPath, "utf-8"));
+    return JSON.parse(readFileSync10(logPath, "utf-8"));
   } catch {
     return { sessions: [] };
   }
 }
 function saveSessionLog(log9) {
   const dir = methodologyDir3();
-  mkdirSync5(dir, { recursive: true });
-  const logPath = join16(dir, "session_log.json");
-  writeFileSync5(logPath, JSON.stringify(log9, null, 2), "utf-8");
+  mkdirSync6(dir, { recursive: true });
+  const logPath = join18(dir, "session_log.json");
+  writeFileSync6(logPath, JSON.stringify(log9, null, 2), "utf-8");
 }
 var PROJECT_ID_PATH_DEPTH = 2;
 function cwdToProjectId3(cwd) {
@@ -52958,14 +53646,14 @@ if (process.argv[1]?.endsWith("session-lifecycle.js") === true) {
   main6().catch(() => process.exit(1));
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/preemptive-context.js
-import { existsSync as existsSync14, readFileSync as readFileSync10, writeFileSync as writeFileSync6 } from "node:fs";
+// packages/memory/dist/hooks/preemptive-context.js
+import { existsSync as existsSync15, readFileSync as readFileSync11, writeFileSync as writeFileSync7 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
-import { join as join17 } from "node:path";
+import { join as join19 } from "node:path";
 var LOG_PREFIX7 = "[cortex-preemptive]";
 var HEAT_BOOST = 0.1;
 var COOLDOWN_SECONDS = 60;
-var COOLDOWN_FILE = join17(tmpdir2(), "cortex_preemptive_cooldown.json");
+var COOLDOWN_FILE = join19(tmpdir2(), "cortex_preemptive_cooldown.json");
 var FILE_TOOLS = /* @__PURE__ */ new Set(["Edit", "Write", "Read"]);
 function log7(msg) {
   process.stderr.write(`${LOG_PREFIX7} ${msg}
@@ -52973,8 +53661,8 @@ function log7(msg) {
 }
 function checkCooldown(filePath) {
   try {
-    if (existsSync14(COOLDOWN_FILE)) {
-      const data = JSON.parse(readFileSync10(COOLDOWN_FILE, "utf-8"));
+    if (existsSync15(COOLDOWN_FILE)) {
+      const data = JSON.parse(readFileSync11(COOLDOWN_FILE, "utf-8"));
       const lastTime = data[filePath] ?? 0;
       if (Date.now() / 1e3 - lastTime < COOLDOWN_SECONDS)
         return true;
@@ -52986,15 +53674,15 @@ function checkCooldown(filePath) {
 function updateCooldown(filePath) {
   try {
     let data = {};
-    if (existsSync14(COOLDOWN_FILE)) {
-      data = JSON.parse(readFileSync10(COOLDOWN_FILE, "utf-8"));
+    if (existsSync15(COOLDOWN_FILE)) {
+      data = JSON.parse(readFileSync11(COOLDOWN_FILE, "utf-8"));
     }
     data[filePath] = Date.now() / 1e3;
     if (Object.keys(data).length > 50) {
       const sorted = Object.entries(data).sort(([, a2], [, b2]) => b2 - a2);
       data = Object.fromEntries(sorted.slice(0, 50));
     }
-    writeFileSync6(COOLDOWN_FILE, JSON.stringify(data), "utf-8");
+    writeFileSync7(COOLDOWN_FILE, JSON.stringify(data), "utf-8");
   } catch {
   }
 }
@@ -53041,13 +53729,13 @@ if (process.argv[1]?.endsWith("preemptive-context.js") === true) {
   main7().catch(() => process.exit(0));
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/pipeline-impact-bump.js
-import { existsSync as existsSync15, readFileSync as readFileSync11, writeFileSync as writeFileSync7 } from "node:fs";
+// packages/memory/dist/hooks/pipeline-impact-bump.js
+import { existsSync as existsSync16, readFileSync as readFileSync12, writeFileSync as writeFileSync8 } from "node:fs";
 import { tmpdir as tmpdir3 } from "node:os";
-import { join as join18 } from "node:path";
+import { join as join20 } from "node:path";
 var LOG_PREFIX8 = "[pipeline-impact-bump]";
 var COOLDOWN_SECONDS2 = 30;
-var COOLDOWN_FILE2 = join18(tmpdir3(), "cortex_pipeline_impact_cooldown.json");
+var COOLDOWN_FILE2 = join20(tmpdir3(), "cortex_pipeline_impact_cooldown.json");
 var FILE_TOOLS2 = /* @__PURE__ */ new Set(["Edit", "Write", "MultiEdit"]);
 var IMPACT_BOOST2 = 0.15;
 var MAX_BUMPS = 20;
@@ -53057,8 +53745,8 @@ function log8(msg) {
 }
 function checkCooldown2(filePath) {
   try {
-    if (existsSync15(COOLDOWN_FILE2)) {
-      const data = JSON.parse(readFileSync11(COOLDOWN_FILE2, "utf-8"));
+    if (existsSync16(COOLDOWN_FILE2)) {
+      const data = JSON.parse(readFileSync12(COOLDOWN_FILE2, "utf-8"));
       const last = data[filePath] ?? 0;
       if (Date.now() / 1e3 - last < COOLDOWN_SECONDS2)
         return true;
@@ -53070,15 +53758,15 @@ function checkCooldown2(filePath) {
 function updateCooldown2(filePath) {
   try {
     let data = {};
-    if (existsSync15(COOLDOWN_FILE2)) {
-      data = JSON.parse(readFileSync11(COOLDOWN_FILE2, "utf-8"));
+    if (existsSync16(COOLDOWN_FILE2)) {
+      data = JSON.parse(readFileSync12(COOLDOWN_FILE2, "utf-8"));
     }
     data[filePath] = Date.now() / 1e3;
     if (Object.keys(data).length > 50) {
       const sorted = Object.entries(data).sort(([, a2], [, b2]) => b2 - a2);
       data = Object.fromEntries(sorted.slice(0, 50));
     }
-    writeFileSync7(COOLDOWN_FILE2, JSON.stringify(data), "utf-8");
+    writeFileSync8(COOLDOWN_FILE2, JSON.stringify(data), "utf-8");
   } catch {
   }
 }
@@ -53180,712 +53868,6 @@ if (process.argv[1]?.endsWith("pipeline-impact-bump.js") === true) {
   main8().catch(() => process.exit(0));
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/management.js
-var VALIDATE_STALENESS_DEFAULT = 0.5;
-var VALIDATE_ERROR_CAP = 10;
-var SEED_MAX_FILE_SIZE_KB = 64;
-var BACKFILL_MAX_FILES_DEFAULT = 20;
-var BACKFILL_MIN_IMPORTANCE = 0.35;
-var CODEBASE_MAX_FILES = 500;
-var CODEBASE_MAX_FILE_SIZE_KB = 100;
-function loadProfilesRaw() {
-  const profilePath = join19(homedir9(), ".claude", "methodology", "profiles.json");
-  if (!existsSync16(profilePath))
-    return { domains: {} };
-  try {
-    return JSON.parse(readFileSync12(profilePath, "utf-8"));
-  } catch {
-    return { domains: {} };
-  }
-}
-function errorText5(tool, err) {
-  const message = err instanceof Error ? err.message : String(err);
-  return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
-}
-function registerManagementTools(server2, deps) {
-  server2.registerTool("validate_memory", {
-    description: "Validate memories against current filesystem state (mark stale if referenced files no longer exist).",
-    inputSchema: {
-      memory_id: external_exports.number().int().optional().describe("Specific memory ID or null for batch"),
-      domain: external_exports.string().optional().describe("Domain filter"),
-      directory: external_exports.string().optional().describe("Directory filter"),
-      base_dir: external_exports.string().default("").describe("Base directory for path resolution"),
-      staleness_threshold: external_exports.number().min(0).max(1).default(VALIDATE_STALENESS_DEFAULT).describe("Heat threshold for stale mark"),
-      dry_run: external_exports.boolean().default(false).describe("Preview without writing")
-    }
-  }, async (args) => {
-    try {
-      const allMems = deps.store.getAllMemoriesForDecay();
-      const candidates = args.memory_id !== void 0 ? allMems.filter((m2) => m2["id"] === args.memory_id) : allMems.filter((m2) => {
-        if (args.domain && m2["domain"] !== args.domain)
-          return false;
-        if (args.directory && !String(m2["directory"] ?? "").startsWith(args.directory))
-          return false;
-        return true;
-      });
-      let validated = 0;
-      let staleMarked = 0;
-      const errors = [];
-      for (const mem of candidates) {
-        try {
-          validated++;
-          const heat = mem["heat"] ?? 0;
-          if (heat >= args.staleness_threshold)
-            continue;
-          const tags = mem["tags"] ?? [];
-          const fileRef = tags.find((t2) => t2.startsWith("file:") || t2.startsWith("path:"));
-          if (!fileRef)
-            continue;
-          const filePath = fileRef.replace(/^(?:file:|path:)/, "");
-          const absPath = args.base_dir ? join19(args.base_dir, filePath) : filePath;
-          if (existsSync16(absPath))
-            continue;
-          if (!args.dry_run) {
-            deps.store.markMemoryStale(Number(mem["id"]), true);
-          }
-          staleMarked++;
-        } catch (e2) {
-          errors.push(String(e2));
-        }
-      }
-      return { content: [{ type: "text", text: JSON.stringify({
-        validated,
-        stale_marked: staleMarked,
-        dry_run: args.dry_run,
-        errors: errors.slice(0, VALIDATE_ERROR_CAP)
-      }) }] };
-    } catch (err) {
-      return errorText5("validate_memory", err);
-    }
-  });
-  server2.registerTool("seed_project", {
-    description: "Bootstrap memory from an existing codebase by scanning files and creating structured memories.",
-    inputSchema: {
-      directory: external_exports.string().default("").describe("Project directory to seed from"),
-      domain: external_exports.string().default("").describe("Domain to assign"),
-      max_file_size_kb: external_exports.number().int().min(1).default(SEED_MAX_FILE_SIZE_KB).describe("Max file size in KB"),
-      dry_run: external_exports.boolean().default(false).describe("Preview without writing")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler6({
-        directory: args.directory,
-        domain: args.domain,
-        max_file_size_kb: args.max_file_size_kb,
-        dry_run: args.dry_run
-      }, { store: deps.store });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText5("seed_project", err);
-    }
-  });
-  server2.registerTool("backfill_memories", {
-    description: "Auto-import prior Claude Code conversation JSONL files, applying Ebbinghaus-decay initial heat.",
-    inputSchema: {
-      project: external_exports.string().default("").describe("Project identifier"),
-      max_files: external_exports.number().int().min(1).default(BACKFILL_MAX_FILES_DEFAULT).describe("Max JSONL files to process"),
-      // source: Ebbinghaus retention curve — min_importance threshold of 0.35
-      // per MCP_TOOLS.md §backfill_memories default
-      min_importance: external_exports.number().min(0).max(1).default(BACKFILL_MIN_IMPORTANCE).describe("Minimum importance score"),
-      dry_run: external_exports.boolean().default(false).describe("Preview without writing"),
-      force_reprocess: external_exports.boolean().default(false).describe("Reprocess already-imported files")
-    }
-  }, async (args) => {
-    try {
-      const rememberFn = (rawArgs) => {
-        const result = remember(rawArgs, deps.store);
-        return Promise.resolve(result.stored ? { stored: true } : null);
-      };
-      const response = await importHandler({
-        project: args.project,
-        domain: "",
-        min_importance: args.min_importance,
-        max_sessions: args.max_files,
-        dry_run: args.dry_run
-      }, rememberFn);
-      return { content: [{ type: "text", text: JSON.stringify({
-        backfilled: response.imported,
-        skipped: response.skipped,
-        files_processed: response.total_files,
-        dry_run: args.dry_run
-      }) }] };
-    } catch (err) {
-      return errorText5("backfill_memories", err);
-    }
-  });
-  server2.registerTool("codebase_analyze", {
-    description: "Analyze codebase and store structural memories (functions, classes, imports, relationships).",
-    inputSchema: {
-      directory: external_exports.string().default("").describe("Directory to analyze"),
-      languages: external_exports.array(external_exports.string()).optional().describe("Languages to analyze (null = auto)"),
-      max_files: external_exports.number().int().min(1).default(CODEBASE_MAX_FILES).describe("Max files to analyze"),
-      max_file_size_kb: external_exports.number().int().min(1).default(CODEBASE_MAX_FILE_SIZE_KB).describe("Max file size in KB"),
-      incremental: external_exports.boolean().default(true).describe("Incremental analysis (skip unchanged)"),
-      dry_run: external_exports.boolean().default(false).describe("Preview without storing"),
-      domain: external_exports.string().default("").describe("Domain to assign")
-    }
-  }, async (args) => {
-    try {
-      const analyzeDeps = { store: deps.store };
-      const result = await codebase_analysis_exports.codebaseAnalyzeHandler(args, analyzeDeps);
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
-    } catch (err) {
-      return errorText5("codebase_analyze", err);
-    }
-  });
-  server2.registerTool("get_methodology_graph", {
-    description: "Returns methodology map as graph data for 3D visualisation.",
-    inputSchema: {
-      domain: external_exports.string().optional().describe("Domain to visualise")
-    }
-  }, async (args) => {
-    try {
-      const profiles = loadProfilesRaw();
-      const domains = profiles["domains"] ?? {};
-      const nodes = [];
-      const edges = [];
-      let edgeId = 0;
-      for (const [id2, domain] of Object.entries(domains)) {
-        if (args.domain && id2 !== args.domain)
-          continue;
-        nodes.push({
-          id: id2,
-          label: domain["label"] ?? id2,
-          session_count: domain["sessionCount"] ?? 0,
-          confidence: domain["confidence"] ?? 0
-        });
-        const bridges = domain["connectionBridges"] ?? [];
-        for (const bridge of bridges) {
-          const target = bridge["targetDomain"];
-          if (!target)
-            continue;
-          edges.push({
-            id: edgeId++,
-            source: id2,
-            target,
-            bridge_type: bridge["bridgeType"] ?? "unknown",
-            strength: bridge["strength"] ?? 0
-          });
-        }
-      }
-      return { content: [{ type: "text", text: JSON.stringify({ nodes, edges }) }] };
-    } catch (err) {
-      return errorText5("get_methodology_graph", err);
-    }
-  });
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/narrative.js
-var MAX_CHAPTERS_MAX = 20;
-var MAX_CHAPTERS_DEFAULT = 5;
-var MAX_RESULTS_MAX = 50;
-var MAX_RESULTS_DEFAULT2 = 10;
-var RRF_K_DEFAULT = 60;
-function errorText6(tool, err) {
-  const message = err instanceof Error ? err.message : String(err);
-  return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
-}
-function registerNarrativeTools(server2, deps = null) {
-  const narrativeDeps = deps !== null && typeof deps === "object" && "store" in deps ? deps : null;
-  const llmClient2 = narrativeDeps?.llmClient ?? (deps !== null && typeof deps === "object" && !("store" in deps) ? deps : null);
-  server2.registerTool("narrative", {
-    description: "Generate project narrative from stored memories (structured summary).",
-    inputSchema: {
-      directory: external_exports.string().optional().describe("Directory scope"),
-      domain: external_exports.string().optional().describe("Domain scope"),
-      brief: external_exports.boolean().default(false).describe("Brief mode (condensed output)")
-    }
-  }, async (args) => {
-    try {
-      if (!narrativeDeps) {
-        return { content: [{ type: "text", text: JSON.stringify({
-          narrative: "",
-          memory_count: 0,
-          note: "no MemoryStore configured \u2014 configure CORTEX_DB_PATH"
-        }) }] };
-      }
-      const response = await narrativeHandler(narrativeDeps.store, {
-        directory: args.directory,
-        domain: args.domain,
-        brief: args.brief
-      }, llmClient2);
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText6("narrative", err);
-    }
-  });
-  server2.registerTool("get_project_story", {
-    description: "Generate a period-based autobiographical narrative (week/month/all).",
-    inputSchema: {
-      directory: external_exports.string().optional().describe("Directory scope"),
-      domain: external_exports.string().optional().describe("Domain scope"),
-      period: external_exports.enum(["day", "week", "month", "all"]).default("week").describe("Time period"),
-      max_chapters: external_exports.number().int().min(1).max(MAX_CHAPTERS_MAX).default(MAX_CHAPTERS_DEFAULT).describe("Max chapters")
-    }
-  }, async (args) => {
-    try {
-      if (!narrativeDeps) {
-        return { content: [{ type: "text", text: JSON.stringify({
-          chapters: [],
-          period: args.period,
-          note: "no MemoryStore configured"
-        }) }] };
-      }
-      const response = getProjectStoryHandler(narrativeDeps.store, {
-        directory: args.directory,
-        domain: args.domain,
-        period: args.period,
-        max_chapters: args.max_chapters
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText6("get_project_story", err);
-    }
-  });
-  server2.registerTool("unified_search", {
-    description: (
-      // source: docs/ADR/0046 — unified search design
-      "RRF-fuse Cortex memory recall with AP code search (ADR-0046 P3)."
-    ),
-    inputSchema: {
-      query: external_exports.string().min(1).describe("Search query"),
-      domain: external_exports.string().optional().describe("Domain filter"),
-      max_results: external_exports.number().int().min(1).max(MAX_RESULTS_MAX).default(MAX_RESULTS_DEFAULT2).describe("Max results"),
-      // source: Cormack & Clarke (2009) "Reciprocal Rank Fusion" — k=60 canonical value
-      k: external_exports.number().int().min(1).default(RRF_K_DEFAULT).describe("RRF k parameter")
-    }
-  }, async (args) => {
-    try {
-      if (!narrativeDeps) {
-        return { content: [{ type: "text", text: JSON.stringify({
-          results: [],
-          query: args.query,
-          note: "no MemoryStore configured"
-        }) }] };
-      }
-      const response = unifiedSearchHandler(
-        // source: packages/memory/src/narrative/handlers/unified-search.ts::UnifiedSearchDeps
-        { memoryPort: narrativeDeps.store },
-        {
-          query: args.query,
-          domain: args.domain,
-          max_results: args.max_results,
-          k: args.k
-        }
-      );
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText6("unified_search", err);
-    }
-  });
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/advanced.js
-var SYNC_MAX_INSIGHTS_DEFAULT = 10;
-var SYNC_MIN_HEAT_DEFAULT = 0.3;
-var ASSESS_STALE_DAYS_DEFAULT = 14;
-var MS_PER_DAY = 864e5;
-var COVERAGE_LOW_THRESHOLD = 0.5;
-var STALE_HEAT_THRESHOLD = 0.1;
-var ROUNDING_FACTOR_2DP = 100;
-function toMemoryReadStore(store) {
-  return {
-    // getMemoriesForDirectory is on MemoryStoreExt — no escape-hatch needed.
-    getMemoriesForDirectory: async (dir, opts) => {
-      const raw = store.getMemoriesForDirectory(dir, opts.min_heat);
-      return raw.map((m2) => m2);
-    },
-    // getHotMemories is on MemoryStoreExt — no escape-hatch needed.
-    getHotMemories: async (opts) => {
-      const raw = store.getHotMemories(opts.min_heat, opts.limit);
-      return raw.map((m2) => m2);
-    }
-  };
-}
-function toProspectiveMemoryStore(store) {
-  const pgStore = store;
-  return {
-    insertProspectiveMemory: async (record3) => {
-      const id2 = pgStore.insertProspectiveMemoryAsync != null ? await pgStore.insertProspectiveMemoryAsync(record3) : store.insertProspectiveMemory(record3);
-      return String(id2);
-    },
-    countActiveTriggers: async () => {
-      return pgStore.countActiveTriggersAsync != null ? pgStore.countActiveTriggersAsync() : Promise.resolve(store.countActiveTriggers());
-    }
-  };
-}
-function toRuleStore(store) {
-  const pgStore = store;
-  return {
-    insertRule: async (rule) => {
-      return pgStore.insertRuleAsync != null ? pgStore.insertRuleAsync(rule) : Promise.resolve(store.insertRule(rule));
-    }
-  };
-}
-function toRuleReadStore(store) {
-  const pgStore = store;
-  return {
-    getAllActiveRules: () => pgStore.getAllActiveRulesAsync != null ? pgStore.getAllActiveRulesAsync() : Promise.resolve(store.getAllActiveRules()),
-    getRulesForScope: (scope) => pgStore.getRulesForScopeAsync != null ? pgStore.getRulesForScopeAsync(scope) : Promise.resolve(store.getRulesForScope(scope)),
-    getAllRulesIncludingInactive: () => pgStore.getAllRulesIncludingInactiveAsync != null ? pgStore.getAllRulesIncludingInactiveAsync() : Promise.resolve(store.getAllRulesIncludingInactive())
-  };
-}
-function errorText7(tool, err) {
-  const message = err instanceof Error ? err.message : String(err);
-  return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
-}
-function registerAdvancedTools(server2, deps) {
-  server2.registerTool("sync_instructions", {
-    description: "Push top memory insights into CLAUDE.md (or similar instruction file).",
-    inputSchema: {
-      directory: external_exports.string().default("").describe("Directory containing CLAUDE.md"),
-      max_insights: external_exports.number().int().min(1).default(SYNC_MAX_INSIGHTS_DEFAULT).describe("Max insights to include"),
-      min_heat: external_exports.number().min(0).max(1).default(SYNC_MIN_HEAT_DEFAULT).describe("Min heat for insight inclusion"),
-      dry_run: external_exports.boolean().default(false).describe("Preview without writing")
-    }
-  }, async (args) => {
-    try {
-      const response = await syncInstructionsHandler({
-        directory: args.directory,
-        max_insights: args.max_insights,
-        min_heat: args.min_heat,
-        dry_run: args.dry_run
-      }, toMemoryReadStore(deps.store));
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText7("sync_instructions", err);
-    }
-  });
-  server2.registerTool("create_trigger", {
-    description: "Create a prospective memory trigger (stored in prospective_memories table).",
-    inputSchema: {
-      content: external_exports.string().min(1).describe("Trigger content"),
-      trigger_condition: external_exports.string().min(1).describe("Condition that fires the trigger"),
-      trigger_type: external_exports.string().default("keyword").describe("Trigger type"),
-      target_directory: external_exports.string().optional().describe("Directory scope for trigger")
-    }
-  }, async (args) => {
-    try {
-      const response = await createTriggerHandler(args, toProspectiveMemoryStore(deps.store));
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText7("create_trigger", err);
-    }
-  });
-  server2.registerTool("add_rule", {
-    description: "Add a neuro-symbolic rule to the memory store.",
-    inputSchema: {
-      condition: external_exports.string().min(1).describe("Rule condition"),
-      action: external_exports.string().min(1).describe("Rule action"),
-      rule_type: external_exports.enum(["soft", "hard"]).default("soft").describe("Rule type"),
-      scope: external_exports.enum(["global", "domain", "directory"]).default("global").describe("Rule scope"),
-      scope_value: external_exports.string().optional().describe("Scope value (domain name or directory)"),
-      priority: external_exports.number().int().default(0).describe("Rule priority (higher = earlier)")
-    }
-  }, async (args) => {
-    try {
-      const response = await addRuleHandler(args, toRuleStore(deps.store));
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText7("add_rule", err);
-    }
-  });
-  server2.registerTool("get_rules", {
-    description: "List active neuro-symbolic rules.",
-    inputSchema: {
-      scope: external_exports.string().optional().describe("Filter by scope"),
-      rule_type: external_exports.string().optional().describe("Filter by type"),
-      include_inactive: external_exports.boolean().default(false).describe("Include inactive rules")
-    }
-  }, async (args) => {
-    try {
-      const response = await getRulesHandler(args, toRuleReadStore(deps.store));
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText7("get_rules", err);
-    }
-  });
-  server2.registerTool("assess_coverage", {
-    description: "Evaluate knowledge coverage completeness for the current domain/directory.",
-    inputSchema: {
-      directory: external_exports.string().default("").describe("Directory scope"),
-      domain: external_exports.string().default("").describe("Domain scope"),
-      stale_days: external_exports.number().int().min(1).default(ASSESS_STALE_DAYS_DEFAULT).describe("Days before a memory is stale")
-    }
-  }, async (args) => {
-    try {
-      const allMems = deps.store.getAllMemoriesForDecay();
-      const scoped = allMems.filter((m2) => {
-        if (args.domain && m2["domain"] !== args.domain)
-          return false;
-        if (args.directory && !String(m2["directory"] ?? "").startsWith(args.directory))
-          return false;
-        return true;
-      });
-      const now = Date.now();
-      const staleMs = args.stale_days * MS_PER_DAY;
-      const stale = scoped.filter((m2) => {
-        const heat = m2["heat"] ?? 0;
-        const createdAt = m2["created_at"];
-        if (heat < STALE_HEAT_THRESHOLD)
-          return true;
-        if (createdAt && now - new Date(createdAt).getTime() > staleMs)
-          return true;
-        return false;
-      }).length;
-      const total = scoped.length;
-      const coverageScore = total === 0 ? 0 : Math.round((total - stale) / total * ROUNDING_FACTOR_2DP) / ROUNDING_FACTOR_2DP;
-      const gaps = [];
-      if (stale > 0)
-        gaps.push(`${stale} stale memories (heat < 0.1 or older than ${args.stale_days} days)`);
-      if (total === 0)
-        gaps.push("no memories found for this scope");
-      const recommendations = [];
-      if (coverageScore < COVERAGE_LOW_THRESHOLD)
-        recommendations.push("Run consolidate to decay + refresh stale memories.");
-      if (total === 0)
-        recommendations.push("Run codebase_analyze or backfill_memories to seed coverage.");
-      return { content: [{ type: "text", text: JSON.stringify({
-        coverage_score: coverageScore,
-        total_memories: total,
-        stale_count: stale,
-        gaps,
-        recommendations,
-        directory: args.directory,
-        domain: args.domain
-      }) }] };
-    } catch (err) {
-      return errorText7("assess_coverage", err);
-    }
-  });
-  server2.registerTool("query_workflow_graph", {
-    description: "Return a typed subgraph of the unified workflow graph.",
-    inputSchema: {
-      node_kind: external_exports.union([external_exports.string(), external_exports.array(external_exports.string())]).optional().describe("Node kind filter"),
-      edge_kind: external_exports.union([external_exports.string(), external_exports.array(external_exports.string())]).optional().describe("Edge kind filter"),
-      neighbour_of: external_exports.string().optional().describe("Node ID to find neighbours of"),
-      depth: external_exports.number().int().optional().describe("Traversal depth"),
-      domain: external_exports.string().optional().describe("Domain filter"),
-      limit_nodes: external_exports.number().int().optional().describe("Max nodes to return")
-    }
-  }, async (args) => {
-    try {
-      const emptyGraph = {
-        nodes: [],
-        edges: [],
-        links: [],
-        meta: { node_count: 0, edge_count: 0, built_at: (/* @__PURE__ */ new Date()).toISOString() }
-      };
-      const response = queryWorkflowGraph(emptyGraph, {
-        node_kind: args.node_kind,
-        edge_kind: args.edge_kind,
-        neighbour_of: args.neighbour_of,
-        depth: args.depth,
-        domain: args.domain,
-        limit_nodes: args.limit_nodes
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText7("query_workflow_graph", err);
-    }
-  });
-}
-
-// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/wiki.js
-import { mkdirSync as mkdirSync6, writeFileSync as writeFileSync8, rmSync as rmSync2 } from "node:fs";
-import { join as join20, resolve as resolve6, dirname as dirname4 } from "node:path";
-import { homedir as homedir10 } from "node:os";
-var WIKI_ROOT = process.env["CORTEX_WIKI_ROOT"] ?? join20(homedir10(), ".claude", "methodology", "wiki");
-async function asyncReadPage(root, relPath) {
-  return Promise.resolve(readPage(root, relPath));
-}
-async function asyncWritePage(root, relPath, content, mode) {
-  return Promise.resolve(writePage(root, relPath, content, mode));
-}
-async function asyncListPages(root, kind2) {
-  return Promise.resolve(listPages(root, kind2));
-}
-async function asyncNextAdrNumber(root) {
-  return Promise.resolve(nextAdrNumber(root));
-}
-async function asyncWriteFile(absPath, content) {
-  const dir = dirname4(resolve6(absPath));
-  mkdirSync6(dir, { recursive: true });
-  writeFileSync8(absPath, content, "utf-8");
-}
-async function asyncEnsureDir(absDir) {
-  mkdirSync6(absDir, { recursive: true });
-}
-async function asyncListAllMarkdownFiles(root, kindFilter) {
-  const paths = await asyncListPages(root, kindFilter);
-  const entries = [];
-  for (const relPath of paths) {
-    const content = await asyncReadPage(root, relPath);
-    if (content !== null)
-      entries.push({ relPath, content });
-  }
-  return entries;
-}
-async function asyncDeleteFile(absPath) {
-  try {
-    rmSync2(absPath);
-  } catch {
-  }
-}
-var AP_ENABLED = false;
-function errorText8(tool, err) {
-  const message = err instanceof Error ? err.message : String(err);
-  return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
-}
-function registerWikiTools(server2) {
-  server2.registerTool("wiki_write", {
-    description: "Author a wiki page (create/append/replace) with provided Markdown.",
-    inputSchema: {
-      path: external_exports.string().min(1).describe("Wiki page path (relative)"),
-      content: external_exports.string().min(1).describe("Markdown content"),
-      mode: external_exports.enum(["create", "append", "replace"]).default("create").describe("Write mode"),
-      tags: external_exports.array(external_exports.string()).default([]).describe("Page tags")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler7({ path: args.path, content: args.content, mode: args.mode, tags: args.tags }, { wikiRoot: WIKI_ROOT, writePage: asyncWritePage });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_write", err);
-    }
-  });
-  server2.registerTool("wiki_read", {
-    description: "Read the raw Markdown of a wiki page by relative path.",
-    inputSchema: {
-      path: external_exports.string().min(1).describe("Wiki page path")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler8({ path: args.path }, { wikiRoot: WIKI_ROOT, readPage: asyncReadPage });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_read", err);
-    }
-  });
-  server2.registerTool("wiki_list", {
-    description: "List authored wiki pages, optionally filtered by kind.",
-    inputSchema: {
-      kind: external_exports.string().optional().describe("Page kind filter")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler9({ kind: args.kind }, { wikiRoot: WIKI_ROOT, listPages: asyncListPages });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_list", err);
-    }
-  });
-  server2.registerTool("wiki_link", {
-    description: "Add a bidirectional link between two wiki pages (creates Related section entry).",
-    inputSchema: {
-      from_path: external_exports.string().min(1).describe("Source page path"),
-      to_path: external_exports.string().min(1).describe("Target page path"),
-      relation: external_exports.string().min(1).describe("Relationship label")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler11({ from_path: args.from_path, to_path: args.to_path, relation: args.relation }, { wikiRoot: WIKI_ROOT, readPage: asyncReadPage, writePage: asyncWritePage });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_link", err);
-    }
-  });
-  server2.registerTool("wiki_adr", {
-    description: "Create a numbered ADR (Architecture Decision Record) with auto-incremented sequence.",
-    inputSchema: {
-      title: external_exports.string().min(1).describe("ADR title"),
-      context: external_exports.string().min(1).describe("Problem context"),
-      decision: external_exports.string().min(1).describe("Decision made"),
-      consequences: external_exports.string().min(1).describe("Consequences"),
-      status: external_exports.enum(["proposed", "accepted", "deprecated", "superseded"]).default("accepted").describe("ADR status"),
-      tags: external_exports.array(external_exports.string()).default([]).describe("Tags")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler10({
-        title: args.title,
-        context: args.context,
-        decision: args.decision,
-        consequences: args.consequences,
-        status: args.status,
-        tags: args.tags
-      }, {
-        wikiRoot: WIKI_ROOT,
-        nextAdrNumber: asyncNextAdrNumber,
-        writePage: asyncWritePage
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_adr", err);
-    }
-  });
-  server2.registerTool("wiki_reindex", {
-    description: "Regenerate the wiki table of contents at .generated/INDEX.md.",
-    inputSchema: {}
-  }, async (_args) => {
-    try {
-      const response = await handler12({}, {
-        wikiRoot: WIKI_ROOT,
-        listPages: asyncListPages,
-        writeFile: asyncWriteFile,
-        ensureDir: asyncEnsureDir,
-        joinPath: join20
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_reindex", err);
-    }
-  });
-  server2.registerTool("wiki_purge", {
-    description: "Re-evaluate and purge wiki pages that fail the current classifier.",
-    inputSchema: {
-      apply: external_exports.boolean().default(false).describe("Apply purge (false = preview only)"),
-      kind: external_exports.string().optional().describe("Page kind to target")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler13({
-        apply: args.apply,
-        kind: args.kind
-      }, {
-        wikiRoot: WIKI_ROOT,
-        wikiRoot_string: WIKI_ROOT,
-        listAllMarkdownFiles: asyncListAllMarkdownFiles,
-        deleteFile: asyncDeleteFile
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_purge", err);
-    }
-  });
-  server2.registerTool("wiki_verify", {
-    description: "Verify wiki-page symbol citations against AP's code graph (ADR-0046 Phase 2).",
-    // source: docs/ADR/0046-change-impact-analysis.md §Phase 2
-    inputSchema: {
-      path: external_exports.string().optional().describe("Page path (null = all pages)")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler14({ path: args.path ?? null }, {
-        wikiRoot: WIKI_ROOT,
-        isApEnabled: () => AP_ENABLED,
-        readPage: asyncReadPage,
-        listPages: asyncListPages,
-        // source: docs/ADR/0046-change-impact-analysis.md §Phase 2 — stub until AP live
-        verifySymbols: async (_symbols) => ({})
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_verify", err);
-    }
-  });
-}
-
 // packages/memory-dashboard/dist/launcher.js
 import { spawn as spawn2, exec } from "node:child_process";
 import { createServer } from "node:net";
@@ -53912,16 +53894,35 @@ async function probePort(port) {
 }
 function killPort(port) {
   return new Promise((resolve7) => {
-    exec(`lsof -t -i :${port}`, (_err, stdout) => {
-      const pids = stdout.trim().split("\n").filter(Boolean);
-      for (const pid of pids) {
-        try {
-          process.kill(parseInt(pid, 10), "SIGTERM");
-        } catch {
+    if (process.platform === "win32") {
+      exec(`netstat -ano -p TCP`, (_err, stdout) => {
+        const portStr = `:${port} `;
+        for (const line of stdout.split("\n")) {
+          if (!line.includes(portStr))
+            continue;
+          const parts = line.trim().split(/\s+/);
+          const pid = parseInt(parts[parts.length - 1] ?? "", 10);
+          if (!isNaN(pid) && pid > 0) {
+            try {
+              process.kill(pid, "SIGTERM");
+            } catch {
+            }
+          }
         }
-      }
-      resolve7();
-    });
+        resolve7();
+      });
+    } else {
+      exec(`lsof -t -i :${port}`, (_err, stdout) => {
+        const pids = stdout.trim().split("\n").filter(Boolean);
+        for (const pid of pids) {
+          try {
+            process.kill(parseInt(pid, 10), "SIGTERM");
+          } catch {
+          }
+        }
+        resolve7();
+      });
+    }
   });
 }
 async function spawnServer(port) {
@@ -53968,8 +53969,19 @@ async function spawnServer(port) {
 function openInBrowser(url) {
   if (!/^https?:\/\/127\.0\.0\.1:\d{1,5}(\/.*)?$/.test(url))
     return;
-  const cmd = process.platform === "darwin" ? "open" : "xdg-open";
-  spawn2(cmd, [url], { stdio: "ignore", detached: true }).unref();
+  let cmd;
+  let args;
+  if (process.platform === "darwin") {
+    cmd = "open";
+    args = [url];
+  } else if (process.platform === "win32") {
+    cmd = "cmd";
+    args = ["/c", "start", "", url];
+  } else {
+    cmd = "xdg-open";
+    args = [url];
+  }
+  spawn2(cmd, args, { stdio: "ignore", detached: true }).unref();
 }
 async function launchDashboard(opts = {}) {
   const port = opts.port ?? DEFAULT_PORT;
@@ -53987,11 +53999,11 @@ async function launchDashboard(opts = {}) {
   return url;
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/ingest.js
+// packages/mcp-servers/memory/dist/tools/ingest.js
 var MIN_IMPORTANCE_DEFAULT = 0.4;
 var TOP_SYMBOLS_DEFAULT = 50;
 var TOP_PROCESSES_DEFAULT = 10;
-var MAX_FILES_DEFAULT = 500;
+var MAX_FILES_DEFAULT = 5e4;
 var MAX_FILES_MAX = 5e4;
 var MAX_FILE_SIZE_KB_DEFAULT = 100;
 var MAX_FILE_SIZE_KB_MAX = 4096;
@@ -54173,7 +54185,7 @@ function registerIngestTools(server2, deps) {
   });
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/navigation.js
+// packages/mcp-servers/memory/dist/tools/navigation.js
 var MAX_EDGES_DEFAULT = 200;
 var ROUNDING_FACTOR_4DP2 = 1e4;
 var HOT_HEAT_THRESHOLD = 0.3;
@@ -54336,7 +54348,7 @@ function registerNavigationTools(server2, deps) {
   });
 }
 
-// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/index.js
+// packages/mcp-servers/memory/dist/index.js
 var server = new McpServer({
   name: "@agentic/mcp-server-memory",
   version: "0.1.0"

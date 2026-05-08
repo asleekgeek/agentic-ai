@@ -116,7 +116,10 @@ const CODEBASE_SOURCE = "codebase_analyze";
 const CODEBASE_TAG = "codebase";
 const LANG_TAG_PREFIX = "lang:";
 // source: cortex Python source mcp_server/handlers/codebase_analyze.py — default values
-const DEFAULT_MAX_FILES = 500; // source: cortex mcp_server/handlers/codebase_analyze.py — max_files default=500
+// NOTE: Python Cortex uses 500 as default because callers pass max_files explicitly.
+// For our zero-config UX the default equals the safety cap so no silent truncation occurs.
+// source: 2026-05-08 UX decision — prefer generous default over Python parity.
+const DEFAULT_MAX_FILES = 50000; // source: zero-config UX default = safety cap; see note above
 const DEFAULT_MAX_FILE_SIZE_KB = 100; // source: cortex mcp_server/handlers/codebase_analyze.py — max_file_size_kb default=100
 // source: cortex mcp_server/handlers/codebase_analyze.py — top N symbols stored as tags per file
 const MAX_SYMBOL_TAGS_PER_FILE = 10;

@@ -34,7 +34,10 @@ const MIN_IMPORTANCE_DEFAULT = 0.4;
 const TOP_SYMBOLS_DEFAULT    = 50;
 const TOP_PROCESSES_DEFAULT  = 10;
 // source: cortex@ed33435 mcp_server/handlers/codebase_analyze.py — default/max values
-const MAX_FILES_DEFAULT        = 500;   // source: cortex codebase_analyze.py — max_files default
+// NOTE: Python Cortex uses 500 as default because callers always pass max_files explicitly.
+// For our zero-config UX the default is the safety cap so users don't silently hit a wall
+// on first use. source: 2026-05-08 UX decision — prefer generous default over Python parity.
+const MAX_FILES_DEFAULT        = 50000; // source: zero-config UX default = safety cap (see note above)
 const MAX_FILES_MAX            = 50000; // source: cortex codebase_analyze.py — max_files upper bound
 const MAX_FILE_SIZE_KB_DEFAULT = 100;   // source: cortex codebase_analyze.py — max_file_size_kb default
 const MAX_FILE_SIZE_KB_MAX     = 4096;  // source: standard 4MB upper bound (also in EXEMPT_PATTERN)
