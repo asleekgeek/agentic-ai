@@ -1,4 +1,4 @@
-import { createRequire as __cjsCreateRequire } from 'node:module'; const require = __cjsCreateRequire(import.meta.url);
+import { createRequire as __cjsCreateRequire } from "node:module"; const require = __cjsCreateRequire(import.meta.url);
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;

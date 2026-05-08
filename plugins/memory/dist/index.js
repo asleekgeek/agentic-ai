@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-import { createRequire as __cjsCreateRequire } from 'node:module'; const require = __cjsCreateRequire(import.meta.url);
+import { createRequire as __cjsCreateRequire } from "node:module"; const require = __cjsCreateRequire(import.meta.url);
 var __create = Object.create;
 var __defProp = Object.defineProperty;
 var __getOwnPropDesc = Object.getOwnPropertyDescriptor;
@@ -3233,8 +3233,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path6) {
-      let input = path6;
+    function removeDotSegments(path7) {
+      let input = path7;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3433,8 +3433,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path6, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path6 && path6 !== "/" ? path6 : void 0;
+        const [path7, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path7 && path7 !== "/" ? path7 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -7541,14 +7541,14 @@ var require_url_state_machine = __commonJS({
       return url.replace(/\u0009|\u000A|\u000D/g, "");
     }
     function shortenPath(url) {
-      const path6 = url.path;
-      if (path6.length === 0) {
+      const path7 = url.path;
+      if (path7.length === 0) {
         return;
       }
-      if (url.scheme === "file" && path6.length === 1 && isNormalizedWindowsDriveLetter(path6[0])) {
+      if (url.scheme === "file" && path7.length === 1 && isNormalizedWindowsDriveLetter(path7[0])) {
         return;
       }
-      path6.pop();
+      path7.pop();
     }
     function includesCredentials(url) {
       return url.username !== "" || url.password !== "";
@@ -13129,14 +13129,14 @@ __export(fileFromPath_exports, {
 });
 import { statSync, createReadStream, promises as fs } from "fs";
 import { basename } from "path";
-function createFileFromPath(path6, { mtimeMs, size }, filenameOrOptions, options = {}) {
+function createFileFromPath(path7, { mtimeMs, size }, filenameOrOptions, options = {}) {
   let filename;
   if (isPlainObject_default2(filenameOrOptions)) {
     [options, filename] = [filenameOrOptions, void 0];
   } else {
     filename = filenameOrOptions;
   }
-  const file = new FileFromPath({ path: path6, size, lastModified: mtimeMs });
+  const file = new FileFromPath({ path: path7, size, lastModified: mtimeMs });
   if (!filename) {
     filename = file.name;
   }
@@ -13145,13 +13145,13 @@ function createFileFromPath(path6, { mtimeMs, size }, filenameOrOptions, options
     lastModified: file.lastModified
   });
 }
-function fileFromPathSync(path6, filenameOrOptions, options = {}) {
-  const stats = statSync(path6);
-  return createFileFromPath(path6, stats, filenameOrOptions, options);
+function fileFromPathSync(path7, filenameOrOptions, options = {}) {
+  const stats = statSync(path7);
+  return createFileFromPath(path7, stats, filenameOrOptions, options);
 }
-async function fileFromPath2(path6, filenameOrOptions, options) {
-  const stats = await fs.stat(path6);
-  return createFileFromPath(path6, stats, filenameOrOptions, options);
+async function fileFromPath2(path7, filenameOrOptions, options) {
+  const stats = await fs.stat(path7);
+  return createFileFromPath(path7, stats, filenameOrOptions, options);
 }
 var import_node_domexception, __classPrivateFieldSet4, __classPrivateFieldGet5, _FileFromPath_path, _FileFromPath_start, MESSAGE, FileFromPath;
 var init_fileFromPath = __esm({
@@ -13556,7 +13556,7 @@ var init_schema_loader = __esm({
 var require_node_gyp_build = __commonJS({
   "node_modules/.pnpm/node-gyp-build@4.8.4/node_modules/node-gyp-build/node-gyp-build.js"(exports2, module2) {
     var fs6 = __require("fs");
-    var path6 = __require("path");
+    var path7 = __require("path");
     var os = __require("os");
     var runtimeRequire = typeof __webpack_require__ === "function" ? __non_webpack_require__ : __require;
     var vars = process.config && process.config.variables || {};
@@ -13573,21 +13573,21 @@ var require_node_gyp_build = __commonJS({
       return runtimeRequire(load.resolve(dir));
     }
     load.resolve = load.path = function(dir) {
-      dir = path6.resolve(dir || ".");
+      dir = path7.resolve(dir || ".");
       try {
-        var name = runtimeRequire(path6.join(dir, "package.json")).name.toUpperCase().replace(/-/g, "_");
+        var name = runtimeRequire(path7.join(dir, "package.json")).name.toUpperCase().replace(/-/g, "_");
         if (process.env[name + "_PREBUILD"]) dir = process.env[name + "_PREBUILD"];
       } catch (err) {
       }
       if (!prebuildsOnly) {
-        var release = getFirst(path6.join(dir, "build/Release"), matchBuild);
+        var release = getFirst(path7.join(dir, "build/Release"), matchBuild);
         if (release) return release;
-        var debug2 = getFirst(path6.join(dir, "build/Debug"), matchBuild);
+        var debug2 = getFirst(path7.join(dir, "build/Debug"), matchBuild);
         if (debug2) return debug2;
       }
       var prebuild = resolve7(dir);
       if (prebuild) return prebuild;
-      var nearby = resolve7(path6.dirname(process.execPath));
+      var nearby = resolve7(path7.dirname(process.execPath));
       if (nearby) return nearby;
       var target = [
         "platform=" + platform,
@@ -13604,14 +13604,14 @@ var require_node_gyp_build = __commonJS({
       ].filter(Boolean).join(" ");
       throw new Error("No native build was found for " + target + "\n    loaded from: " + dir + "\n");
       function resolve7(dir2) {
-        var tuples = readdirSync10(path6.join(dir2, "prebuilds")).map(parseTuple);
+        var tuples = readdirSync10(path7.join(dir2, "prebuilds")).map(parseTuple);
         var tuple = tuples.filter(matchTuple(platform, arch)).sort(compareTuples)[0];
         if (!tuple) return;
-        var prebuilds = path6.join(dir2, "prebuilds", tuple.name);
+        var prebuilds = path7.join(dir2, "prebuilds", tuple.name);
         var parsed = readdirSync10(prebuilds).map(parseTags4);
         var candidates = parsed.filter(matchTags(runtime, abi));
         var winner = candidates.sort(compareTags(runtime))[0];
-        if (winner) return path6.join(prebuilds, winner.file);
+        if (winner) return path7.join(prebuilds, winner.file);
       }
     };
     function readdirSync10(dir) {
@@ -13623,7 +13623,7 @@ var require_node_gyp_build = __commonJS({
     }
     function getFirst(dir, filter2) {
       var files = readdirSync10(dir).filter(filter2);
-      return files[0] && path6.join(dir, files[0]);
+      return files[0] && path7.join(dir, files[0]);
     }
     function matchBuild(name) {
       return /\.node$/.test(name);
@@ -14938,8 +14938,8 @@ function getErrorMap() {
 
 // node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path6, errorMaps, issueData } = params;
-  const fullPath = [...path6, ...issueData.path || []];
+  const { data, path: path7, errorMaps, issueData } = params;
+  const fullPath = [...path7, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -15055,11 +15055,11 @@ var errorUtil;
 
 // node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path6, key) {
+  constructor(parent, value, path7, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path6;
+    this._path = path7;
     this._key = key;
   }
   get path() {
@@ -18696,10 +18696,10 @@ function assignProp(target, prop, value) {
     configurable: true
   });
 }
-function getElementAtPath(obj, path6) {
-  if (!path6)
+function getElementAtPath(obj, path7) {
+  if (!path7)
     return obj;
-  return path6.reduce((acc, key) => acc?.[key], obj);
+  return path7.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -19019,11 +19019,11 @@ function aborted(x2, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path6, issues) {
+function prefixIssues(path7, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path6);
+    iss.path.unshift(path7);
     return iss;
   });
 }
@@ -29055,13 +29055,13 @@ var MultipartBody = class {
 // node_modules/.pnpm/@anthropic-ai+sdk@0.39.0/node_modules/@anthropic-ai/sdk/_shims/node-runtime.mjs
 import { ReadableStream as ReadableStream3 } from "node:stream/web";
 var fileFromPathWarned = false;
-async function fileFromPath3(path6, ...args) {
+async function fileFromPath3(path7, ...args) {
   const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => (init_fileFromPath(), fileFromPath_exports));
   if (!fileFromPathWarned) {
-    console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path6)}) instead`);
+    console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path7)}) instead`);
     fileFromPathWarned = true;
   }
-  return await _fileFromPath(path6, ...args);
+  return await _fileFromPath(path7, ...args);
 }
 var defaultHttpAgent = new import_agentkeepalive.default({ keepAlive: true, timeout: 5 * 60 * 1e3 });
 var defaultHttpsAgent = new import_agentkeepalive.default.HttpsAgent({ keepAlive: true, timeout: 5 * 60 * 1e3 });
@@ -29785,29 +29785,29 @@ var APIClient = class {
   defaultIdempotencyKey() {
     return `stainless-node-retry-${uuid4()}`;
   }
-  get(path6, opts) {
-    return this.methodRequest("get", path6, opts);
+  get(path7, opts) {
+    return this.methodRequest("get", path7, opts);
   }
-  post(path6, opts) {
-    return this.methodRequest("post", path6, opts);
+  post(path7, opts) {
+    return this.methodRequest("post", path7, opts);
   }
-  patch(path6, opts) {
-    return this.methodRequest("patch", path6, opts);
+  patch(path7, opts) {
+    return this.methodRequest("patch", path7, opts);
   }
-  put(path6, opts) {
-    return this.methodRequest("put", path6, opts);
+  put(path7, opts) {
+    return this.methodRequest("put", path7, opts);
   }
-  delete(path6, opts) {
-    return this.methodRequest("delete", path6, opts);
+  delete(path7, opts) {
+    return this.methodRequest("delete", path7, opts);
   }
-  methodRequest(method, path6, opts) {
+  methodRequest(method, path7, opts) {
     return this.request(Promise.resolve(opts).then(async (opts2) => {
       const body = opts2 && isBlobLike(opts2?.body) ? new DataView(await opts2.body.arrayBuffer()) : opts2?.body instanceof DataView ? opts2.body : opts2?.body instanceof ArrayBuffer ? new DataView(opts2.body) : opts2 && ArrayBuffer.isView(opts2?.body) ? new DataView(opts2.body.buffer) : opts2?.body;
-      return { method, path: path6, ...opts2, body };
+      return { method, path: path7, ...opts2, body };
     }));
   }
-  getAPIList(path6, Page2, opts) {
-    return this.requestAPIList(Page2, { method: "get", path: path6, ...opts });
+  getAPIList(path7, Page2, opts) {
+    return this.requestAPIList(Page2, { method: "get", path: path7, ...opts });
   }
   calculateContentLength(body) {
     if (typeof body === "string") {
@@ -29826,10 +29826,10 @@ var APIClient = class {
   }
   buildRequest(options, { retryCount = 0 } = {}) {
     options = { ...options };
-    const { method, path: path6, query, headers = {} } = options;
+    const { method, path: path7, query, headers = {} } = options;
     const body = ArrayBuffer.isView(options.body) || options.__binaryRequest && typeof options.body === "string" ? options.body : isMultipartBody(options.body) ? options.body.body : options.body ? JSON.stringify(options.body, null, 2) : null;
     const contentLength = this.calculateContentLength(body);
-    const url = this.buildURL(path6, query);
+    const url = this.buildURL(path7, query);
     if ("timeout" in options)
       validatePositiveInteger("timeout", options.timeout);
     options.timeout = options.timeout ?? this.timeout;
@@ -29953,8 +29953,8 @@ var APIClient = class {
     const request = this.makeRequest(options, null);
     return new PagePromise(this, request, Page2);
   }
-  buildURL(path6, query) {
-    const url = isAbsoluteURL(path6) ? new URL(path6) : new URL(this.baseURL + (this.baseURL.endsWith("/") && path6.startsWith("/") ? path6.slice(1) : path6));
+  buildURL(path7, query) {
+    const url = isAbsoluteURL(path7) ? new URL(path7) : new URL(this.baseURL + (this.baseURL.endsWith("/") && path7.startsWith("/") ? path7.slice(1) : path7));
     const defaultQuery = this.defaultQuery();
     if (!isEmptyObj(defaultQuery)) {
       query = { ...defaultQuery, ...query };
@@ -46918,14 +46918,14 @@ import { homedir as homedir6 } from "node:os";
 
 // packages/memory/dist/wiki/types.js
 var WikiExists = class extends Error {
-  constructor(path6) {
-    super(`wiki page already exists: ${path6}`);
+  constructor(path7) {
+    super(`wiki page already exists: ${path7}`);
     this.name = "WikiExists";
   }
 };
 var WikiMissing = class extends Error {
-  constructor(path6) {
-    super(`wiki page not found: ${path6}`);
+  constructor(path7) {
+    super(`wiki page not found: ${path7}`);
     this.name = "WikiMissing";
   }
 };
@@ -47845,22 +47845,22 @@ function parseLeadAndSections(md) {
   }
   return { lead: leadLines.join("\n").trim(), sections };
 }
-async function verifyOne(path6, deps) {
-  const content = await deps.readPage(deps.wikiRoot, path6);
+async function verifyOne(path7, deps) {
+  const content = await deps.readPage(deps.wikiRoot, path7);
   if (content === null) {
-    return { page: path6, symbol_refs: [], missing_refs: [], is_symbol_stale: false, rationale: "page not found", error: "page not found" };
+    return { page: path7, symbol_refs: [], missing_refs: [], is_symbol_stale: false, rationale: "page not found", error: "page not found" };
   }
   const pageStruct = parseLeadAndSections(content);
   const symbolRefs = harvestPageSymbols(pageStruct).slice(0, 200);
   const existence = symbolRefs.length > 0 ? await deps.verifySymbols(symbolRefs) : {};
   const verdict = evaluateSymbolStaleness({
-    page_id: path6,
+    page_id: path7,
     is_symbol_stale_was: false,
     symbol_refs: symbolRefs,
     existence
   });
   return {
-    page: path6,
+    page: path7,
     symbol_refs: verdict.symbol_refs,
     missing_refs: verdict.missing_refs,
     is_symbol_stale: verdict.is_symbol_stale_now,
@@ -49189,16 +49189,16 @@ var EXT_TO_LANG = {
   ".h": "c",
   ".m": "objc"
 };
-function detectLanguage(path6) {
+function detectLanguage(path7) {
   for (const [ext2, lang] of Object.entries(EXT_TO_LANG)) {
-    if (path6.endsWith(ext2))
+    if (path7.endsWith(ext2))
       return lang;
   }
   return "unknown";
 }
-function parseFile(path6, content) {
+function parseFile(path7, content) {
   const { IMPORT_EXTRACTORS: IMPORT_EXTRACTORS2, SYMBOL_EXTRACTORS: SYMBOL_EXTRACTORS2, extractDocstring: extractDocstring2 } = codebase_extractors_exports;
-  const language2 = detectLanguage(path6);
+  const language2 = detectLanguage(path7);
   const contentHash = createHash3("sha256").update(content, "utf8").digest("hex").slice(0, 16);
   const importExtractor = IMPORT_EXTRACTORS2[language2] ?? ((_2) => []);
   const symbolExtractor = SYMBOL_EXTRACTORS2[language2] ?? ((_2) => []);
@@ -49206,7 +49206,7 @@ function parseFile(path6, content) {
   const definitions = symbolExtractor(content);
   const docstring = extractDocstring2(content, language2);
   return {
-    path: path6,
+    path: path7,
     language: language2,
     contentHash,
     imports,
@@ -50312,13 +50312,13 @@ function isAvailable() {
   }
   return _treeSitterAvailable;
 }
-function parseFileAst(path6, content) {
-  const language2 = detectLanguage(path6);
+function parseFileAst(path7, content) {
+  const language2 = detectLanguage(path7);
   const contentHash = createHash4("sha256").update(content).digest("hex").slice(0, CONTENT_HASH_HEX_CHARS);
   const text = content.toString("utf8");
   const extractorAndTree = _getExtractorAndTree(language2, content);
   if (!extractorAndTree) {
-    return parseFile(path6, text);
+    return parseFile(path7, text);
   }
   const { extractor, tree } = extractorAndTree;
   const root = tree.rootNode;
@@ -50326,7 +50326,7 @@ function parseFileAst(path6, content) {
   const docstring = _extractModuleDoc(root, language2, content);
   const callsPerFunction = extractCallsPerFunction(root, content);
   return {
-    path: path6,
+    path: path7,
     language: language2,
     contentHash,
     imports,
@@ -51353,11 +51353,11 @@ function _buildTags(relPath, analysis) {
   }
   return tags;
 }
-function _parseOneFile(path6, content) {
+function _parseOneFile(path7, content) {
   if (isAvailable()) {
-    return parseFileAst(path6, Buffer.from(content, "utf8"));
+    return parseFileAst(path7, Buffer.from(content, "utf8"));
   }
-  return parseFile(path6, content);
+  return parseFile(path7, content);
 }
 async function _storeFile(root, relPath, analysis, domain, store) {
   const content = buildMemoryContent(analysis);
@@ -51509,8 +51509,8 @@ function _markDeleted(existing, seenPaths, store, incremental) {
   if (!incremental)
     return 0;
   const deletedIds = [];
-  for (const [path6, [mid]] of existing) {
-    if (!seenPaths.has(path6))
+  for (const [path7, [mid]] of existing) {
+    if (!seenPaths.has(path7))
       deletedIds.push(mid);
   }
   return markStale(store, deletedIds);
@@ -52255,15 +52255,15 @@ var schema9 = {
   }
 };
 async function _fetchPrd(args, pool) {
-  const path6 = (args["path"] ?? "").trim();
+  const path7 = (args["path"] ?? "").trim();
   const content = args["content"] ?? "";
   const pipelineId = (args["pipeline_id"] ?? "").trim();
-  const provided = [Boolean(path6), Boolean(content), Boolean(pipelineId)];
+  const provided = [Boolean(path7), Boolean(content), Boolean(pipelineId)];
   if (provided.filter(Boolean).length !== 1) {
     throw new Error("exactly one of path / content / pipeline_id must be supplied");
   }
-  if (path6)
-    return [readFileSync8(resolve5(path6), "utf8"), "path"];
+  if (path7)
+    return [readFileSync8(resolve5(path7), "utf8"), "path"];
   if (content)
     return [content, "content"];
   const payload = await callUpstream(_UPSTREAM_SERVER4, "get_pipeline_state", {
@@ -54664,8 +54664,138 @@ if (process.argv[1]?.endsWith("pipeline-impact-bump.js") === true) {
   main8().catch(() => process.exit(0));
 }
 
+// packages/memory-dashboard/dist/launcher.js
+import { spawn as spawn2, exec } from "node:child_process";
+import { createServer } from "node:net";
+import { fileURLToPath } from "node:url";
+import path6 from "node:path";
+var DEFAULT_PORT = 3458;
+var SPAWN_TIMEOUT_MS = 5e3;
+var __dirname2 = path6.dirname(fileURLToPath(import.meta.url));
+async function probePort(port) {
+  return new Promise((resolve7) => {
+    const sock = createServer();
+    sock.once("error", (err) => {
+      if (err.code === "EADDRINUSE") {
+        resolve7(`http://127.0.0.1:${port}`);
+      } else {
+        resolve7(null);
+      }
+    });
+    sock.once("listening", () => {
+      sock.close(() => resolve7(null));
+    });
+    sock.listen(port, "127.0.0.1");
+  });
+}
+function killPort(port) {
+  return new Promise((resolve7) => {
+    if (process.platform === "win32") {
+      exec(`netstat -ano -p TCP`, (_err, stdout) => {
+        const portStr = `:${port} `;
+        for (const line of stdout.split("\n")) {
+          if (!line.includes(portStr))
+            continue;
+          const parts = line.trim().split(/\s+/);
+          const pid = parseInt(parts[parts.length - 1] ?? "", 10);
+          if (!isNaN(pid) && pid > 0) {
+            try {
+              process.kill(pid, "SIGTERM");
+            } catch {
+            }
+          }
+        }
+        resolve7();
+      });
+    } else {
+      exec(`lsof -t -i :${port}`, (_err, stdout) => {
+        const pids = stdout.trim().split("\n").filter(Boolean);
+        for (const pid of pids) {
+          try {
+            process.kill(parseInt(pid, 10), "SIGTERM");
+          } catch {
+          }
+        }
+        resolve7();
+      });
+    }
+  });
+}
+async function spawnServer(port) {
+  const serverScript = path6.resolve(__dirname2, "server.js");
+  const env = { ...process.env, DASHBOARD_PORT: String(port) };
+  const child = spawn2(process.execPath, [serverScript], {
+    detached: true,
+    stdio: ["ignore", "pipe", "ignore"],
+    env
+  });
+  return new Promise((resolve7, reject) => {
+    const timer = setTimeout(() => {
+      child.unref();
+      reject(new Error(`memory-dashboard did not start within 5 s on port ${port}`));
+    }, SPAWN_TIMEOUT_MS);
+    let buf = "";
+    child.stdout?.on("data", (chunk) => {
+      buf += chunk.toString();
+      const nl = buf.indexOf("\n");
+      if (nl !== -1) {
+        clearTimeout(timer);
+        child.stdout?.destroy();
+        child.unref();
+        try {
+          const info = JSON.parse(buf.slice(0, nl));
+          resolve7(info.url);
+        } catch {
+          resolve7(`http://127.0.0.1:${port}`);
+        }
+      }
+    });
+    child.once("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    child.once("exit", (code) => {
+      if (code !== null && code !== 0) {
+        clearTimeout(timer);
+        reject(new Error(`memory-dashboard process exited with code ${code}`));
+      }
+    });
+  });
+}
+function openInBrowser(url) {
+  if (!/^https?:\/\/127\.0\.0\.1:\d{1,5}(\/.*)?$/.test(url))
+    return;
+  let cmd;
+  let args;
+  if (process.platform === "darwin") {
+    cmd = "open";
+    args = [url];
+  } else if (process.platform === "win32") {
+    cmd = "cmd";
+    args = ["/c", "start", "", url];
+  } else {
+    cmd = "xdg-open";
+    args = [url];
+  }
+  spawn2(cmd, args, { stdio: "ignore", detached: true }).unref();
+}
+async function launchDashboard(opts = {}) {
+  const port = opts.port ?? DEFAULT_PORT;
+  const openBrowser = opts.openBrowser ?? true;
+  const existing = await probePort(port);
+  if (existing) {
+    if (openBrowser)
+      openInBrowser(existing);
+    return existing;
+  }
+  await killPort(port);
+  const url = await spawnServer(port);
+  if (openBrowser)
+    openInBrowser(url);
+  return url;
+}
+
 // packages/mcp-servers/memory/dist/tools/ingest.js
-import { launchDashboard } from "@agentic/memory-dashboard/launcher";
 var MIN_IMPORTANCE_DEFAULT = 0.3;
 var TOP_SYMBOLS_DEFAULT = 50;
 var TOP_PROCESSES_DEFAULT = 10;
