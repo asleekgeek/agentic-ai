@@ -31,6 +31,9 @@ import type { MemoryStore } from "../remember/storage/memory-store.js";
 // source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:file_hash (65536 = 64 KiB)
 const HASH_READ_BYTES = 65536; // source: IEC 80000-13:2008 §21-12
 
+// source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:file_hash — h.hexdigest()[:16]
+const HASH_HEX_LENGTH = 16;
+
 // source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:discover_files — limit = max_files * 3
 const DISCOVER_MULTIPLIER = 3; // source: backfill_helpers.py:discover_files
 
@@ -71,9 +74,9 @@ const CORE_CONCEPTS: Readonly<Record<string, readonly string[]>> = {
 // ── Backfill log helpers ──────────────────────────────────────────────────────
 
 /**
- * Ensure the backfill_log table exists.
+ * Ensure the backfill_log table exists (SQLite path).
  *
- * Pre:  store is a connected MemoryStore.
+ * Pre:  store is a connected SQLiteMemoryStore.
  * Post: backfill_log table exists (idempotent CREATE TABLE IF NOT EXISTS).
  *
  * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:ensure_backfill_log
@@ -98,6 +101,113 @@ export function ensureBackfillLog(store: MemoryStore): void {
 }
 
 /**
+ * Ensure the backfill_log table exists (PostgreSQL path).
+ *
+ * Uses SERIAL and timestamptz instead of SQLite equivalents.
+ * Calls store.queryRawAsync when available (PgMemoryStore exposes it).
+ * Falls back to ensureBackfillLog() on SQLite.
+ *
+ * Pre:  store is a connected MemoryStore (PG or SQLite).
+ * Post: backfill_log table exists in the backing database.
+ *
+ * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:ensure_backfill_log
+ * source: engineer@41e5778 — *Async-when-available pattern for PG/SQLite parity.
+ */
+export async function ensureBackfillLogAsync(store: MemoryStore): Promise<void> {
+  const storeAny = store as unknown as {
+    queryRawAsync?: (sql: string, params?: unknown[]) => Promise<unknown>;
+    run?: (sql: string) => void;
+  };
+
+  if (storeAny.queryRawAsync) {
+    // PostgreSQL path — SERIAL + timestamptz syntax.
+    try {
+      await storeAny.queryRawAsync(
+        `CREATE TABLE IF NOT EXISTS backfill_log (
+          id SERIAL PRIMARY KEY,
+          file_path TEXT NOT NULL UNIQUE,
+          file_hash TEXT NOT NULL,
+          memories_imported INTEGER DEFAULT 0,
+          processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+        )`,
+      );
+    } catch {
+      // Best-effort; table may already exist.
+    }
+  } else {
+    // SQLite fallback.
+    ensureBackfillLog(store);
+  }
+}
+
+/**
+ * Check whether a file has already been backfilled (async, PG/SQLite parity).
+ *
+ * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:is_already_backfilled
+ * source: engineer@41e5778 — *Async-when-available pattern.
+ */
+export async function isAlreadyBackfilledAsync(
+  store: MemoryStore,
+  filePath: string,
+  currentHash: string,
+): Promise<boolean> {
+  const storeAny = store as unknown as {
+    queryRawAsync?: (sql: string, params?: unknown[]) => Promise<Array<Record<string, unknown>>>;
+    get?: (sql: string, params: unknown[]) => Record<string, unknown> | undefined;
+  };
+
+  try {
+    if (storeAny.queryRawAsync) {
+      const rows = await storeAny.queryRawAsync(
+        "SELECT file_hash FROM backfill_log WHERE file_path = $1",
+        [filePath],
+      ) as Array<Record<string, unknown>>;
+      if (!rows || rows.length === 0) return false;
+      return rows[0]?.["file_hash"] === currentHash;
+    }
+    return isAlreadyBackfilled(store, filePath, currentHash);
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Record that a file has been backfilled (async, PG/SQLite parity).
+ *
+ * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:mark_backfilled
+ * source: engineer@41e5778 — *Async-when-available pattern.
+ */
+export async function markBackfilledAsync(
+  store: MemoryStore,
+  filePath: string,
+  fhash: string,
+  count: number,
+): Promise<void> {
+  const storeAny = store as unknown as {
+    queryRawAsync?: (sql: string, params?: unknown[]) => Promise<unknown>;
+    run?: (sql: string, params: unknown[]) => void;
+  };
+
+  try {
+    if (storeAny.queryRawAsync) {
+      await storeAny.queryRawAsync(
+        `INSERT INTO backfill_log (file_path, file_hash, memories_imported, processed_at)
+         VALUES ($1, $2, $3, NOW())
+         ON CONFLICT(file_path) DO UPDATE SET
+           file_hash = EXCLUDED.file_hash,
+           memories_imported = EXCLUDED.memories_imported,
+           processed_at = NOW()`,
+        [filePath, fhash, count],
+      );
+    } else {
+      markBackfilled(store, filePath, fhash, count);
+    }
+  } catch {
+    // Best-effort.
+  }
+}
+
+/**
  * Compute a fast hash of the first 64 KiB of a file.
  *
  * Pre:  filePath exists and is readable.
@@ -115,7 +225,7 @@ export function fileHash(filePath: string): string {
     fs.closeSync(fd);
   }
   const hash = crypto.createHash("sha256").update(buf.subarray(0, bytesRead)).digest("hex");
-  return hash.slice(0, 16); // source: backfill_helpers.py — h.hexdigest()[:16]
+  return hash.slice(0, HASH_HEX_LENGTH);
 }
 
 /**

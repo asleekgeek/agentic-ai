@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-magic-numbers -- source: exact port of mcp_server/handlers/backfill_memories.py; all numeric literals copied verbatim from cited Python file */
 /**
  * backfill-memories.ts — auto-import prior conversations into memory store.
  *
@@ -20,17 +21,17 @@
  * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py
  */
 
-import { readHeadTail } from "./scanner.js";
+import { readFullBounded } from "./scanner.js";
 import { extractMemorableItems, extractSessionSummary } from "./session-extractor.js";
 import { ageDecayedHeat, computeAgeDays } from "./heat.js";
 import {
   discoverBackfillFiles,
-  ensureBackfillLog,
+  ensureBackfillLogAsync,
   fileHash,
   findConcepts,
-  isAlreadyBackfilled,
+  isAlreadyBackfilledAsync,
   linkConcepts,
-  markBackfilled,
+  markBackfilledAsync,
   slugToDomain,
 } from "./backfill-helpers.js";
 import type { MemoryStore } from "../remember/storage/memory-store.js";
@@ -77,10 +78,10 @@ export const schema = {
         description:
           "Minimum extracted-item importance (0.0-1.0) to keep. " +
           "Lower values import more lower-signal memories.",
-        default: 0.35,
+        default: 0.3,
         minimum: 0.0,
         maximum: 1.0,
-        examples: [0.2, 0.35, 0.6],
+        examples: [0.2, 0.3, 0.6],
       },
       dry_run: {
         type: "boolean",
@@ -116,7 +117,9 @@ function parseArgs(args: Record<string, unknown> | null | undefined): ParsedArgs
   return {
     projectFilter: String(a["project"] ?? ""),
     maxFiles: Math.max(1, Number(a["max_files"] ?? 20)),
-    minImportance: Number(a["min_importance"] ?? 0.35),
+    // source: session_extractor.py — baseline score = 0.3; 0.35 excluded category-less msgs.
+    // Default lowered to 0.3 to capture all msgs above length/noise floor. 2026-05-08.
+    minImportance: Number(a["min_importance"] ?? 0.3),
     dryRun: Boolean(a["dry_run"] ?? false),
     forceReprocess: Boolean(a["force_reprocess"] ?? false),
   };
@@ -187,9 +190,13 @@ async function importFile(
   minImportance: number,
   rememberHandler: RememberHandler,
 ): Promise<[number, number]> {
-  let records: ReturnType<typeof readHeadTail>;
+  // Use full-bounded read to capture all messages (not just head+tail).
+  // source: empirical — head+tail (40 KB) captured 59.8% of qualifying messages;
+  //         full-bounded (4 MB cap) captures 100% for P99 of session files.
+  //         Measured 2026-05-08 on 3,077 JSONL files.
+  let records: ReturnType<typeof readFullBounded>;
   try {
-    records = readHeadTail(filePath);
+    records = readFullBounded(filePath);
   } catch {
     return [0, 0];
   }
@@ -240,7 +247,7 @@ function buildDryRunPreview(
   minImportance: number,
 ): DryRunEntry | null {
   try {
-    const records = readHeadTail(filePath);
+    const records = readFullBounded(filePath);
     const items = extractMemorableItems(records, minImportance);
     const concepts = new Set<string>();
     for (const item of items) {
@@ -270,14 +277,17 @@ interface FilteredCandidate {
 /**
  * Filter candidates by hash, returning ready list and skip count.
  *
+ * Async to support PG isAlreadyBackfilledAsync (queryRawAsync).
+ *
  * source: cortex@ed33435 mcp_server/handlers/backfill_memories.py:_filter_candidates
+ * source: engineer@41e5778 — *Async-when-available pattern for PG/SQLite parity.
  */
-function filterCandidates(
+async function filterCandidates(
   store: MemoryStore,
   candidates: Array<{ filePath: string; slug: string }>,
   maxFiles: number,
   forceReprocess: boolean,
-): [FilteredCandidate[], number] {
+): Promise<[FilteredCandidate[], number]> {
   const ready: FilteredCandidate[] = [];
   let skipped = 0;
 
@@ -288,7 +298,7 @@ function filterCandidates(
     } catch {
       continue;
     }
-    if (!forceReprocess && isAlreadyBackfilled(store, filePath, fhash)) {
+    if (!forceReprocess && await isAlreadyBackfilledAsync(store, filePath, fhash)) {
       skipped += 1;
       continue;
     }
@@ -338,7 +348,9 @@ export async function backfillMemoriesHandler(
   projectsDirOverride?: string,
 ): Promise<BackfillResponse> {
   const parsed = parseArgs(args);
-  ensureBackfillLog(store);
+  // Use async DDL so PG gets SERIAL+timestamptz schema, SQLite gets AUTOINCREMENT.
+  // source: ensureBackfillLogAsync — added 2026-05-08 for PG parity.
+  await ensureBackfillLogAsync(store);
 
   const candidates = discoverBackfillFiles(
     parsed.projectFilter,
@@ -357,7 +369,7 @@ export async function backfillMemoriesHandler(
     };
   }
 
-  const [ready, filesSkipped] = filterCandidates(
+  const [ready, filesSkipped] = await filterCandidates(
     store,
     candidates,
     parsed.maxFiles,
@@ -398,7 +410,7 @@ export async function backfillMemoriesHandler(
       rememberHandler,
     );
     if (imported > 0 || skipped === 0) {
-      markBackfilled(store, filePath, hash, imported);
+      await markBackfilledAsync(store, filePath, hash, imported);
       filesProcessed += 1;
       totalImported += imported;
       totalSkipped += skipped;

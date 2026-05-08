@@ -163,6 +163,10 @@
       "import": "./dist/consolidation/handler.js",
       "types": "./dist/consolidation/handler.d.ts"
     },
+    "./import/backfill-memories.js": {
+      "import": "./dist/import/backfill-memories.js",
+      "types": "./dist/import/backfill-memories.d.ts"
+    },
     "./import/handler.js": {
       "import": "./dist/import/handler.js",
       "types": "./dist/import/handler.d.ts"
