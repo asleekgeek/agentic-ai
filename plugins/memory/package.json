@@ -1,6 +1,6 @@
 {
   "name": "@agentic/plugin-memory",
-  "version": "0.0.21",
+  "version": "0.0.22",
   "private": true,
   "description": "Self-contained memory MCP server plugin. Pure-JS deps are inlined via esbuild; native deps are declared here and installed on first launch by scripts/launch.sh.",
   "type": "module",
