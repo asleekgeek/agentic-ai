@@ -50450,156 +50450,119 @@ var VALID_KINDS = /* @__PURE__ */ new Set([
   "constant",
   "struct"
 ]);
-async function _getOrCreateEntity(store, name, entityType, domain) {
+function _getOrCreateEntity(store, name, entityType, domain) {
   try {
-    const existing = store.getEntityByNameAsync ? await store.getEntityByNameAsync(name) : store.getEntityByName(name);
+    const existing = store.getEntityByName(name);
     if (existing)
       return existing["id"];
   } catch {
   }
-  if (store.upsertEntityAsync) {
-    return store.upsertEntityAsync(name, entityType, domain);
-  }
   return store.upsertEntity(name, entityType, domain);
 }
-async function _persistSymbolEntities(store, analysis, fileEid, domain) {
+function _persistSymbolEntities(store, analysis, fileEid, domain, memoryId) {
   let entities = 0;
   let relationships = 0;
   for (const sym of analysis.definitions) {
     const kind2 = VALID_KINDS.has(sym.kind) ? sym.kind : "function";
-    const symEid = await _getOrCreateEntity(store, sym.name, kind2, domain);
+    const symEid = _getOrCreateEntity(store, sym.name, kind2, domain);
     entities++;
     try {
-      if (store.insertRelationshipAsync) {
-        await store.insertRelationshipAsync({
-          source_entity_id: fileEid,
-          target_entity_id: symEid,
-          relationship_type: "defines",
-          weight: 1
-        });
-      } else {
-        store.insertRelationship({
-          source_entity_id: fileEid,
-          target_entity_id: symEid,
-          relationship_type: "defines",
-          weight: 1
-        });
-      }
+      store.linkMemoryEntity(memoryId, symEid);
+    } catch {
+    }
+    try {
+      store.insertRelationship({
+        source_entity_id: fileEid,
+        target_entity_id: symEid,
+        relationship_type: "defines",
+        weight: 1
+      });
       relationships++;
-    } catch (err) {
-      process.stderr.write(`[codebase-analyze] _persistSymbolEntities failed for ${sym.name}: ${err.message}
-`);
+    } catch {
     }
   }
   return [entities, relationships];
 }
-async function _persistImportEntities(store, analysis, fileEid, domain) {
+function _persistImportEntities(store, analysis, fileEid, domain, memoryId) {
   let entities = 0;
   let relationships = 0;
   for (const imp of analysis.imports) {
-    const depEid = await _getOrCreateEntity(store, imp.module, "dependency", domain);
+    const depEid = _getOrCreateEntity(store, imp.module, "dependency", domain);
     entities++;
     try {
-      if (store.insertRelationshipAsync) {
-        await store.insertRelationshipAsync({
-          source_entity_id: fileEid,
-          target_entity_id: depEid,
-          relationship_type: "imports",
-          weight: 1
-        });
-      } else {
-        store.insertRelationship({
-          source_entity_id: fileEid,
-          target_entity_id: depEid,
-          relationship_type: "imports",
-          weight: 1
-        });
-      }
+      store.linkMemoryEntity(memoryId, depEid);
+    } catch {
+    }
+    try {
+      store.insertRelationship({
+        source_entity_id: fileEid,
+        target_entity_id: depEid,
+        relationship_type: "imports",
+        weight: 1
+      });
       relationships++;
-    } catch (err) {
-      process.stderr.write(`[codebase-analyze] _persistImportEntities failed for ${imp.module}: ${err.message}
-`);
+    } catch {
     }
   }
   return [entities, relationships];
 }
-async function persistEntities(store, analysis, _memoryId, domain) {
+function persistEntities(store, analysis, memoryId, domain) {
   let entities = 0;
   let relationships = 0;
   try {
-    const fileEid = await _getOrCreateEntity(store, analysis.path, "file", domain);
+    const fileEid = _getOrCreateEntity(store, analysis.path, "file", domain);
     entities++;
-    const [se2, sr2] = await _persistSymbolEntities(store, analysis, fileEid, domain);
+    try {
+      store.linkMemoryEntity(memoryId, fileEid);
+    } catch {
+    }
+    const [se2, sr2] = _persistSymbolEntities(store, analysis, fileEid, domain, memoryId);
     entities += se2;
     relationships += sr2;
-    const [ie2, ir2] = await _persistImportEntities(store, analysis, fileEid, domain);
+    const [ie2, ir2] = _persistImportEntities(store, analysis, fileEid, domain, memoryId);
     entities += ie2;
     relationships += ir2;
-  } catch (err) {
-    process.stderr.write(`[codebase-analyze] persistEntities failed for ${analysis.path}: ${err.message}
-`);
+  } catch {
   }
   return [entities, relationships];
 }
-async function persistFileEdge(store, edges, domain) {
+function persistFileEdge(store, edges, domain) {
   let count = 0;
   for (const [srcPath, tgtPath] of edges) {
     try {
-      const srcEid = await _getOrCreateEntity(store, srcPath, "file", domain);
-      const tgtEid = await _getOrCreateEntity(store, tgtPath, "file", domain);
-      if (store.insertRelationshipAsync) {
-        await store.insertRelationshipAsync({
-          source_entity_id: srcEid,
-          target_entity_id: tgtEid,
-          relationship_type: "imports",
-          weight: 1
-        });
-      } else {
-        store.insertRelationship({
-          source_entity_id: srcEid,
-          target_entity_id: tgtEid,
-          relationship_type: "imports",
-          weight: 1
-        });
-      }
+      const srcEid = _getOrCreateEntity(store, srcPath, "file", domain);
+      const tgtEid = _getOrCreateEntity(store, tgtPath, "file", domain);
+      store.insertRelationship({
+        source_entity_id: srcEid,
+        target_entity_id: tgtEid,
+        relationship_type: "imports",
+        weight: 1
+      });
       count++;
-    } catch (err) {
-      process.stderr.write(`[codebase-analyze] persistFileEdge failed for ${srcPath}\u2192${tgtPath}: ${err.message}
-`);
+    } catch {
     }
   }
   return count;
 }
-async function persistInheritanceEdge(store, edges, domain) {
+function persistInheritanceEdge(store, edges, domain) {
   let count = 0;
   for (const [child, parent] of edges) {
     try {
-      const childEid = await _getOrCreateEntity(store, child, "class", domain);
-      const parentEid = await _getOrCreateEntity(store, parent, "class", domain);
-      if (store.insertRelationshipAsync) {
-        await store.insertRelationshipAsync({
-          source_entity_id: childEid,
-          target_entity_id: parentEid,
-          relationship_type: "extends",
-          weight: 1
-        });
-      } else {
-        store.insertRelationship({
-          source_entity_id: childEid,
-          target_entity_id: parentEid,
-          relationship_type: "extends",
-          weight: 1
-        });
-      }
+      const childEid = _getOrCreateEntity(store, child, "class", domain);
+      const parentEid = _getOrCreateEntity(store, parent, "class", domain);
+      store.insertRelationship({
+        source_entity_id: childEid,
+        target_entity_id: parentEid,
+        relationship_type: "extends",
+        weight: 1
+      });
       count++;
-    } catch (err) {
-      process.stderr.write(`[codebase-analyze] persistInheritanceEdge failed for ${child}\u2192${parent}: ${err.message}
-`);
+    } catch {
     }
   }
   return count;
 }
-async function persistCommunityTags(store, communities) {
+function persistCommunityTags(store, communities) {
   if (communities.size === 0)
     return;
   const allCodebaseMemories = (() => {
