@@ -13,7 +13,10 @@
 
   // Paged-fetch state. ONE page on open, all subsequent pages gated
   // on actual user scroll.
-  var BOARD_PAGE_LIMIT = 100;
+  // Raised from 100 to 10000 so all memories load in one round-trip on typical
+  // corpora. Server-side PAGE_LIMIT_MAX was removed concurrently.
+  // source: 2026-05-08 user feedback — "knowledge and board not showing all nodes"
+  var BOARD_PAGE_LIMIT = 10000;
   var boardAccum = [];
   var boardSeenIds = Object.create(null);
   var boardCursor = null;

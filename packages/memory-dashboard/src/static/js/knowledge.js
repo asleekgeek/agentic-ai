@@ -14,7 +14,10 @@
 
   // Paged-fetch state. Reset on every show()/filter change. Each page
   // after the first is gated on a genuine user scroll.
-  var PAGE_LIMIT = 50;
+  // Raised from 50 to 10000 so all memories load in one round-trip on typical
+  // corpora. Server-side PAGE_LIMIT_MAX was removed concurrently.
+  // source: 2026-05-08 user feedback — "knowledge and board not showing all nodes"
+  var PAGE_LIMIT = 10000;
   var memoriesAccum = [];          // accumulated rows across pages
   var seenIds = Object.create(null);
   var nextCursor = null;

@@ -56,13 +56,17 @@ function createFixtureDb(): string {
   const db = new Database(dbPath);
 
   // Fixture schema uses heat_base (canonical column name since A3 migration).
+  // Includes heat_base_set_at and no_decay for computeEffectiveHeat() compatibility.
   // source: packages/memory/src/remember/storage/sqlite-schema.ts
   // source: 2026-05-07 schema reconciliation — heat column renamed to heat_base
+  // source: 2026-05-08 effective heat — heat_base_set_at, no_decay added for decay
   db.exec(`
     CREATE TABLE memories (
       id TEXT PRIMARY KEY,
       content TEXT,
-      heat_base REAL DEFAULT 0,
+      heat_base REAL DEFAULT 1.0,
+      heat_base_set_at TEXT,
+      no_decay INTEGER DEFAULT 0,
       importance REAL DEFAULT 0.5,
       store_type TEXT DEFAULT 'episodic',
       tags TEXT,

@@ -20,6 +20,7 @@
 
 import type { FastifyInstance } from "fastify";
 import type { DashboardDb } from "../db-adapter.js";
+import { computeEffectiveHeat } from "../util/heat.js";
 
 // ── Named constants ───────────────────────────────────────────────────────────
 const EPOCH_DIVISOR = 1000; // source: POSIX — convert ms to seconds (Date.now() returns ms)
@@ -173,7 +174,12 @@ async function buildGraph(db: DashboardDb): Promise<void> {
     interface MemoryRow {
       id: string;
       content: string;
-      heat: number;
+      heat_base: number | null;        // raw stored value — effective heat applied post-read
+      heat_base_set_at: string | null; // for computeEffectiveHeat() decay reference
+      last_accessed: string | null;    // fallback reference time
+      stage_entered_at: string | null; // for stage_hours in beta calculation
+      no_decay: number | null;         // if truthy, skip decay
+      emotional_valence: number | null;
       importance: number;
       store_type: string;
       domain: string | null;
@@ -184,19 +190,42 @@ async function buildGraph(db: DashboardDb): Promise<void> {
       is_global: number;
     }
 
-    // memories.heat is the legacy column name; current schema uses
-    // heat_base (alias to keep TS code unchanged). See note in
-    // routes/memories.ts. source: 2026-05-07 schema reconciliation.
+    // Fetch heat_base plus decay fields so computeEffectiveHeat() can produce the
+    // same value as the PL/pgSQL effective_heat() function on PG.
+    // ORDER BY heat_base DESC — SQLite has no UDF for effective_heat; heat_base
+    // preserves rank ordering within the same stage and recency (documented limitation).
+    // source: 2026-05-07 schema reconciliation — heat column renamed to heat_base.
+    // source: 2026-05-08 effective heat — decay fields added for computeEffectiveHeat().
+    const tNow = new Date();
     const memRows = await db.prepare(
-      `SELECT id, content, heat_base AS heat, importance, store_type, domain, tags,
-              created_at, consolidation_stage, is_protected, is_global
+      `SELECT id, content, heat_base, heat_base_set_at, last_accessed,
+              stage_entered_at, no_decay, emotional_valence, importance,
+              store_type, domain, tags, created_at, consolidation_stage,
+              is_protected, is_global
        FROM memories WHERE NOT is_benchmark AND NOT is_stale
-       ORDER BY heat_base DESC` // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:161 — get_hot_memories(limit=0) equivalent; 2000 is a practical cap to avoid OOM on large stores
+       ORDER BY heat_base DESC` // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:161 — get_hot_memories(limit=0) equivalent
     ).all<MemoryRow>();
 
     for (const m of memRows) {
       const id = `memory:${m.id}`;
       const domainId = m.domain ? domainNodeMap.get(m.domain) : undefined;
+      // Apply effective heat decay — mirrors PL/pgSQL effective_heat() used by recall.
+      // source: packages/memory-dashboard/src/util/heat.ts:computeEffectiveHeat
+      // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:586-683
+      const effectiveHeat = computeEffectiveHeat(
+        {
+          heat_base: m.heat_base,
+          heat_base_set_at: m.heat_base_set_at,
+          last_accessed: m.last_accessed,
+          created_at: m.created_at,
+          stage_entered_at: m.stage_entered_at,
+          is_protected: m.is_protected,
+          no_decay: m.no_decay,
+          consolidation_stage: m.consolidation_stage,
+          emotional_valence: m.emotional_valence,
+        },
+        tNow,
+      );
       const node: GraphNode = {
         id,
         kind: "memory",
@@ -204,7 +233,7 @@ async function buildGraph(db: DashboardDb): Promise<void> {
         label: (m.content ?? "").slice(0, LABEL_MAX_LEN),
         domain: m.domain ?? "",
         domain_id: domainId ?? "",
-        heat: m.heat,
+        heat: effectiveHeat,
         importance: m.importance,
         store_type: m.store_type,
         consolidation_stage: m.consolidation_stage ?? "labile",

@@ -29,11 +29,15 @@
 
 import type { FastifyInstance } from "fastify";
 import type { DashboardDb } from "../db-adapter.js";
+import { computeEffectiveHeat } from "../util/heat.js";
 
 // ── Named constants ───────────────────────────────────────────────────────────
 // source: cortex@ed33435 mcp_server/handlers/memories_page.py:_DEFAULT_LIMIT
 const PAGE_LIMIT_DEFAULT = 50;
-const PAGE_LIMIT_MAX = 200; // source: cortex@ed33435 mcp_server/handlers/memories_page.py:_MAX_LIMIT
+// PAGE_LIMIT_MAX removed per user feedback — Cortex Python's _MAX_LIMIT=200 was
+// a safety bound; users with rich indexes (≥967 memories) were silently capped.
+// Browser-side rendering provides the practical upper bound for large requests.
+// source: 2026-05-08 user feedback — "knowledge and board not showing all nodes"
 // source: cortex@ed33435 mcp_server/handlers/memories_facets.py — hot threshold
 const HOT_HEAT_THRESHOLD = 0.5;
 // source: cortex@ed33435 mcp_server/handlers/memories_facets.py — urgency importance threshold
@@ -58,7 +62,11 @@ const BASE64_BLOCK = 4;
 interface MemoryRow {
   id: number | string;
   content: string;
-  heat: number;              // aliased from heat_base
+  heat_base: number | null;          // raw stored value — effective heat applied post-read
+  heat_base_set_at: string | null;   // timestamp of last heat_base update (for decay)
+  last_accessed: string | null;      // fallback for decay reference time
+  stage_entered_at: string | null;   // for stage_hours in beta calculation
+  no_decay: number | null;           // 0/1 — if truthy, skip decay
   importance: number;
   store_type: string | null;
   tags: string | string[] | null;
@@ -85,7 +93,7 @@ interface MemoryRow {
  *   createdAt, lastAccessed, isProtected, is_protected, isGlobal, is_global,
  *   emotion, emotional_valence, store_type, access_count, useful_count.
  */
-function rowToNode(m: MemoryRow): Record<string, unknown> {
+function rowToNode(m: MemoryRow, tNow: Date): Record<string, unknown> {
   // parseTags handles both forms:
   //   - SQLite: JSON-encoded string e.g. '["a","b"]'
   //   - PG: JSONB already deserialized by node-postgres into an array
@@ -110,6 +118,26 @@ function rowToNode(m: MemoryRow): Record<string, unknown> {
   else if (val <= VALENCE_NEG_THRESHOLD) emotion = "confusion";
   if (imp >= URGENT_IMPORTANCE_THRESHOLD) emotion = "urgency";
 
+  // Compute effective (decayed) heat. This mirrors the PL/pgSQL effective_heat()
+  // function used by the PG recall pipeline. On SQLite there is no stored procedure,
+  // so we apply the same formula in TypeScript.
+  // source: packages/memory-dashboard/src/util/heat.ts:computeEffectiveHeat
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:586-683
+  const effectiveHeat = computeEffectiveHeat(
+    {
+      heat_base: m.heat_base,
+      heat_base_set_at: m.heat_base_set_at,
+      last_accessed: m.last_accessed,
+      created_at: m.created_at,
+      stage_entered_at: m.stage_entered_at,
+      is_protected: m.is_protected,
+      no_decay: m.no_decay,
+      consolidation_stage: m.consolidation_stage,
+      emotional_valence: m.emotional_valence,
+    },
+    tNow,
+  );
+
   const domainVal = m.domain ?? "";
   const domainId = `domain:${domainVal || "__global__"}`;
 
@@ -123,7 +151,7 @@ function rowToNode(m: MemoryRow): Record<string, unknown> {
     domain: domainVal,
     domain_id: domainId,
     tags: parseTags(m.tags),
-    heat: m.heat ?? 0,
+    heat: effectiveHeat,
     importance: m.importance ?? 0,
     stage: m.consolidation_stage ?? "labile",
     consolidationStage: m.consolidation_stage ?? "labile",
@@ -242,7 +270,9 @@ export async function registerMemoriesRoutes(
       const sort = (sortRaw && SORT_ORDER[sortRaw]) ? sortRaw : "heat";
       // Over-fetch by 1 so we can detect "more pages exist" without a count query.
       // source: cortex@ed33435 mcp_server/handlers/memories_page.py:params.append(limit + 1)
-      const limit = Math.min(PAGE_LIMIT_MAX, Math.max(1, parseInt(limitStr ?? String(PAGE_LIMIT_DEFAULT), 10)));
+      // No server-side cap: callers may request any limit; browser rendering is
+      // the practical bound. source: 2026-05-08 user feedback — cap removed.
+      const limit = Math.max(1, parseInt(limitStr ?? String(PAGE_LIMIT_DEFAULT), 10));
       const cursor = decodeCursor(cursorStr);
       const minHeat = minHeatStr ? parseFloat(minHeatStr) : null;
       const protectedOnly = protectedFlag === "1" || protectedFlag === "true";
@@ -306,10 +336,14 @@ export async function registerMemoriesRoutes(
       const fetchLimit = limit + 1;
       params.push(fetchLimit);
 
-      // heat_base aliased to heat for rowToNode(). Works in both SQLite and PG.
+      // Fetch heat_base plus all fields needed by computeEffectiveHeat().
+      // ORDER BY heat_base DESC (SQLite cannot ORDER BY a computed effective_heat
+      // without a UDF; heat_base preserves rank ordering within same stage/recency).
       // source: 2026-05-07 schema reconciliation — heat column renamed to heat_base.
+      // source: 2026-05-08 effective heat — decay fields added for computeEffectiveHeat().
       const rows = await deps.db.prepare(
-        `SELECT id, content, heat_base AS heat, importance, store_type, domain,
+        `SELECT id, content, heat_base, heat_base_set_at, last_accessed,
+                stage_entered_at, no_decay, importance, store_type, domain,
                 tags, created_at, consolidation_stage, emotional_valence,
                 is_protected, is_global, access_count, useful_count
          FROM memories ${where} ORDER BY ${orderBy} LIMIT ?`
@@ -324,15 +358,21 @@ export async function registerMemoriesRoutes(
       if (hasMore && items.length > 0) {
         const last = items[items.length - 1];
         if (last) {
+          // heat sort uses heat_base (the raw stored value) for cursor keyset
+          // since ORDER BY is on heat_base; effective heat is display-only.
           const sortValue = sort === "heat"
-            ? (last.heat ?? 0)
+            ? (last.heat_base ?? 0)
             : (last.created_at ?? "");
           nextCursor = encodeCursor({ k: sortValue, id: last.id });
         }
       }
 
+      // Compute effective heat at the current moment — same Date for all rows
+      // so paging comparisons are consistent.
+      const tNow = new Date();
+
       return reply.send({
-        items: items.map((m) => rowToNode(m)),
+        items: items.map((m) => rowToNode(m, tNow)),
         next_cursor: nextCursor,
         page_count: items.length,
         sort,
