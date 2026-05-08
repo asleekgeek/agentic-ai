@@ -40680,6 +40680,63 @@ function ensureSchema(dbPath) {
   }
 }
 
+// packages/memory-dashboard/dist/util/heat.js
+var PG_P_FACTOR_DEFAULT = 0.99787;
+var PG_EMOTIONAL_DAMPING = 0.3;
+var PERMASTORE_FLOOR_CONSOLIDATED = 0.1;
+var PERMASTORE_FLOOR_LATE = 0.05;
+var MS_PER_HOUR = 36e5;
+var BETA_STAGE_HOURS_CAP = 80;
+var REAL_UNDERFLOW_FLOOR = 1e-38;
+function computeEffectiveHeat(row, tNow, factor = 1, pFactor = PG_P_FACTOR_DEFAULT) {
+  const heatBase = row.heat_base ?? 1;
+  const isProtected = Boolean(row.is_protected);
+  const noDecay = Boolean(row.no_decay);
+  if (isProtected || noDecay) {
+    return Math.min(1, Math.max(0, heatBase * factor));
+  }
+  const nowMs = tNow.getTime();
+  const heatSetMs = parseIso(row.heat_base_set_at) ?? parseIso(row.last_accessed) ?? parseIso(row.created_at) ?? nowMs;
+  const stageSetMs = parseIso(row.stage_entered_at) ?? parseIso(row.created_at) ?? nowMs;
+  const hoursElapsed = Math.max(0, (nowMs - heatSetMs) / MS_PER_HOUR);
+  const stageHours = Math.max(0, (nowMs - stageSetMs) / MS_PER_HOUR);
+  const stage = row.consolidation_stage ?? "labile";
+  const alpha = ALPHA_BY_STAGE[stage] ?? 1;
+  const valence = Math.abs(row.emotional_valence ?? 0);
+  const beta = 1 - PG_EMOTIONAL_DAMPING * valence * (1 - Math.exp(-Math.min(stageHours, BETA_STAGE_HOURS_CAP)));
+  const stageFloor = STAGE_FLOOR[stage] ?? 0;
+  const baseScaled = heatBase * factor;
+  const decayed = baseScaled * Math.pow(pFactor, alpha * beta * hoursElapsed);
+  const floor = Math.max(stageFloor, REAL_UNDERFLOW_FLOOR);
+  return Math.min(1, Math.max(floor, decayed));
+}
+function parseIso(s) {
+  if (!s)
+    return null;
+  const ms = Date.parse(s);
+  return Number.isFinite(ms) ? ms : null;
+}
+var ALPHA_BY_STAGE = {
+  labile: 2,
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:627
+  early_ltp: 1.2,
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:628
+  late_ltp: 0.8,
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:629
+  consolidated: 0.5,
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:630
+  reconsolidating: 1.5
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:631
+};
+var STAGE_FLOOR = {
+  consolidated: PERMASTORE_FLOOR_CONSOLIDATED,
+  // source: Bahrick (1984)
+  late_ltp: PERMASTORE_FLOOR_LATE,
+  // source: Benna & Fusi (2016)
+  reconsolidating: PERMASTORE_FLOOR_LATE
+  // source: Benna & Fusi (2016)
+};
+
 // packages/memory-dashboard/dist/routes/graph.js
 var EPOCH_DIVISOR = 1e3;
 var PROGRESS_STARTING = 0.01;
@@ -40743,16 +40800,30 @@ async function buildGraph(db) {
     _progress.phase = "L5 memories";
     _progress.pct = PROGRESS_L5;
     _progress.message = "loading memories\u2026";
+    const tNow = /* @__PURE__ */ new Date();
     const memRows = await db.prepare(
-      `SELECT id, content, heat_base AS heat, importance, store_type, domain, tags,
-              created_at, consolidation_stage, is_protected, is_global
+      `SELECT id, content, heat_base, heat_base_set_at, last_accessed,
+              stage_entered_at, no_decay, emotional_valence, importance,
+              store_type, domain, tags, created_at, consolidation_stage,
+              is_protected, is_global
        FROM memories WHERE NOT is_benchmark AND NOT is_stale
        ORDER BY heat_base DESC`
-      // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:161 — get_hot_memories(limit=0) equivalent; 2000 is a practical cap to avoid OOM on large stores
+      // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:161 — get_hot_memories(limit=0) equivalent
     ).all();
     for (const m of memRows) {
       const id = `memory:${m.id}`;
       const domainId = m.domain ? domainNodeMap.get(m.domain) : void 0;
+      const effectiveHeat = computeEffectiveHeat({
+        heat_base: m.heat_base,
+        heat_base_set_at: m.heat_base_set_at,
+        last_accessed: m.last_accessed,
+        created_at: m.created_at,
+        stage_entered_at: m.stage_entered_at,
+        is_protected: m.is_protected,
+        no_decay: m.no_decay,
+        consolidation_stage: m.consolidation_stage,
+        emotional_valence: m.emotional_valence
+      }, tNow);
       const node = {
         id,
         kind: "memory",
@@ -40760,7 +40831,7 @@ async function buildGraph(db) {
         label: (m.content ?? "").slice(0, LABEL_MAX_LEN),
         domain: m.domain ?? "",
         domain_id: domainId ?? "",
-        heat: m.heat,
+        heat: effectiveHeat,
         importance: m.importance,
         store_type: m.store_type,
         consolidation_stage: m.consolidation_stage ?? "labile",
@@ -41331,7 +41402,6 @@ async function registerFileDiffRoutes(fastify) {
 
 // packages/memory-dashboard/dist/routes/memories.js
 var PAGE_LIMIT_DEFAULT = 50;
-var PAGE_LIMIT_MAX = 200;
 var HOT_HEAT_THRESHOLD = 0.5;
 var URGENT_IMPORTANCE_THRESHOLD = 0.75;
 var VALENCE_POS_THRESHOLD = 0.25;
@@ -41341,7 +41411,7 @@ var HTTP_5004 = 500;
 var VALENCE_STRONG_POS = 0.55;
 var VALENCE_STRONG_NEG = -0.55;
 var BASE64_BLOCK = 4;
-function rowToNode(m) {
+function rowToNode(m, tNow) {
   const parseTags = (t) => {
     if (!t)
       return [];
@@ -41369,6 +41439,17 @@ function rowToNode(m) {
     emotion = "confusion";
   if (imp >= URGENT_IMPORTANCE_THRESHOLD)
     emotion = "urgency";
+  const effectiveHeat = computeEffectiveHeat({
+    heat_base: m.heat_base,
+    heat_base_set_at: m.heat_base_set_at,
+    last_accessed: m.last_accessed,
+    created_at: m.created_at,
+    stage_entered_at: m.stage_entered_at,
+    is_protected: m.is_protected,
+    no_decay: m.no_decay,
+    consolidation_stage: m.consolidation_stage,
+    emotional_valence: m.emotional_valence
+  }, tNow);
   const domainVal = m.domain ?? "";
   const domainId = `domain:${domainVal || "__global__"}`;
   return {
@@ -41381,7 +41462,7 @@ function rowToNode(m) {
     domain: domainVal,
     domain_id: domainId,
     tags: parseTags(m.tags),
-    heat: m.heat ?? 0,
+    heat: effectiveHeat,
     importance: m.importance ?? 0,
     stage: m.consolidation_stage ?? "labile",
     consolidationStage: m.consolidation_stage ?? "labile",
@@ -41436,7 +41517,7 @@ async function registerMemoriesRoutes(fastify, deps) {
         oldest: ">"
       };
       const sort = sortRaw && SORT_ORDER[sortRaw] ? sortRaw : "heat";
-      const limit = Math.min(PAGE_LIMIT_MAX, Math.max(1, parseInt(limitStr ?? String(PAGE_LIMIT_DEFAULT), 10)));
+      const limit = Math.max(1, parseInt(limitStr ?? String(PAGE_LIMIT_DEFAULT), 10));
       const cursor = decodeCursor(cursorStr);
       const minHeat = minHeatStr ? parseFloat(minHeatStr) : null;
       const protectedOnly = protectedFlag === "1" || protectedFlag === "true";
@@ -41486,7 +41567,8 @@ async function registerMemoriesRoutes(fastify, deps) {
       const orderBy = SORT_ORDER[sort] ?? "heat_base DESC, id DESC";
       const fetchLimit = limit + 1;
       params.push(fetchLimit);
-      const rows = await deps.db.prepare(`SELECT id, content, heat_base AS heat, importance, store_type, domain,
+      const rows = await deps.db.prepare(`SELECT id, content, heat_base, heat_base_set_at, last_accessed,
+                stage_entered_at, no_decay, importance, store_type, domain,
                 tags, created_at, consolidation_stage, emotional_valence,
                 is_protected, is_global, access_count, useful_count
          FROM memories ${where} ORDER BY ${orderBy} LIMIT ?`).all(...params);
@@ -41496,12 +41578,13 @@ async function registerMemoriesRoutes(fastify, deps) {
       if (hasMore && items.length > 0) {
         const last = items[items.length - 1];
         if (last) {
-          const sortValue = sort === "heat" ? last.heat ?? 0 : last.created_at ?? "";
+          const sortValue = sort === "heat" ? last.heat_base ?? 0 : last.created_at ?? "";
           nextCursor = encodeCursor({ k: sortValue, id: last.id });
         }
       }
+      const tNow = /* @__PURE__ */ new Date();
       return reply.send({
-        items: items.map((m) => rowToNode(m)),
+        items: items.map((m) => rowToNode(m, tNow)),
         next_cursor: nextCursor,
         page_count: items.length,
         sort
