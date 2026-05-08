@@ -476,4 +476,96 @@ export interface MemoryStoreExt extends MemoryStore {
 
   /** Log a consolidation run. */
   logConsolidation(data: Record<string, unknown>): void;
+
+  // ── Rule engine ────────────────────────────────────────────────────────
+  //
+  // Previously called via escape-hatch casts in advanced.ts. Lifting onto
+  // the interface enforces behavioral parity: PgMemoryStore must return
+  // equivalent observable state, not silently return [] / 0.
+  //
+  // Substitutability contract (Liskov & Wing 1994, §4 — history constraint):
+  //   The set of observable histories of PgMemoryStore must be a subset of
+  //   those of SqliteMemoryStore for these methods. Returning [] for
+  //   getAllActiveRules() after insertRule() violates the history constraint.
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:9-70
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+
+  /**
+   * Insert a neuro-symbolic rule. Returns the new row id.
+   *
+   * precondition:  rule.condition and rule.action are non-empty strings.
+   * postcondition: returned id > 0; row exists in memory_rules with is_active = rule.is_active.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:14-31
+   */
+  insertRule(rule: {
+    rule_type: string;
+    scope: string;
+    scope_value: string | null;
+    condition: string;
+    action: string;
+    priority: number;
+    is_active: boolean;
+  }): number;
+
+  /**
+   * Return all active rules ordered by scope and priority descending.
+   *
+   * postcondition: returns every row where is_active = true, ordered by
+   *   scope ASC, priority DESC. Returns [] if no rules exist.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:41-45
+   */
+  getAllActiveRules(): Record<string, unknown>[];
+
+  /**
+   * Return active rules matching a specific scope string.
+   *
+   * postcondition: returns rows where scope = scope AND is_active = true,
+   *   ordered by priority DESC. Returns [] if no matching rules exist.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:33-39
+   */
+  getRulesForScope(scope: string): Record<string, unknown>[];
+
+  /**
+   * Return all rules including inactive ones (admin/debug listing).
+   *
+   * postcondition: returns every row in memory_rules ordered by scope ASC,
+   *   priority DESC. Returns [] if table is empty.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py
+   */
+  getAllRulesIncludingInactive(): Record<string, unknown>[];
+
+  /**
+   * Count prospective-memory triggers currently armed (is_active = true).
+   *
+   * postcondition: returns COUNT(*) WHERE is_active = true from
+   *   prospective_memories. Returns 0 if table is empty.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
+   */
+  countActiveTriggers(): number;
+
+  /**
+   * Schedule a prospective memory (trigger). Returns the new row id.
+   *
+   * precondition:  record.content, record.trigger_condition, and
+   *   record.trigger_type are non-empty strings.
+   * postcondition: returned id > 0; row exists in prospective_memories
+   *   with is_active = true (unless record.is_active is false).
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+   */
+  insertProspectiveMemory(record: {
+    content: string;
+    trigger_condition: string;
+    trigger_type: string;
+    target_directory?: string | null;
+    is_active?: boolean;
+    triggered_count?: number;
+  }): number;
 }

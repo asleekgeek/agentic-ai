@@ -79,48 +79,72 @@ function toMemoryReadStore(store: MemoryStoreExt): MemoryReadStore {
 }
 
 function toProspectiveMemoryStore(store: MemoryStoreExt): ProspectiveMemoryStore {
-  // insertProspectiveMemory and countActiveTriggers are SQLite-only (not on
-  // MemoryStoreExt yet). On PG these return defaults. This is a residual gap
-  // documented in the parity matrix but not blocking core functionality.
-  const ext = store as unknown as Record<string, (...args: unknown[]) => unknown>;
+  // LSP-VIOLATION CLOSED: insertProspectiveMemory and countActiveTriggers are
+  // now on MemoryStoreExt; both backends implement them. No escape-hatch needed.
+  //
+  // PgMemoryStore exposes *Async variants — prefer them when available so the
+  // caller does not hit the _runSync() throw path. Fall back to the sync
+  // interface for SqliteMemoryStore (which has no *Async).
+  //
+  // source: Martin (2017) Clean Architecture Ch. 22 — composition root adapts
+  //   concrete types to port interfaces declared by the handler layer.
+  const pgStore = store as unknown as {
+    insertProspectiveMemoryAsync?: (r: Parameters<MemoryStoreExt["insertProspectiveMemory"]>[0]) => Promise<number>;
+    countActiveTriggersAsync?: () => Promise<number>;
+  };
   return {
     insertProspectiveMemory: async (record) => {
-      const id = ext["insertProspectiveMemory"]?.(record) ?? "";
+      const id = pgStore.insertProspectiveMemoryAsync != null
+        ? await pgStore.insertProspectiveMemoryAsync(record)
+        : store.insertProspectiveMemory(record);
       return String(id);
     },
     countActiveTriggers: async () => {
-      return (ext["countActiveTriggers"]?.() ?? 0) as number;
+      return pgStore.countActiveTriggersAsync != null
+        ? pgStore.countActiveTriggersAsync()
+        : Promise.resolve(store.countActiveTriggers());
     },
   };
 }
 
 function toRuleStore(store: MemoryStoreExt): RuleStore {
-  // insertRule is SQLite-only (rule engine not ported to PG). On PG this
-  // is a no-op. Documented residual gap.
-  const ext = store as unknown as Record<string, (...args: unknown[]) => unknown>;
+  // LSP-VIOLATION CLOSED: insertRule is now on MemoryStoreExt; both backends
+  // implement it. No escape-hatch needed.
+  //
+  // Prefer *Async variant on PgMemoryStore to avoid the _runSync() throw path.
+  const pgStore = store as unknown as {
+    insertRuleAsync?: (r: Parameters<MemoryStoreExt["insertRule"]>[0]) => Promise<number>;
+  };
   return {
     insertRule: async (rule) => {
-      const id = ext["insertRule"]?.(rule) ?? 0;
-      return Number(id);
+      return pgStore.insertRuleAsync != null
+        ? pgStore.insertRuleAsync(rule)
+        : Promise.resolve(store.insertRule(rule));
     },
   };
 }
 
 function toRuleReadStore(store: MemoryStoreExt): RuleReadStore {
-  // getAllActiveRules etc. are SQLite-only (rule engine not ported to PG).
-  // On PG these return []. Documented residual gap.
-  const ext = store as unknown as Record<string, (...args: unknown[]) => unknown>;
-
-  async function fetchRules(method: string): Promise<unknown[]> {
-    const result = ext[method]?.();
-    if (result instanceof Promise) return result as Promise<unknown[]>;
-    return Promise.resolve((result ?? []) as unknown[]);
-  }
-
+  // LSP-VIOLATION CLOSED: getAllActiveRules, getRulesForScope,
+  // getAllRulesIncludingInactive are now on MemoryStoreExt; both backends
+  // implement them. No escape-hatch needed.
+  //
+  // Prefer *Async variants on PgMemoryStore to avoid the _runSync() throw path.
+  const pgStore = store as unknown as {
+    getAllActiveRulesAsync?: () => Promise<Record<string, unknown>[]>;
+    getRulesForScopeAsync?: (scope: string) => Promise<Record<string, unknown>[]>;
+    getAllRulesIncludingInactiveAsync?: () => Promise<Record<string, unknown>[]>;
+  };
   return {
-    getAllActiveRules:           () => fetchRules("getAllActiveRules") as ReturnType<RuleReadStore["getAllActiveRules"]>,
-    getRulesForScope:            (scope) => (ext["getRulesForScope"]?.(scope) ?? Promise.resolve([])) as ReturnType<RuleReadStore["getRulesForScope"]>,
-    getAllRulesIncludingInactive: () => fetchRules("getAllRulesIncludingInactive") as ReturnType<RuleReadStore["getAllRulesIncludingInactive"]>,
+    getAllActiveRules: () => pgStore.getAllActiveRulesAsync != null
+      ? pgStore.getAllActiveRulesAsync() as ReturnType<RuleReadStore["getAllActiveRules"]>
+      : Promise.resolve(store.getAllActiveRules()) as ReturnType<RuleReadStore["getAllActiveRules"]>,
+    getRulesForScope: (scope) => pgStore.getRulesForScopeAsync != null
+      ? pgStore.getRulesForScopeAsync(scope) as ReturnType<RuleReadStore["getRulesForScope"]>
+      : Promise.resolve(store.getRulesForScope(scope)) as ReturnType<RuleReadStore["getRulesForScope"]>,
+    getAllRulesIncludingInactive: () => pgStore.getAllRulesIncludingInactiveAsync != null
+      ? pgStore.getAllRulesIncludingInactiveAsync() as ReturnType<RuleReadStore["getAllRulesIncludingInactive"]>
+      : Promise.resolve(store.getAllRulesIncludingInactive()) as ReturnType<RuleReadStore["getAllRulesIncludingInactive"]>,
   };
 }
 

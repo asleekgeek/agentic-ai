@@ -88,6 +88,14 @@ import {
   getActiveProspectiveMemories as pgGetActiveProspectiveMemories,
   insertArchive as pgInsertArchive,
 } from "./pg-store-auxiliary.js";
+import {
+  insertRule as pgInsertRule,
+  getAllActiveRules as pgGetAllActiveRules,
+  getRulesForScope as pgGetRulesForScope,
+  getAllRulesIncludingInactive as pgGetAllRulesIncludingInactive,
+  countActiveTriggers as pgCountActiveTriggers,
+  insertProspectiveMemory as pgInsertProspectiveMemory,
+} from "./pg-store-rules.js";
 import { findCoAccessedPairs as pgFindCoAccessedPairs } from "./pg-store-queries.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
@@ -1191,6 +1199,130 @@ export class PgMemoryStore implements MemoryStoreExt {
         duration_ms: typeof data["duration_ms"] === "number" ? data["duration_ms"] : 0,
       }),
     );
+  }
+
+  // ── MemoryStoreExt: rule engine ────────────────────────────────────────
+  //
+  // LSP-VIOLATION CLOSED: insertRule, getAllActiveRules, getRulesForScope,
+  // getAllRulesIncludingInactive, countActiveTriggers, insertProspectiveMemory
+  // were previously called via escape-hatch casts in advanced.ts; on PG all
+  // returned defaults (0 / []) because the methods did not exist on this class.
+  // That is a history-constraint LSP violation (Liskov & Wing 1994, §4).
+  //
+  // Each sync-signature method calls _runSync() (throws at runtime — same
+  // convention as all other PG CRUD methods). MCP tool handlers must use
+  // the *Async siblings, which are the production code paths.
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:9-70
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+
+  /**
+   * precondition:  rule.condition and rule.action are non-empty strings.
+   * postcondition: returned id > 0; row exists in memory_rules.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:14-31
+   */
+  insertRule(rule: {
+    rule_type: string;
+    scope: string;
+    scope_value: string | null;
+    condition: string;
+    action: string;
+    priority: number;
+    is_active: boolean;
+  }): number {
+    return this._runSync(async (c) => pgInsertRule(c, rule));
+  }
+
+  async insertRuleAsync(rule: {
+    rule_type: string;
+    scope: string;
+    scope_value: string | null;
+    condition: string;
+    action: string;
+    priority: number;
+    is_active: boolean;
+  }): Promise<number> {
+    return this.runAsync((c) => pgInsertRule(c, rule));
+  }
+
+  /**
+   * postcondition: returns every row where is_active = true, ordered by
+   *   scope ASC, priority DESC. Returns [] if no rules exist.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:41-45
+   */
+  getAllActiveRules(): Record<string, unknown>[] {
+    return this._runSync((c) => pgGetAllActiveRules(c));
+  }
+
+  async getAllActiveRulesAsync(): Promise<Record<string, unknown>[]> {
+    return this.runAsync((c) => pgGetAllActiveRules(c));
+  }
+
+  /**
+   * postcondition: returns rows where scope = scope AND is_active = true,
+   *   ordered by priority DESC. Returns [] if none exist.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:33-39
+   */
+  getRulesForScope(scope: string): Record<string, unknown>[] {
+    return this._runSync((c) => pgGetRulesForScope(c, scope));
+  }
+
+  async getRulesForScopeAsync(scope: string): Promise<Record<string, unknown>[]> {
+    return this.runAsync((c) => pgGetRulesForScope(c, scope));
+  }
+
+  /**
+   * postcondition: returns every row in memory_rules ordered by scope ASC,
+   *   priority DESC. Returns [] if table is empty.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py
+   */
+  getAllRulesIncludingInactive(): Record<string, unknown>[] {
+    return this._runSync((c) => pgGetAllRulesIncludingInactive(c));
+  }
+
+  async getAllRulesIncludingInactiveAsync(): Promise<Record<string, unknown>[]> {
+    return this.runAsync((c) => pgGetAllRulesIncludingInactive(c));
+  }
+
+  /**
+   * postcondition: returns COUNT(*) WHERE is_active = true. Returns 0 if empty.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
+   */
+  countActiveTriggers(): number {
+    return this._runSync((c) => pgCountActiveTriggers(c));
+  }
+
+  async countActiveTriggersAsync(): Promise<number> {
+    return this.runAsync((c) => pgCountActiveTriggers(c));
+  }
+
+  /**
+   * precondition:  record.content, record.trigger_condition, record.trigger_type
+   *   are non-empty strings.
+   * postcondition: returned id > 0; row exists in prospective_memories.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+   */
+  insertProspectiveMemory(record: {
+    content: string;
+    trigger_condition: string;
+    trigger_type: string;
+    target_directory?: string | null;
+    is_active?: boolean;
+    triggered_count?: number;
+  }): number {
+    return this._runSync((c) => pgInsertProspectiveMemory(c, record));
+  }
+
+  async insertProspectiveMemoryAsync(record: {
+    content: string;
+    trigger_condition: string;
+    trigger_type: string;
+    target_directory?: string | null;
+    is_active?: boolean;
+    triggered_count?: number;
+  }): Promise<number> {
+    return this.runAsync((c) => pgInsertProspectiveMemory(c, record));
   }
 
   async close(): Promise<void> {

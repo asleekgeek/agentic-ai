@@ -3233,8 +3233,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path6) {
-      let input = path6;
+    function removeDotSegments(path5) {
+      let input = path5;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3433,8 +3433,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path6, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path6 && path6 !== "/" ? path6 : void 0;
+        const [path5, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path5 && path5 !== "/" ? path5 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -7541,14 +7541,14 @@ var require_url_state_machine = __commonJS({
       return url.replace(/\u0009|\u000A|\u000D/g, "");
     }
     function shortenPath(url) {
-      const path6 = url.path;
-      if (path6.length === 0) {
+      const path5 = url.path;
+      if (path5.length === 0) {
         return;
       }
-      if (url.scheme === "file" && path6.length === 1 && isNormalizedWindowsDriveLetter(path6[0])) {
+      if (url.scheme === "file" && path5.length === 1 && isNormalizedWindowsDriveLetter(path5[0])) {
         return;
       }
-      path6.pop();
+      path5.pop();
     }
     function includesCredentials(url) {
       return url.username !== "" || url.password !== "";
@@ -13129,14 +13129,14 @@ __export(fileFromPath_exports, {
 });
 import { statSync, createReadStream, promises as fs } from "fs";
 import { basename } from "path";
-function createFileFromPath(path6, { mtimeMs, size }, filenameOrOptions, options = {}) {
+function createFileFromPath(path5, { mtimeMs, size }, filenameOrOptions, options = {}) {
   let filename;
   if (isPlainObject_default2(filenameOrOptions)) {
     [options, filename] = [filenameOrOptions, void 0];
   } else {
     filename = filenameOrOptions;
   }
-  const file = new FileFromPath({ path: path6, size, lastModified: mtimeMs });
+  const file = new FileFromPath({ path: path5, size, lastModified: mtimeMs });
   if (!filename) {
     filename = file.name;
   }
@@ -13145,13 +13145,13 @@ function createFileFromPath(path6, { mtimeMs, size }, filenameOrOptions, options
     lastModified: file.lastModified
   });
 }
-function fileFromPathSync(path6, filenameOrOptions, options = {}) {
-  const stats = statSync(path6);
-  return createFileFromPath(path6, stats, filenameOrOptions, options);
+function fileFromPathSync(path5, filenameOrOptions, options = {}) {
+  const stats = statSync(path5);
+  return createFileFromPath(path5, stats, filenameOrOptions, options);
 }
-async function fileFromPath2(path6, filenameOrOptions, options) {
-  const stats = await fs.stat(path6);
-  return createFileFromPath(path6, stats, filenameOrOptions, options);
+async function fileFromPath2(path5, filenameOrOptions, options) {
+  const stats = await fs.stat(path5);
+  return createFileFromPath(path5, stats, filenameOrOptions, options);
 }
 var import_node_domexception, __classPrivateFieldSet4, __classPrivateFieldGet5, _FileFromPath_path, _FileFromPath_start, MESSAGE, FileFromPath;
 var init_fileFromPath = __esm({
@@ -13209,354 +13209,11 @@ var init_fileFromPath = __esm({
   }
 });
 
-// packages/memory/dist/wiki/layout.js
-function slugify(value, maxLen = _MAX_SLUG_LEN) {
-  if (!value)
-    return "unknown";
-  const cleaned = value.trim().toLowerCase().replace(_SAFE, "-").replace(/^-+|-+$/g, "");
-  if (!cleaned)
-    return "unknown";
-  const trimmed = cleaned.slice(0, maxLen).replace(/-+$/, "");
-  return trimmed || "unknown";
-}
-function adrFilename(number3, slug) {
-  return `${String(number3).padStart(4, "0")}-${slug}.md`;
-}
-function pagePath(kind2, filename) {
-  if (!PAGE_KINDS.includes(kind2)) {
-    throw new Error(`unknown wiki page kind: ${kind2}`);
-  }
-  return `${kind2}/${filename}`;
-}
-function indexPath() {
-  return ".generated/INDEX.md";
-}
-var PAGE_KINDS, _SAFE, _MAX_SLUG_LEN;
-var init_layout = __esm({
-  "packages/memory/dist/wiki/layout.js"() {
-    "use strict";
-    PAGE_KINDS = [
-      "adr",
-      "specs",
-      "guides",
-      "reference",
-      "conventions",
-      "lessons",
-      "notes",
-      "journal",
-      "files"
-    ];
-    _SAFE = /[^a-zA-Z0-9_.\\-]+/g;
-    _MAX_SLUG_LEN = 80;
-  }
-});
-
-// packages/memory/dist/wiki/pages.js
-function nowIso3() {
-  return (/* @__PURE__ */ new Date()).toISOString().replace(/\.\d{3}Z$/, "Z");
-}
-function formatFrontmatter(fm) {
-  if (!fm || Object.keys(fm).length === 0)
-    return "";
-  const lines = ["---"];
-  for (const key of Object.keys(fm).sort()) {
-    const value = fm[key];
-    let rendered;
-    if (Array.isArray(value)) {
-      rendered = "[" + value.map(String).join(", ") + "]";
-    } else if (value == null) {
-      rendered = "";
-    } else {
-      rendered = String(value);
-    }
-    lines.push(`${key}: ${rendered}`);
-  }
-  lines.push("---");
-  lines.push("");
-  return lines.join("\n");
-}
-function stripInlineList(value) {
-  let inner = value.trim();
-  if (inner.startsWith("[") && inner.endsWith("]")) {
-    inner = inner.slice(1, -1);
-  }
-  return inner.split(",").map((s2) => s2.trim()).filter(Boolean);
-}
-function parsePage(text) {
-  if (!text.startsWith("---\n") && !text.startsWith("---\r\n")) {
-    return { frontmatter: {}, body: text };
-  }
-  const lines = text.split("\n");
-  if (!lines[0] || lines[0].trim() !== "---") {
-    return { frontmatter: {}, body: text };
-  }
-  const fm = {};
-  let bodyStart = lines.length;
-  for (let idx = 1; idx < lines.length; idx++) {
-    const line = lines[idx];
-    if (!line)
-      continue;
-    if (line.trim() === "---") {
-      bodyStart = idx + 1;
-      break;
-    }
-    if (!line.includes(":"))
-      continue;
-    const colonIdx = line.indexOf(":");
-    const key = line.slice(0, colonIdx).trim();
-    const raw = line.slice(colonIdx + 1).trim();
-    if (raw.startsWith("[") && raw.endsWith("]")) {
-      fm[key] = stripInlineList(raw);
-    } else {
-      fm[key] = raw;
-    }
-  }
-  let bodyLines = lines.slice(bodyStart);
-  while (bodyLines.length > 0 && bodyLines[0] === "") {
-    bodyLines = bodyLines.slice(1);
-  }
-  return { frontmatter: fm, body: bodyLines.join("\n") };
-}
-function renderPage(doc) {
-  const header = formatFrontmatter(doc.frontmatter);
-  if (header && doc.body) {
-    return header + doc.body + (doc.body.endsWith("\n") ? "" : "\n");
-  }
-  if (header)
-    return header;
-  return doc.body ? doc.body + (doc.body.endsWith("\n") ? "" : "\n") : "";
-}
-function buildAdr(args) {
-  const status = args.status ?? "accepted";
-  if (!ADR_STATUSES.includes(status)) {
-    throw new Error(`unknown ADR status: ${status}`);
-  }
-  const fm = {
-    kind: "adr",
-    number: String(args.number).padStart(4, "0"),
-    title: args.title,
-    status,
-    created: nowIso3(),
-    tags: args.tags ?? ["adr"]
-  };
-  const body = `# ADR-${String(args.number).padStart(4, "0")}: ${args.title}
-
-## Status
-
-${status}
-
-## Context
-
-${args.context}
-
-## Decision
-
-${args.decision}
-
-## Consequences
-
-${args.consequences}
-`;
-  return renderPage({ frontmatter: fm, body });
-}
-var ADR_STATUSES;
-var init_pages = __esm({
-  "packages/memory/dist/wiki/pages.js"() {
-    "use strict";
-    init_layout();
-    ADR_STATUSES = [
-      "proposed",
-      "accepted",
-      "rejected",
-      "superseded",
-      "deprecated"
-    ];
-  }
-});
-
-// packages/memory/dist/wiki/schema-loader.js
-var schema_loader_exports = {};
-__export(schema_loader_exports, {
-  loadRegistry: () => loadRegistry
-});
-import * as fs3 from "node:fs";
-import * as path3 from "node:path";
-function parseKind(relPath, content) {
-  const doc = parsePage(content);
-  const fm = doc.frontmatter;
-  const name = fm["name"] ?? path3.basename(relPath, ".md");
-  if (!name)
-    return null;
-  const toStringArray = (v2) => {
-    if (Array.isArray(v2))
-      return v2.map(String);
-    if (typeof v2 === "string" && v2)
-      return [v2];
-    return [];
-  };
-  return {
-    name,
-    display_name: String(fm["display_name"] ?? name),
-    dir_name: String(fm["dir_name"] ?? name + "s"),
-    required_sections: toStringArray(fm["required_sections"]),
-    optional_sections: toStringArray(fm["optional_sections"]),
-    parent_kind: fm["parent_kind"] ?? null,
-    autofill_prompt: String(fm["autofill_prompt"] ?? "")
-  };
-}
-function parseRulesTable(body) {
-  const rows = [];
-  let m2;
-  const re2 = /^\|(.+)\|$/gm;
-  while ((m2 = re2.exec(body)) !== null) {
-    rows.push(m2[1]);
-  }
-  if (rows.length < 2)
-    return [];
-  const headerCells = rows[0].split("|").map((c2) => c2.trim().toLowerCase());
-  const rules = [];
-  for (const row of rows.slice(2)) {
-    const cells = row.split("|").map((c2) => c2.trim());
-    if (cells.length !== headerCells.length)
-      continue;
-    const r2 = {};
-    headerCells.forEach((h2, i2) => {
-      r2[h2] = cells[i2] ?? "";
-    });
-    if (!r2["pattern"] || !r2["kind"])
-      continue;
-    let target = r2["target"] ?? null;
-    if (target === "reject" || target === "-" || target === "") {
-      target = null;
-    }
-    let weight = 1;
-    const rawWeight = r2["weight"];
-    if (rawWeight) {
-      const parsed = parseFloat(rawWeight);
-      if (!isNaN(parsed))
-        weight = parsed;
-    }
-    rules.push({
-      pattern: r2["pattern"],
-      pattern_kind: r2["kind"],
-      target_kind: target,
-      weight,
-      note: r2["note"] ?? ""
-    });
-  }
-  return rules;
-}
-function parseView(relPath, content) {
-  const doc = parsePage(content);
-  const m2 = QUERY_BLOCK_RE.exec(doc.body);
-  if (!m2)
-    return null;
-  const fm = doc.frontmatter;
-  return {
-    name: String(fm["name"] ?? path3.basename(relPath, ".md")),
-    rel_path: relPath,
-    query: m2[1].trim(),
-    description: String(fm["description"] ?? "")
-  };
-}
-function parseTrigger(relPath, content) {
-  const doc = parsePage(content);
-  const fm = doc.frontmatter;
-  const event = fm["event"];
-  if (!event)
-    return null;
-  return {
-    name: String(fm["name"] ?? path3.basename(relPath, ".md")),
-    event: String(event),
-    condition: String(fm["condition"] ?? ""),
-    action: String(fm["action"] ?? "")
-  };
-}
-function loadFolderDirect(wikiRoot, folder, parser) {
-  const results = {};
-  const full = path3.join(wikiRoot, folder);
-  if (!fs3.existsSync(full))
-    return results;
-  function walk(dir) {
-    let entries;
-    try {
-      entries = fs3.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const entryPath = path3.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        walk(entryPath);
-      } else if (entry.isFile() && entry.name.endsWith(".md")) {
-        const relPath = path3.relative(wikiRoot, entryPath).replace(/\\/g, "/");
-        try {
-          const content = fs3.readFileSync(entryPath, "utf-8");
-          const parsed = parser(relPath, content);
-          if (parsed !== null) {
-            const key = parsed.name ?? relPath;
-            results[key] = parsed;
-          }
-        } catch {
-        }
-      }
-    }
-  }
-  walk(full);
-  return results;
-}
-function loadRegistry(wikiRoot) {
-  const kinds = loadFolderDirect(wikiRoot, "_kinds", parseKind);
-  const rules = [];
-  const rulesDir = path3.join(wikiRoot, "_rules");
-  if (fs3.existsSync(rulesDir)) {
-    const walk = (dir) => {
-      let entries;
-      try {
-        entries = fs3.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of [...entries].sort((a2, b2) => a2.name.localeCompare(b2.name))) {
-        const entryPath = path3.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(entryPath);
-        } else if (entry.isFile() && entry.name.endsWith(".md")) {
-          try {
-            const content = fs3.readFileSync(entryPath, "utf-8");
-            const body = parsePage(content).body;
-            rules.push(...parseRulesTable(body));
-          } catch {
-          }
-        }
-      }
-    };
-    walk(rulesDir);
-  }
-  const views = loadFolderDirect(wikiRoot, "_views", parseView);
-  const triggers = loadFolderDirect(wikiRoot, "_triggers", parseTrigger);
-  return {
-    kinds,
-    rules,
-    views,
-    triggers,
-    known_kind_names: new Set(Object.keys(kinds))
-  };
-}
-var QUERY_BLOCK_RE;
-var init_schema_loader = __esm({
-  "packages/memory/dist/wiki/schema-loader.js"() {
-    "use strict";
-    init_pages();
-    QUERY_BLOCK_RE = /```cortex-query\n([\s\S]*?)\n```/;
-  }
-});
-
 // node_modules/.pnpm/node-gyp-build@4.8.4/node_modules/node-gyp-build/node-gyp-build.js
 var require_node_gyp_build = __commonJS({
   "node_modules/.pnpm/node-gyp-build@4.8.4/node_modules/node-gyp-build/node-gyp-build.js"(exports2, module2) {
     var fs5 = __require("fs");
-    var path6 = __require("path");
+    var path5 = __require("path");
     var os = __require("os");
     var runtimeRequire = typeof __webpack_require__ === "function" ? __non_webpack_require__ : __require;
     var vars = process.config && process.config.variables || {};
@@ -13573,21 +13230,21 @@ var require_node_gyp_build = __commonJS({
       return runtimeRequire(load.resolve(dir));
     }
     load.resolve = load.path = function(dir) {
-      dir = path6.resolve(dir || ".");
+      dir = path5.resolve(dir || ".");
       try {
-        var name = runtimeRequire(path6.join(dir, "package.json")).name.toUpperCase().replace(/-/g, "_");
+        var name = runtimeRequire(path5.join(dir, "package.json")).name.toUpperCase().replace(/-/g, "_");
         if (process.env[name + "_PREBUILD"]) dir = process.env[name + "_PREBUILD"];
       } catch (err) {
       }
       if (!prebuildsOnly) {
-        var release = getFirst(path6.join(dir, "build/Release"), matchBuild);
+        var release = getFirst(path5.join(dir, "build/Release"), matchBuild);
         if (release) return release;
-        var debug2 = getFirst(path6.join(dir, "build/Debug"), matchBuild);
+        var debug2 = getFirst(path5.join(dir, "build/Debug"), matchBuild);
         if (debug2) return debug2;
       }
       var prebuild = resolve7(dir);
       if (prebuild) return prebuild;
-      var nearby = resolve7(path6.dirname(process.execPath));
+      var nearby = resolve7(path5.dirname(process.execPath));
       if (nearby) return nearby;
       var target = [
         "platform=" + platform,
@@ -13604,14 +13261,14 @@ var require_node_gyp_build = __commonJS({
       ].filter(Boolean).join(" ");
       throw new Error("No native build was found for " + target + "\n    loaded from: " + dir + "\n");
       function resolve7(dir2) {
-        var tuples = readdirSync9(path6.join(dir2, "prebuilds")).map(parseTuple);
+        var tuples = readdirSync9(path5.join(dir2, "prebuilds")).map(parseTuple);
         var tuple = tuples.filter(matchTuple(platform, arch)).sort(compareTuples)[0];
         if (!tuple) return;
-        var prebuilds = path6.join(dir2, "prebuilds", tuple.name);
+        var prebuilds = path5.join(dir2, "prebuilds", tuple.name);
         var parsed = readdirSync9(prebuilds).map(parseTags4);
         var candidates = parsed.filter(matchTags(runtime, abi));
         var winner = candidates.sort(compareTags(runtime))[0];
-        if (winner) return path6.join(prebuilds, winner.file);
+        if (winner) return path5.join(prebuilds, winner.file);
       }
     };
     function readdirSync9(dir) {
@@ -13623,7 +13280,7 @@ var require_node_gyp_build = __commonJS({
     }
     function getFirst(dir, filter2) {
       var files = readdirSync9(dir).filter(filter2);
-      return files[0] && path6.join(dir, files[0]);
+      return files[0] && path5.join(dir, files[0]);
     }
     function matchBuild(name) {
       return /\.node$/.test(name);
@@ -14460,6 +14117,349 @@ var require_tree_sitter = __commonJS({
   }
 });
 
+// packages/memory/dist/wiki/layout.js
+function slugify(value, maxLen = _MAX_SLUG_LEN) {
+  if (!value)
+    return "unknown";
+  const cleaned = value.trim().toLowerCase().replace(_SAFE, "-").replace(/^-+|-+$/g, "");
+  if (!cleaned)
+    return "unknown";
+  const trimmed = cleaned.slice(0, maxLen).replace(/-+$/, "");
+  return trimmed || "unknown";
+}
+function adrFilename(number3, slug) {
+  return `${String(number3).padStart(4, "0")}-${slug}.md`;
+}
+function pagePath(kind2, filename) {
+  if (!PAGE_KINDS.includes(kind2)) {
+    throw new Error(`unknown wiki page kind: ${kind2}`);
+  }
+  return `${kind2}/${filename}`;
+}
+function indexPath() {
+  return ".generated/INDEX.md";
+}
+var PAGE_KINDS, _SAFE, _MAX_SLUG_LEN;
+var init_layout = __esm({
+  "packages/memory/dist/wiki/layout.js"() {
+    "use strict";
+    PAGE_KINDS = [
+      "adr",
+      "specs",
+      "guides",
+      "reference",
+      "conventions",
+      "lessons",
+      "notes",
+      "journal",
+      "files"
+    ];
+    _SAFE = /[^a-zA-Z0-9_.\\-]+/g;
+    _MAX_SLUG_LEN = 80;
+  }
+});
+
+// packages/memory/dist/wiki/pages.js
+function nowIso3() {
+  return (/* @__PURE__ */ new Date()).toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+function formatFrontmatter(fm) {
+  if (!fm || Object.keys(fm).length === 0)
+    return "";
+  const lines = ["---"];
+  for (const key of Object.keys(fm).sort()) {
+    const value = fm[key];
+    let rendered;
+    if (Array.isArray(value)) {
+      rendered = "[" + value.map(String).join(", ") + "]";
+    } else if (value == null) {
+      rendered = "";
+    } else {
+      rendered = String(value);
+    }
+    lines.push(`${key}: ${rendered}`);
+  }
+  lines.push("---");
+  lines.push("");
+  return lines.join("\n");
+}
+function stripInlineList(value) {
+  let inner = value.trim();
+  if (inner.startsWith("[") && inner.endsWith("]")) {
+    inner = inner.slice(1, -1);
+  }
+  return inner.split(",").map((s2) => s2.trim()).filter(Boolean);
+}
+function parsePage(text) {
+  if (!text.startsWith("---\n") && !text.startsWith("---\r\n")) {
+    return { frontmatter: {}, body: text };
+  }
+  const lines = text.split("\n");
+  if (!lines[0] || lines[0].trim() !== "---") {
+    return { frontmatter: {}, body: text };
+  }
+  const fm = {};
+  let bodyStart = lines.length;
+  for (let idx = 1; idx < lines.length; idx++) {
+    const line = lines[idx];
+    if (!line)
+      continue;
+    if (line.trim() === "---") {
+      bodyStart = idx + 1;
+      break;
+    }
+    if (!line.includes(":"))
+      continue;
+    const colonIdx = line.indexOf(":");
+    const key = line.slice(0, colonIdx).trim();
+    const raw = line.slice(colonIdx + 1).trim();
+    if (raw.startsWith("[") && raw.endsWith("]")) {
+      fm[key] = stripInlineList(raw);
+    } else {
+      fm[key] = raw;
+    }
+  }
+  let bodyLines = lines.slice(bodyStart);
+  while (bodyLines.length > 0 && bodyLines[0] === "") {
+    bodyLines = bodyLines.slice(1);
+  }
+  return { frontmatter: fm, body: bodyLines.join("\n") };
+}
+function renderPage(doc) {
+  const header = formatFrontmatter(doc.frontmatter);
+  if (header && doc.body) {
+    return header + doc.body + (doc.body.endsWith("\n") ? "" : "\n");
+  }
+  if (header)
+    return header;
+  return doc.body ? doc.body + (doc.body.endsWith("\n") ? "" : "\n") : "";
+}
+function buildAdr(args) {
+  const status = args.status ?? "accepted";
+  if (!ADR_STATUSES.includes(status)) {
+    throw new Error(`unknown ADR status: ${status}`);
+  }
+  const fm = {
+    kind: "adr",
+    number: String(args.number).padStart(4, "0"),
+    title: args.title,
+    status,
+    created: nowIso3(),
+    tags: args.tags ?? ["adr"]
+  };
+  const body = `# ADR-${String(args.number).padStart(4, "0")}: ${args.title}
+
+## Status
+
+${status}
+
+## Context
+
+${args.context}
+
+## Decision
+
+${args.decision}
+
+## Consequences
+
+${args.consequences}
+`;
+  return renderPage({ frontmatter: fm, body });
+}
+var ADR_STATUSES;
+var init_pages = __esm({
+  "packages/memory/dist/wiki/pages.js"() {
+    "use strict";
+    init_layout();
+    ADR_STATUSES = [
+      "proposed",
+      "accepted",
+      "rejected",
+      "superseded",
+      "deprecated"
+    ];
+  }
+});
+
+// packages/memory/dist/wiki/schema-loader.js
+var schema_loader_exports = {};
+__export(schema_loader_exports, {
+  loadRegistry: () => loadRegistry
+});
+import * as fs2 from "node:fs";
+import * as path from "node:path";
+function parseKind(relPath, content) {
+  const doc = parsePage(content);
+  const fm = doc.frontmatter;
+  const name = fm["name"] ?? path.basename(relPath, ".md");
+  if (!name)
+    return null;
+  const toStringArray = (v2) => {
+    if (Array.isArray(v2))
+      return v2.map(String);
+    if (typeof v2 === "string" && v2)
+      return [v2];
+    return [];
+  };
+  return {
+    name,
+    display_name: String(fm["display_name"] ?? name),
+    dir_name: String(fm["dir_name"] ?? name + "s"),
+    required_sections: toStringArray(fm["required_sections"]),
+    optional_sections: toStringArray(fm["optional_sections"]),
+    parent_kind: fm["parent_kind"] ?? null,
+    autofill_prompt: String(fm["autofill_prompt"] ?? "")
+  };
+}
+function parseRulesTable(body) {
+  const rows = [];
+  let m2;
+  const re2 = /^\|(.+)\|$/gm;
+  while ((m2 = re2.exec(body)) !== null) {
+    rows.push(m2[1]);
+  }
+  if (rows.length < 2)
+    return [];
+  const headerCells = rows[0].split("|").map((c2) => c2.trim().toLowerCase());
+  const rules = [];
+  for (const row of rows.slice(2)) {
+    const cells = row.split("|").map((c2) => c2.trim());
+    if (cells.length !== headerCells.length)
+      continue;
+    const r2 = {};
+    headerCells.forEach((h2, i2) => {
+      r2[h2] = cells[i2] ?? "";
+    });
+    if (!r2["pattern"] || !r2["kind"])
+      continue;
+    let target = r2["target"] ?? null;
+    if (target === "reject" || target === "-" || target === "") {
+      target = null;
+    }
+    let weight = 1;
+    const rawWeight = r2["weight"];
+    if (rawWeight) {
+      const parsed = parseFloat(rawWeight);
+      if (!isNaN(parsed))
+        weight = parsed;
+    }
+    rules.push({
+      pattern: r2["pattern"],
+      pattern_kind: r2["kind"],
+      target_kind: target,
+      weight,
+      note: r2["note"] ?? ""
+    });
+  }
+  return rules;
+}
+function parseView(relPath, content) {
+  const doc = parsePage(content);
+  const m2 = QUERY_BLOCK_RE.exec(doc.body);
+  if (!m2)
+    return null;
+  const fm = doc.frontmatter;
+  return {
+    name: String(fm["name"] ?? path.basename(relPath, ".md")),
+    rel_path: relPath,
+    query: m2[1].trim(),
+    description: String(fm["description"] ?? "")
+  };
+}
+function parseTrigger(relPath, content) {
+  const doc = parsePage(content);
+  const fm = doc.frontmatter;
+  const event = fm["event"];
+  if (!event)
+    return null;
+  return {
+    name: String(fm["name"] ?? path.basename(relPath, ".md")),
+    event: String(event),
+    condition: String(fm["condition"] ?? ""),
+    action: String(fm["action"] ?? "")
+  };
+}
+function loadFolderDirect(wikiRoot, folder, parser) {
+  const results = {};
+  const full = path.join(wikiRoot, folder);
+  if (!fs2.existsSync(full))
+    return results;
+  function walk(dir) {
+    let entries;
+    try {
+      entries = fs2.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const entryPath = path.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(entryPath);
+      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+        const relPath = path.relative(wikiRoot, entryPath).replace(/\\/g, "/");
+        try {
+          const content = fs2.readFileSync(entryPath, "utf-8");
+          const parsed = parser(relPath, content);
+          if (parsed !== null) {
+            const key = parsed.name ?? relPath;
+            results[key] = parsed;
+          }
+        } catch {
+        }
+      }
+    }
+  }
+  walk(full);
+  return results;
+}
+function loadRegistry(wikiRoot) {
+  const kinds = loadFolderDirect(wikiRoot, "_kinds", parseKind);
+  const rules = [];
+  const rulesDir = path.join(wikiRoot, "_rules");
+  if (fs2.existsSync(rulesDir)) {
+    const walk = (dir) => {
+      let entries;
+      try {
+        entries = fs2.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of [...entries].sort((a2, b2) => a2.name.localeCompare(b2.name))) {
+        const entryPath = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(entryPath);
+        } else if (entry.isFile() && entry.name.endsWith(".md")) {
+          try {
+            const content = fs2.readFileSync(entryPath, "utf-8");
+            const body = parsePage(content).body;
+            rules.push(...parseRulesTable(body));
+          } catch {
+          }
+        }
+      }
+    };
+    walk(rulesDir);
+  }
+  const views = loadFolderDirect(wikiRoot, "_views", parseView);
+  const triggers = loadFolderDirect(wikiRoot, "_triggers", parseTrigger);
+  return {
+    kinds,
+    rules,
+    views,
+    triggers,
+    known_kind_names: new Set(Object.keys(kinds))
+  };
+}
+var QUERY_BLOCK_RE;
+var init_schema_loader = __esm({
+  "packages/memory/dist/wiki/schema-loader.js"() {
+    "use strict";
+    init_pages();
+    QUERY_BLOCK_RE = /```cortex-query\n([\s\S]*?)\n```/;
+  }
+});
+
 // node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/external.js
 var external_exports = {};
 __export(external_exports, {
@@ -14938,8 +14938,8 @@ function getErrorMap() {
 
 // node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path6, errorMaps, issueData } = params;
-  const fullPath = [...path6, ...issueData.path || []];
+  const { data, path: path5, errorMaps, issueData } = params;
+  const fullPath = [...path5, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -15055,11 +15055,11 @@ var errorUtil;
 
 // node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path6, key) {
+  constructor(parent, value, path5, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path6;
+    this._path = path5;
     this._key = key;
   }
   get path() {
@@ -18696,10 +18696,10 @@ function assignProp(target, prop, value) {
     configurable: true
   });
 }
-function getElementAtPath(obj, path6) {
-  if (!path6)
+function getElementAtPath(obj, path5) {
+  if (!path5)
     return obj;
-  return path6.reduce((acc, key) => acc?.[key], obj);
+  return path5.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -19019,11 +19019,11 @@ function aborted(x2, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path6, issues) {
+function prefixIssues(path5, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path6);
+    iss.path.unshift(path5);
     return iss;
   });
 }
@@ -29055,13 +29055,13 @@ var MultipartBody = class {
 // node_modules/.pnpm/@anthropic-ai+sdk@0.39.0/node_modules/@anthropic-ai/sdk/_shims/node-runtime.mjs
 import { ReadableStream as ReadableStream3 } from "node:stream/web";
 var fileFromPathWarned = false;
-async function fileFromPath3(path6, ...args) {
+async function fileFromPath3(path5, ...args) {
   const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => (init_fileFromPath(), fileFromPath_exports));
   if (!fileFromPathWarned) {
-    console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path6)}) instead`);
+    console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path5)}) instead`);
     fileFromPathWarned = true;
   }
-  return await _fileFromPath(path6, ...args);
+  return await _fileFromPath(path5, ...args);
 }
 var defaultHttpAgent = new import_agentkeepalive.default({ keepAlive: true, timeout: 5 * 60 * 1e3 });
 var defaultHttpsAgent = new import_agentkeepalive.default.HttpsAgent({ keepAlive: true, timeout: 5 * 60 * 1e3 });
@@ -29785,29 +29785,29 @@ var APIClient = class {
   defaultIdempotencyKey() {
     return `stainless-node-retry-${uuid4()}`;
   }
-  get(path6, opts) {
-    return this.methodRequest("get", path6, opts);
+  get(path5, opts) {
+    return this.methodRequest("get", path5, opts);
   }
-  post(path6, opts) {
-    return this.methodRequest("post", path6, opts);
+  post(path5, opts) {
+    return this.methodRequest("post", path5, opts);
   }
-  patch(path6, opts) {
-    return this.methodRequest("patch", path6, opts);
+  patch(path5, opts) {
+    return this.methodRequest("patch", path5, opts);
   }
-  put(path6, opts) {
-    return this.methodRequest("put", path6, opts);
+  put(path5, opts) {
+    return this.methodRequest("put", path5, opts);
   }
-  delete(path6, opts) {
-    return this.methodRequest("delete", path6, opts);
+  delete(path5, opts) {
+    return this.methodRequest("delete", path5, opts);
   }
-  methodRequest(method, path6, opts) {
+  methodRequest(method, path5, opts) {
     return this.request(Promise.resolve(opts).then(async (opts2) => {
       const body = opts2 && isBlobLike(opts2?.body) ? new DataView(await opts2.body.arrayBuffer()) : opts2?.body instanceof DataView ? opts2.body : opts2?.body instanceof ArrayBuffer ? new DataView(opts2.body) : opts2 && ArrayBuffer.isView(opts2?.body) ? new DataView(opts2.body.buffer) : opts2?.body;
-      return { method, path: path6, ...opts2, body };
+      return { method, path: path5, ...opts2, body };
     }));
   }
-  getAPIList(path6, Page2, opts) {
-    return this.requestAPIList(Page2, { method: "get", path: path6, ...opts });
+  getAPIList(path5, Page2, opts) {
+    return this.requestAPIList(Page2, { method: "get", path: path5, ...opts });
   }
   calculateContentLength(body) {
     if (typeof body === "string") {
@@ -29826,10 +29826,10 @@ var APIClient = class {
   }
   buildRequest(options, { retryCount = 0 } = {}) {
     options = { ...options };
-    const { method, path: path6, query, headers = {} } = options;
+    const { method, path: path5, query, headers = {} } = options;
     const body = ArrayBuffer.isView(options.body) || options.__binaryRequest && typeof options.body === "string" ? options.body : isMultipartBody(options.body) ? options.body.body : options.body ? JSON.stringify(options.body, null, 2) : null;
     const contentLength = this.calculateContentLength(body);
-    const url = this.buildURL(path6, query);
+    const url = this.buildURL(path5, query);
     if ("timeout" in options)
       validatePositiveInteger("timeout", options.timeout);
     options.timeout = options.timeout ?? this.timeout;
@@ -29953,8 +29953,8 @@ var APIClient = class {
     const request = this.makeRequest(options, null);
     return new PagePromise(this, request, Page2);
   }
-  buildURL(path6, query) {
-    const url = isAbsoluteURL(path6) ? new URL(path6) : new URL(this.baseURL + (this.baseURL.endsWith("/") && path6.startsWith("/") ? path6.slice(1) : path6));
+  buildURL(path5, query) {
+    const url = isAbsoluteURL(path5) ? new URL(path5) : new URL(this.baseURL + (this.baseURL.endsWith("/") && path5.startsWith("/") ? path5.slice(1) : path5));
     const defaultQuery = this.defaultQuery();
     if (!isEmptyObj(defaultQuery)) {
       query = { ...defaultQuery, ...query };
@@ -32398,6 +32398,79 @@ var SqliteNarrativeAdapter = class {
   }
 };
 
+// packages/memory/dist/narrative/handlers/pg-narrative-adapter.js
+function rowToRecord2(row) {
+  let tags;
+  const rawTags = row.tags;
+  if (Array.isArray(rawTags)) {
+    tags = rawTags;
+  } else if (typeof rawTags === "string") {
+    try {
+      const parsed = JSON.parse(rawTags);
+      tags = Array.isArray(parsed) ? parsed : [];
+    } catch {
+      tags = [];
+    }
+  } else {
+    tags = [];
+  }
+  return {
+    content: String(row.content ?? ""),
+    tags,
+    importance: typeof row.importance === "number" ? row.importance : 0.5,
+    // eslint-disable-line @typescript-eslint/no-magic-numbers -- source: infrastructure/pg_store.py default importance
+    heat: typeof row.heat_base === "number" ? row.heat_base : 0,
+    timestamp: String(row.created_at ?? ""),
+    session_id: ""
+  };
+}
+var PgNarrativeAdapter = class {
+  _store;
+  constructor(_store) {
+    this._store = _store;
+  }
+  /**
+   * Return memories for a directory, ordered by heat descending.
+   *
+   * Precondition:  directory is a non-empty string; minHeat >= 0.
+   * Postcondition: returns memories where directory_context LIKE directory%
+   *   AND heat_base >= minHeat, ordered by heat DESC.
+   *
+   * NOTE: PG uses a LIKE prefix match (same semantics as SQLite adapter).
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:30-38
+   */
+  getMemoriesForDirectory(directory, minHeat) {
+    const raw = this._store.getMemoriesForDirectory(directory, minHeat);
+    return raw.map((r2) => rowToRecord2(r2));
+  }
+  /**
+   * Return up to `limit` memories for a domain, ordered by heat descending.
+   *
+   * Precondition:  domain is a string; minHeat >= 0; limit > 0.
+   * Postcondition: returns at most `limit` rows where domain = domain
+   *   AND heat_base >= minHeat, ordered by heat DESC.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:20-28
+   */
+  getMemoriesForDomain(domain, minHeat, limit) {
+    const raw = this._store.getMemoriesForDomain(domain, minHeat, limit);
+    return raw.map((r2) => rowToRecord2(r2));
+  }
+  /**
+   * Return up to `limit` hot memories across all domains.
+   *
+   * Precondition:  minHeat >= 0; limit > 0.
+   * Postcondition: returns at most `limit` rows with heat_base >= minHeat,
+   *   ordered by heat DESC.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:40-61
+   */
+  getHotMemories(minHeat, limit) {
+    const raw = this._store.getHotMemories(minHeat, limit);
+    return raw.map((r2) => rowToRecord2(r2));
+  }
+};
+
 // packages/memory/dist/remember/storage/sqlite-store.js
 import { createRequire } from "node:module";
 import Database from "better-sqlite3";
@@ -32405,6 +32478,7 @@ var _require = createRequire(import.meta.url);
 var FTS5_TOKEN_RE = /[A-Za-z0-9][A-Za-z0-9_'-]*/g;
 var FTS5_MIN_TOKEN_LEN = 2;
 var FTS5_MAX_TOKENS = 32;
+var FTS5_DEFAULT_LIMIT = 20;
 function sanitiseFts5Query(query) {
   if (!query)
     return "";
@@ -32533,6 +32607,80 @@ CREATE TABLE IF NOT EXISTS oscillatory_state (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   state_json TEXT NOT NULL DEFAULT '{}'
 )`;
+var STAGE_TRANSITIONS_DDL = `
+CREATE TABLE IF NOT EXISTS stage_transitions (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  memory_id           INTEGER NOT NULL,
+  from_stage          TEXT NOT NULL,
+  to_stage            TEXT NOT NULL,
+  hours_in_prev_stage REAL DEFAULT 0.0,
+  trigger             TEXT DEFAULT 'cascade',
+  transitioned_at     TEXT NOT NULL DEFAULT (datetime('now'))
+)`;
+var PROSPECTIVE_MEMORIES_DDL = `
+CREATE TABLE IF NOT EXISTS prospective_memories (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  content           TEXT NOT NULL,
+  trigger_condition TEXT NOT NULL,
+  trigger_type      TEXT NOT NULL,
+  target_directory  TEXT,
+  is_active         INTEGER DEFAULT 1,
+  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
+  triggered_at      TEXT,
+  triggered_count   INTEGER DEFAULT 0
+)`;
+var CHECKPOINTS_DDL = `
+CREATE TABLE IF NOT EXISTS checkpoints (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  session_id          TEXT DEFAULT 'default',
+  directory_context   TEXT DEFAULT '',
+  current_task        TEXT DEFAULT '',
+  files_being_edited  TEXT DEFAULT '[]',
+  key_decisions       TEXT DEFAULT '[]',
+  open_questions      TEXT DEFAULT '[]',
+  next_steps          TEXT DEFAULT '[]',
+  active_errors       TEXT DEFAULT '[]',
+  custom_context      TEXT DEFAULT '',
+  epoch               INTEGER DEFAULT 0,
+  created_at          TEXT NOT NULL DEFAULT (datetime('now')),
+  is_active           INTEGER DEFAULT 1
+)`;
+var MEMORY_ARCHIVES_DDL = `
+CREATE TABLE IF NOT EXISTS memory_archives (
+  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+  original_memory_id  INTEGER NOT NULL,
+  content             TEXT NOT NULL,
+  archived_at         TEXT NOT NULL DEFAULT (datetime('now')),
+  mismatch_score      REAL DEFAULT 0.0,
+  archive_reason      TEXT DEFAULT ''
+)`;
+var CONSOLIDATION_LOG_DDL = `
+CREATE TABLE IF NOT EXISTS consolidation_log (
+  id                INTEGER PRIMARY KEY AUTOINCREMENT,
+  timestamp         TEXT NOT NULL DEFAULT (datetime('now')),
+  memories_added    INTEGER DEFAULT 0,
+  memories_updated  INTEGER DEFAULT 0,
+  memories_archived INTEGER DEFAULT 0,
+  duration_ms       INTEGER DEFAULT 0
+)`;
+var ENGRAM_SLOTS_DDL = `
+CREATE TABLE IF NOT EXISTS engram_slots (
+  slot_index      INTEGER PRIMARY KEY,
+  excitability    REAL DEFAULT 0.5,
+  last_activated  TEXT
+)`;
+var MEMORY_RULES_DDL = `
+CREATE TABLE IF NOT EXISTS memory_rules (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  rule_type   TEXT NOT NULL DEFAULT 'soft',
+  scope       TEXT NOT NULL DEFAULT 'global',
+  scope_value TEXT,
+  condition   TEXT NOT NULL,
+  action      TEXT NOT NULL,
+  priority    INTEGER DEFAULT 0,
+  is_active   INTEGER DEFAULT 1,
+  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
+)`;
 var INDEXES = [
   `CREATE INDEX IF NOT EXISTS idx_memories_heat_base ON memories(heat_base)`,
   `CREATE INDEX IF NOT EXISTS idx_memories_domain ON memories(domain)`,
@@ -32623,6 +32771,13 @@ var SqliteMemoryStore = class {
       HOMEOSTATIC_STATE_DDL,
       SCHEMAS_DDL,
       OSCILLATORY_STATE_DDL,
+      STAGE_TRANSITIONS_DDL,
+      PROSPECTIVE_MEMORIES_DDL,
+      CHECKPOINTS_DDL,
+      MEMORY_ARCHIVES_DDL,
+      CONSOLIDATION_LOG_DDL,
+      ENGRAM_SLOTS_DDL,
+      MEMORY_RULES_DDL,
       ...INDEXES
     ];
     for (const ddl of ddls) {
@@ -32767,8 +32922,9 @@ var SqliteMemoryStore = class {
       heat_base: clampHeat(data.heat ?? 1),
       heat_base_set_at: now,
       surprise_score: data.surprise_score ?? 0,
+      // source: infrastructure/sqlite_store.py default importance
       importance: data.importance ?? 0.5,
-      // eslint-disable-line @typescript-eslint/no-magic-numbers -- source: infrastructure/sqlite_store.py default importance
+      // eslint-disable-line @typescript-eslint/no-magic-numbers
       emotional_valence: data.emotional_valence ?? 0,
       confidence: data.confidence ?? 1,
       store_type: data.store_type ?? "episodic",
@@ -32953,7 +33109,7 @@ var SqliteMemoryStore = class {
    * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:232-242
    * source: https://www.sqlite.org/fts5.html#full_text_query_syntax — FTS5 query grammar
    */
-  searchFts(query, limit = 20) {
+  searchFts(query, limit = FTS5_DEFAULT_LIMIT) {
     const sanitised = sanitiseFts5Query(query);
     if (!sanitised)
       return [];
@@ -33057,8 +33213,9 @@ var SqliteMemoryStore = class {
       heat_base_set_at: row["heat_base_set_at"] ?? "",
       no_decay: Boolean(row["no_decay"]),
       surprise_score: row["surprise_score"] ?? 0,
+      // source: infrastructure/sqlite_store.py _normalize_row default importance
       importance: row["importance"] ?? 0.5,
-      // eslint-disable-line @typescript-eslint/no-magic-numbers -- source: infrastructure/sqlite_store.py _normalize_row default importance
+      // eslint-disable-line @typescript-eslint/no-magic-numbers
       emotional_valence: row["emotional_valence"] ?? 0,
       confidence: row["confidence"] ?? 1,
       access_count: row["access_count"] ?? 0,
@@ -33118,12 +33275,419 @@ var SqliteMemoryStore = class {
       created_at: r2["created_at"]
     }));
   }
+  // ── MemoryStoreExt methods ─────────────────────────────────────────────
+  // These were previously accessible only via escape-hatch casts in index.ts
+  // and consolidation.ts. Lifting them onto the interface closes all LSP
+  // violations on the SQLite backend.
+  //
+  // source: Liskov & Wing (1994) — the contract IS the interface; both
+  //   subtypes must satisfy the same behavioral contract.
+  // ── Decay / stats ──────────��───────────────────────────────────────────
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:108-112
+   */
+  getAllMemoriesForDecay() {
+    return this._db.prepare("SELECT * FROM memories WHERE NOT is_stale").all();
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:78-86
+   */
+  // source: sqlite_store_queries.py:79
+  getAllMemoriesForValidation(limit = 1e3) {
+    return this._db.prepare("SELECT * FROM memories WHERE NOT is_stale ORDER BY last_accessed ASC LIMIT ?").all(limit);
+  }
+  // ── Domain / directory / hot queries ──────────────────────────────────
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:19-27
+   */
+  // source: sqlite_store_queries.py:21
+  getMemoriesForDomain(domain, minHeat = 0.05, limit = 50) {
+    return this._db.prepare("SELECT * FROM memories WHERE (domain = ? OR is_global = 1) AND heat_base >= ? ORDER BY heat_base DESC LIMIT ?").all(domain, minHeat, limit);
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:29-37
+   */
+  // source: sqlite_store_queries.py:30
+  getMemoriesForDirectory(directory, minHeat = 0.05) {
+    return this._db.prepare("SELECT * FROM memories WHERE (directory_context = ? OR is_global = 1) AND heat_base >= ? ORDER BY heat_base DESC").all(directory, minHeat);
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:39-57
+   */
+  // source: sqlite_store_queries.py:41
+  getHotMemories(minHeat = 0.7, limit = 20, includeBenchmarks = false) {
+    if (includeBenchmarks) {
+      return this._db.prepare("SELECT * FROM memories WHERE heat_base >= ? ORDER BY heat_base DESC LIMIT ?").all(minHeat, limit);
+    }
+    return this._db.prepare("SELECT * FROM memories WHERE heat_base >= ? AND NOT COALESCE(is_benchmark, 0) ORDER BY heat_base DESC LIMIT ?").all(minHeat, limit);
+  }
+  // ── Consolidation stage queries ─────────────────────────────���──────────
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:157
+   */
+  // source: sqlite_store_stats.py:108
+  getMemoriesByStage(stage, limit = 100) {
+    return this._db.prepare("SELECT * FROM memories WHERE consolidation_stage = ? ORDER BY hours_in_stage DESC LIMIT ?").all(stage, limit);
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:70-84
+   */
+  updateMemoryConsolidation(memoryId, stage, hoursInStage, replayCount, hippocampalDependency) {
+    this._db.prepare("UPDATE memories SET consolidation_stage = ?, hours_in_stage = ?, replay_count = ?, hippocampal_dependency = ? WHERE id = ?").run(stage, hoursInStage, replayCount, hippocampalDependency, memoryId);
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:86-106
+   */
+  insertStageTransitionsBatch(rows) {
+    if (rows.length === 0)
+      return 0;
+    const stmt = this._db.prepare("INSERT INTO stage_transitions (memory_id, from_stage, to_stage, hours_in_prev_stage, trigger) VALUES (?, ?, ?, ?, ?)");
+    const runBatch = this._db.transaction((batchRows) => {
+      for (const r2 of batchRows) {
+        stmt.run(Number(r2["memory_id"]), String(r2["from_stage"]), String(r2["to_stage"]), Number(r2["hours_in_prev"] ?? r2["hours_in_stage"] ?? 0), String(r2["trigger"] ?? "cascade"));
+      }
+    });
+    runBatch(rows);
+    return rows.length;
+  }
+  /**
+   * Update stage_entered_at for a memory row.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py — cascade stage logic
+   */
+  updateStageEnteredAt(memoryId, enteredAt) {
+    this._db.prepare("UPDATE memories SET stage_entered_at = ? WHERE id = ?").run(enteredAt, memoryId);
+  }
+  // ── CLS queries ────────────────────────���───────────────────────────────
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:183-199
+   */
+  // source: sqlite_store_stats.py:184
+  getEpisodicMemories(domain = "", directory = "", limit = 500) {
+    const conditions = ["store_type = 'episodic'", "NOT is_stale"];
+    const params = [];
+    if (domain) {
+      conditions.push("domain = ?");
+      params.push(domain);
+    }
+    if (directory) {
+      conditions.push("directory_context = ?");
+      params.push(directory);
+    }
+    params.push(limit);
+    return this._db.prepare(`SELECT * FROM memories WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC LIMIT ?`).all(...params);
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:201-217
+   */
+  // source: sqlite_store_stats.py:201
+  getSemanticMemories(domain = "", limit = 500) {
+    if (domain) {
+      return this._db.prepare("SELECT * FROM memories WHERE store_type = 'semantic' AND domain = ? AND NOT is_stale ORDER BY created_at DESC LIMIT ?").all(domain, limit);
+    }
+    return this._db.prepare("SELECT * FROM memories WHERE store_type = 'semantic' AND NOT is_stale ORDER BY created_at DESC LIMIT ?").all(limit);
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:219-224
+   */
+  updateMemoryStoreType(memoryId, storeType) {
+    this._db.prepare("UPDATE memories SET store_type = ? WHERE id = ?").run(storeType, memoryId);
+  }
+  // ── Entity queries for consolidation ──────────────────────────────────
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:99-111
+   */
+  getAllEntities(opts) {
+    const minHeat = opts?.minHeat ?? 0.05;
+    if (opts?.includeArchived) {
+      return this._db.prepare("SELECT * FROM entities WHERE heat >= ?").all(minHeat);
+    }
+    return this._db.prepare("SELECT * FROM entities WHERE heat >= ? AND NOT archived").all(minHeat);
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:19-37
+   */
+  updateEntitiesHeatBatch(updates) {
+    if (updates.length === 0)
+      return;
+    const stmt = this._db.prepare("UPDATE entities SET heat = ? WHERE id = ?");
+    const tx = this._db.transaction((rows) => {
+      for (const [id2, heat] of rows)
+        stmt.run(heat, id2);
+    });
+    tx(updates);
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:39-48
+   */
+  archiveEntitiesBatch(entityIds) {
+    if (entityIds.length === 0)
+      return 0;
+    const stmt = this._db.prepare("UPDATE entities SET heat = 0 WHERE id = ?");
+    const tx = this._db.transaction((ids) => {
+      for (const id2 of ids)
+        stmt.run(id2);
+    });
+    tx(entityIds);
+    return entityIds.length;
+  }
+  // ── Relationship queries ──────────────────────────────��────────────────
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:105-112
+   */
+  getAllRelationships() {
+    return this._db.prepare(`SELECT id, source_entity_id, target_entity_id, relationship_type,
+                weight, is_causal, confidence, created_at
+         FROM relationships`).all();
+  }
+  /**
+   * Find co-accessed entity pairs for a set of memory IDs.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:154-162
+   */
+  findCoAccessedPairs(memoryIds) {
+    if (memoryIds.length === 0)
+      return [];
+    const placeholders = memoryIds.map(() => "?").join(",");
+    const rows = this._db.prepare(`SELECT DISTINCT MIN(me1.entity_id, me2.entity_id) AS a, MAX(me1.entity_id, me2.entity_id) AS b
+         FROM memory_entities me1 JOIN memory_entities me2
+           ON me1.memory_id = me2.memory_id AND me1.entity_id < me2.entity_id
+         WHERE me1.memory_id IN (${placeholders})`).all(...memoryIds);
+    return rows.map((r2) => [r2.a, r2.b]);
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py
+   */
+  updateRelationshipsWeightBatch(updates) {
+    if (updates.length === 0)
+      return;
+    const stmt = this._db.prepare("UPDATE relationships SET weight = ? WHERE id = ?");
+    const tx = this._db.transaction((rows) => {
+      for (const [id2, weight] of rows)
+        stmt.run(weight, id2);
+    });
+    tx(updates);
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py
+   */
+  deleteRelationshipsBatch(ids) {
+    if (ids.length === 0)
+      return 0;
+    const placeholders = ids.map(() => "?").join(",");
+    const result = this._db.prepare(`DELETE FROM relationships WHERE id IN (${placeholders})`).run(...ids);
+    return result.changes;
+  }
+  /**
+   * Insert a raw relationship record.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py
+   */
+  insertRelationship(rel) {
+    const now = nowIso();
+    this._stmtUpsertRelationship.run(Number(rel["source_entity_id"]), Number(rel["target_entity_id"]), String(rel["relationship_type"] ?? "generic"), typeof rel["weight"] === "number" ? rel["weight"] : 1, now, now);
+  }
+  /**
+   * Reinforce or create a relationship between two entity names.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:133-207
+   */
+  reinforceOrCreateRelationship(entityA, entityB, _learningRate) {
+    const srcRow = this._db.prepare("SELECT id FROM entities WHERE LOWER(name) = LOWER(?) LIMIT 1").get(entityA);
+    const tgtRow = this._db.prepare("SELECT id FROM entities WHERE LOWER(name) = LOWER(?) LIMIT 1").get(entityB);
+    if (srcRow == null || tgtRow == null)
+      return;
+    const now = nowIso();
+    this._db.prepare(`INSERT INTO relationships (source_entity_id, target_entity_id, relationship_type, weight, created_at, last_reinforced)
+         VALUES (?, ?, 'co_retrieval', 1.0, ?, ?)
+         ON CONFLICT DO NOTHING`).run(srcRow.id, tgtRow.id, now, now);
+  }
+  // ── Hippocampal transfer ───────────────────────────────────────────────
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py — transfer candidates
+   */
+  // source: sqlite_store_stats.py
+  getTransferCandidates(limit = 50) {
+    return this._db.prepare(`SELECT * FROM memories
+         WHERE store_type = 'episodic'
+           AND hippocampal_dependency > 0.5
+           AND NOT is_stale
+         ORDER BY hippocampal_dependency DESC, heat_base DESC
+         LIMIT ?`).all(limit);
+  }
+  /**
+   * Update hippocampal dependency for a memory row.
+   */
+  updateHippocampalDependency(memoryId, dependency) {
+    this._db.prepare("UPDATE memories SET hippocampal_dependency = ? WHERE id = ?").run(dependency, memoryId);
+  }
+  // ── Recently accessed ─────────────────────────────��────────────────────
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:90-101
+   */
+  // source: sqlite_store_stats.py:93
+  getRecentlyAccessedMemories(limit = 20, minAccessCount = 1) {
+    return this._db.prepare("SELECT * FROM memories WHERE access_count >= ? AND NOT is_stale ORDER BY last_accessed DESC LIMIT ?").all(minAccessCount, limit);
+  }
+  // ── Agent context query (codebase-analyze) ────────────────────────────
+  //
+  // LSP-VIOLATION CLOSED (#5): codebase-analyze called store.execute()
+  // which is SQLite-specific. Replaced with a typed method.
+  //
+  // source: packages/memory/src/codebase-analysis/handlers/codebase-analyze-helpers.ts:142-160
+  getMemoriesByAgentContext(agentContext) {
+    const rows = this._db.prepare("SELECT id, tags FROM memories WHERE agent_context = ? AND NOT is_stale").all(agentContext);
+    return rows.map((r2) => ({
+      id: r2.id,
+      tags: typeof r2.tags === "string" ? r2.tags : JSON.stringify(r2.tags ?? [])
+    }));
+  }
+  // ── Prospective memories ───────────────────────────────────────────────
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:39-42
+   */
+  getActiveProspectiveMemories() {
+    return this._db.prepare("SELECT * FROM prospective_memories WHERE is_active").all();
+  }
+  // ── Replay count ───────────────────────��───────────────────────────────
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:125-130
+   */
+  incrementReplayCount(memoryId) {
+    this._db.prepare("UPDATE memories SET replay_count = replay_count + 1 WHERE id = ?").run(memoryId);
+  }
+  // ── Archive / compression ─────────────────────���────────────────────────
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:114-132
+   */
+  insertArchive(row) {
+    try {
+      this._db.prepare(`INSERT INTO memory_archives (original_memory_id, content, mismatch_score, archive_reason)
+           VALUES (?, ?, ?, ?)`).run(Number(row["original_memory_id"]), String(row["content"] ?? ""), typeof row["mismatch_score"] === "number" ? row["mismatch_score"] : 0, String(row["archive_reason"] ?? ""));
+    } catch {
+    }
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py — compression
+   */
+  updateMemoryCompression(memoryId, content, _embedding, compressionLevel, _opts) {
+    this._db.prepare(`UPDATE memories SET content = ?, compressed = 1,
+            compression_level = ?,
+            original_content = CASE WHEN original_content IS NULL THEN content ELSE original_content END
+         WHERE id = ?`).run(content, compressionLevel, memoryId);
+  }
+  // ── By-IDs batch fetch ─────────────────────────────────────────────────
+  getByIds(ids) {
+    if (ids.length === 0)
+      return [];
+    const placeholders = ids.map(() => "?").join(",");
+    return this._db.prepare(`SELECT * FROM memories WHERE id IN (${placeholders})`).all(...ids);
+  }
+  // ── Consolidation log ──────────────────────────────────────────────────
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:228-241
+   */
+  logConsolidation(data) {
+    try {
+      this._db.prepare("INSERT INTO consolidation_log (memories_added, memories_updated, memories_archived, duration_ms) VALUES (?, ?, ?, ?)").run(data["memories_added"] ?? 0, data["memories_updated"] ?? 0, data["memories_archived"] ?? 0, data["duration_ms"] ?? 0);
+    } catch {
+    }
+  }
+  // ── Rule engine ────────────────────────────────────────────────────────
+  //
+  // LSP-VIOLATION CLOSED: these methods were previously in SqliteRuleMixin /
+  // SqliteStatsMixin / SqliteAuxiliaryMixin standalone classes, not on
+  // SqliteMemoryStore. The production store therefore returned undefined for
+  // escape-hatch calls, silently breaking the rule engine on BOTH backends.
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:9-70
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+  /**
+   * precondition:  rule.condition and rule.action are non-empty.
+   * postcondition: returned id > 0; row in memory_rules with is_active = rule.is_active.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:14-31
+   */
+  insertRule(rule) {
+    const result = this._db.prepare("INSERT INTO memory_rules (rule_type, scope, scope_value, condition, action, priority, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))").run(rule.rule_type ?? "soft", rule.scope ?? "global", rule.scope_value ?? null, rule.condition, rule.action, rule.priority ?? 0, rule.is_active !== false ? 1 : 0);
+    return result.lastInsertRowid;
+  }
+  /**
+   * postcondition: returns every row where is_active = true, ordered by
+   *   scope ASC, priority DESC. Returns [] if no rules exist.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:41-45
+   */
+  getAllActiveRules() {
+    return this._db.prepare("SELECT * FROM memory_rules WHERE is_active ORDER BY scope, priority DESC").all();
+  }
+  /**
+   * postcondition: returns rows where scope = scope AND is_active = true,
+   *   ordered by priority DESC. Returns [] if none.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:33-39
+   */
+  getRulesForScope(scope) {
+    return this._db.prepare("SELECT * FROM memory_rules WHERE scope = ? AND is_active ORDER BY priority DESC").all(scope);
+  }
+  /**
+   * postcondition: returns every row in memory_rules ordered by scope ASC,
+   *   priority DESC. Returns [] if table is empty.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py
+   */
+  getAllRulesIncludingInactive() {
+    return this._db.prepare("SELECT * FROM memory_rules ORDER BY scope, priority DESC").all();
+  }
+  /**
+   * postcondition: returns COUNT(*) WHERE is_active = true from
+   *   prospective_memories. Returns 0 if table is empty.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
+   */
+  countActiveTriggers() {
+    const row = this._db.prepare("SELECT COUNT(*) AS c FROM prospective_memories WHERE is_active").get();
+    return row?.c ?? 0;
+  }
+  /**
+   * precondition:  record.content, record.trigger_condition, record.trigger_type
+   *   are non-empty strings.
+   * postcondition: returned id > 0; row in prospective_memories with is_active = true.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+   */
+  insertProspectiveMemory(record3) {
+    const result = this._db.prepare("INSERT INTO prospective_memories (content, trigger_condition, trigger_type, target_directory, is_active, triggered_count) VALUES (?, ?, ?, ?, ?, ?)").run(record3.content, record3.trigger_condition, record3.trigger_type, record3.target_directory ?? null, record3.is_active !== false ? 1 : 0, record3.triggered_count ?? 0);
+    return result.lastInsertRowid;
+  }
 };
 
 // packages/memory/dist/remember/storage/pg-store.js
 import { Pool } from "pg";
 
 // packages/memory/dist/remember/storage/pg-store-queries.js
+async function getMemoriesForDomain(client, domain, minHeat = 0.05, limit = 50) {
+  return (await client.query(`SELECT * FROM memories WHERE (domain = $1 OR is_global = TRUE) AND heat_base >= $2 ORDER BY heat_base DESC LIMIT $3`, [domain, minHeat, limit])).rows;
+}
+async function getMemoriesForDirectory(client, directory, minHeat = 0.05) {
+  return (await client.query(`SELECT * FROM memories WHERE (directory_context = $1 OR is_global = TRUE) AND heat_base >= $2 ORDER BY heat_base DESC`, [directory, minHeat])).rows;
+}
+async function getHotMemories(client, minHeat = 0.7, limit = 20, includeBenchmarks = false) {
+  const f2 = includeBenchmarks ? "" : "AND NOT coalesce(is_benchmark, FALSE) ";
+  if (limit > 0) {
+    return (await client.query(`SELECT * FROM memories WHERE heat_base >= $1 ${f2}ORDER BY heat_base DESC LIMIT $2`, [minHeat, limit])).rows;
+  }
+  return (await client.query(`SELECT * FROM memories WHERE heat_base >= $1 ${f2}ORDER BY heat_base DESC`, [minHeat])).rows;
+}
+async function getAllMemoriesForValidation(client, limit = 1e3) {
+  return (await client.query("SELECT * FROM memories WHERE NOT is_stale ORDER BY last_accessed ASC LIMIT $1", [limit])).rows;
+}
+async function getAllMemoriesForDecay(client) {
+  return (await client.query("SELECT * FROM memories WHERE NOT is_stale")).rows;
+}
+async function findCoAccessedPairs(client, memoryIds) {
+  if (memoryIds.length === 0)
+    return [];
+  const result = await client.query(`SELECT DISTINCT LEAST(me1.entity_id, me2.entity_id) AS a, GREATEST(me1.entity_id, me2.entity_id) AS b
+     FROM memory_entities me1 JOIN memory_entities me2 ON me1.memory_id = me2.memory_id AND me1.entity_id < me2.entity_id
+     WHERE me1.memory_id = ANY($1::int[])`, [memoryIds]);
+  return result.rows.map((r2) => [r2.a, r2.b]);
+}
 async function callRecallMemories(client, params) {
   const {
     queryText,
@@ -33177,6 +33741,244 @@ async function callRecallMemories(client, params) {
     includeGlobals
   ]);
   return result.rows;
+}
+
+// packages/memory/dist/remember/storage/pg-store-stats.js
+async function getRecentlyAccessedMemories(client, limit = 20, minAccessCount = 1) {
+  return (await client.query("SELECT * FROM memories WHERE access_count >= $1 AND NOT is_stale ORDER BY last_accessed DESC LIMIT $2", [minAccessCount, limit])).rows;
+}
+async function updateMemoryConsolidation(client, memoryId, stage, hoursInStage, replayCount, hippocampalDependency) {
+  await client.query("UPDATE memories SET consolidation_stage = $1, hours_in_stage = $2, replay_count = $3, hippocampal_dependency = $4 WHERE id = $5", [stage, hoursInStage, replayCount, hippocampalDependency, memoryId]);
+}
+async function insertStageTransitionsBatch(client, rows) {
+  if (rows.length === 0)
+    return 0;
+  await client.query(`INSERT INTO stage_transitions (memory_id, from_stage, to_stage, hours_in_prev_stage, trigger)
+     SELECT * FROM UNNEST($1::int[], $2::text[], $3::text[], $4::real[], $5::text[])`, [
+    rows.map((r2) => r2.memory_id),
+    rows.map((r2) => r2.from_stage),
+    rows.map((r2) => r2.to_stage),
+    rows.map((r2) => r2.hours_in_prev),
+    rows.map((r2) => r2.trigger ?? "cascade")
+  ]);
+  return rows.length;
+}
+async function getMemoriesByStage(client, stage, limit = 100) {
+  return (await client.query("SELECT * FROM memories WHERE consolidation_stage = $1 ORDER BY hours_in_stage DESC LIMIT $2", [stage, limit])).rows;
+}
+async function incrementReplayCount(client, memoryId) {
+  await client.query("UPDATE memories SET replay_count = replay_count + 1 WHERE id = $1", [memoryId]);
+}
+async function saveOscillatoryState(client, stateJson) {
+  await client.query("INSERT INTO oscillatory_state (id, state_json) VALUES (1, $1) ON CONFLICT (id) DO UPDATE SET state_json = EXCLUDED.state_json", [stateJson]);
+}
+async function loadOscillatoryState(client) {
+  return (await client.query("SELECT state_json FROM oscillatory_state WHERE id = 1")).rows[0]?.state_json ?? null;
+}
+async function getEpisodicMemories(client, domain = "", directory = "", limit = 500) {
+  const conditions = ["store_type = 'episodic'", "NOT is_stale"];
+  const params = [];
+  if (domain) {
+    conditions.push(`domain = $${params.length + 1}`);
+    params.push(domain);
+  }
+  if (directory) {
+    conditions.push(`directory_context = $${params.length + 1}`);
+    params.push(directory);
+  }
+  params.push(limit);
+  return (await client.query(`SELECT * FROM memories WHERE ${conditions.join(" AND ")} ORDER BY created_at DESC LIMIT $${params.length}`, params)).rows;
+}
+async function getSemanticMemories(client, domain = "", limit = 500) {
+  if (domain) {
+    return (await client.query("SELECT * FROM memories WHERE store_type = 'semantic' AND domain = $1 AND NOT is_stale ORDER BY created_at DESC LIMIT $2", [domain, limit])).rows;
+  }
+  return (await client.query("SELECT * FROM memories WHERE store_type = 'semantic' AND NOT is_stale ORDER BY created_at DESC LIMIT $1", [limit])).rows;
+}
+async function updateMemoryStoreType(client, memoryId, storeType) {
+  await client.query("UPDATE memories SET store_type = $1 WHERE id = $2", [storeType, memoryId]);
+}
+async function logConsolidation(client, data) {
+  const result = await client.query("INSERT INTO consolidation_log (memories_added, memories_updated, memories_archived, duration_ms) VALUES ($1, $2, $3, $4) RETURNING id", [data.memories_added ?? 0, data.memories_updated ?? 0, data.memories_archived ?? 0, data.duration_ms ?? 0]);
+  const row = result.rows[0];
+  if (row == null)
+    throw new Error("logConsolidation: no id returned");
+  return row.id;
+}
+
+// packages/memory/dist/remember/storage/pg-store-entities.js
+function canonicalize(name) {
+  return name.trim();
+}
+async function updateEntitiesHeatBatch(client, updates) {
+  if (updates.length === 0)
+    return 0;
+  await client.query(`UPDATE entities AS e SET heat = v.new_heat FROM (SELECT UNNEST($1::int[]) AS id, UNNEST($2::real[]) AS new_heat) AS v WHERE e.id = v.id`, [updates.map((u2) => u2[0]), updates.map((u2) => u2[1])]);
+  return updates.length;
+}
+async function archiveEntitiesBatch(client, entityIds) {
+  if (entityIds.length === 0)
+    return 0;
+  await client.query("UPDATE entities SET heat = 0 WHERE id = ANY($1::int[])", [entityIds]);
+  return entityIds.length;
+}
+async function insertEntity(client, data) {
+  const canonical = canonicalize(data.name);
+  const existing = await client.query("SELECT id FROM entities WHERE LOWER(name) = LOWER($1) LIMIT 1", [canonical]);
+  const existingRow = existing.rows[0];
+  if (existingRow != null)
+    return existingRow.id;
+  const result = await client.query(`INSERT INTO entities (name, type, domain, created_at, last_accessed, heat)
+     VALUES ($1, $2, $3, COALESCE($4, NOW()), NOW(), $5) RETURNING id`, [canonical, data.type, data.domain ?? "", data.created_at ?? null, data.heat ?? 1]);
+  const row = result.rows[0];
+  if (row == null)
+    throw new Error("insertEntity: no id returned");
+  return row.id;
+}
+async function getEntityByName(client, name) {
+  const result = await client.query("SELECT * FROM entities WHERE LOWER(name) = LOWER($1) LIMIT 1", [name]);
+  return result.rows[0] ?? null;
+}
+async function getAllEntities(client, minHeat = 0.05, includeArchived = false) {
+  const q2 = includeArchived ? "SELECT * FROM entities WHERE heat >= $1" : "SELECT * FROM entities WHERE heat >= $1 AND NOT archived";
+  return (await client.query(q2, [minHeat])).rows;
+}
+
+// packages/memory/dist/remember/storage/pg-store-relationships.js
+async function updateRelationshipsWeightBatch(client, updates) {
+  if (updates.length === 0)
+    return 0;
+  await client.query(`UPDATE relationships AS r SET weight = v.new_weight FROM (SELECT UNNEST($1::int[]) AS id, UNNEST($2::real[]) AS new_weight) AS v WHERE r.id = v.id`, [updates.map((u2) => u2[0]), updates.map((u2) => u2[1])]);
+  return updates.length;
+}
+async function deleteRelationshipsBatch(client, relIds) {
+  if (relIds.length === 0)
+    return 0;
+  await client.query("DELETE FROM relationships WHERE id = ANY($1::int[])", [relIds]);
+  return relIds.length;
+}
+async function insertRelationship(client, data) {
+  const result = await client.query(`INSERT INTO relationships (source_entity_id, target_entity_id, relationship_type, weight, is_causal, confidence, created_at, last_reinforced)
+     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, NOW()), NOW()) RETURNING id`, [
+    data.source_entity_id,
+    data.target_entity_id,
+    data.relationship_type,
+    data.weight ?? 1,
+    data.is_causal ?? false,
+    data.confidence ?? 1,
+    data.created_at ?? null
+  ]);
+  const row = result.rows[0];
+  if (row == null)
+    throw new Error("insertRelationship: no id returned");
+  return row.id;
+}
+async function getAllRelationships(client) {
+  return (await client.query(`SELECT id, source_entity_id, target_entity_id, relationship_type, weight,
+            is_causal, confidence, release_probability, facilitation, depression, last_reinforced
+     FROM relationships`)).rows;
+}
+async function reinforceOrCreateRelationship(client, sourceName, targetName, deltaWeight = 0.1, relType = "co_retrieval") {
+  const src = (await client.query("SELECT id FROM entities WHERE LOWER(name) = LOWER($1) LIMIT 1", [sourceName])).rows[0];
+  const tgt = (await client.query("SELECT id FROM entities WHERE LOWER(name) = LOWER($1) LIMIT 1", [targetName])).rows[0];
+  if (src == null || tgt == null)
+    return;
+  const sid = src.id;
+  const tid = tgt.id;
+  const HEAT_BUMP = 0.05;
+  await client.query(`UPDATE entities SET last_accessed = NOW(), heat = LEAST(1.0, heat + $1) WHERE id IN ($2, $3)`, [HEAT_BUMP, sid, tid]);
+  if (relType === "co_retrieval") {
+    const a2 = Math.min(sid, tid);
+    const b2 = Math.max(sid, tid);
+    const FAC_STEP = 0.05;
+    await client.query(`INSERT INTO relationships (source_entity_id, target_entity_id, relationship_type, weight, facilitation, last_reinforced)
+       VALUES ($1, $2, $3, $4, $5, NOW())
+       ON CONFLICT (source_entity_id, target_entity_id, relationship_type)
+       WHERE relationship_type = 'co_retrieval'
+       DO UPDATE SET weight = LEAST(2.0, relationships.weight + EXCLUDED.weight),
+         facilitation = LEAST(1.0, relationships.facilitation + $5), last_reinforced = NOW()`, [a2, b2, relType, deltaWeight, FAC_STEP]);
+    return;
+  }
+  const updated = await client.query(
+    // source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:192-196
+    `UPDATE relationships SET weight = LEAST(2.0, weight + $1), facilitation = LEAST(1.0, facilitation + 0.05), last_reinforced = NOW()
+     WHERE source_entity_id = $2 AND target_entity_id = $3 AND relationship_type = $4`,
+    [deltaWeight, sid, tid, relType]
+  );
+  if ((updated.rowCount ?? 0) === 0) {
+    await client.query("INSERT INTO relationships (source_entity_id, target_entity_id, relationship_type, weight) VALUES ($1, $2, $3, $4)", [sid, tid, relType, deltaWeight]);
+  }
+}
+
+// packages/memory/dist/remember/storage/pg-store-auxiliary.js
+async function getActiveProspectiveMemories(client) {
+  const result = await client.query("SELECT * FROM prospective_memories WHERE is_active");
+  return result.rows;
+}
+async function insertArchive(client, data, bytesToVector) {
+  const emb = bytesToVector(data.embedding ?? null);
+  const result = await client.query(`INSERT INTO memory_archives (original_memory_id, content, embedding, mismatch_score, archive_reason)
+     VALUES ($1, $2, $3, $4, $5) RETURNING id`, [data.original_memory_id, data.content, emb, data.mismatch_score ?? 0, data.archive_reason ?? ""]);
+  const row = result.rows[0];
+  if (row == null)
+    throw new Error("insertArchive: no id returned");
+  return row.id;
+}
+async function getSchemasForDomain(client, domain) {
+  return (await client.query("SELECT * FROM schemas WHERE domain = $1 ORDER BY formation_count DESC", [domain])).rows;
+}
+
+// packages/memory/dist/remember/storage/pg-store-rules.js
+async function insertRule(client, data) {
+  const result = await client.query(`INSERT INTO memory_rules
+       (rule_type, scope, scope_value, condition, action, priority, is_active, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+     RETURNING id`, [
+    data.rule_type ?? "soft",
+    data.scope ?? "global",
+    data.scope_value ?? null,
+    data.condition,
+    data.action,
+    data.priority ?? 0,
+    data.is_active !== false
+  ]);
+  const row = result.rows[0];
+  if (row == null)
+    throw new Error("insertRule: no id returned from PG");
+  return row.id;
+}
+async function getAllActiveRules(client) {
+  const result = await client.query("SELECT * FROM memory_rules WHERE is_active ORDER BY scope, priority DESC");
+  return result.rows;
+}
+async function getRulesForScope(client, scope) {
+  const result = await client.query("SELECT * FROM memory_rules WHERE scope = $1 AND is_active ORDER BY priority DESC", [scope]);
+  return result.rows;
+}
+async function getAllRulesIncludingInactive(client) {
+  const result = await client.query("SELECT * FROM memory_rules ORDER BY scope, priority DESC");
+  return result.rows;
+}
+async function countActiveTriggers(client) {
+  const result = await client.query("SELECT COUNT(*) AS c FROM prospective_memories WHERE is_active");
+  return result.rows[0]?.c ?? 0;
+}
+async function insertProspectiveMemory(client, data) {
+  const result = await client.query(`INSERT INTO prospective_memories
+       (content, trigger_condition, trigger_type, target_directory, is_active, triggered_count)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id`, [
+    data.content,
+    data.trigger_condition,
+    data.trigger_type,
+    data.target_directory ?? null,
+    data.is_active !== false,
+    data.triggered_count ?? 0
+  ]);
+  const row = result.rows[0];
+  if (row == null)
+    throw new Error("insertProspectiveMemory: no id returned from PG");
+  return row.id;
 }
 
 // packages/memory/dist/remember/storage/pg-store.js
@@ -33263,8 +34065,9 @@ var PgMemoryStore = class {
         clampHeat2(data.heat ?? 1),
         now,
         data.surprise_score ?? 0,
+        // source: infrastructure/pg_store.py default importance
         data.importance ?? 0.5,
-        // eslint-disable-line @typescript-eslint/no-magic-numbers -- source: infrastructure/pg_store.py default importance
+        // eslint-disable-line @typescript-eslint/no-magic-numbers
         data.emotional_valence ?? 0,
         data.confidence ?? 1,
         data.store_type ?? "episodic",
@@ -33489,30 +34292,554 @@ var PgMemoryStore = class {
     const vecLiteral = `[${Array.from(floats).join(",")}]`;
     return this.runAsync((c2) => c2.query(`UPDATE memories SET embedding = $1::vector WHERE id = $2`, [vecLiteral, memoryId]).then(() => void 0));
   }
-  // ── Entity graph (deferred: see pg-store-entities.ts) ─────────────────
-  // FAILS_ON: entity operations not yet implemented for PG backend.
-  // The entity graph is fully implemented in SqliteMemoryStore.
-  // PG entity support is tracked in PHASE_7_TRACKING.md Group D.
+  // ── Entity graph ──────────────────────────────────────────────────────
+  //
+  // LSP-VIOLATION CLOSED: these methods previously returned null/0/no-op.
+  // They now delegate to pg-store-entities.ts functions via runAsync.
+  // Sync signatures call _runSync (throws at runtime) — use *Async variants
+  // from async MCP handlers (same pattern as all other PG CRUD methods).
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py
   getEntityByName(_name) {
-    return null;
+    return this._runSync(async (c2) => {
+      const row = await getEntityByName(c2, _name);
+      return row ? this._normalizeEntityRow(row) : null;
+    });
   }
+  async getEntityByNameAsync(name) {
+    return this.runAsync(async (c2) => {
+      const row = await getEntityByName(c2, name);
+      return row ? this._normalizeEntityRow(row) : null;
+    });
+  }
+  /**
+   * Upsert an entity; return its id.
+   *
+   * postcondition: returns id > 0 for the entity.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:50-80
+   */
   upsertEntity(_name, _type, _domain) {
-    return 0;
+    return this._runSync(async (c2) => insertEntity(c2, { name: _name, type: _type, domain: _domain }));
   }
+  async upsertEntityAsync(name, type, domain) {
+    return this.runAsync((c2) => insertEntity(c2, { name, type, domain }));
+  }
+  /**
+   * Link a memory to an entity. Idempotent.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py — memory_entities INSERT
+   */
   linkMemoryEntity(_memoryId, _entityId) {
+    void this.runAsync((c2) => c2.query(`INSERT INTO memory_entities (memory_id, entity_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [_memoryId, _entityId]));
   }
-  upsertRelationship(_sourceEntityId, _targetEntityId, _relationshipType, _weight) {
+  async linkMemoryEntityAsync(memoryId, entityId) {
+    return this.runAsync((c2) => c2.query(`INSERT INTO memory_entities (memory_id, entity_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [memoryId, entityId]).then(() => void 0));
   }
+  /**
+   * Upsert a typed relationship between two entities.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:52-69
+   */
+  upsertRelationship(_sourceEntityId, _targetEntityId, _relationshipType, _weight = 1) {
+    void this.runAsync((c2) => insertRelationship(c2, {
+      source_entity_id: _sourceEntityId,
+      target_entity_id: _targetEntityId,
+      relationship_type: _relationshipType,
+      weight: _weight
+    }));
+  }
+  /**
+   * Return all schema records for a domain.
+   *
+   * LSP-VIOLATION CLOSED: previously returned []. Now delegates to PG.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:285-305
+   */
   getSchemasForDomain(_domain) {
-    return [];
+    return this._runSync(async (c2) => getSchemasForDomain(c2, _domain));
   }
+  async getSchemasForDomainAsync(domain) {
+    return this.runAsync((c2) => getSchemasForDomain(c2, domain));
+  }
+  /**
+   * Load oscillatory clock state JSON string.
+   *
+   * LSP-VIOLATION CLOSED: previously returned null always (oscillatory_state
+   * table listed as "not yet created"). The pg-schema-tables.ts includes this
+   * table; pg-store-stats.ts implements loadOscillatoryState. Wire it here.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:143-147
+   */
   loadOscillatoryState() {
-    return null;
+    return this._runSync(async (c2) => loadOscillatoryState(c2));
   }
+  async loadOscillatoryStateAsync() {
+    return this.runAsync((c2) => loadOscillatoryState(c2));
+  }
+  /**
+   * Persist oscillatory clock state JSON string.
+   *
+   * LSP-VIOLATION CLOSED: previously a no-op.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:135-141
+   */
   saveOscillatoryState(_stateJson) {
+    void this.runAsync((c2) => saveOscillatoryState(c2, _stateJson));
+  }
+  async saveOscillatoryStateAsync(stateJson) {
+    return this.runAsync((c2) => saveOscillatoryState(c2, stateJson));
+  }
+  // ── MemoryStoreExt: decay / stats queries ──────────────────────────────
+  //
+  // LSP-VIOLATION CLOSED (violations #1 and #6): all of these previously
+  // returned [] via escape-hatch `ext["method"]?.() ?? []`. They now
+  // delegate to pg-store-queries.ts and pg-store-stats.ts functions which
+  // execute real SQL against the PG connection pool.
+  /**
+   * Return all non-stale memories for the decay pipeline.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:107-109
+   */
+  getAllMemoriesForDecay() {
+    return this._runSync(async (c2) => getAllMemoriesForDecay(c2));
+  }
+  async getAllMemoriesForDecayAsync() {
+    return this.runAsync((c2) => getAllMemoriesForDecay(c2));
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:77-85
+   */
+  // source: pg_store_queries.py:78
+  getAllMemoriesForValidation(limit = 1e3) {
+    return this._runSync(async (c2) => getAllMemoriesForValidation(c2, limit));
+  }
+  // source: pg_store_queries.py:78
+  async getAllMemoriesForValidationAsync(limit = 1e3) {
+    return this.runAsync((c2) => getAllMemoriesForValidation(c2, limit));
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:20-28
+   */
+  // source: pg_store_queries.py:21
+  getMemoriesForDomain(domain, minHeat = 0.05, limit = 50) {
+    return this._runSync(async (c2) => getMemoriesForDomain(c2, domain, minHeat, limit));
+  }
+  // source: pg_store_queries.py:21
+  async getMemoriesForDomainAsync(domain, minHeat = 0.05, limit = 50) {
+    return this.runAsync((c2) => getMemoriesForDomain(c2, domain, minHeat, limit));
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:30-38
+   */
+  // source: pg_store_queries.py:31
+  getMemoriesForDirectory(directory, minHeat = 0.05) {
+    return this._runSync(async (c2) => getMemoriesForDirectory(c2, directory, minHeat));
+  }
+  // source: pg_store_queries.py:31
+  async getMemoriesForDirectoryAsync(directory, minHeat = 0.05) {
+    return this.runAsync((c2) => getMemoriesForDirectory(c2, directory, minHeat));
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:40-61
+   */
+  // source: pg_store_queries.py:41
+  getHotMemories(minHeat = 0.7, limit = 20, includeBenchmarks = false) {
+    return this._runSync(async (c2) => getHotMemories(c2, minHeat, limit, includeBenchmarks));
+  }
+  // source: pg_store_queries.py:41
+  async getHotMemoriesAsync(minHeat = 0.7, limit = 20, includeBenchmarks = false) {
+    return this.runAsync((c2) => getHotMemories(c2, minHeat, limit, includeBenchmarks));
+  }
+  // ── MemoryStoreExt: full-text search ───────────────────────────────────
+  //
+  // LSP-VIOLATION CLOSED (#3): recall pipeline's searchByFts previously
+  // called storeExt["searchFts"]?.() which returned [] on PG (method did
+  // not exist). Now implemented via PG tsvector + websearch_to_tsquery.
+  //
+  // source: PostgreSQL 11+ websearch_to_tsquery
+  //   https://www.postgresql.org/docs/current/textsearch-controls.html#TEXTSEARCH-PARSING-QUERIES
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store.py — FTS via tsvector column
+  /**
+   * Full-text search via PostgreSQL tsvector.
+   *
+   * postcondition: returns (memory_id, rank) pairs ordered by relevance.
+   *   Returns [] if query is empty or no matches found. Never throws.
+   *
+   * source: PostgreSQL 11+ websearch_to_tsquery and ts_rank_cd functions
+   *   https://www.postgresql.org/docs/current/textsearch-controls.html
+   */
+  // source: sqlite_store_search.py:237 default limit=20
+  searchFts(query, limit = 20) {
+    return this._runSync(async (c2) => this._searchFtsOnClient(c2, query, limit));
+  }
+  // source: sqlite_store_search.py:237
+  async searchFtsAsync(query, limit = 20) {
+    if (!query)
+      return [];
+    return this.runAsync((c2) => this._searchFtsOnClient(c2, query, limit));
+  }
+  async _searchFtsOnClient(client, query, limit) {
+    if (!query)
+      return [];
+    try {
+      const result = await client.query(`SELECT id, ts_rank_cd(content_tsv, websearch_to_tsquery('english', $1)) AS rank
+         FROM memories
+         WHERE content_tsv @@ websearch_to_tsquery('english', $1)
+           AND NOT is_stale
+         ORDER BY rank DESC
+         LIMIT $2`, [query, limit]);
+      return result.rows.map((r2) => [r2.id, r2.rank]);
+    } catch {
+      return [];
+    }
+  }
+  // ── MemoryStoreExt: consolidation stage queries ────────────────────────
+  //
+  // LSP-VIOLATION CLOSED (#6): consolidation pipeline silently no-ops on PG.
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:79-87
+   */
+  // source: pg_store_stats.py:110
+  getMemoriesByStage(stage, limit = 100) {
+    return this._runSync(async (c2) => getMemoriesByStage(c2, stage, limit));
+  }
+  // source: pg_store_stats.py:110
+  async getMemoriesByStageAsync(stage, limit = 100) {
+    return this.runAsync((c2) => getMemoriesByStage(c2, stage, limit));
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:55-61
+   */
+  updateMemoryConsolidation(memoryId, stage, hoursInStage, replayCount, hippocampalDependency) {
+    void this.runAsync((c2) => updateMemoryConsolidation(c2, memoryId, stage, hoursInStage, replayCount, hippocampalDependency));
+  }
+  async updateMemoryConsolidationAsync(memoryId, stage, hoursInStage, replayCount, hippocampalDependency) {
+    return this.runAsync((c2) => updateMemoryConsolidation(c2, memoryId, stage, hoursInStage, replayCount, hippocampalDependency));
+  }
+  /**
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:63-76
+   */
+  insertStageTransitionsBatch(rows) {
+    void this.runAsync((c2) => insertStageTransitionsBatch(c2, rows.map((r2) => ({
+      memory_id: Number(r2["memory_id"]),
+      from_stage: String(r2["from_stage"]),
+      to_stage: String(r2["to_stage"]),
+      hours_in_prev: Number(r2["hours_in_prev"] ?? r2["hours_in_stage"] ?? 0),
+      trigger: String(r2["trigger"] ?? "cascade")
+    }))));
+    return rows.length;
+  }
+  /**
+   * Update stage_entered_at timestamp.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py — cascade stage logic
+   */
+  updateStageEnteredAt(memoryId, enteredAt) {
+    void this.runAsync((c2) => c2.query(`UPDATE memories SET stage_entered_at = $1 WHERE id = $2`, [enteredAt, memoryId]));
+  }
+  // ── MemoryStoreExt: CLS queries ────────────────────────────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:136-162
+  // source: pg_store_stats.py:185
+  getEpisodicMemories(domain = "", directory = "", limit = 500) {
+    return this._runSync(async (c2) => getEpisodicMemories(c2, domain, directory, limit));
+  }
+  // source: pg_store_stats.py:185
+  async getEpisodicMemoriesAsync(domain = "", directory = "", limit = 500) {
+    return this.runAsync((c2) => getEpisodicMemories(c2, domain, directory, limit));
+  }
+  // source: pg_store_stats.py:204
+  getSemanticMemories(domain = "", limit = 500) {
+    return this._runSync(async (c2) => getSemanticMemories(c2, domain, limit));
+  }
+  // source: pg_store_stats.py:204
+  async getSemanticMemoriesAsync(domain = "", limit = 500) {
+    return this.runAsync((c2) => getSemanticMemories(c2, domain, limit));
+  }
+  updateMemoryStoreType(memoryId, storeType) {
+    void this.runAsync((c2) => updateMemoryStoreType(c2, memoryId, storeType));
+  }
+  // ── MemoryStoreExt: entity queries for consolidation ───────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py
+  getAllEntities(opts) {
+    return this._runSync(async (c2) => getAllEntities(c2, opts?.minHeat, opts?.includeArchived));
+  }
+  async getAllEntitiesAsync(opts) {
+    return this.runAsync((c2) => getAllEntities(c2, opts?.minHeat, opts?.includeArchived));
+  }
+  updateEntitiesHeatBatch(updates) {
+    void this.runAsync((c2) => updateEntitiesHeatBatch(c2, updates));
+  }
+  archiveEntitiesBatch(entityIds) {
+    void this.runAsync((c2) => archiveEntitiesBatch(c2, entityIds));
+    return entityIds.length;
+  }
+  // ── MemoryStoreExt: relationship queries ───────────────────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py
+  getAllRelationships() {
+    return this._runSync(async (c2) => getAllRelationships(c2));
+  }
+  async getAllRelationshipsAsync() {
+    return this.runAsync((c2) => getAllRelationships(c2));
+  }
+  findCoAccessedPairs(memoryIds) {
+    return this._runSync(async (c2) => findCoAccessedPairs(c2, memoryIds));
+  }
+  async findCoAccessedPairsAsync(memoryIds) {
+    return this.runAsync((c2) => findCoAccessedPairs(c2, memoryIds));
+  }
+  updateRelationshipsWeightBatch(updates) {
+    void this.runAsync((c2) => updateRelationshipsWeightBatch(c2, updates));
+  }
+  deleteRelationshipsBatch(ids) {
+    void this.runAsync((c2) => deleteRelationshipsBatch(c2, ids));
+    return ids.length;
+  }
+  insertRelationship(rel) {
+    void this.runAsync((c2) => insertRelationship(c2, {
+      source_entity_id: Number(rel["source_entity_id"]),
+      target_entity_id: Number(rel["target_entity_id"]),
+      relationship_type: String(rel["relationship_type"] ?? "generic"),
+      weight: typeof rel["weight"] === "number" ? rel["weight"] : 1
+    }));
+  }
+  reinforceOrCreateRelationship(entityA, entityB, learningRate) {
+    void this.runAsync((c2) => reinforceOrCreateRelationship(c2, entityA, entityB, learningRate));
+  }
+  // ── MemoryStoreExt: hippocampal transfer ───────────────────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py
+  // source: pg_store_stats.py
+  getTransferCandidates(limit = 50) {
+    return this._runSync(async (c2) => {
+      const result = await c2.query(
+        // Hippocampal transfer candidates: episodic memories with high
+        // hippocampal_dependency that are ready for semantic extraction.
+        // source: cortex@ed33435 mcp_server/core/cls_transfer.py — transfer eligibility
+        `SELECT * FROM memories
+         WHERE store_type = 'episodic'
+           AND hippocampal_dependency > 0.5
+           AND NOT is_stale
+         ORDER BY hippocampal_dependency DESC, heat_base DESC
+         LIMIT $1`,
+        [limit]
+      );
+      return result.rows;
+    });
+  }
+  // source: pg_store_stats.py
+  async getTransferCandidatesAsync(limit = 50) {
+    return this.runAsync(async (c2) => {
+      const result = await c2.query(`SELECT * FROM memories
+         WHERE store_type = 'episodic'
+           AND hippocampal_dependency > 0.5
+           AND NOT is_stale
+         ORDER BY hippocampal_dependency DESC, heat_base DESC
+         LIMIT $1`, [limit]);
+      return result.rows;
+    });
+  }
+  updateHippocampalDependency(memoryId, dependency) {
+    void this.runAsync((c2) => c2.query(`UPDATE memories SET hippocampal_dependency = $1 WHERE id = $2`, [dependency, memoryId]));
+  }
+  // ── MemoryStoreExt: recently accessed ─────────────────────────────────
+  // source: pg_store_stats.py:58
+  getRecentlyAccessedMemories(limit = 20, minAccessCount = 1) {
+    return this._runSync(async (c2) => getRecentlyAccessedMemories(c2, limit, minAccessCount));
+  }
+  // source: pg_store_stats.py:58
+  async getRecentlyAccessedMemoriesAsync(limit = 20, minAccessCount = 1) {
+    return this.runAsync((c2) => getRecentlyAccessedMemories(c2, limit, minAccessCount));
+  }
+  // ── MemoryStoreExt: agent context query (codebase-analyze) ────────────
+  //
+  // LSP-VIOLATION CLOSED (#5): codebase-analyze called store.execute() which
+  // is SQLite-only. Replaced with a typed method on the interface.
+  //
+  // source: packages/memory/src/codebase-analysis/handlers/codebase-analyze-helpers.ts:142-160
+  /**
+   * Return memories for a given agent_context.
+   *
+   * postcondition: returns rows where agent_context = agentContext AND NOT is_stale.
+   *   Returns [] if none exist. Never throws.
+   *
+   * source: codebase-analyze-helpers.ts:142-160 — SELECT id, tags FROM memories
+   *   WHERE agent_context = ? AND NOT is_stale
+   */
+  getMemoriesByAgentContext(agentContext) {
+    return this._runSync(async (c2) => this._getMemoriesByAgentContextOnClient(c2, agentContext));
+  }
+  async getMemoriesByAgentContextAsync(agentContext) {
+    return this.runAsync((c2) => this._getMemoriesByAgentContextOnClient(c2, agentContext));
+  }
+  async _getMemoriesByAgentContextOnClient(client, agentContext) {
+    const result = await client.query(`SELECT id, tags FROM memories WHERE agent_context = $1 AND NOT is_stale`, [agentContext]);
+    return result.rows.map((r2) => ({
+      id: r2.id,
+      tags: typeof r2.tags === "string" ? r2.tags : JSON.stringify(r2.tags ?? [])
+    }));
+  }
+  // ── MemoryStoreExt: prospective memories ──────────────────────────────
+  getActiveProspectiveMemories() {
+    return this._runSync(async (c2) => getActiveProspectiveMemories(c2));
+  }
+  async getActiveProspectiveMemoriesAsync() {
+    return this.runAsync((c2) => getActiveProspectiveMemories(c2));
+  }
+  // ── MemoryStoreExt: replay count ──────────────────────────────────────
+  incrementReplayCount(memoryId) {
+    void this.runAsync((c2) => incrementReplayCount(c2, memoryId));
+  }
+  // ── MemoryStoreExt: archive / compression ─────────────────────────────
+  insertArchive(row) {
+    void this.runAsync(async (c2) => {
+      await insertArchive(
+        c2,
+        {
+          original_memory_id: Number(row["original_memory_id"]),
+          content: String(row["content"] ?? ""),
+          embedding: row["embedding"] instanceof Buffer ? row["embedding"] : null,
+          mismatch_score: typeof row["mismatch_score"] === "number" ? row["mismatch_score"] : 0,
+          archive_reason: String(row["archive_reason"] ?? "")
+        },
+        // bytesToVector converter: convert Buffer to pgvector literal
+        (buf) => {
+          if (!(buf instanceof Buffer) || buf.byteLength === 0)
+            return null;
+          const dim = buf.byteLength / Float32Array.BYTES_PER_ELEMENT;
+          const floats = new Float32Array(buf.buffer, buf.byteOffset, dim);
+          return `[${Array.from(floats).join(",")}]`;
+        }
+      );
+    });
+  }
+  updateMemoryCompression(memoryId, content, _embedding, compressionLevel, _opts) {
+    void this.runAsync((c2) => c2.query(`UPDATE memories SET content = $1, compressed = TRUE,
+            compression_level = $2,
+            original_content = CASE WHEN original_content IS NULL THEN content ELSE original_content END
+         WHERE id = $3`, [content, compressionLevel, memoryId]));
+  }
+  // ── MemoryStoreExt: batch fetch ────────────────────────────────────────
+  getByIds(ids) {
+    if (ids.length === 0)
+      return [];
+    return this._runSync(async (c2) => {
+      const result = await c2.query(`SELECT * FROM memories WHERE id = ANY($1::int[])`, [ids]);
+      return result.rows;
+    });
+  }
+  async getByIdsAsync(ids) {
+    if (ids.length === 0)
+      return [];
+    return this.runAsync(async (c2) => {
+      const result = await c2.query(`SELECT * FROM memories WHERE id = ANY($1::int[])`, [ids]);
+      return result.rows;
+    });
+  }
+  // ── MemoryStoreExt: consolidation log ─────────────────────────────────
+  logConsolidation(data) {
+    void this.runAsync((c2) => logConsolidation(c2, {
+      memories_added: typeof data["memories_added"] === "number" ? data["memories_added"] : 0,
+      memories_updated: typeof data["memories_updated"] === "number" ? data["memories_updated"] : 0,
+      memories_archived: typeof data["memories_archived"] === "number" ? data["memories_archived"] : 0,
+      duration_ms: typeof data["duration_ms"] === "number" ? data["duration_ms"] : 0
+    }));
+  }
+  // ── MemoryStoreExt: rule engine ────────────────────────────────────────
+  //
+  // LSP-VIOLATION CLOSED: insertRule, getAllActiveRules, getRulesForScope,
+  // getAllRulesIncludingInactive, countActiveTriggers, insertProspectiveMemory
+  // were previously called via escape-hatch casts in advanced.ts; on PG all
+  // returned defaults (0 / []) because the methods did not exist on this class.
+  // That is a history-constraint LSP violation (Liskov & Wing 1994, §4).
+  //
+  // Each sync-signature method calls _runSync() (throws at runtime — same
+  // convention as all other PG CRUD methods). MCP tool handlers must use
+  // the *Async siblings, which are the production code paths.
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:9-70
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+  /**
+   * precondition:  rule.condition and rule.action are non-empty strings.
+   * postcondition: returned id > 0; row exists in memory_rules.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:14-31
+   */
+  insertRule(rule) {
+    return this._runSync(async (c2) => insertRule(c2, rule));
+  }
+  async insertRuleAsync(rule) {
+    return this.runAsync((c2) => insertRule(c2, rule));
+  }
+  /**
+   * postcondition: returns every row where is_active = true, ordered by
+   *   scope ASC, priority DESC. Returns [] if no rules exist.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:41-45
+   */
+  getAllActiveRules() {
+    return this._runSync((c2) => getAllActiveRules(c2));
+  }
+  async getAllActiveRulesAsync() {
+    return this.runAsync((c2) => getAllActiveRules(c2));
+  }
+  /**
+   * postcondition: returns rows where scope = scope AND is_active = true,
+   *   ordered by priority DESC. Returns [] if none exist.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:33-39
+   */
+  getRulesForScope(scope) {
+    return this._runSync((c2) => getRulesForScope(c2, scope));
+  }
+  async getRulesForScopeAsync(scope) {
+    return this.runAsync((c2) => getRulesForScope(c2, scope));
+  }
+  /**
+   * postcondition: returns every row in memory_rules ordered by scope ASC,
+   *   priority DESC. Returns [] if table is empty.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py
+   */
+  getAllRulesIncludingInactive() {
+    return this._runSync((c2) => getAllRulesIncludingInactive(c2));
+  }
+  async getAllRulesIncludingInactiveAsync() {
+    return this.runAsync((c2) => getAllRulesIncludingInactive(c2));
+  }
+  /**
+   * postcondition: returns COUNT(*) WHERE is_active = true. Returns 0 if empty.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
+   */
+  countActiveTriggers() {
+    return this._runSync((c2) => countActiveTriggers(c2));
+  }
+  async countActiveTriggersAsync() {
+    return this.runAsync((c2) => countActiveTriggers(c2));
+  }
+  /**
+   * precondition:  record.content, record.trigger_condition, record.trigger_type
+   *   are non-empty strings.
+   * postcondition: returned id > 0; row exists in prospective_memories.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+   */
+  insertProspectiveMemory(record3) {
+    return this._runSync((c2) => insertProspectiveMemory(c2, record3));
+  }
+  async insertProspectiveMemoryAsync(record3) {
+    return this.runAsync((c2) => insertProspectiveMemory(c2, record3));
   }
   async close() {
     await this._pool.end();
+  }
+  // ── Entity row normalization ──────────────────────────────────────────
+  _normalizeEntityRow(row) {
+    return {
+      id: row["id"],
+      name: row["name"],
+      type: row["type"] ?? "",
+      domain: row["domain"] ?? "",
+      heat: row["heat"] ?? 1,
+      archived: Boolean(row["archived"]),
+      created_at: row["created_at"],
+      last_accessed: row["last_accessed"] ?? ""
+    };
   }
   // ── Row normalization ──────────────────────────────────────────────────
   _normalizeRow(row) {
@@ -33533,8 +34860,9 @@ var PgMemoryStore = class {
       heat_base_set_at: row["heat_base_set_at"] ?? "",
       no_decay: Boolean(row["no_decay"]),
       surprise_score: row["surprise_score"] ?? 0,
+      // source: infrastructure/pg_store.py _normalize_memory_row default importance
       importance: row["importance"] ?? 0.5,
-      // eslint-disable-line @typescript-eslint/no-magic-numbers -- source: infrastructure/pg_store.py _normalize_memory_row default importance
+      // eslint-disable-line @typescript-eslint/no-magic-numbers
       emotional_valence: row["emotional_valence"] ?? 0,
       confidence: row["confidence"] ?? 1,
       access_count: row["access_count"] ?? 0,
@@ -33568,26 +34896,6 @@ var PgMemoryStore = class {
     };
   }
 };
-
-// packages/mcp-servers/memory/dist/db-guard.js
-var LOCALHOST_NAMES = /* @__PURE__ */ new Set(["localhost", "127.0.0.1", "::1", "[::1]", ""]);
-var FORBIDDEN_DB_NAME = "cortex";
-var EX_CONFIG = 78;
-function assertNotForbiddenDb(url) {
-  let parsed;
-  try {
-    parsed = new URL(url);
-  } catch {
-    return;
-  }
-  const host = parsed.hostname.toLowerCase();
-  const dbName = parsed.pathname.replace(/^\//, "");
-  if (LOCALHOST_NAMES.has(host) && dbName === FORBIDDEN_DB_NAME) {
-    process.stderr.write(`[mcp-server-memory] FATAL: DATABASE_URL points to the standalone Python Cortex database (db_name="${FORBIDDEN_DB_NAME}" on localhost). The agentic-ai memory plugin must NEVER write to this database. Set DATABASE_URL to a safe database (e.g. cortex_agentic) or unset DATABASE_URL to use the SQLite fallback.
-`);
-    process.exit(EX_CONFIG);
-  }
-}
 
 // packages/memory/dist/recall/co-activation.js
 var ENTITY_EXTRACTION_CAP = 10;
@@ -40350,109 +41658,96 @@ function saveProfiles(profiles) {
   writeFileSync(join2(dir, "profiles.json"), JSON.stringify(profiles, null, 2), "utf-8");
 }
 function toConsolidationStore(store) {
-  const ext2 = store;
   return {
     // ── shared / decay ───────────────────────────────────────────────────────
-    getAllMemoriesForDecay: () => Promise.resolve(ext2["getAllMemoriesForDecay"]?.() ?? []),
-    getAllEntities: (opts) => Promise.resolve(ext2["getAllEntities"]?.(opts) ?? []),
+    getAllMemoriesForDecay: () => Promise.resolve(store.getAllMemoriesForDecay()),
+    getAllEntities: (opts) => Promise.resolve(store.getAllEntities(opts)),
     updateEntitiesHeatBatch: (u2) => {
-      ext2["updateEntitiesHeatBatch"]?.(u2);
+      store.updateEntitiesHeatBatch(u2);
       return Promise.resolve();
     },
     // ── plasticity ───────────────────────────────────────────────────────────
-    getAllRelationships: () => Promise.resolve(ext2["getAllRelationships"]?.() ?? []),
-    getHotMemories: (opts) => Promise.resolve(ext2["getHotMemories"]?.(opts) ?? []),
-    findCoAccessedPairs: (ids) => Promise.resolve(ext2["findCoAccessedPairs"]?.(ids) ?? []),
+    getAllRelationships: () => Promise.resolve(store.getAllRelationships()),
+    getHotMemories: (opts) => Promise.resolve(store.getHotMemories(opts?.minHeat, opts?.limit)),
+    findCoAccessedPairs: (ids) => Promise.resolve(store.findCoAccessedPairs([...ids])),
     updateRelationshipsWeightBatch: (u2) => {
-      ext2["updateRelationshipsWeightBatch"]?.(u2);
+      store.updateRelationshipsWeightBatch([...u2]);
       return Promise.resolve();
     },
     // ── pruning ──────────────────────────────────────────────────────────────
-    deleteRelationshipsBatch: (ids) => Promise.resolve(ext2["deleteRelationshipsBatch"]?.(ids) ?? 0),
-    archiveEntitiesBatch: (ids) => Promise.resolve(ext2["archiveEntitiesBatch"]?.(ids) ?? 0),
+    deleteRelationshipsBatch: (ids) => Promise.resolve(store.deleteRelationshipsBatch([...ids])),
+    archiveEntitiesBatch: (ids) => Promise.resolve(store.archiveEntitiesBatch([...ids])),
     // ── compression + sleep ──────────────────────────────────────────────────
     insertArchive: (row) => {
-      ext2["insertArchive"]?.(row);
+      store.insertArchive(row);
       return Promise.resolve();
     },
     updateMemoryCompression: (id2, content, embedding, compressionLevel, opts) => {
-      ext2["updateMemoryCompression"]?.(id2, content, embedding, compressionLevel, opts);
+      store.updateMemoryCompression(id2, content, embedding instanceof Buffer ? embedding : embedding != null ? Buffer.from(embedding) : null, compressionLevel, opts);
       return Promise.resolve();
     },
     // ── CLS ──────────────────────────────────────────────────────────────────
-    getEpisodicMemories: (l2) => Promise.resolve(ext2["getEpisodicMemories"]?.(l2) ?? []),
-    getSemanticMemories: (l2) => Promise.resolve(ext2["getSemanticMemories"]?.(l2) ?? []),
+    getEpisodicMemories: (l2) => Promise.resolve(store.getEpisodicMemories(void 0, void 0, l2)),
+    getSemanticMemories: (l2) => Promise.resolve(store.getSemanticMemories(void 0, l2)),
     // ── memify ───────────────────────────────────────────────────────────────
     deleteMemory: (id2) => {
-      ext2["deleteMemory"]?.(id2);
+      store.deleteMemory(id2);
       return Promise.resolve();
     },
     updateMemoryImportance: (id2, importance) => {
-      ext2["updateMemoryImportance"]?.(id2, importance);
+      store.updateMemoryImportance(id2, importance);
       return Promise.resolve();
     },
     insertRelationship: (rel) => {
-      ext2["insertRelationship"]?.(rel);
+      store.insertRelationship(rel);
       return Promise.resolve();
     },
     // ── sleep ────────────────────────────────────────────────────────────────
-    // Use insertMemoryAsync when available (PG path). ext["insertMemory"]?.(mem) would call
-    // PgMemoryStore.insertMemory() which throws via _runSync().
-    // source: ADR-0042 — async path for PG backend
-    insertMemory: async (mem) => {
-      if (store.insertMemoryAsync) {
-        return store.insertMemoryAsync(mem);
-      }
-      return ext2["insertMemory"]?.(mem) ?? 0;
-    },
+    insertMemory: (mem) => Promise.resolve(store.insertMemory(mem)),
     // ── cascade ──────────────────────────────────────────────────────────────
-    getMemoriesByStage: (s2, l2) => Promise.resolve(ext2["getMemoriesByStage"]?.(s2, l2) ?? []),
+    getMemoriesByStage: (s2, l2) => Promise.resolve(store.getMemoriesByStage(s2, l2)),
     updateMemoryConsolidation: (id2, s2, h2, r2, d2) => {
-      ext2["updateMemoryConsolidation"]?.(id2, s2, h2, r2, d2);
+      store.updateMemoryConsolidation(id2, s2, h2, r2, d2);
       return Promise.resolve();
     },
     insertStageTransitionsBatch: (t2) => {
-      ext2["insertStageTransitionsBatch"]?.(t2);
+      store.insertStageTransitionsBatch(t2);
       return Promise.resolve();
     },
     updateStageEnteredAt: (memoryId, enteredAt) => {
-      ext2["updateStageEnteredAt"]?.(memoryId, enteredAt);
+      store.updateStageEnteredAt(memoryId, enteredAt instanceof Date ? enteredAt.toISOString() : String(enteredAt));
       return Promise.resolve();
     },
     // ── homeostatic ──────────────────────────────────────────────────────────
-    // Use getHomeostaticFactorAsync when available (PG path — sync throws via _runSync).
-    // source: ADR-0042 — async path for PG backend
-    getHomeostaticFactor: async (d2) => {
-      const pgStore2 = store;
-      if (pgStore2.getHomeostaticFactorAsync) {
-        return pgStore2.getHomeostaticFactorAsync(d2);
-      }
-      return store.getHomeostaticFactor(d2);
-    },
+    getHomeostaticFactor: (d2) => Promise.resolve(store.getHomeostaticFactor(d2)),
     setHomeostaticFactor: (d2, f2) => {
       store.setHomeostaticFactor(d2, f2);
       return Promise.resolve();
     },
     bumpHeatRaw: (id2, heat) => {
-      ext2["bumpHeatRaw"]?.(id2, heat);
+      store.bumpHeatRaw(id2, heat);
       return Promise.resolve();
     },
-    // ── batch connection (memify + homeostatic + sleep) ───────────────────────
-    acquireBatch: () => ({ execute: async (sql, params) => {
-      ext2["acquireBatch"]?.();
-      return { rows: [], rowcount: 0 };
-      void sql;
-      void params;
-    } }),
+    // ── batch connection (no-op: acquireBatch was SQLite-only internal) ───────
+    // source: The acquireBatch pattern was a SQLite-specific internal that
+    // allowed the write gate to reuse a connection. With MemoryStoreExt,
+    // all methods are properly routed to the correct backend.
+    acquireBatch: () => ({
+      execute: async (sql, params) => {
+        void sql;
+        void params;
+        return { rows: [], rowcount: 0 };
+      }
+    }),
     // ── transfer ─────────────────────────────────────────────────────────────
-    getTransferCandidates: (l2) => Promise.resolve(ext2["getTransferCandidates"]?.(l2) ?? []),
+    getTransferCandidates: (l2) => Promise.resolve(store.getTransferCandidates(l2)),
     updateHippocampalDependency: (id2, d2) => {
-      ext2["updateHippocampalDependency"]?.(id2, d2);
+      store.updateHippocampalDependency(id2, d2);
       return Promise.resolve();
     },
     // ── logging ──────────────────────────────────────────────────────────────
     logConsolidation: (e2) => {
-      ext2["logConsolidation"]?.(e2);
+      store.logConsolidation(e2);
       return Promise.resolve();
     }
   };
@@ -40557,8 +41852,7 @@ function registerConsolidationTools(server2, deps) {
     inputSchema: {}
   }, async (_args) => {
     try {
-      const ext2 = deps.store;
-      const allMems = ext2["getAllMemoriesForDecay"]?.() ?? [];
+      const allMems = deps.store.getAllMemoriesForDecay();
       const total = allMems.length;
       const episodic = allMems.filter((m2) => m2["store_type"] === "episodic").length;
       const semantic = allMems.filter((m2) => m2["store_type"] === "semantic").length;
@@ -40630,9 +41924,9 @@ function registerConsolidationTools(server2, deps) {
 }
 
 // packages/mcp-servers/memory/dist/tools/management.js
-import { existsSync as existsSync6, readFileSync as readFileSync4 } from "node:fs";
-import { join as join5 } from "node:path";
-import { homedir as homedir4 } from "node:os";
+import { existsSync as existsSync16, readFileSync as readFileSync12 } from "node:fs";
+import { join as join19 } from "node:path";
+import { homedir as homedir9 } from "node:os";
 
 // packages/memory/dist/import/handler.js
 import { join as join3 } from "node:path";
@@ -41084,5227 +42378,6 @@ async function importHandler(args, rememberHandler, projectsDirOverride) {
     }
   }
   return buildResult(totalImported, totalGated, totalSkipped, sessionsScanned, jsonlFiles.length, dry_run, previewItems, errors);
-}
-
-// packages/memory/dist/codebase-analysis/handlers/seed-project.js
-import { existsSync as existsSync5 } from "node:fs";
-import { basename as basename3, resolve as resolvePath } from "node:path";
-
-// packages/memory/dist/codebase-analysis/file-scanner.js
-import { existsSync as existsSync4, readFileSync as readFileSync3, readdirSync as readdirSync2, statSync as statSync3 } from "node:fs";
-import { basename as basename2, extname, join as join4, relative } from "node:path";
-var HEAT_BY_TYPE = {
-  structural_summary: 0.9,
-  // source: cortex@ed33435 seed_project_constants.py:10
-  documentation: 0.85,
-  // source: cortex@ed33435 seed_project_constants.py:11
-  entry_point: 0.8,
-  // source: cortex@ed33435 seed_project_constants.py:12
-  config: 0.7,
-  // source: cortex@ed33435 seed_project_constants.py:13
-  ci_cd: 0.6
-  // source: cortex@ed33435 seed_project_constants.py:14
-};
-var CONFIG_FILES = [
-  "package.json",
-  "package-lock.json",
-  "pyproject.toml",
-  "setup.py",
-  "setup.cfg",
-  "requirements.txt",
-  "Cargo.toml",
-  "Cargo.lock",
-  "go.mod",
-  "go.sum",
-  "pom.xml",
-  "build.gradle",
-  "composer.json",
-  ".ruby-version",
-  "Gemfile",
-  "mix.exs"
-];
-var DOC_GLOBS = ["README", "CLAUDE", "CONTRIBUTING", "CHANGELOG", "ARCHITECTURE"];
-var DOC_DIRS = ["docs", "doc", "documentation", "adr", "docs/adr"];
-var ENTRY_POINT_NAMES = /* @__PURE__ */ new Set([
-  "__main__.py",
-  "main.py",
-  "app.py",
-  "server.py",
-  "cli.py",
-  "index.js",
-  "index.ts",
-  "main.js",
-  "main.ts",
-  "server.js",
-  "main.go",
-  "main.rs",
-  "Main.java"
-]);
-var CI_FILES = [
-  ".github/workflows",
-  "Makefile",
-  "makefile",
-  "Dockerfile",
-  "docker-compose.yml",
-  "docker-compose.yaml",
-  "tox.ini",
-  ".travis.yml",
-  "circle.yml",
-  ".circleci",
-  "Jenkinsfile",
-  ".gitlab-ci.yml",
-  "bitbucket-pipelines.yml"
-];
-var IGNORE_DIRS = /* @__PURE__ */ new Set([
-  ".git",
-  ".hg",
-  ".svn",
-  "node_modules",
-  "__pycache__",
-  ".mypy_cache",
-  ".pytest_cache",
-  ".ruff_cache",
-  ".venv",
-  "venv",
-  "env",
-  ".env",
-  "dist",
-  "build",
-  "target",
-  "out",
-  ".next",
-  ".nuxt",
-  "coverage",
-  ".coverage",
-  "htmlcov",
-  "site-packages",
-  ".tox",
-  ".nox"
-]);
-var EXT_MAP = {
-  ".py": "Python",
-  ".js": "JavaScript",
-  ".ts": "TypeScript",
-  ".go": "Go",
-  ".rs": "Rust",
-  ".java": "Java",
-  ".kt": "Kotlin",
-  ".rb": "Ruby",
-  ".php": "PHP",
-  ".cs": "C#",
-  ".cpp": "C++",
-  ".c": "C",
-  ".swift": "Swift",
-  ".ex": "Elixir",
-  ".exs": "Elixir",
-  ".scala": "Scala",
-  ".clj": "Clojure",
-  ".hs": "Haskell"
-};
-var TOP_LEVEL_LAYOUT_CAP = 30;
-var TOP_LANGUAGES_CAP = 5;
-var STAGE_DOCS_CAP = 20;
-var STAGE_ENTRY_POINTS_CAP = 5;
-var STAGE_CICD_CAP = 5;
-var CICD_DIR_YAML_CAP = 3;
-var CICD_MAX_BYTES = 32768;
-function safeRead(filePath, maxBytes) {
-  try {
-    const buf = readFileSync3(filePath);
-    const slice = buf.subarray(0, maxBytes);
-    return slice.toString("utf-8");
-  } catch {
-    return "";
-  }
-}
-function* walkPruned(root) {
-  const stack = [root];
-  while (stack.length > 0) {
-    const dir = stack.pop();
-    if (dir === void 0)
-      break;
-    let entries;
-    try {
-      entries = readdirSync2(dir, { encoding: "utf8" });
-    } catch {
-      continue;
-    }
-    for (const name of entries) {
-      const full = join4(dir, name);
-      let stat;
-      try {
-        stat = statSync3(full, { bigint: false });
-      } catch {
-        continue;
-      }
-      if (stat.isDirectory()) {
-        if (!IGNORE_DIRS.has(name)) {
-          stack.push(full);
-        }
-      } else if (stat.isFile()) {
-        yield full;
-      }
-    }
-  }
-}
-function detectLanguages(root) {
-  const extCounts = /* @__PURE__ */ new Map();
-  for (const file of walkPruned(root)) {
-    const lang = EXT_MAP[extname(file).toLowerCase()];
-    if (lang)
-      extCounts.set(lang, (extCounts.get(lang) ?? 0) + 1);
-  }
-  return [...extCounts.entries()].sort((a2, b2) => b2[1] - a2[1]).slice(0, TOP_LANGUAGES_CAP).map(([lang]) => lang);
-}
-function topLevelLayout(root) {
-  const items = [];
-  let entries;
-  try {
-    entries = readdirSync2(root, { encoding: "utf8" });
-  } catch {
-    return [];
-  }
-  for (const name of entries.sort()) {
-    if (name.startsWith(".") && name !== ".github")
-      continue;
-    if (IGNORE_DIRS.has(name))
-      continue;
-    const full = join4(root, name);
-    let isDir = false;
-    try {
-      isDir = statSync3(full).isDirectory();
-    } catch {
-    }
-    items.push(`${isDir ? "[dir] " : "[file] "}${name}`);
-  }
-  return items.slice(0, TOP_LEVEL_LAYOUT_CAP);
-}
-function stageConfigs(root, maxBytes) {
-  const discoveries = [];
-  for (const name of CONFIG_FILES) {
-    const p2 = join4(root, name);
-    if (!existsSync4(p2))
-      continue;
-    let isFile2 = false;
-    try {
-      isFile2 = statSync3(p2).isFile();
-    } catch {
-      continue;
-    }
-    if (!isFile2)
-      continue;
-    const content = safeRead(p2, maxBytes);
-    if (content.trim()) {
-      discoveries.push({
-        title: `Project config: ${name}`,
-        content: `# ${name}
-
-${content}`,
-        tags: ["config", "project-setup", name.replace(/\./g, "_")]
-      });
-    }
-  }
-  return discoveries;
-}
-function stageDocs(root, maxBytes) {
-  const seen = /* @__PURE__ */ new Set();
-  const discoveries = [];
-  let rootEntries;
-  try {
-    rootEntries = readdirSync2(root, { encoding: "utf8" });
-  } catch {
-    rootEntries = [];
-  }
-  for (const name of rootEntries) {
-    const p2 = join4(root, name);
-    let isFile2 = false;
-    try {
-      isFile2 = statSync3(p2).isFile();
-    } catch {
-      continue;
-    }
-    if (!isFile2)
-      continue;
-    const nameLower = name.toUpperCase();
-    const matchesGlob = DOC_GLOBS.some((prefix) => nameLower.startsWith(prefix));
-    if (!matchesGlob)
-      continue;
-    if (seen.has(p2))
-      continue;
-    seen.add(p2);
-    const content = safeRead(p2, maxBytes);
-    if (content.trim()) {
-      discoveries.push({
-        title: `Documentation: ${name}`,
-        content: `# ${name}
-
-${content}`,
-        tags: ["documentation", "project-context"]
-      });
-    }
-  }
-  const docSuffixes = /* @__PURE__ */ new Set([".md", ".rst", ".txt", ".adoc"]);
-  for (const docDir of DOC_DIRS) {
-    const d2 = join4(root, docDir);
-    if (!existsSync4(d2))
-      continue;
-    let isDir = false;
-    try {
-      isDir = statSync3(d2).isDirectory();
-    } catch {
-      continue;
-    }
-    if (!isDir)
-      continue;
-    let dirEntries;
-    try {
-      dirEntries = readdirSync2(d2, { encoding: "utf8" }).sort();
-    } catch {
-      continue;
-    }
-    for (const name of dirEntries) {
-      const p2 = join4(d2, name);
-      let isFile2 = false;
-      try {
-        isFile2 = statSync3(p2).isFile();
-      } catch {
-        continue;
-      }
-      if (!isFile2)
-        continue;
-      if (!docSuffixes.has(extname(name).toLowerCase()))
-        continue;
-      if (seen.has(p2))
-        continue;
-      seen.add(p2);
-      const content = safeRead(p2, maxBytes);
-      if (content.trim()) {
-        const relPath = relative(root, p2);
-        const isAdr = docDir.includes("adr");
-        discoveries.push({
-          title: `Doc: ${relPath}`,
-          content: `# ${name}
-
-${content}`,
-          tags: ["documentation", isAdr ? "adr" : "docs"]
-        });
-      }
-    }
-  }
-  return discoveries.slice(0, STAGE_DOCS_CAP);
-}
-function stageEntryPoints(root, maxBytes) {
-  const discoveries = [];
-  for (const filePath of walkPruned(root)) {
-    if (discoveries.length >= STAGE_ENTRY_POINTS_CAP)
-      break;
-    const name = basename2(filePath);
-    if (!ENTRY_POINT_NAMES.has(name))
-      continue;
-    const content = safeRead(filePath, maxBytes);
-    if (!content.trim())
-      continue;
-    const relPath = relative(root, filePath);
-    discoveries.push({
-      title: `Entry point: ${relPath}`,
-      content: `# Entry point: ${relPath}
-
-\`\`\`
-${content}
-\`\`\``,
-      tags: ["entry-point", "architecture"]
-    });
-  }
-  return discoveries;
-}
-function stageCicd(root) {
-  const found = [];
-  for (const pathStr of CI_FILES) {
-    if (found.length >= STAGE_CICD_CAP)
-      break;
-    const p2 = join4(root, pathStr);
-    if (!existsSync4(p2))
-      continue;
-    let stat;
-    try {
-      stat = statSync3(p2);
-    } catch {
-      continue;
-    }
-    if (stat.isDirectory()) {
-      let entries;
-      try {
-        entries = readdirSync2(p2, { encoding: "utf8" });
-      } catch {
-        continue;
-      }
-      const yamlFiles = entries.filter((n3) => n3.endsWith(".yml") || n3.endsWith(".yaml")).slice(0, CICD_DIR_YAML_CAP);
-      for (const yamlName of yamlFiles) {
-        if (found.length >= STAGE_CICD_CAP)
-          break;
-        const fp = join4(p2, yamlName);
-        const content = safeRead(fp, CICD_MAX_BYTES);
-        if (content.trim()) {
-          const relPath = relative(root, fp);
-          found.push({
-            title: `CI/CD: ${relPath}`,
-            content: `# CI/CD: ${relPath}
-
-\`\`\`yaml
-${content}
-\`\`\``,
-            tags: ["ci-cd", "devops"]
-          });
-        }
-      }
-    } else if (stat.isFile()) {
-      const content = safeRead(p2, CICD_MAX_BYTES);
-      if (content.trim()) {
-        found.push({
-          title: `CI/CD: ${basename2(p2)}`,
-          content: `# ${basename2(p2)}
-
-\`\`\`
-${content}
-\`\`\``,
-          tags: ["ci-cd", "devops"]
-        });
-      }
-    }
-  }
-  return found;
-}
-function stageStructuralSummary(root) {
-  const layout = topLevelLayout(root);
-  const languages = detectLanguages(root);
-  const name = basename2(root);
-  const lines = [
-    `# Project structure: ${name}`,
-    `
-**Root:** \`${root}\``,
-    `
-**Primary languages:** ${languages.join(", ") || "unknown"}`,
-    "\n## Top-level layout",
-    ...layout.map((item) => `- ${item}`)
-  ];
-  return {
-    title: `Project structure: ${name}`,
-    content: lines.join("\n"),
-    tags: ["project-structure", "architecture", "seeded"]
-  };
-}
-function collectAllDiscoveries(root, maxBytes) {
-  const discoveries = [];
-  discoveries.push(stageStructuralSummary(root));
-  discoveries.push(...stageConfigs(root, maxBytes));
-  discoveries.push(...stageDocs(root, maxBytes));
-  discoveries.push(...stageEntryPoints(root, maxBytes));
-  discoveries.push(...stageCicd(root));
-  return discoveries;
-}
-var HEAT_FALLBACK = 0.7;
-function heatForTags(tags) {
-  const tagSet = new Set(tags);
-  if (tagSet.has("project-structure") || tagSet.has("structural_summary")) {
-    return HEAT_BY_TYPE["structural_summary"] ?? HEAT_FALLBACK;
-  }
-  if (tagSet.has("documentation"))
-    return HEAT_BY_TYPE["documentation"] ?? HEAT_FALLBACK;
-  if (tagSet.has("entry-point"))
-    return HEAT_BY_TYPE["entry_point"] ?? HEAT_FALLBACK;
-  if (tagSet.has("config") || tagSet.has("project-setup"))
-    return HEAT_BY_TYPE["config"] ?? HEAT_FALLBACK;
-  if (tagSet.has("ci-cd") || tagSet.has("devops"))
-    return HEAT_BY_TYPE["ci_cd"] ?? HEAT_FALLBACK;
-  return HEAT_FALLBACK;
-}
-
-// packages/memory/dist/codebase-analysis/handlers/seed-project.js
-var DEFAULT_MAX_FILE_SIZE_KB = 64;
-var BYTES_PER_KB = 1024;
-function parseArgs(args) {
-  const raw = args.directory?.trim() || process.cwd();
-  const root = resolvePath(raw);
-  const domain = args.domain?.trim() ?? basename3(root);
-  const maxKb = args.max_file_size_kb ?? DEFAULT_MAX_FILE_SIZE_KB;
-  const maxBytes = maxKb * BYTES_PER_KB;
-  const dryRun = args.dry_run ?? false;
-  return { root, domain, maxBytes, dryRun };
-}
-function buildStageCounts(discoveries) {
-  return {
-    structural_summary: 1,
-    configs: discoveries.filter((d2) => d2.tags.includes("config")).length,
-    docs: discoveries.filter((d2) => d2.tags.includes("documentation")).length,
-    entry_points: discoveries.filter((d2) => d2.tags.includes("entry-point")).length,
-    cicd: discoveries.filter((d2) => d2.tags.includes("ci-cd")).length
-  };
-}
-async function storeDiscoveriesAsync(discoveries, root, domain, store) {
-  let stored = 0;
-  let skipped = 0;
-  const memoryIds = [];
-  for (const disc of discoveries) {
-    try {
-      const discTags = [...disc.tags, "seeded"];
-      const initialHeat = heatForTags(discTags);
-      const insertData = {
-        content: disc.content,
-        tags: discTags,
-        domain,
-        directory_context: root,
-        source: "seed_project",
-        importance: initialHeat
-      };
-      let mid;
-      if (store.insertMemoryAsync) {
-        mid = await store.insertMemoryAsync(insertData);
-      } else {
-        mid = store.insertMemory(insertData);
-      }
-      if (mid > 0) {
-        if (store.bumpHeatRawAsync) {
-          await store.bumpHeatRawAsync(mid, initialHeat);
-        } else {
-          store.bumpHeatRaw(mid, initialHeat);
-        }
-        stored++;
-        memoryIds.push(mid);
-      } else {
-        skipped++;
-      }
-    } catch {
-      skipped++;
-    }
-  }
-  return { stored, skipped, memoryIds };
-}
-async function handler3(args, deps) {
-  const { root, domain, maxBytes, dryRun } = parseArgs(args);
-  if (!existsSync5(root)) {
-    return { seeded: false, reason: `directory not found: ${root}` };
-  }
-  const allDiscoveries = collectAllDiscoveries(root, maxBytes);
-  if (dryRun) {
-    return {
-      seeded: false,
-      dry_run: true,
-      discoveries: allDiscoveries.length,
-      titles: allDiscoveries.map((d2) => d2.title)
-    };
-  }
-  let purgedStale = 0;
-  const storeExt2 = deps.store;
-  if (typeof storeExt2.deleteMemoriesByTag === "function") {
-    purgedStale = storeExt2.deleteMemoriesByTag("seeded", domain);
-  }
-  const { stored, skipped, memoryIds } = await storeDiscoveriesAsync(allDiscoveries, root, domain, deps.store);
-  return {
-    seeded: true,
-    directory: root,
-    domain,
-    discoveries: allDiscoveries.length,
-    stored,
-    skipped,
-    purged_stale: purgedStale,
-    memory_ids: memoryIds,
-    stages: buildStageCounts(allDiscoveries)
-  };
-}
-var schema = {
-  title: "Seed project",
-  description: "Bootstrap the memory store from an existing codebase via a five-stage structural sweep (config extraction, documentation harvesting, entry-point scan, CI/CD detection, structural summary). Each discovery is stored through the standard write gate. Distinct from codebase_analyze (tree-sitter AST per file, much deeper). Returns counts and stored memory IDs."
-};
-
-// packages/mcp-servers/memory/dist/tools/management.js
-var VALIDATE_STALENESS_DEFAULT = 0.5;
-var VALIDATE_ERROR_CAP = 10;
-var SEED_MAX_FILE_SIZE_KB = 64;
-var BACKFILL_MAX_FILES_DEFAULT = 20;
-var BACKFILL_MIN_IMPORTANCE = 0.35;
-function loadProfilesRaw() {
-  const profilePath = join5(homedir4(), ".claude", "methodology", "profiles.json");
-  if (!existsSync6(profilePath))
-    return { domains: {} };
-  try {
-    return JSON.parse(readFileSync4(profilePath, "utf-8"));
-  } catch {
-    return { domains: {} };
-  }
-}
-function errorText5(tool, err) {
-  const message = err instanceof Error ? err.message : String(err);
-  return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
-}
-function registerManagementTools(server2, deps) {
-  server2.registerTool("validate_memory", {
-    description: "Validate memories against current filesystem state (mark stale if referenced files no longer exist).",
-    inputSchema: {
-      memory_id: external_exports.number().int().optional().describe("Specific memory ID or null for batch"),
-      domain: external_exports.string().optional().describe("Domain filter"),
-      directory: external_exports.string().optional().describe("Directory filter"),
-      base_dir: external_exports.string().default("").describe("Base directory for path resolution"),
-      staleness_threshold: external_exports.number().min(0).max(1).default(VALIDATE_STALENESS_DEFAULT).describe("Heat threshold for stale mark"),
-      dry_run: external_exports.boolean().default(false).describe("Preview without writing")
-    }
-  }, async (args) => {
-    try {
-      const storeExt2 = deps.store;
-      const allMems = storeExt2.getAllMemoriesForDecay?.() ?? [];
-      const candidates = args.memory_id !== void 0 ? allMems.filter((m2) => m2["id"] === args.memory_id) : allMems.filter((m2) => {
-        if (args.domain && m2["domain"] !== args.domain)
-          return false;
-        if (args.directory && !String(m2["directory"] ?? "").startsWith(args.directory))
-          return false;
-        return true;
-      });
-      let validated = 0;
-      let staleMarked = 0;
-      const errors = [];
-      for (const mem of candidates) {
-        try {
-          validated++;
-          const heat = mem["heat"] ?? 0;
-          if (heat >= args.staleness_threshold)
-            continue;
-          const tags = mem["tags"] ?? [];
-          const fileRef = tags.find((t2) => t2.startsWith("file:") || t2.startsWith("path:"));
-          if (!fileRef)
-            continue;
-          const filePath = fileRef.replace(/^(?:file:|path:)/, "");
-          const absPath = args.base_dir ? join5(args.base_dir, filePath) : filePath;
-          if (existsSync6(absPath))
-            continue;
-          if (!args.dry_run) {
-            deps.store.markMemoryStale(Number(mem["id"]), true);
-          }
-          staleMarked++;
-        } catch (e2) {
-          errors.push(String(e2));
-        }
-      }
-      return { content: [{ type: "text", text: JSON.stringify({
-        validated,
-        stale_marked: staleMarked,
-        dry_run: args.dry_run,
-        errors: errors.slice(0, VALIDATE_ERROR_CAP)
-      }) }] };
-    } catch (err) {
-      return errorText5("validate_memory", err);
-    }
-  });
-  server2.registerTool("seed_project", {
-    description: "Bootstrap memory from an existing codebase by scanning files and creating structured memories.",
-    inputSchema: {
-      directory: external_exports.string().default("").describe("Project directory to seed from"),
-      domain: external_exports.string().default("").describe("Domain to assign"),
-      max_file_size_kb: external_exports.number().int().min(1).default(SEED_MAX_FILE_SIZE_KB).describe("Max file size in KB"),
-      dry_run: external_exports.boolean().default(false).describe("Preview without writing")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler3({
-        directory: args.directory,
-        domain: args.domain,
-        max_file_size_kb: args.max_file_size_kb,
-        dry_run: args.dry_run
-      }, { store: deps.store });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText5("seed_project", err);
-    }
-  });
-  server2.registerTool("backfill_memories", {
-    description: "Auto-import prior Claude Code conversation JSONL files, applying Ebbinghaus-decay initial heat.",
-    inputSchema: {
-      project: external_exports.string().default("").describe("Project identifier"),
-      max_files: external_exports.number().int().min(1).default(BACKFILL_MAX_FILES_DEFAULT).describe("Max JSONL files to process"),
-      // source: Ebbinghaus retention curve — min_importance threshold of 0.35
-      // per MCP_TOOLS.md §backfill_memories default
-      min_importance: external_exports.number().min(0).max(1).default(BACKFILL_MIN_IMPORTANCE).describe("Minimum importance score"),
-      dry_run: external_exports.boolean().default(false).describe("Preview without writing"),
-      force_reprocess: external_exports.boolean().default(false).describe("Reprocess already-imported files")
-    }
-  }, async (args) => {
-    try {
-      const rememberFn = async (rawArgs) => {
-        const result = await rememberAsync(rawArgs, deps.store);
-        return result.stored ? { stored: true } : null;
-      };
-      const response = await importHandler({
-        project: args.project,
-        domain: "",
-        min_importance: args.min_importance,
-        max_sessions: args.max_files,
-        dry_run: args.dry_run
-      }, rememberFn);
-      return { content: [{ type: "text", text: JSON.stringify({
-        backfilled: response.imported,
-        skipped: response.skipped,
-        files_processed: response.total_files,
-        dry_run: args.dry_run
-      }) }] };
-    } catch (err) {
-      return errorText5("backfill_memories", err);
-    }
-  });
-  server2.registerTool("get_methodology_graph", {
-    description: "Returns methodology map as graph data for 3D visualisation.",
-    inputSchema: {
-      domain: external_exports.string().optional().describe("Domain to visualise")
-    }
-  }, async (args) => {
-    try {
-      const profiles = loadProfilesRaw();
-      const domains = profiles["domains"] ?? {};
-      const nodes = [];
-      const edges = [];
-      let edgeId = 0;
-      for (const [id2, domain] of Object.entries(domains)) {
-        if (args.domain && id2 !== args.domain)
-          continue;
-        nodes.push({
-          id: id2,
-          label: domain["label"] ?? id2,
-          session_count: domain["sessionCount"] ?? 0,
-          confidence: domain["confidence"] ?? 0
-        });
-        const bridges = domain["connectionBridges"] ?? [];
-        for (const bridge of bridges) {
-          const target = bridge["targetDomain"];
-          if (!target)
-            continue;
-          edges.push({
-            id: edgeId++,
-            source: id2,
-            target,
-            bridge_type: bridge["bridgeType"] ?? "unknown",
-            strength: bridge["strength"] ?? 0
-          });
-        }
-      }
-      return { content: [{ type: "text", text: JSON.stringify({ nodes, edges }) }] };
-    } catch (err) {
-      return errorText5("get_methodology_graph", err);
-    }
-  });
-}
-
-// packages/memory/dist/narrative/narrative-builder.js
-var CONTENT_TRUNCATION_CHARS = 150;
-var TOPIC_CONTENT_CHARS = 100;
-var BRIEF_SUMMARY_MAX_CHARS = 300;
-var DEFAULT_IMPORTANCE_THRESHOLD = 0.7;
-var DEFAULT_HEAT_THRESHOLD = 0.7;
-var DEFAULT_MAX_ENTITIES = 10;
-var DEFAULT_MAX_TOPICS = 5;
-var DISPLAY_LIMIT = 10;
-var BRIEF_DISPLAY_LIMIT = 2;
-var BRIEF_TOPICS_LIMIT = 3;
-var ELLIPSIS_RESERVE = 3;
-var SENTENCE_BOUNDARY_DIVISOR = 3;
-var DECISION_KEYWORDS = /* @__PURE__ */ new Set([
-  "decided",
-  "chose",
-  "choosing",
-  "switched",
-  "migrated",
-  "replaced",
-  "using",
-  "adopted",
-  "selected",
-  "picked",
-  "went with"
-]);
-var EVENT_KEYWORDS = /* @__PURE__ */ new Set([
-  "error",
-  "fix",
-  "fixed",
-  "bug",
-  "resolved",
-  "broke",
-  "crash",
-  "deployed",
-  "released",
-  "implemented",
-  "completed",
-  "refactored"
-]);
-var DECISION_RE4 = new RegExp("\\b(" + Array.from(DECISION_KEYWORDS).map((k2) => k2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\b", "i");
-var EVENT_RE = new RegExp("\\b(" + Array.from(EVENT_KEYWORDS).map((k2) => k2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\b", "i");
-var TOOL_HEADER_RE = /^#\s*Tool:\s*\w+\s*\n(?:\*\*(?:File|Command|Read):\*\*\s*`[^`]*`\s*\n)?/gm;
-var OUTPUT_BLOCK_RE = /\*\*Output:\*\*\s*\n```\n?/gm;
-function cleanAutoCaptured(content) {
-  let cleaned = content.replace(TOOL_HEADER_RE, "");
-  cleaned = cleaned.replace(OUTPUT_BLOCK_RE, "");
-  cleaned = cleaned.replace(/```/g, "").trim();
-  const lines = cleaned.split("\n");
-  while (lines.length > 0 && lines[0] !== void 0 && !lines[0].trim()) {
-    lines.shift();
-  }
-  return lines.join("\n").trim();
-}
-function normaliseTags(raw) {
-  if (!raw)
-    return [];
-  if (typeof raw === "string")
-    return raw.split(",").map((t2) => t2.trim());
-  return raw;
-}
-function extractDecisions(memories) {
-  const decisions = [];
-  for (const mem of memories) {
-    const tags = normaliseTags(mem.tags);
-    const isDecision = tags.map((t2) => t2.toLowerCase()).includes("decision") || DECISION_RE4.test(mem.content);
-    if (!isDecision)
-      continue;
-    const cleaned = cleanAutoCaptured(mem.content);
-    const text = cleaned.length > CONTENT_TRUNCATION_CHARS ? cleaned.slice(0, CONTENT_TRUNCATION_CHARS).trim() + "..." : cleaned.slice(0, CONTENT_TRUNCATION_CHARS).trim();
-    decisions.push(text);
-  }
-  return decisions;
-}
-function extractEvents(memories, importanceThreshold = DEFAULT_IMPORTANCE_THRESHOLD) {
-  const events = [];
-  for (const mem of memories) {
-    const isEvent = mem.importance >= importanceThreshold || EVENT_RE.test(mem.content);
-    if (!isEvent)
-      continue;
-    const cleaned = cleanAutoCaptured(mem.content);
-    const text = mem.content.length > CONTENT_TRUNCATION_CHARS ? cleaned.slice(0, CONTENT_TRUNCATION_CHARS).trim() + "..." : cleaned.slice(0, CONTENT_TRUNCATION_CHARS).trim();
-    events.push(text);
-  }
-  return events;
-}
-function extractTopEntities(memories, maxEntities = DEFAULT_MAX_ENTITIES) {
-  const entityCounts = /* @__PURE__ */ new Map();
-  const camelRe = /\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)\b/g;
-  const pathRe = /[\w./]+\.\w{1,4}\b/g;
-  for (const mem of memories) {
-    const content = mem.content;
-    for (const match2 of content.matchAll(camelRe)) {
-      const name = match2[1] ?? match2[0];
-      entityCounts.set(name, (entityCounts.get(name) ?? 0) + 1);
-    }
-    for (const match2 of content.matchAll(pathRe)) {
-      const name = match2[0];
-      if (name.includes("/") || name.includes(".")) {
-        entityCounts.set(name, (entityCounts.get(name) ?? 0) + 1);
-      }
-    }
-  }
-  return Array.from(entityCounts.entries()).sort((a2, b2) => b2[1] - a2[1]).slice(0, maxEntities).map(([name]) => name);
-}
-function extractHotTopics(memories, heatThreshold = DEFAULT_HEAT_THRESHOLD, maxTopics = DEFAULT_MAX_TOPICS) {
-  const hot = memories.filter((m2) => m2.heat >= heatThreshold).sort((a2, b2) => b2.heat - a2.heat);
-  const topics = [];
-  for (const mem of hot.slice(0, maxTopics)) {
-    const content = mem.content.slice(0, TOPIC_CONTENT_CHARS).trim();
-    if (content)
-      topics.push(content);
-  }
-  return topics;
-}
-function mapToFunctionType(mem) {
-  const tags = normaliseTags(mem.tags).map((t2) => t2.toLowerCase());
-  const content = mem.content.toLowerCase();
-  if (tags.includes("error"))
-    return "complication";
-  if (tags.includes("insight"))
-    return "resolution";
-  if (tags.includes("decision") || tags.includes("architecture"))
-    return "orientation";
-  if (/\b(error|bug|crash|broke|failed|failure)\b/.test(content)) {
-    return "complication";
-  }
-  if (/\b(fixed|resolved|completed|deployed|released|refactored)\b/.test(content)) {
-    return "resolution";
-  }
-  return "orientation";
-}
-function detectArc(memories) {
-  const buckets = {
-    orientation: [],
-    complication: [],
-    resolution: []
-  };
-  for (const mem of memories) {
-    const fnType = mapToFunctionType(mem);
-    const cleaned = cleanAutoCaptured(mem.content);
-    const text = cleaned.length > CONTENT_TRUNCATION_CHARS ? cleaned.slice(0, CONTENT_TRUNCATION_CHARS) + "..." : cleaned;
-    buckets[fnType].push(text);
-  }
-  const arc = {};
-  if (buckets.orientation.length > 0) {
-    arc.orientation = {
-      type: "orientation",
-      items: buckets.orientation,
-      inferred: false
-    };
-  }
-  if (buckets.complication.length > 0) {
-    arc.complication = {
-      type: "complication",
-      items: buckets.complication,
-      inferred: false
-    };
-  }
-  if (buckets.resolution.length > 0) {
-    arc.resolution = {
-      type: "resolution",
-      items: buckets.resolution,
-      inferred: false
-    };
-  }
-  return arc;
-}
-function appendSection(lines, heading, items) {
-  if (items.length === 0)
-    return;
-  lines.push(heading);
-  for (const item of items) {
-    lines.push(`- ${item}`);
-  }
-  lines.push("");
-}
-function assembleNarrativeText(memoryCount, decisions, events, entities, topics, directory, periodLabel) {
-  const lines = [];
-  let header = "# Project Narrative";
-  if (directory)
-    header += ` \u2014 ${directory}`;
-  if (periodLabel)
-    header += ` (${periodLabel})`;
-  lines.push(header, "");
-  lines.push(`Based on ${memoryCount} memories.`, "");
-  appendSection(lines, "## Key Decisions", decisions.slice(0, DISPLAY_LIMIT));
-  appendSection(lines, "## Significant Events", events.slice(0, DISPLAY_LIMIT));
-  if (entities.length > 0) {
-    lines.push("## Key Entities");
-    lines.push(entities.join(", "));
-    lines.push("");
-  }
-  appendSection(lines, "## Current Focus", topics);
-  if (decisions.length === 0 && events.length === 0 && topics.length === 0) {
-    lines.push("*No significant activity recorded in this period.*");
-  }
-  return lines.join("\n");
-}
-function generateNarrative(memories, directory = "", periodLabel = "") {
-  const decisions = extractDecisions(memories);
-  const events = extractEvents(memories);
-  const entities = extractTopEntities(memories);
-  const topics = extractHotTopics(memories);
-  const arc = detectArc(memories);
-  const narrative = assembleNarrativeText(memories.length, decisions, events, entities, topics, directory, periodLabel);
-  return {
-    narrative,
-    decisions,
-    events,
-    entities,
-    topics,
-    arc,
-    memory_count: memories.length
-  };
-}
-function generateBriefSummary(memories, maxChars = BRIEF_SUMMARY_MAX_CHARS) {
-  const decisions = extractDecisions(memories);
-  const events = extractEvents(memories);
-  const topics = extractHotTopics(memories, DEFAULT_HEAT_THRESHOLD, BRIEF_TOPICS_LIMIT);
-  const parts = [];
-  if (topics.length > 0)
-    parts.push(`Focus: ${topics.slice(0, BRIEF_TOPICS_LIMIT).join(", ")}`);
-  if (decisions.length > 0)
-    parts.push(`Decisions: ${decisions.slice(0, BRIEF_DISPLAY_LIMIT).join("; ")}`);
-  if (events.length > 0)
-    parts.push(`Events: ${events.slice(0, BRIEF_DISPLAY_LIMIT).join("; ")}`);
-  let summary = parts.join(". ");
-  if (summary.length <= maxChars)
-    return summary;
-  const truncated = summary.slice(0, maxChars - ELLIPSIS_RESERVE);
-  const lastEnd = Math.max(truncated.lastIndexOf(". "), truncated.lastIndexOf("! "), truncated.lastIndexOf("? "));
-  if (lastEnd > Math.floor(maxChars / SENTENCE_BOUNDARY_DIVISOR)) {
-    return truncated.slice(0, lastEnd + 1);
-  }
-  const lastSpace = truncated.lastIndexOf(" ");
-  if (lastSpace > Math.floor(maxChars / SENTENCE_BOUNDARY_DIVISOR)) {
-    return truncated.slice(0, lastSpace) + "...";
-  }
-  return truncated + "...";
-}
-
-// packages/memory/dist/narrative/types.js
-var MemoryRecordSchema = external_exports.object({
-  content: external_exports.string(),
-  tags: external_exports.union([external_exports.array(external_exports.string()), external_exports.string()]).default([]),
-  importance: external_exports.number().min(0).max(1).default(0.5),
-  heat: external_exports.number().min(0).max(1).default(0),
-  timestamp: external_exports.string().default(""),
-  session_id: external_exports.string().default("")
-});
-var SessionRecordSchema = external_exports.object({
-  type: external_exports.enum(["user", "assistant", "system"]).optional(),
-  sessionId: external_exports.string().optional(),
-  cwd: external_exports.string().optional(),
-  timestamp: external_exports.string().optional(),
-  isMeta: external_exports.boolean().optional(),
-  toolUseResult: external_exports.unknown().optional(),
-  message: external_exports.object({
-    content: external_exports.union([
-      external_exports.string(),
-      external_exports.array(external_exports.object({
-        type: external_exports.string(),
-        text: external_exports.string().optional(),
-        name: external_exports.string().optional()
-      }))
-    ]).optional()
-  }).optional()
-});
-var MemorableItemSchema = external_exports.object({
-  content: external_exports.string(),
-  tags: external_exports.array(external_exports.string()),
-  importance: external_exports.number().min(0).max(1),
-  timestamp: external_exports.string(),
-  session_id: external_exports.string()
-});
-var SessionSummarySchema = external_exports.object({
-  session_id: external_exports.string(),
-  cwd: external_exports.string(),
-  first_message: external_exports.string(),
-  user_count: external_exports.number().int().nonnegative(),
-  tools_used: external_exports.array(external_exports.string()),
-  start_time: external_exports.string(),
-  end_time: external_exports.string()
-});
-var NarrativeFunctionTypeSchema = external_exports.enum([
-  "orientation",
-  "complication",
-  "resolution"
-]);
-var NarrativeFunctionSchema = external_exports.object({
-  /** Structural function type — what this step DOES in the arc. */
-  type: NarrativeFunctionTypeSchema,
-  /** The memory items that realise this function. */
-  items: external_exports.array(external_exports.string()),
-  /** Whether this function was derived from explicit signal or inferred. */
-  inferred: external_exports.boolean().default(false)
-});
-var NarrativeArcSchema = external_exports.object({
-  orientation: NarrativeFunctionSchema.optional(),
-  complication: NarrativeFunctionSchema.optional(),
-  resolution: NarrativeFunctionSchema.optional()
-});
-var NarrativeRequestSchema = external_exports.object({
-  /** Absolute project directory to narrate. Mutually exclusive with domain. */
-  directory: external_exports.string().optional(),
-  /** Domain identifier (e.g. 'cortex', 'auth-service'). */
-  domain: external_exports.string().optional(),
-  /**
-   * If true, return a one-paragraph executive summary instead of the
-   * full multi-section narrative.
-   */
-  brief: external_exports.boolean().default(false)
-});
-var NarrativeResponseSchema = external_exports.object({
-  /** Full formatted narrative string (absent when brief=true). */
-  narrative: external_exports.string().optional(),
-  /** One-paragraph brief summary (present when brief=true). */
-  summary: external_exports.string().optional(),
-  /** Extracted decision statements. */
-  decisions: external_exports.array(external_exports.string()).default([]),
-  /** Extracted event statements. */
-  events: external_exports.array(external_exports.string()).default([]),
-  /** Top entity names by frequency. */
-  entities: external_exports.array(external_exports.string()).default([]),
-  /** High-heat focus topics. */
-  topics: external_exports.array(external_exports.string()).default([]),
-  /** Structural narrative arc (Proppian function sequence). */
-  arc: NarrativeArcSchema.optional(),
-  /** Total memories analysed. */
-  memory_count: external_exports.number().int().nonnegative()
-});
-var SessionEventSchema = external_exports.object({
-  id: external_exports.string(),
-  type: NarrativeFunctionTypeSchema,
-  content: external_exports.string(),
-  importance: external_exports.number().min(0).max(1).default(0.5),
-  timestamp: external_exports.string().default("")
-});
-
-// packages/memory/dist/narrative/handlers/narrative.js
-var MEMORY_FETCH_LIMIT = 200;
-var HOT_MEMORY_MIN_HEAT = 0.1;
-var NARRATIVE_POLISH_MAX_TOKENS = 1024;
-var NARRATIVE_POLISH_TEMPERATURE = 0.7;
-var PROSE_POLISH_SYSTEM = `You are a technical writing assistant. You receive a structured project narrative in Markdown and rewrite it as flowing, readable prose. Preserve every factual claim, decision, and entity exactly. Do not add new information. Return only the rewritten text with the same section headings.`;
-function buildPolishPrompt(structuredNarrative) {
-  return `Rewrite the following structured project narrative as flowing prose. Keep all section headings. Do not add information not present in the input.
-
-${structuredNarrative}`;
-}
-async function narrativeHandler(store, rawArgs, llmClient2 = null) {
-  const args = NarrativeRequestSchema.parse(rawArgs ?? {});
-  const { directory = "", domain = "", brief } = args;
-  let memories;
-  if (directory) {
-    memories = store.getMemoriesForDirectory(directory, 0);
-  } else if (domain) {
-    memories = store.getMemoriesForDomain(domain, 0, MEMORY_FETCH_LIMIT);
-  } else {
-    memories = store.getHotMemories(HOT_MEMORY_MIN_HEAT, MEMORY_FETCH_LIMIT);
-  }
-  if (brief) {
-    const summary = generateBriefSummary(memories);
-    return {
-      summary,
-      decisions: [],
-      events: [],
-      entities: [],
-      topics: [],
-      memory_count: memories.length
-    };
-  }
-  const result = generateNarrative(memories, directory || domain);
-  const structuralNarrative = result.narrative;
-  if (llmClient2 !== null && typeof structuralNarrative === "string" && structuralNarrative.length > 0) {
-    const polished = await llmClient2.complete({
-      system: PROSE_POLISH_SYSTEM,
-      prompt: buildPolishPrompt(structuralNarrative),
-      maxTokens: NARRATIVE_POLISH_MAX_TOKENS,
-      temperature: NARRATIVE_POLISH_TEMPERATURE
-    });
-    return { ...result, narrative: polished };
-  }
-  return result;
-}
-
-// packages/memory/dist/narrative/handlers/get-project-story.js
-var GET_PROJECT_STORY_DEFAULT_LIMIT = 50;
-var HOT_MEMORY_HEAT_THRESHOLD = 0.5;
-var GET_PROJECT_STORY_MAX_TOPICS = 10;
-function getProjectStoryHandler(store, args) {
-  const domain = args.domain?.trim() ?? "default";
-  const limit = args.max_chapters ?? args.max_memories ?? GET_PROJECT_STORY_DEFAULT_LIMIT;
-  const memories = store.getMemoriesForDomain(domain, 0, limit);
-  const hotMemories = memories.filter((m2) => m2.heat >= HOT_MEMORY_HEAT_THRESHOLD);
-  const hotTopics = hotMemories.flatMap((m2) => Array.isArray(m2.tags) ? m2.tags : []);
-  const uniqueTopics = [...new Set(hotTopics)].slice(0, GET_PROJECT_STORY_MAX_TOPICS);
-  const summary = memories.length === 0 ? `No memories found for domain "${domain}".` : `Found ${memories.length.toString()} memories for domain "${domain}". Hot topics: ${uniqueTopics.join(", ") || "none"}.`;
-  return { domain, memoriesFound: memories.length, summary, hotTopics: uniqueTopics, sessionCount: 0 };
-}
-
-// packages/memory/dist/narrative/handlers/unified-search.js
-var MEMORY_FETCH_LIMIT2 = 200;
-var HOT_MEMORY_MIN_HEAT2 = 0.1;
-var AP_SEARCH_LIMIT = 20;
-var MAX_RESULTS_CAP = 50;
-var MIN_RESULTS = 1;
-var SCORE_DECIMAL_SHIFT = 1e4;
-var UnifiedSearchRequestSchema = external_exports.object({
-  query: external_exports.string().min(1),
-  domain: external_exports.string().optional(),
-  max_results: external_exports.number().int().min(MIN_RESULTS).max(MAX_RESULTS_CAP).default(10),
-  // source: Cormack, Clarke, Buettcher (2009) SIGIR — K=60 canonical
-  k: external_exports.number().int().min(1).default(DEFAULT_RRF_K),
-  // source: cortex@ed33435 unified_search.py — optional graph_path for AP leg
-  graph_path: external_exports.string().optional()
-});
-function scoreRecord(query, record3) {
-  const queryTokens = new Set(query.toLowerCase().split(/\s+/).filter((t2) => t2.length > 2));
-  const contentLower = record3.content.toLowerCase();
-  if (queryTokens.size === 0)
-    return 0;
-  let hits = 0;
-  for (const token of queryTokens)
-    if (contentLower.includes(token))
-      hits++;
-  return hits / queryTokens.size;
-}
-function apSymbolToResult(symbol, score) {
-  const name = typeof symbol["name"] === "string" ? symbol["name"] : "";
-  const kind2 = typeof symbol["kind"] === "string" ? symbol["kind"] : "";
-  const filePath = typeof symbol["filePath"] === "string" ? symbol["filePath"] : "";
-  return {
-    source: "ap",
-    score: Math.round(score * SCORE_DECIMAL_SHIFT) / SCORE_DECIMAL_SHIFT,
-    content: `${filePath}::${name} [${kind2}]`,
-    tags: ["code-symbol", kind2].filter(Boolean),
-    heat: 0
-  };
-}
-async function unifiedSearchHandler(deps, rawArgs) {
-  const args = UnifiedSearchRequestSchema.parse(rawArgs ?? {});
-  const { query, domain, max_results, k: k2, graph_path } = args;
-  const { memoryPort, codebasePort } = deps;
-  let memories;
-  if (domain) {
-    memories = memoryPort.getMemoriesForDomain(domain, 0, MEMORY_FETCH_LIMIT2);
-  } else {
-    memories = memoryPort.getHotMemories(HOT_MEMORY_MIN_HEAT2, MEMORY_FETCH_LIMIT2);
-  }
-  const textScores = memories.map((m2, idx) => [idx, scoreRecord(query, m2)]);
-  const heatScores = memories.map((m2, idx) => [idx, m2.heat]);
-  const textRanked = textScores.sort((a2, b2) => b2[1] - a2[1]).map(([id2]) => id2);
-  const heatRanked = heatScores.sort((a2, b2) => b2[1] - a2[1]).map(([id2]) => id2);
-  const cortexCount = memories.length;
-  let apSymbols = [];
-  const activeRankLists = [["text", textRanked], ["heat", heatRanked]];
-  if (codebasePort !== void 0 && graph_path !== void 0 && graph_path.length > 0) {
-    try {
-      const apInput = { graphPath: graph_path, query, limit: AP_SEARCH_LIMIT };
-      const apResult = await codebasePort.searchCodebase(apInput);
-      apSymbols = apResult.results;
-      const apRanked = apSymbols.map((_2, i2) => cortexCount + i2);
-      activeRankLists.push(["ap", apRanked]);
-    } catch {
-    }
-  }
-  const fused = rrfFuseIds(activeRankLists, k2);
-  const results = fused.slice(0, max_results).flatMap(([idx, score]) => {
-    if (idx < cortexCount) {
-      const record3 = memories[idx];
-      if (!record3)
-        return [];
-      return [{
-        source: "cortex",
-        score: Math.round(score * SCORE_DECIMAL_SHIFT) / SCORE_DECIMAL_SHIFT,
-        content: record3.content,
-        tags: Array.isArray(record3.tags) ? record3.tags : [],
-        heat: record3.heat
-      }];
-    }
-    const sym = apSymbols[idx - cortexCount];
-    if (!sym)
-      return [];
-    return [apSymbolToResult(sym, score)];
-  });
-  return {
-    status: "ok",
-    results,
-    query,
-    total: results.length,
-    sources: activeRankLists.map(([name]) => name),
-    counts: { cortex: cortexCount, ap: apSymbols.length },
-    k: k2
-  };
-}
-
-// packages/mcp-servers/memory/dist/tools/narrative.js
-var MAX_CHAPTERS_MAX = 20;
-var MAX_CHAPTERS_DEFAULT = 5;
-var MAX_RESULTS_MAX = 50;
-var MAX_RESULTS_DEFAULT2 = 10;
-var RRF_K_DEFAULT = 60;
-function errorText6(tool, err) {
-  const message = err instanceof Error ? err.message : String(err);
-  return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
-}
-function registerNarrativeTools(server2, deps = null) {
-  const narrativeDeps = deps !== null && typeof deps === "object" && "store" in deps ? deps : null;
-  const llmClient2 = narrativeDeps?.llmClient ?? (deps !== null && typeof deps === "object" && !("store" in deps) ? deps : null);
-  server2.registerTool("narrative", {
-    description: "Generate project narrative from stored memories (structured summary).",
-    inputSchema: {
-      directory: external_exports.string().optional().describe("Directory scope"),
-      domain: external_exports.string().optional().describe("Domain scope"),
-      brief: external_exports.boolean().default(false).describe("Brief mode (condensed output)")
-    }
-  }, async (args) => {
-    try {
-      if (!narrativeDeps) {
-        return { content: [{ type: "text", text: JSON.stringify({
-          narrative: "",
-          memory_count: 0,
-          note: "no MemoryStore configured \u2014 configure CORTEX_DB_PATH"
-        }) }] };
-      }
-      const response = await narrativeHandler(narrativeDeps.store, {
-        directory: args.directory,
-        domain: args.domain,
-        brief: args.brief
-      }, llmClient2);
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText6("narrative", err);
-    }
-  });
-  server2.registerTool("get_project_story", {
-    description: "Generate a period-based autobiographical narrative (week/month/all).",
-    inputSchema: {
-      directory: external_exports.string().optional().describe("Directory scope"),
-      domain: external_exports.string().optional().describe("Domain scope"),
-      period: external_exports.enum(["day", "week", "month", "all"]).default("week").describe("Time period"),
-      max_chapters: external_exports.number().int().min(1).max(MAX_CHAPTERS_MAX).default(MAX_CHAPTERS_DEFAULT).describe("Max chapters")
-    }
-  }, async (args) => {
-    try {
-      if (!narrativeDeps) {
-        return { content: [{ type: "text", text: JSON.stringify({
-          chapters: [],
-          period: args.period,
-          note: "no MemoryStore configured"
-        }) }] };
-      }
-      const response = getProjectStoryHandler(narrativeDeps.store, {
-        directory: args.directory,
-        domain: args.domain,
-        period: args.period,
-        max_chapters: args.max_chapters
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText6("get_project_story", err);
-    }
-  });
-  server2.registerTool("unified_search", {
-    description: (
-      // source: docs/ADR/0046 — unified search design
-      "RRF-fuse Cortex memory recall with AP code search (ADR-0046 P3)."
-    ),
-    inputSchema: {
-      query: external_exports.string().min(1).describe("Search query"),
-      domain: external_exports.string().optional().describe("Domain filter"),
-      max_results: external_exports.number().int().min(1).max(MAX_RESULTS_MAX).default(MAX_RESULTS_DEFAULT2).describe("Max results"),
-      // source: Cormack & Clarke (2009) "Reciprocal Rank Fusion" — k=60 canonical value
-      k: external_exports.number().int().min(1).default(RRF_K_DEFAULT).describe("RRF k parameter")
-    }
-  }, async (args) => {
-    try {
-      if (!narrativeDeps) {
-        return { content: [{ type: "text", text: JSON.stringify({
-          results: [],
-          query: args.query,
-          note: "no MemoryStore configured"
-        }) }] };
-      }
-      const response = unifiedSearchHandler(
-        // source: packages/memory/src/narrative/handlers/unified-search.ts::UnifiedSearchDeps
-        { memoryPort: narrativeDeps.store },
-        {
-          query: args.query,
-          domain: args.domain,
-          max_results: args.max_results,
-          k: args.k
-        }
-      );
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText6("unified_search", err);
-    }
-  });
-}
-
-// packages/memory/dist/automation/handlers/sync-to-claude-md.js
-import { promises as fs2 } from "node:fs";
-import path from "node:path";
-
-// packages/memory/dist/automation/types.js
-var TriggerTypeSchema = external_exports.enum([
-  "keyword",
-  "time",
-  "file",
-  "domain",
-  "keyword_match",
-  "directory_match",
-  "entity_match",
-  "time_based"
-]);
-var TriggerSchema = external_exports.object({
-  id: external_exports.string().optional(),
-  content: external_exports.string().min(1),
-  trigger_condition: external_exports.string().min(1),
-  trigger_type: TriggerTypeSchema.default("keyword"),
-  target_directory: external_exports.string().nullable().optional(),
-  is_active: external_exports.boolean().default(true),
-  triggered_count: external_exports.number().int().nonnegative().default(0),
-  created_at: external_exports.string().datetime().optional()
-});
-var TriggerContextSchema = external_exports.object({
-  directory: external_exports.string().default(""),
-  content: external_exports.string().default(""),
-  entities: external_exports.array(external_exports.string()).default([]),
-  /** ISO 8601 datetime string; defaults to now when omitted */
-  current_time: external_exports.string().datetime().optional()
-});
-var TriggerConditionSchema = external_exports.object({
-  trigger: TriggerSchema,
-  context: TriggerContextSchema
-});
-var RuleTypeSchema = external_exports.enum(["hard", "soft", "tag"]);
-var RuleScopeSchema = external_exports.enum(["global", "domain", "directory"]);
-var RuleSchema = external_exports.object({
-  id: external_exports.number().int().optional(),
-  rule_type: RuleTypeSchema.default("soft"),
-  scope: RuleScopeSchema.default("global"),
-  scope_value: external_exports.string().nullable().optional(),
-  condition: external_exports.string().min(1),
-  action: external_exports.string().min(1),
-  priority: external_exports.number().int().min(-100).max(100).default(0),
-  is_active: external_exports.boolean().default(true),
-  created_at: external_exports.string().datetime().optional()
-});
-var ParsedConditionSchema = external_exports.object({
-  field: external_exports.string(),
-  operator: external_exports.enum([
-    "==",
-    "!=",
-    "contains",
-    "not_contains",
-    ">",
-    "<",
-    ">=",
-    "<=",
-    "matches"
-  ]),
-  value: external_exports.string()
-});
-var ParsedActionSchema = external_exports.object({
-  action_type: external_exports.enum(["filter", "boost", "penalty"]),
-  value: external_exports.number().default(0)
-});
-var RuleActionSchema = external_exports.object({
-  rule_id: external_exports.number().int().optional(),
-  rule_type: RuleTypeSchema,
-  matched: external_exports.boolean(),
-  action: external_exports.string()
-});
-var PatternKindSchema = external_exports.enum(["prefix", "regex", "substring", "tag"]);
-var ClassifierRuleSchema = external_exports.object({
-  pattern_kind: PatternKindSchema,
-  pattern: external_exports.string(),
-  target_kind: external_exports.string().nullable().optional(),
-  weight: external_exports.number().default(1),
-  note: external_exports.string().optional()
-});
-var RuleMatchSchema = external_exports.object({
-  matched_rule: ClassifierRuleSchema.nullable(),
-  target_kind: external_exports.string().nullable(),
-  rationale: external_exports.string()
-});
-var AddRuleRequestSchema = external_exports.object({
-  condition: external_exports.string().min(1),
-  action: external_exports.string().min(1),
-  rule_type: RuleTypeSchema.default("soft"),
-  scope: RuleScopeSchema.default("global"),
-  scope_value: external_exports.string().optional(),
-  priority: external_exports.number().int().min(-100).max(100).default(0)
-});
-var AddRuleResponseSchema = external_exports.object({
-  created: external_exports.boolean(),
-  rule_id: external_exports.number().int().optional(),
-  rule_type: RuleTypeSchema.optional(),
-  scope: RuleScopeSchema.optional(),
-  scope_value: external_exports.string().nullable().optional(),
-  condition: external_exports.string().optional(),
-  action: external_exports.string().optional(),
-  priority: external_exports.number().int().optional(),
-  reason: external_exports.string().optional()
-});
-var CreateTriggerRequestSchema = external_exports.object({
-  content: external_exports.string().min(1),
-  trigger_condition: external_exports.string().min(1),
-  trigger_type: TriggerTypeSchema.default("keyword"),
-  target_directory: external_exports.string().optional()
-});
-var CreateTriggerResponseSchema = external_exports.object({
-  created: external_exports.boolean(),
-  trigger_id: external_exports.string().optional(),
-  trigger_type: TriggerTypeSchema.optional(),
-  trigger_condition: external_exports.string().optional(),
-  content: external_exports.string().optional(),
-  target_directory: external_exports.string().nullable().optional(),
-  active_triggers: external_exports.number().int().optional(),
-  reason: external_exports.string().optional()
-});
-var SyncInstructionsRequestSchema = external_exports.object({
-  directory: external_exports.string().optional(),
-  max_insights: external_exports.number().int().min(1).max(50).default(10),
-  min_heat: external_exports.number().min(0).max(1).default(0.3),
-  dry_run: external_exports.boolean().default(false)
-});
-var SyncInstructionsResponseSchema = external_exports.object({
-  synced: external_exports.boolean(),
-  action: external_exports.string().optional(),
-  path: external_exports.string().optional(),
-  insights_count: external_exports.number().int().optional(),
-  memory_count: external_exports.number().int().optional(),
-  dry_run: external_exports.boolean().optional(),
-  preview: external_exports.string().optional(),
-  reason: external_exports.string().optional(),
-  directory: external_exports.string().optional()
-});
-var AutomationRequestSchema = external_exports.discriminatedUnion("operation", [
-  external_exports.object({ operation: external_exports.literal("add_rule"), params: AddRuleRequestSchema }),
-  external_exports.object({
-    operation: external_exports.literal("create_trigger"),
-    params: CreateTriggerRequestSchema
-  }),
-  external_exports.object({
-    operation: external_exports.literal("sync_instructions"),
-    params: SyncInstructionsRequestSchema
-  })
-]);
-
-// packages/memory/dist/automation/handlers/sync-to-claude-md.js
-var SECTION_START = "<!-- cortex:memory-insights:start -->";
-var SECTION_END = "<!-- cortex:memory-insights:end -->";
-var DECISION_RE5 = /\b(decided|chose|switching|migrated|using|adopted|went with|replaced)\b/i;
-function extractInsights(memories, maxInsights) {
-  const decisions = memories.filter((m2) => DECISION_RE5.test(m2.content ?? ""));
-  const others = memories.filter((m2) => !DECISION_RE5.test(m2.content ?? ""));
-  const ordered = [
-    ...decisions.sort((a2, b2) => (b2.heat ?? 0) - (a2.heat ?? 0)),
-    ...others.sort((a2, b2) => (b2.importance ?? 0) - (a2.importance ?? 0))
-  ];
-  const insights = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const mem of ordered.slice(0, maxInsights * 2)) {
-    const text = (mem.content ?? "").trim();
-    if (!text)
-      continue;
-    const bullet = text.slice(0, 120).replace(/\n/g, " ");
-    if (seen.has(bullet))
-      continue;
-    seen.add(bullet);
-    insights.push(bullet);
-    if (insights.length >= maxInsights)
-      break;
-  }
-  return insights;
-}
-function buildSection(insights) {
-  const lines = [
-    SECTION_START,
-    "## Memory Insights",
-    "",
-    "Auto-synced from Cortex memory. Do not edit manually.",
-    "",
-    ...insights.map((i2) => `- ${i2}`),
-    "",
-    SECTION_END
-  ];
-  return lines.join("\n");
-}
-async function updateClaudeMd(claudeMdPath, section, dryRun) {
-  let exists = false;
-  try {
-    await fs2.access(claudeMdPath);
-    exists = true;
-  } catch {
-  }
-  if (!exists) {
-    if (dryRun) {
-      return { action: "would_create", path: claudeMdPath };
-    }
-    await fs2.writeFile(claudeMdPath, section + "\n", "utf-8");
-    return { action: "created", path: claudeMdPath };
-  }
-  const original = await fs2.readFile(claudeMdPath, "utf-8");
-  const startIdx = original.indexOf(SECTION_START);
-  const endIdx = original.indexOf(SECTION_END);
-  let updated;
-  let action;
-  if (startIdx !== -1 && endIdx !== -1) {
-    const before = original.slice(0, startIdx);
-    const after = original.slice(endIdx + SECTION_END.length);
-    updated = before + section + after;
-    action = "updated";
-  } else {
-    updated = original.trimEnd() + "\n\n" + section + "\n";
-    action = "appended";
-  }
-  if (dryRun) {
-    return { action: `would_${action}`, path: claudeMdPath, preview: section };
-  }
-  await fs2.writeFile(claudeMdPath, updated, "utf-8");
-  return { action, path: claudeMdPath };
-}
-async function findClaudeMd(directory) {
-  const resolved = path.resolve(directory);
-  const candidate = path.join(resolved, "CLAUDE.md");
-  try {
-    await fs2.access(candidate);
-    return candidate;
-  } catch {
-    const parent = path.join(path.dirname(resolved), "CLAUDE.md");
-    try {
-      await fs2.access(parent);
-      return parent;
-    } catch {
-      return candidate;
-    }
-  }
-}
-async function syncInstructionsHandler(rawArgs, store) {
-  const parseResult = SyncInstructionsRequestSchema.safeParse(rawArgs ?? {});
-  const args = parseResult.success ? parseResult.data : { directory: void 0, max_insights: 10, min_heat: 0.3, dry_run: false };
-  const directory = args.directory ?? process.cwd();
-  const maxInsights = args.max_insights;
-  const minHeat = args.min_heat;
-  const dryRun = args.dry_run;
-  let memories = await store.getMemoriesForDirectory(directory, { min_heat: minHeat });
-  if (memories.length === 0) {
-    memories = await store.getHotMemories({ min_heat: minHeat, limit: 50 });
-  }
-  if (memories.length === 0) {
-    return { synced: false, reason: "no_memories_found", directory };
-  }
-  const insights = extractInsights(memories, maxInsights);
-  if (insights.length === 0) {
-    return {
-      synced: false,
-      reason: "no_insights_extracted",
-      memory_count: memories.length
-    };
-  }
-  const claudeMdPath = await findClaudeMd(directory);
-  const section = buildSection(insights);
-  const result = await updateClaudeMd(claudeMdPath, section, dryRun);
-  return {
-    synced: true,
-    action: result.action,
-    path: result.path,
-    preview: result.preview,
-    insights_count: insights.length,
-    memory_count: memories.length,
-    dry_run: dryRun
-  };
-}
-
-// packages/memory/dist/automation/handlers/create-trigger.js
-async function createTriggerHandler(rawArgs, store) {
-  const parseResult = CreateTriggerRequestSchema.safeParse(rawArgs);
-  if (!parseResult.success) {
-    return {
-      created: false,
-      reason: parseResult.error.issues[0]?.message ?? "invalid arguments"
-    };
-  }
-  const args = parseResult.data;
-  const validTypes = TriggerTypeSchema.options;
-  if (!validTypes.includes(args.trigger_type)) {
-    return {
-      created: false,
-      reason: `invalid trigger_type: ${args.trigger_type}`
-    };
-  }
-  const triggerId = await store.insertProspectiveMemory({
-    content: args.content,
-    trigger_condition: args.trigger_condition,
-    trigger_type: args.trigger_type,
-    target_directory: args.target_directory ?? null,
-    is_active: true,
-    triggered_count: 0
-  });
-  const activeCount = await store.countActiveTriggers();
-  return {
-    created: true,
-    trigger_id: triggerId,
-    trigger_type: args.trigger_type,
-    trigger_condition: args.trigger_condition,
-    content: args.content,
-    target_directory: args.target_directory ?? null,
-    active_triggers: activeCount
-  };
-}
-
-// node_modules/.pnpm/balanced-match@4.0.4/node_modules/balanced-match/dist/esm/index.js
-var balanced = (a2, b2, str) => {
-  const ma = a2 instanceof RegExp ? maybeMatch(a2, str) : a2;
-  const mb = b2 instanceof RegExp ? maybeMatch(b2, str) : b2;
-  const r2 = ma !== null && mb != null && range(ma, mb, str);
-  return r2 && {
-    start: r2[0],
-    end: r2[1],
-    pre: str.slice(0, r2[0]),
-    body: str.slice(r2[0] + ma.length, r2[1]),
-    post: str.slice(r2[1] + mb.length)
-  };
-};
-var maybeMatch = (reg, str) => {
-  const m2 = str.match(reg);
-  return m2 ? m2[0] : null;
-};
-var range = (a2, b2, str) => {
-  let begs, beg, left, right = void 0, result;
-  let ai = str.indexOf(a2);
-  let bi = str.indexOf(b2, ai + 1);
-  let i2 = ai;
-  if (ai >= 0 && bi > 0) {
-    if (a2 === b2) {
-      return [ai, bi];
-    }
-    begs = [];
-    left = str.length;
-    while (i2 >= 0 && !result) {
-      if (i2 === ai) {
-        begs.push(i2);
-        ai = str.indexOf(a2, i2 + 1);
-      } else if (begs.length === 1) {
-        const r2 = begs.pop();
-        if (r2 !== void 0)
-          result = [r2, bi];
-      } else {
-        beg = begs.pop();
-        if (beg !== void 0 && beg < left) {
-          left = beg;
-          right = bi;
-        }
-        bi = str.indexOf(b2, i2 + 1);
-      }
-      i2 = ai < bi && ai >= 0 ? ai : bi;
-    }
-    if (begs.length && right !== void 0) {
-      result = [left, right];
-    }
-  }
-  return result;
-};
-
-// node_modules/.pnpm/brace-expansion@5.0.5/node_modules/brace-expansion/dist/esm/index.js
-var escSlash = "\0SLASH" + Math.random() + "\0";
-var escOpen = "\0OPEN" + Math.random() + "\0";
-var escClose = "\0CLOSE" + Math.random() + "\0";
-var escComma = "\0COMMA" + Math.random() + "\0";
-var escPeriod = "\0PERIOD" + Math.random() + "\0";
-var escSlashPattern = new RegExp(escSlash, "g");
-var escOpenPattern = new RegExp(escOpen, "g");
-var escClosePattern = new RegExp(escClose, "g");
-var escCommaPattern = new RegExp(escComma, "g");
-var escPeriodPattern = new RegExp(escPeriod, "g");
-var slashPattern = /\\\\/g;
-var openPattern = /\\{/g;
-var closePattern = /\\}/g;
-var commaPattern = /\\,/g;
-var periodPattern = /\\\./g;
-var EXPANSION_MAX = 1e5;
-function numeric(str) {
-  return !isNaN(str) ? parseInt(str, 10) : str.charCodeAt(0);
-}
-function escapeBraces(str) {
-  return str.replace(slashPattern, escSlash).replace(openPattern, escOpen).replace(closePattern, escClose).replace(commaPattern, escComma).replace(periodPattern, escPeriod);
-}
-function unescapeBraces(str) {
-  return str.replace(escSlashPattern, "\\").replace(escOpenPattern, "{").replace(escClosePattern, "}").replace(escCommaPattern, ",").replace(escPeriodPattern, ".");
-}
-function parseCommaParts(str) {
-  if (!str) {
-    return [""];
-  }
-  const parts = [];
-  const m2 = balanced("{", "}", str);
-  if (!m2) {
-    return str.split(",");
-  }
-  const { pre, body, post } = m2;
-  const p2 = pre.split(",");
-  p2[p2.length - 1] += "{" + body + "}";
-  const postParts = parseCommaParts(post);
-  if (post.length) {
-    ;
-    p2[p2.length - 1] += postParts.shift();
-    p2.push.apply(p2, postParts);
-  }
-  parts.push.apply(parts, p2);
-  return parts;
-}
-function expand(str, options = {}) {
-  if (!str) {
-    return [];
-  }
-  const { max = EXPANSION_MAX } = options;
-  if (str.slice(0, 2) === "{}") {
-    str = "\\{\\}" + str.slice(2);
-  }
-  return expand_(escapeBraces(str), max, true).map(unescapeBraces);
-}
-function embrace(str) {
-  return "{" + str + "}";
-}
-function isPadded(el) {
-  return /^-?0\d/.test(el);
-}
-function lte(i2, y2) {
-  return i2 <= y2;
-}
-function gte(i2, y2) {
-  return i2 >= y2;
-}
-function expand_(str, max, isTop) {
-  const expansions = [];
-  const m2 = balanced("{", "}", str);
-  if (!m2)
-    return [str];
-  const pre = m2.pre;
-  const post = m2.post.length ? expand_(m2.post, max, false) : [""];
-  if (/\$$/.test(m2.pre)) {
-    for (let k2 = 0; k2 < post.length && k2 < max; k2++) {
-      const expansion = pre + "{" + m2.body + "}" + post[k2];
-      expansions.push(expansion);
-    }
-  } else {
-    const isNumericSequence = /^-?\d+\.\.-?\d+(?:\.\.-?\d+)?$/.test(m2.body);
-    const isAlphaSequence = /^[a-zA-Z]\.\.[a-zA-Z](?:\.\.-?\d+)?$/.test(m2.body);
-    const isSequence = isNumericSequence || isAlphaSequence;
-    const isOptions = m2.body.indexOf(",") >= 0;
-    if (!isSequence && !isOptions) {
-      if (m2.post.match(/,(?!,).*\}/)) {
-        str = m2.pre + "{" + m2.body + escClose + m2.post;
-        return expand_(str, max, true);
-      }
-      return [str];
-    }
-    let n3;
-    if (isSequence) {
-      n3 = m2.body.split(/\.\./);
-    } else {
-      n3 = parseCommaParts(m2.body);
-      if (n3.length === 1 && n3[0] !== void 0) {
-        n3 = expand_(n3[0], max, false).map(embrace);
-        if (n3.length === 1) {
-          return post.map((p2) => m2.pre + n3[0] + p2);
-        }
-      }
-    }
-    let N2;
-    if (isSequence && n3[0] !== void 0 && n3[1] !== void 0) {
-      const x2 = numeric(n3[0]);
-      const y2 = numeric(n3[1]);
-      const width = Math.max(n3[0].length, n3[1].length);
-      let incr = n3.length === 3 && n3[2] !== void 0 ? Math.max(Math.abs(numeric(n3[2])), 1) : 1;
-      let test = lte;
-      const reverse = y2 < x2;
-      if (reverse) {
-        incr *= -1;
-        test = gte;
-      }
-      const pad = n3.some(isPadded);
-      N2 = [];
-      for (let i2 = x2; test(i2, y2); i2 += incr) {
-        let c2;
-        if (isAlphaSequence) {
-          c2 = String.fromCharCode(i2);
-          if (c2 === "\\") {
-            c2 = "";
-          }
-        } else {
-          c2 = String(i2);
-          if (pad) {
-            const need = width - c2.length;
-            if (need > 0) {
-              const z2 = new Array(need + 1).join("0");
-              if (i2 < 0) {
-                c2 = "-" + z2 + c2.slice(1);
-              } else {
-                c2 = z2 + c2;
-              }
-            }
-          }
-        }
-        N2.push(c2);
-      }
-    } else {
-      N2 = [];
-      for (let j2 = 0; j2 < n3.length; j2++) {
-        N2.push.apply(N2, expand_(n3[j2], max, false));
-      }
-    }
-    for (let j2 = 0; j2 < N2.length; j2++) {
-      for (let k2 = 0; k2 < post.length && expansions.length < max; k2++) {
-        const expansion = pre + N2[j2] + post[k2];
-        if (!isTop || isSequence || expansion) {
-          expansions.push(expansion);
-        }
-      }
-    }
-  }
-  return expansions;
-}
-
-// node_modules/.pnpm/minimatch@10.2.5/node_modules/minimatch/dist/esm/assert-valid-pattern.js
-var MAX_PATTERN_LENGTH = 1024 * 64;
-var assertValidPattern = (pattern) => {
-  if (typeof pattern !== "string") {
-    throw new TypeError("invalid pattern");
-  }
-  if (pattern.length > MAX_PATTERN_LENGTH) {
-    throw new TypeError("pattern is too long");
-  }
-};
-
-// node_modules/.pnpm/minimatch@10.2.5/node_modules/minimatch/dist/esm/brace-expressions.js
-var posixClasses = {
-  "[:alnum:]": ["\\p{L}\\p{Nl}\\p{Nd}", true],
-  "[:alpha:]": ["\\p{L}\\p{Nl}", true],
-  "[:ascii:]": ["\\x00-\\x7f", false],
-  "[:blank:]": ["\\p{Zs}\\t", true],
-  "[:cntrl:]": ["\\p{Cc}", true],
-  "[:digit:]": ["\\p{Nd}", true],
-  "[:graph:]": ["\\p{Z}\\p{C}", true, true],
-  "[:lower:]": ["\\p{Ll}", true],
-  "[:print:]": ["\\p{C}", true],
-  "[:punct:]": ["\\p{P}", true],
-  "[:space:]": ["\\p{Z}\\t\\r\\n\\v\\f", true],
-  "[:upper:]": ["\\p{Lu}", true],
-  "[:word:]": ["\\p{L}\\p{Nl}\\p{Nd}\\p{Pc}", true],
-  "[:xdigit:]": ["A-Fa-f0-9", false]
-};
-var braceEscape = (s2) => s2.replace(/[[\]\\-]/g, "\\$&");
-var regexpEscape = (s2) => s2.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
-var rangesToString = (ranges) => ranges.join("");
-var parseClass = (glob, position) => {
-  const pos = position;
-  if (glob.charAt(pos) !== "[") {
-    throw new Error("not in a brace expression");
-  }
-  const ranges = [];
-  const negs = [];
-  let i2 = pos + 1;
-  let sawStart = false;
-  let uflag = false;
-  let escaping = false;
-  let negate = false;
-  let endPos = pos;
-  let rangeStart = "";
-  WHILE: while (i2 < glob.length) {
-    const c2 = glob.charAt(i2);
-    if ((c2 === "!" || c2 === "^") && i2 === pos + 1) {
-      negate = true;
-      i2++;
-      continue;
-    }
-    if (c2 === "]" && sawStart && !escaping) {
-      endPos = i2 + 1;
-      break;
-    }
-    sawStart = true;
-    if (c2 === "\\") {
-      if (!escaping) {
-        escaping = true;
-        i2++;
-        continue;
-      }
-    }
-    if (c2 === "[" && !escaping) {
-      for (const [cls, [unip, u2, neg]] of Object.entries(posixClasses)) {
-        if (glob.startsWith(cls, i2)) {
-          if (rangeStart) {
-            return ["$.", false, glob.length - pos, true];
-          }
-          i2 += cls.length;
-          if (neg)
-            negs.push(unip);
-          else
-            ranges.push(unip);
-          uflag = uflag || u2;
-          continue WHILE;
-        }
-      }
-    }
-    escaping = false;
-    if (rangeStart) {
-      if (c2 > rangeStart) {
-        ranges.push(braceEscape(rangeStart) + "-" + braceEscape(c2));
-      } else if (c2 === rangeStart) {
-        ranges.push(braceEscape(c2));
-      }
-      rangeStart = "";
-      i2++;
-      continue;
-    }
-    if (glob.startsWith("-]", i2 + 1)) {
-      ranges.push(braceEscape(c2 + "-"));
-      i2 += 2;
-      continue;
-    }
-    if (glob.startsWith("-", i2 + 1)) {
-      rangeStart = c2;
-      i2 += 2;
-      continue;
-    }
-    ranges.push(braceEscape(c2));
-    i2++;
-  }
-  if (endPos < i2) {
-    return ["", false, 0, false];
-  }
-  if (!ranges.length && !negs.length) {
-    return ["$.", false, glob.length - pos, true];
-  }
-  if (negs.length === 0 && ranges.length === 1 && /^\\?.$/.test(ranges[0]) && !negate) {
-    const r2 = ranges[0].length === 2 ? ranges[0].slice(-1) : ranges[0];
-    return [regexpEscape(r2), false, endPos - pos, false];
-  }
-  const sranges = "[" + (negate ? "^" : "") + rangesToString(ranges) + "]";
-  const snegs = "[" + (negate ? "" : "^") + rangesToString(negs) + "]";
-  const comb = ranges.length && negs.length ? "(" + sranges + "|" + snegs + ")" : ranges.length ? sranges : snegs;
-  return [comb, uflag, endPos - pos, true];
-};
-
-// node_modules/.pnpm/minimatch@10.2.5/node_modules/minimatch/dist/esm/unescape.js
-var unescape2 = (s2, { windowsPathsNoEscape = false, magicalBraces = true } = {}) => {
-  if (magicalBraces) {
-    return windowsPathsNoEscape ? s2.replace(/\[([^/\\])\]/g, "$1") : s2.replace(/((?!\\).|^)\[([^/\\])\]/g, "$1$2").replace(/\\([^/])/g, "$1");
-  }
-  return windowsPathsNoEscape ? s2.replace(/\[([^/\\{}])\]/g, "$1") : s2.replace(/((?!\\).|^)\[([^/\\{}])\]/g, "$1$2").replace(/\\([^/{}])/g, "$1");
-};
-
-// node_modules/.pnpm/minimatch@10.2.5/node_modules/minimatch/dist/esm/ast.js
-var _a2;
-var types = /* @__PURE__ */ new Set(["!", "?", "+", "*", "@"]);
-var isExtglobType = (c2) => types.has(c2);
-var isExtglobAST = (c2) => isExtglobType(c2.type);
-var adoptionMap = /* @__PURE__ */ new Map([
-  ["!", ["@"]],
-  ["?", ["?", "@"]],
-  ["@", ["@"]],
-  ["*", ["*", "+", "?", "@"]],
-  ["+", ["+", "@"]]
-]);
-var adoptionWithSpaceMap = /* @__PURE__ */ new Map([
-  ["!", ["?"]],
-  ["@", ["?"]],
-  ["+", ["?", "*"]]
-]);
-var adoptionAnyMap = /* @__PURE__ */ new Map([
-  ["!", ["?", "@"]],
-  ["?", ["?", "@"]],
-  ["@", ["?", "@"]],
-  ["*", ["*", "+", "?", "@"]],
-  ["+", ["+", "@", "?", "*"]]
-]);
-var usurpMap = /* @__PURE__ */ new Map([
-  ["!", /* @__PURE__ */ new Map([["!", "@"]])],
-  [
-    "?",
-    /* @__PURE__ */ new Map([
-      ["*", "*"],
-      ["+", "*"]
-    ])
-  ],
-  [
-    "@",
-    /* @__PURE__ */ new Map([
-      ["!", "!"],
-      ["?", "?"],
-      ["@", "@"],
-      ["*", "*"],
-      ["+", "+"]
-    ])
-  ],
-  [
-    "+",
-    /* @__PURE__ */ new Map([
-      ["?", "*"],
-      ["*", "*"]
-    ])
-  ]
-]);
-var startNoTraversal = "(?!(?:^|/)\\.\\.?(?:$|/))";
-var startNoDot = "(?!\\.)";
-var addPatternStart = /* @__PURE__ */ new Set(["[", "."]);
-var justDots = /* @__PURE__ */ new Set(["..", "."]);
-var reSpecials = new Set("().*{}+?[]^$\\!");
-var regExpEscape = (s2) => s2.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
-var qmark = "[^/]";
-var star = qmark + "*?";
-var starNoEmpty = qmark + "+?";
-var ID = 0;
-var AST = class {
-  type;
-  #root;
-  #hasMagic;
-  #uflag = false;
-  #parts = [];
-  #parent;
-  #parentIndex;
-  #negs;
-  #filledNegs = false;
-  #options;
-  #toString;
-  // set to true if it's an extglob with no children
-  // (which really means one child of '')
-  #emptyExt = false;
-  id = ++ID;
-  get depth() {
-    return (this.#parent?.depth ?? -1) + 1;
-  }
-  [/* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom")]() {
-    return {
-      "@@type": "AST",
-      id: this.id,
-      type: this.type,
-      root: this.#root.id,
-      parent: this.#parent?.id,
-      depth: this.depth,
-      partsLength: this.#parts.length,
-      parts: this.#parts
-    };
-  }
-  constructor(type, parent, options = {}) {
-    this.type = type;
-    if (type)
-      this.#hasMagic = true;
-    this.#parent = parent;
-    this.#root = this.#parent ? this.#parent.#root : this;
-    this.#options = this.#root === this ? options : this.#root.#options;
-    this.#negs = this.#root === this ? [] : this.#root.#negs;
-    if (type === "!" && !this.#root.#filledNegs)
-      this.#negs.push(this);
-    this.#parentIndex = this.#parent ? this.#parent.#parts.length : 0;
-  }
-  get hasMagic() {
-    if (this.#hasMagic !== void 0)
-      return this.#hasMagic;
-    for (const p2 of this.#parts) {
-      if (typeof p2 === "string")
-        continue;
-      if (p2.type || p2.hasMagic)
-        return this.#hasMagic = true;
-    }
-    return this.#hasMagic;
-  }
-  // reconstructs the pattern
-  toString() {
-    return this.#toString !== void 0 ? this.#toString : !this.type ? this.#toString = this.#parts.map((p2) => String(p2)).join("") : this.#toString = this.type + "(" + this.#parts.map((p2) => String(p2)).join("|") + ")";
-  }
-  #fillNegs() {
-    if (this !== this.#root)
-      throw new Error("should only call on root");
-    if (this.#filledNegs)
-      return this;
-    this.toString();
-    this.#filledNegs = true;
-    let n3;
-    while (n3 = this.#negs.pop()) {
-      if (n3.type !== "!")
-        continue;
-      let p2 = n3;
-      let pp = p2.#parent;
-      while (pp) {
-        for (let i2 = p2.#parentIndex + 1; !pp.type && i2 < pp.#parts.length; i2++) {
-          for (const part of n3.#parts) {
-            if (typeof part === "string") {
-              throw new Error("string part in extglob AST??");
-            }
-            part.copyIn(pp.#parts[i2]);
-          }
-        }
-        p2 = pp;
-        pp = p2.#parent;
-      }
-    }
-    return this;
-  }
-  push(...parts) {
-    for (const p2 of parts) {
-      if (p2 === "")
-        continue;
-      if (typeof p2 !== "string" && !(p2 instanceof _a2 && p2.#parent === this)) {
-        throw new Error("invalid part: " + p2);
-      }
-      this.#parts.push(p2);
-    }
-  }
-  toJSON() {
-    const ret = this.type === null ? this.#parts.slice().map((p2) => typeof p2 === "string" ? p2 : p2.toJSON()) : [this.type, ...this.#parts.map((p2) => p2.toJSON())];
-    if (this.isStart() && !this.type)
-      ret.unshift([]);
-    if (this.isEnd() && (this === this.#root || this.#root.#filledNegs && this.#parent?.type === "!")) {
-      ret.push({});
-    }
-    return ret;
-  }
-  isStart() {
-    if (this.#root === this)
-      return true;
-    if (!this.#parent?.isStart())
-      return false;
-    if (this.#parentIndex === 0)
-      return true;
-    const p2 = this.#parent;
-    for (let i2 = 0; i2 < this.#parentIndex; i2++) {
-      const pp = p2.#parts[i2];
-      if (!(pp instanceof _a2 && pp.type === "!")) {
-        return false;
-      }
-    }
-    return true;
-  }
-  isEnd() {
-    if (this.#root === this)
-      return true;
-    if (this.#parent?.type === "!")
-      return true;
-    if (!this.#parent?.isEnd())
-      return false;
-    if (!this.type)
-      return this.#parent?.isEnd();
-    const pl = this.#parent ? this.#parent.#parts.length : 0;
-    return this.#parentIndex === pl - 1;
-  }
-  copyIn(part) {
-    if (typeof part === "string")
-      this.push(part);
-    else
-      this.push(part.clone(this));
-  }
-  clone(parent) {
-    const c2 = new _a2(this.type, parent);
-    for (const p2 of this.#parts) {
-      c2.copyIn(p2);
-    }
-    return c2;
-  }
-  static #parseAST(str, ast, pos, opt, extDepth) {
-    const maxDepth = opt.maxExtglobRecursion ?? 2;
-    let escaping = false;
-    let inBrace = false;
-    let braceStart = -1;
-    let braceNeg = false;
-    if (ast.type === null) {
-      let i3 = pos;
-      let acc2 = "";
-      while (i3 < str.length) {
-        const c2 = str.charAt(i3++);
-        if (escaping || c2 === "\\") {
-          escaping = !escaping;
-          acc2 += c2;
-          continue;
-        }
-        if (inBrace) {
-          if (i3 === braceStart + 1) {
-            if (c2 === "^" || c2 === "!") {
-              braceNeg = true;
-            }
-          } else if (c2 === "]" && !(i3 === braceStart + 2 && braceNeg)) {
-            inBrace = false;
-          }
-          acc2 += c2;
-          continue;
-        } else if (c2 === "[") {
-          inBrace = true;
-          braceStart = i3;
-          braceNeg = false;
-          acc2 += c2;
-          continue;
-        }
-        const doRecurse = !opt.noext && isExtglobType(c2) && str.charAt(i3) === "(" && extDepth <= maxDepth;
-        if (doRecurse) {
-          ast.push(acc2);
-          acc2 = "";
-          const ext2 = new _a2(c2, ast);
-          i3 = _a2.#parseAST(str, ext2, i3, opt, extDepth + 1);
-          ast.push(ext2);
-          continue;
-        }
-        acc2 += c2;
-      }
-      ast.push(acc2);
-      return i3;
-    }
-    let i2 = pos + 1;
-    let part = new _a2(null, ast);
-    const parts = [];
-    let acc = "";
-    while (i2 < str.length) {
-      const c2 = str.charAt(i2++);
-      if (escaping || c2 === "\\") {
-        escaping = !escaping;
-        acc += c2;
-        continue;
-      }
-      if (inBrace) {
-        if (i2 === braceStart + 1) {
-          if (c2 === "^" || c2 === "!") {
-            braceNeg = true;
-          }
-        } else if (c2 === "]" && !(i2 === braceStart + 2 && braceNeg)) {
-          inBrace = false;
-        }
-        acc += c2;
-        continue;
-      } else if (c2 === "[") {
-        inBrace = true;
-        braceStart = i2;
-        braceNeg = false;
-        acc += c2;
-        continue;
-      }
-      const doRecurse = !opt.noext && isExtglobType(c2) && str.charAt(i2) === "(" && /* c8 ignore start - the maxDepth is sufficient here */
-      (extDepth <= maxDepth || ast && ast.#canAdoptType(c2));
-      if (doRecurse) {
-        const depthAdd = ast && ast.#canAdoptType(c2) ? 0 : 1;
-        part.push(acc);
-        acc = "";
-        const ext2 = new _a2(c2, part);
-        part.push(ext2);
-        i2 = _a2.#parseAST(str, ext2, i2, opt, extDepth + depthAdd);
-        continue;
-      }
-      if (c2 === "|") {
-        part.push(acc);
-        acc = "";
-        parts.push(part);
-        part = new _a2(null, ast);
-        continue;
-      }
-      if (c2 === ")") {
-        if (acc === "" && ast.#parts.length === 0) {
-          ast.#emptyExt = true;
-        }
-        part.push(acc);
-        acc = "";
-        ast.push(...parts, part);
-        return i2;
-      }
-      acc += c2;
-    }
-    ast.type = null;
-    ast.#hasMagic = void 0;
-    ast.#parts = [str.substring(pos - 1)];
-    return i2;
-  }
-  #canAdoptWithSpace(child) {
-    return this.#canAdopt(child, adoptionWithSpaceMap);
-  }
-  #canAdopt(child, map = adoptionMap) {
-    if (!child || typeof child !== "object" || child.type !== null || child.#parts.length !== 1 || this.type === null) {
-      return false;
-    }
-    const gc = child.#parts[0];
-    if (!gc || typeof gc !== "object" || gc.type === null) {
-      return false;
-    }
-    return this.#canAdoptType(gc.type, map);
-  }
-  #canAdoptType(c2, map = adoptionAnyMap) {
-    return !!map.get(this.type)?.includes(c2);
-  }
-  #adoptWithSpace(child, index) {
-    const gc = child.#parts[0];
-    const blank = new _a2(null, gc, this.options);
-    blank.#parts.push("");
-    gc.push(blank);
-    this.#adopt(child, index);
-  }
-  #adopt(child, index) {
-    const gc = child.#parts[0];
-    this.#parts.splice(index, 1, ...gc.#parts);
-    for (const p2 of gc.#parts) {
-      if (typeof p2 === "object")
-        p2.#parent = this;
-    }
-    this.#toString = void 0;
-  }
-  #canUsurpType(c2) {
-    const m2 = usurpMap.get(this.type);
-    return !!m2?.has(c2);
-  }
-  #canUsurp(child) {
-    if (!child || typeof child !== "object" || child.type !== null || child.#parts.length !== 1 || this.type === null || this.#parts.length !== 1) {
-      return false;
-    }
-    const gc = child.#parts[0];
-    if (!gc || typeof gc !== "object" || gc.type === null) {
-      return false;
-    }
-    return this.#canUsurpType(gc.type);
-  }
-  #usurp(child) {
-    const m2 = usurpMap.get(this.type);
-    const gc = child.#parts[0];
-    const nt2 = m2?.get(gc.type);
-    if (!nt2)
-      return false;
-    this.#parts = gc.#parts;
-    for (const p2 of this.#parts) {
-      if (typeof p2 === "object") {
-        p2.#parent = this;
-      }
-    }
-    this.type = nt2;
-    this.#toString = void 0;
-    this.#emptyExt = false;
-  }
-  static fromGlob(pattern, options = {}) {
-    const ast = new _a2(null, void 0, options);
-    _a2.#parseAST(pattern, ast, 0, options, 0);
-    return ast;
-  }
-  // returns the regular expression if there's magic, or the unescaped
-  // string if not.
-  toMMPattern() {
-    if (this !== this.#root)
-      return this.#root.toMMPattern();
-    const glob = this.toString();
-    const [re2, body, hasMagic, uflag] = this.toRegExpSource();
-    const anyMagic = hasMagic || this.#hasMagic || this.#options.nocase && !this.#options.nocaseMagicOnly && glob.toUpperCase() !== glob.toLowerCase();
-    if (!anyMagic) {
-      return body;
-    }
-    const flags = (this.#options.nocase ? "i" : "") + (uflag ? "u" : "");
-    return Object.assign(new RegExp(`^${re2}$`, flags), {
-      _src: re2,
-      _glob: glob
-    });
-  }
-  get options() {
-    return this.#options;
-  }
-  // returns the string match, the regexp source, whether there's magic
-  // in the regexp (so a regular expression is required) and whether or
-  // not the uflag is needed for the regular expression (for posix classes)
-  // TODO: instead of injecting the start/end at this point, just return
-  // the BODY of the regexp, along with the start/end portions suitable
-  // for binding the start/end in either a joined full-path makeRe context
-  // (where we bind to (^|/), or a standalone matchPart context (where
-  // we bind to ^, and not /).  Otherwise slashes get duped!
-  //
-  // In part-matching mode, the start is:
-  // - if not isStart: nothing
-  // - if traversal possible, but not allowed: ^(?!\.\.?$)
-  // - if dots allowed or not possible: ^
-  // - if dots possible and not allowed: ^(?!\.)
-  // end is:
-  // - if not isEnd(): nothing
-  // - else: $
-  //
-  // In full-path matching mode, we put the slash at the START of the
-  // pattern, so start is:
-  // - if first pattern: same as part-matching mode
-  // - if not isStart(): nothing
-  // - if traversal possible, but not allowed: /(?!\.\.?(?:$|/))
-  // - if dots allowed or not possible: /
-  // - if dots possible and not allowed: /(?!\.)
-  // end is:
-  // - if last pattern, same as part-matching mode
-  // - else nothing
-  //
-  // Always put the (?:$|/) on negated tails, though, because that has to be
-  // there to bind the end of the negated pattern portion, and it's easier to
-  // just stick it in now rather than try to inject it later in the middle of
-  // the pattern.
-  //
-  // We can just always return the same end, and leave it up to the caller
-  // to know whether it's going to be used joined or in parts.
-  // And, if the start is adjusted slightly, can do the same there:
-  // - if not isStart: nothing
-  // - if traversal possible, but not allowed: (?:/|^)(?!\.\.?$)
-  // - if dots allowed or not possible: (?:/|^)
-  // - if dots possible and not allowed: (?:/|^)(?!\.)
-  //
-  // But it's better to have a simpler binding without a conditional, for
-  // performance, so probably better to return both start options.
-  //
-  // Then the caller just ignores the end if it's not the first pattern,
-  // and the start always gets applied.
-  //
-  // But that's always going to be $ if it's the ending pattern, or nothing,
-  // so the caller can just attach $ at the end of the pattern when building.
-  //
-  // So the todo is:
-  // - better detect what kind of start is needed
-  // - return both flavors of starting pattern
-  // - attach $ at the end of the pattern when creating the actual RegExp
-  //
-  // Ah, but wait, no, that all only applies to the root when the first pattern
-  // is not an extglob. If the first pattern IS an extglob, then we need all
-  // that dot prevention biz to live in the extglob portions, because eg
-  // +(*|.x*) can match .xy but not .yx.
-  //
-  // So, return the two flavors if it's #root and the first child is not an
-  // AST, otherwise leave it to the child AST to handle it, and there,
-  // use the (?:^|/) style of start binding.
-  //
-  // Even simplified further:
-  // - Since the start for a join is eg /(?!\.) and the start for a part
-  // is ^(?!\.), we can just prepend (?!\.) to the pattern (either root
-  // or start or whatever) and prepend ^ or / at the Regexp construction.
-  toRegExpSource(allowDot) {
-    const dot4 = allowDot ?? !!this.#options.dot;
-    if (this.#root === this) {
-      this.#flatten();
-      this.#fillNegs();
-    }
-    if (!isExtglobAST(this)) {
-      const noEmpty = this.isStart() && this.isEnd() && !this.#parts.some((s2) => typeof s2 !== "string");
-      const src = this.#parts.map((p2) => {
-        const [re2, _2, hasMagic, uflag] = typeof p2 === "string" ? _a2.#parseGlob(p2, this.#hasMagic, noEmpty) : p2.toRegExpSource(allowDot);
-        this.#hasMagic = this.#hasMagic || hasMagic;
-        this.#uflag = this.#uflag || uflag;
-        return re2;
-      }).join("");
-      let start2 = "";
-      if (this.isStart()) {
-        if (typeof this.#parts[0] === "string") {
-          const dotTravAllowed = this.#parts.length === 1 && justDots.has(this.#parts[0]);
-          if (!dotTravAllowed) {
-            const aps = addPatternStart;
-            const needNoTrav = (
-              // dots are allowed, and the pattern starts with [ or .
-              dot4 && aps.has(src.charAt(0)) || // the pattern starts with \., and then [ or .
-              src.startsWith("\\.") && aps.has(src.charAt(2)) || // the pattern starts with \.\., and then [ or .
-              src.startsWith("\\.\\.") && aps.has(src.charAt(4))
-            );
-            const needNoDot = !dot4 && !allowDot && aps.has(src.charAt(0));
-            start2 = needNoTrav ? startNoTraversal : needNoDot ? startNoDot : "";
-          }
-        }
-      }
-      let end = "";
-      if (this.isEnd() && this.#root.#filledNegs && this.#parent?.type === "!") {
-        end = "(?:$|\\/)";
-      }
-      const final2 = start2 + src + end;
-      return [
-        final2,
-        unescape2(src),
-        this.#hasMagic = !!this.#hasMagic,
-        this.#uflag
-      ];
-    }
-    const repeated = this.type === "*" || this.type === "+";
-    const start = this.type === "!" ? "(?:(?!(?:" : "(?:";
-    let body = this.#partsToRegExp(dot4);
-    if (this.isStart() && this.isEnd() && !body && this.type !== "!") {
-      const s2 = this.toString();
-      const me2 = this;
-      me2.#parts = [s2];
-      me2.type = null;
-      me2.#hasMagic = void 0;
-      return [s2, unescape2(this.toString()), false, false];
-    }
-    let bodyDotAllowed = !repeated || allowDot || dot4 || !startNoDot ? "" : this.#partsToRegExp(true);
-    if (bodyDotAllowed === body) {
-      bodyDotAllowed = "";
-    }
-    if (bodyDotAllowed) {
-      body = `(?:${body})(?:${bodyDotAllowed})*?`;
-    }
-    let final = "";
-    if (this.type === "!" && this.#emptyExt) {
-      final = (this.isStart() && !dot4 ? startNoDot : "") + starNoEmpty;
-    } else {
-      const close = this.type === "!" ? (
-        // !() must match something,but !(x) can match ''
-        "))" + (this.isStart() && !dot4 && !allowDot ? startNoDot : "") + star + ")"
-      ) : this.type === "@" ? ")" : this.type === "?" ? ")?" : this.type === "+" && bodyDotAllowed ? ")" : this.type === "*" && bodyDotAllowed ? `)?` : `)${this.type}`;
-      final = start + body + close;
-    }
-    return [
-      final,
-      unescape2(body),
-      this.#hasMagic = !!this.#hasMagic,
-      this.#uflag
-    ];
-  }
-  #flatten() {
-    if (!isExtglobAST(this)) {
-      for (const p2 of this.#parts) {
-        if (typeof p2 === "object") {
-          p2.#flatten();
-        }
-      }
-    } else {
-      let iterations = 0;
-      let done = false;
-      do {
-        done = true;
-        for (let i2 = 0; i2 < this.#parts.length; i2++) {
-          const c2 = this.#parts[i2];
-          if (typeof c2 === "object") {
-            c2.#flatten();
-            if (this.#canAdopt(c2)) {
-              done = false;
-              this.#adopt(c2, i2);
-            } else if (this.#canAdoptWithSpace(c2)) {
-              done = false;
-              this.#adoptWithSpace(c2, i2);
-            } else if (this.#canUsurp(c2)) {
-              done = false;
-              this.#usurp(c2);
-            }
-          }
-        }
-      } while (!done && ++iterations < 10);
-    }
-    this.#toString = void 0;
-  }
-  #partsToRegExp(dot4) {
-    return this.#parts.map((p2) => {
-      if (typeof p2 === "string") {
-        throw new Error("string type in extglob ast??");
-      }
-      const [re2, _2, _hasMagic, uflag] = p2.toRegExpSource(dot4);
-      this.#uflag = this.#uflag || uflag;
-      return re2;
-    }).filter((p2) => !(this.isStart() && this.isEnd()) || !!p2).join("|");
-  }
-  static #parseGlob(glob, hasMagic, noEmpty = false) {
-    let escaping = false;
-    let re2 = "";
-    let uflag = false;
-    let inStar = false;
-    for (let i2 = 0; i2 < glob.length; i2++) {
-      const c2 = glob.charAt(i2);
-      if (escaping) {
-        escaping = false;
-        re2 += (reSpecials.has(c2) ? "\\" : "") + c2;
-        continue;
-      }
-      if (c2 === "*") {
-        if (inStar)
-          continue;
-        inStar = true;
-        re2 += noEmpty && /^[*]+$/.test(glob) ? starNoEmpty : star;
-        hasMagic = true;
-        continue;
-      } else {
-        inStar = false;
-      }
-      if (c2 === "\\") {
-        if (i2 === glob.length - 1) {
-          re2 += "\\\\";
-        } else {
-          escaping = true;
-        }
-        continue;
-      }
-      if (c2 === "[") {
-        const [src, needUflag, consumed, magic] = parseClass(glob, i2);
-        if (consumed) {
-          re2 += src;
-          uflag = uflag || needUflag;
-          i2 += consumed - 1;
-          hasMagic = hasMagic || magic;
-          continue;
-        }
-      }
-      if (c2 === "?") {
-        re2 += qmark;
-        hasMagic = true;
-        continue;
-      }
-      re2 += regExpEscape(c2);
-    }
-    return [re2, unescape2(glob), !!hasMagic, uflag];
-  }
-};
-_a2 = AST;
-
-// node_modules/.pnpm/minimatch@10.2.5/node_modules/minimatch/dist/esm/escape.js
-var escape2 = (s2, { windowsPathsNoEscape = false, magicalBraces = false } = {}) => {
-  if (magicalBraces) {
-    return windowsPathsNoEscape ? s2.replace(/[?*()[\]{}]/g, "[$&]") : s2.replace(/[?*()[\]\\{}]/g, "\\$&");
-  }
-  return windowsPathsNoEscape ? s2.replace(/[?*()[\]]/g, "[$&]") : s2.replace(/[?*()[\]\\]/g, "\\$&");
-};
-
-// node_modules/.pnpm/minimatch@10.2.5/node_modules/minimatch/dist/esm/index.js
-var minimatch = (p2, pattern, options = {}) => {
-  assertValidPattern(pattern);
-  if (!options.nocomment && pattern.charAt(0) === "#") {
-    return false;
-  }
-  return new Minimatch(pattern, options).match(p2);
-};
-var starDotExtRE = /^\*+([^+@!?*[(]*)$/;
-var starDotExtTest = (ext2) => (f2) => !f2.startsWith(".") && f2.endsWith(ext2);
-var starDotExtTestDot = (ext2) => (f2) => f2.endsWith(ext2);
-var starDotExtTestNocase = (ext2) => {
-  ext2 = ext2.toLowerCase();
-  return (f2) => !f2.startsWith(".") && f2.toLowerCase().endsWith(ext2);
-};
-var starDotExtTestNocaseDot = (ext2) => {
-  ext2 = ext2.toLowerCase();
-  return (f2) => f2.toLowerCase().endsWith(ext2);
-};
-var starDotStarRE = /^\*+\.\*+$/;
-var starDotStarTest = (f2) => !f2.startsWith(".") && f2.includes(".");
-var starDotStarTestDot = (f2) => f2 !== "." && f2 !== ".." && f2.includes(".");
-var dotStarRE = /^\.\*+$/;
-var dotStarTest = (f2) => f2 !== "." && f2 !== ".." && f2.startsWith(".");
-var starRE = /^\*+$/;
-var starTest = (f2) => f2.length !== 0 && !f2.startsWith(".");
-var starTestDot = (f2) => f2.length !== 0 && f2 !== "." && f2 !== "..";
-var qmarksRE = /^\?+([^+@!?*[(]*)?$/;
-var qmarksTestNocase = ([$0, ext2 = ""]) => {
-  const noext = qmarksTestNoExt([$0]);
-  if (!ext2)
-    return noext;
-  ext2 = ext2.toLowerCase();
-  return (f2) => noext(f2) && f2.toLowerCase().endsWith(ext2);
-};
-var qmarksTestNocaseDot = ([$0, ext2 = ""]) => {
-  const noext = qmarksTestNoExtDot([$0]);
-  if (!ext2)
-    return noext;
-  ext2 = ext2.toLowerCase();
-  return (f2) => noext(f2) && f2.toLowerCase().endsWith(ext2);
-};
-var qmarksTestDot = ([$0, ext2 = ""]) => {
-  const noext = qmarksTestNoExtDot([$0]);
-  return !ext2 ? noext : (f2) => noext(f2) && f2.endsWith(ext2);
-};
-var qmarksTest = ([$0, ext2 = ""]) => {
-  const noext = qmarksTestNoExt([$0]);
-  return !ext2 ? noext : (f2) => noext(f2) && f2.endsWith(ext2);
-};
-var qmarksTestNoExt = ([$0]) => {
-  const len = $0.length;
-  return (f2) => f2.length === len && !f2.startsWith(".");
-};
-var qmarksTestNoExtDot = ([$0]) => {
-  const len = $0.length;
-  return (f2) => f2.length === len && f2 !== "." && f2 !== "..";
-};
-var defaultPlatform = typeof process === "object" && process ? typeof process.env === "object" && process.env && process.env.__MINIMATCH_TESTING_PLATFORM__ || process.platform : "posix";
-var path2 = {
-  win32: { sep: "\\" },
-  posix: { sep: "/" }
-};
-var sep = defaultPlatform === "win32" ? path2.win32.sep : path2.posix.sep;
-minimatch.sep = sep;
-var GLOBSTAR = /* @__PURE__ */ Symbol("globstar **");
-minimatch.GLOBSTAR = GLOBSTAR;
-var qmark2 = "[^/]";
-var star2 = qmark2 + "*?";
-var twoStarDot = "(?:(?!(?:\\/|^)(?:\\.{1,2})($|\\/)).)*?";
-var twoStarNoDot = "(?:(?!(?:\\/|^)\\.).)*?";
-var filter = (pattern, options = {}) => (p2) => minimatch(p2, pattern, options);
-minimatch.filter = filter;
-var ext = (a2, b2 = {}) => Object.assign({}, a2, b2);
-var defaults = (def) => {
-  if (!def || typeof def !== "object" || !Object.keys(def).length) {
-    return minimatch;
-  }
-  const orig = minimatch;
-  const m2 = (p2, pattern, options = {}) => orig(p2, pattern, ext(def, options));
-  return Object.assign(m2, {
-    Minimatch: class Minimatch extends orig.Minimatch {
-      constructor(pattern, options = {}) {
-        super(pattern, ext(def, options));
-      }
-      static defaults(options) {
-        return orig.defaults(ext(def, options)).Minimatch;
-      }
-    },
-    AST: class AST extends orig.AST {
-      /* c8 ignore start */
-      constructor(type, parent, options = {}) {
-        super(type, parent, ext(def, options));
-      }
-      /* c8 ignore stop */
-      static fromGlob(pattern, options = {}) {
-        return orig.AST.fromGlob(pattern, ext(def, options));
-      }
-    },
-    unescape: (s2, options = {}) => orig.unescape(s2, ext(def, options)),
-    escape: (s2, options = {}) => orig.escape(s2, ext(def, options)),
-    filter: (pattern, options = {}) => orig.filter(pattern, ext(def, options)),
-    defaults: (options) => orig.defaults(ext(def, options)),
-    makeRe: (pattern, options = {}) => orig.makeRe(pattern, ext(def, options)),
-    braceExpand: (pattern, options = {}) => orig.braceExpand(pattern, ext(def, options)),
-    match: (list, pattern, options = {}) => orig.match(list, pattern, ext(def, options)),
-    sep: orig.sep,
-    GLOBSTAR
-  });
-};
-minimatch.defaults = defaults;
-var braceExpand = (pattern, options = {}) => {
-  assertValidPattern(pattern);
-  if (options.nobrace || !/\{(?:(?!\{).)*\}/.test(pattern)) {
-    return [pattern];
-  }
-  return expand(pattern, { max: options.braceExpandMax });
-};
-minimatch.braceExpand = braceExpand;
-var makeRe = (pattern, options = {}) => new Minimatch(pattern, options).makeRe();
-minimatch.makeRe = makeRe;
-var match = (list, pattern, options = {}) => {
-  const mm = new Minimatch(pattern, options);
-  list = list.filter((f2) => mm.match(f2));
-  if (mm.options.nonull && !list.length) {
-    list.push(pattern);
-  }
-  return list;
-};
-minimatch.match = match;
-var globMagic = /[?*]|[+@!]\(.*?\)|\[|\]/;
-var regExpEscape2 = (s2) => s2.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
-var Minimatch = class {
-  options;
-  set;
-  pattern;
-  windowsPathsNoEscape;
-  nonegate;
-  negate;
-  comment;
-  empty;
-  preserveMultipleSlashes;
-  partial;
-  globSet;
-  globParts;
-  nocase;
-  isWindows;
-  platform;
-  windowsNoMagicRoot;
-  maxGlobstarRecursion;
-  regexp;
-  constructor(pattern, options = {}) {
-    assertValidPattern(pattern);
-    options = options || {};
-    this.options = options;
-    this.maxGlobstarRecursion = options.maxGlobstarRecursion ?? 200;
-    this.pattern = pattern;
-    this.platform = options.platform || defaultPlatform;
-    this.isWindows = this.platform === "win32";
-    const awe = "allowWindowsEscape";
-    this.windowsPathsNoEscape = !!options.windowsPathsNoEscape || options[awe] === false;
-    if (this.windowsPathsNoEscape) {
-      this.pattern = this.pattern.replace(/\\/g, "/");
-    }
-    this.preserveMultipleSlashes = !!options.preserveMultipleSlashes;
-    this.regexp = null;
-    this.negate = false;
-    this.nonegate = !!options.nonegate;
-    this.comment = false;
-    this.empty = false;
-    this.partial = !!options.partial;
-    this.nocase = !!this.options.nocase;
-    this.windowsNoMagicRoot = options.windowsNoMagicRoot !== void 0 ? options.windowsNoMagicRoot : !!(this.isWindows && this.nocase);
-    this.globSet = [];
-    this.globParts = [];
-    this.set = [];
-    this.make();
-  }
-  hasMagic() {
-    if (this.options.magicalBraces && this.set.length > 1) {
-      return true;
-    }
-    for (const pattern of this.set) {
-      for (const part of pattern) {
-        if (typeof part !== "string")
-          return true;
-      }
-    }
-    return false;
-  }
-  debug(..._2) {
-  }
-  make() {
-    const pattern = this.pattern;
-    const options = this.options;
-    if (!options.nocomment && pattern.charAt(0) === "#") {
-      this.comment = true;
-      return;
-    }
-    if (!pattern) {
-      this.empty = true;
-      return;
-    }
-    this.parseNegate();
-    this.globSet = [...new Set(this.braceExpand())];
-    if (options.debug) {
-      this.debug = (...args) => console.error(...args);
-    }
-    this.debug(this.pattern, this.globSet);
-    const rawGlobParts = this.globSet.map((s2) => this.slashSplit(s2));
-    this.globParts = this.preprocess(rawGlobParts);
-    this.debug(this.pattern, this.globParts);
-    let set = this.globParts.map((s2, _2, __) => {
-      if (this.isWindows && this.windowsNoMagicRoot) {
-        const isUNC = s2[0] === "" && s2[1] === "" && (s2[2] === "?" || !globMagic.test(s2[2])) && !globMagic.test(s2[3]);
-        const isDrive = /^[a-z]:/i.test(s2[0]);
-        if (isUNC) {
-          return [
-            ...s2.slice(0, 4),
-            ...s2.slice(4).map((ss) => this.parse(ss))
-          ];
-        } else if (isDrive) {
-          return [s2[0], ...s2.slice(1).map((ss) => this.parse(ss))];
-        }
-      }
-      return s2.map((ss) => this.parse(ss));
-    });
-    this.debug(this.pattern, set);
-    this.set = set.filter((s2) => s2.indexOf(false) === -1);
-    if (this.isWindows) {
-      for (let i2 = 0; i2 < this.set.length; i2++) {
-        const p2 = this.set[i2];
-        if (p2[0] === "" && p2[1] === "" && this.globParts[i2][2] === "?" && typeof p2[3] === "string" && /^[a-z]:$/i.test(p2[3])) {
-          p2[2] = "?";
-        }
-      }
-    }
-    this.debug(this.pattern, this.set);
-  }
-  // various transforms to equivalent pattern sets that are
-  // faster to process in a filesystem walk.  The goal is to
-  // eliminate what we can, and push all ** patterns as far
-  // to the right as possible, even if it increases the number
-  // of patterns that we have to process.
-  preprocess(globParts) {
-    if (this.options.noglobstar) {
-      for (const partset of globParts) {
-        for (let j2 = 0; j2 < partset.length; j2++) {
-          if (partset[j2] === "**") {
-            partset[j2] = "*";
-          }
-        }
-      }
-    }
-    const { optimizationLevel = 1 } = this.options;
-    if (optimizationLevel >= 2) {
-      globParts = this.firstPhasePreProcess(globParts);
-      globParts = this.secondPhasePreProcess(globParts);
-    } else if (optimizationLevel >= 1) {
-      globParts = this.levelOneOptimize(globParts);
-    } else {
-      globParts = this.adjascentGlobstarOptimize(globParts);
-    }
-    return globParts;
-  }
-  // just get rid of adjascent ** portions
-  adjascentGlobstarOptimize(globParts) {
-    return globParts.map((parts) => {
-      let gs = -1;
-      while (-1 !== (gs = parts.indexOf("**", gs + 1))) {
-        let i2 = gs;
-        while (parts[i2 + 1] === "**") {
-          i2++;
-        }
-        if (i2 !== gs) {
-          parts.splice(gs, i2 - gs);
-        }
-      }
-      return parts;
-    });
-  }
-  // get rid of adjascent ** and resolve .. portions
-  levelOneOptimize(globParts) {
-    return globParts.map((parts) => {
-      parts = parts.reduce((set, part) => {
-        const prev = set[set.length - 1];
-        if (part === "**" && prev === "**") {
-          return set;
-        }
-        if (part === "..") {
-          if (prev && prev !== ".." && prev !== "." && prev !== "**") {
-            set.pop();
-            return set;
-          }
-        }
-        set.push(part);
-        return set;
-      }, []);
-      return parts.length === 0 ? [""] : parts;
-    });
-  }
-  levelTwoFileOptimize(parts) {
-    if (!Array.isArray(parts)) {
-      parts = this.slashSplit(parts);
-    }
-    let didSomething = false;
-    do {
-      didSomething = false;
-      if (!this.preserveMultipleSlashes) {
-        for (let i2 = 1; i2 < parts.length - 1; i2++) {
-          const p2 = parts[i2];
-          if (i2 === 1 && p2 === "" && parts[0] === "")
-            continue;
-          if (p2 === "." || p2 === "") {
-            didSomething = true;
-            parts.splice(i2, 1);
-            i2--;
-          }
-        }
-        if (parts[0] === "." && parts.length === 2 && (parts[1] === "." || parts[1] === "")) {
-          didSomething = true;
-          parts.pop();
-        }
-      }
-      let dd = 0;
-      while (-1 !== (dd = parts.indexOf("..", dd + 1))) {
-        const p2 = parts[dd - 1];
-        if (p2 && p2 !== "." && p2 !== ".." && p2 !== "**" && !(this.isWindows && /^[a-z]:$/i.test(p2))) {
-          didSomething = true;
-          parts.splice(dd - 1, 2);
-          dd -= 2;
-        }
-      }
-    } while (didSomething);
-    return parts.length === 0 ? [""] : parts;
-  }
-  // First phase: single-pattern processing
-  // <pre> is 1 or more portions
-  // <rest> is 1 or more portions
-  // <p> is any portion other than ., .., '', or **
-  // <e> is . or ''
-  //
-  // **/.. is *brutal* for filesystem walking performance, because
-  // it effectively resets the recursive walk each time it occurs,
-  // and ** cannot be reduced out by a .. pattern part like a regexp
-  // or most strings (other than .., ., and '') can be.
-  //
-  // <pre>/**/../<p>/<p>/<rest> -> {<pre>/../<p>/<p>/<rest>,<pre>/**/<p>/<p>/<rest>}
-  // <pre>/<e>/<rest> -> <pre>/<rest>
-  // <pre>/<p>/../<rest> -> <pre>/<rest>
-  // **/**/<rest> -> **/<rest>
-  //
-  // **/*/<rest> -> */**/<rest> <== not valid because ** doesn't follow
-  // this WOULD be allowed if ** did follow symlinks, or * didn't
-  firstPhasePreProcess(globParts) {
-    let didSomething = false;
-    do {
-      didSomething = false;
-      for (let parts of globParts) {
-        let gs = -1;
-        while (-1 !== (gs = parts.indexOf("**", gs + 1))) {
-          let gss = gs;
-          while (parts[gss + 1] === "**") {
-            gss++;
-          }
-          if (gss > gs) {
-            parts.splice(gs + 1, gss - gs);
-          }
-          let next = parts[gs + 1];
-          const p2 = parts[gs + 2];
-          const p22 = parts[gs + 3];
-          if (next !== "..")
-            continue;
-          if (!p2 || p2 === "." || p2 === ".." || !p22 || p22 === "." || p22 === "..") {
-            continue;
-          }
-          didSomething = true;
-          parts.splice(gs, 1);
-          const other = parts.slice(0);
-          other[gs] = "**";
-          globParts.push(other);
-          gs--;
-        }
-        if (!this.preserveMultipleSlashes) {
-          for (let i2 = 1; i2 < parts.length - 1; i2++) {
-            const p2 = parts[i2];
-            if (i2 === 1 && p2 === "" && parts[0] === "")
-              continue;
-            if (p2 === "." || p2 === "") {
-              didSomething = true;
-              parts.splice(i2, 1);
-              i2--;
-            }
-          }
-          if (parts[0] === "." && parts.length === 2 && (parts[1] === "." || parts[1] === "")) {
-            didSomething = true;
-            parts.pop();
-          }
-        }
-        let dd = 0;
-        while (-1 !== (dd = parts.indexOf("..", dd + 1))) {
-          const p2 = parts[dd - 1];
-          if (p2 && p2 !== "." && p2 !== ".." && p2 !== "**") {
-            didSomething = true;
-            const needDot = dd === 1 && parts[dd + 1] === "**";
-            const splin = needDot ? ["."] : [];
-            parts.splice(dd - 1, 2, ...splin);
-            if (parts.length === 0)
-              parts.push("");
-            dd -= 2;
-          }
-        }
-      }
-    } while (didSomething);
-    return globParts;
-  }
-  // second phase: multi-pattern dedupes
-  // {<pre>/*/<rest>,<pre>/<p>/<rest>} -> <pre>/*/<rest>
-  // {<pre>/<rest>,<pre>/<rest>} -> <pre>/<rest>
-  // {<pre>/**/<rest>,<pre>/<rest>} -> <pre>/**/<rest>
-  //
-  // {<pre>/**/<rest>,<pre>/**/<p>/<rest>} -> <pre>/**/<rest>
-  // ^-- not valid because ** doens't follow symlinks
-  secondPhasePreProcess(globParts) {
-    for (let i2 = 0; i2 < globParts.length - 1; i2++) {
-      for (let j2 = i2 + 1; j2 < globParts.length; j2++) {
-        const matched = this.partsMatch(globParts[i2], globParts[j2], !this.preserveMultipleSlashes);
-        if (matched) {
-          globParts[i2] = [];
-          globParts[j2] = matched;
-          break;
-        }
-      }
-    }
-    return globParts.filter((gs) => gs.length);
-  }
-  partsMatch(a2, b2, emptyGSMatch = false) {
-    let ai = 0;
-    let bi = 0;
-    let result = [];
-    let which = "";
-    while (ai < a2.length && bi < b2.length) {
-      if (a2[ai] === b2[bi]) {
-        result.push(which === "b" ? b2[bi] : a2[ai]);
-        ai++;
-        bi++;
-      } else if (emptyGSMatch && a2[ai] === "**" && b2[bi] === a2[ai + 1]) {
-        result.push(a2[ai]);
-        ai++;
-      } else if (emptyGSMatch && b2[bi] === "**" && a2[ai] === b2[bi + 1]) {
-        result.push(b2[bi]);
-        bi++;
-      } else if (a2[ai] === "*" && b2[bi] && (this.options.dot || !b2[bi].startsWith(".")) && b2[bi] !== "**") {
-        if (which === "b")
-          return false;
-        which = "a";
-        result.push(a2[ai]);
-        ai++;
-        bi++;
-      } else if (b2[bi] === "*" && a2[ai] && (this.options.dot || !a2[ai].startsWith(".")) && a2[ai] !== "**") {
-        if (which === "a")
-          return false;
-        which = "b";
-        result.push(b2[bi]);
-        ai++;
-        bi++;
-      } else {
-        return false;
-      }
-    }
-    return a2.length === b2.length && result;
-  }
-  parseNegate() {
-    if (this.nonegate)
-      return;
-    const pattern = this.pattern;
-    let negate = false;
-    let negateOffset = 0;
-    for (let i2 = 0; i2 < pattern.length && pattern.charAt(i2) === "!"; i2++) {
-      negate = !negate;
-      negateOffset++;
-    }
-    if (negateOffset)
-      this.pattern = pattern.slice(negateOffset);
-    this.negate = negate;
-  }
-  // set partial to true to test if, for example,
-  // "/a/b" matches the start of "/*/b/*/d"
-  // Partial means, if you run out of file before you run
-  // out of pattern, then that's fine, as long as all
-  // the parts match.
-  matchOne(file, pattern, partial2 = false) {
-    let fileStartIndex = 0;
-    let patternStartIndex = 0;
-    if (this.isWindows) {
-      const fileDrive = typeof file[0] === "string" && /^[a-z]:$/i.test(file[0]);
-      const fileUNC = !fileDrive && file[0] === "" && file[1] === "" && file[2] === "?" && /^[a-z]:$/i.test(file[3]);
-      const patternDrive = typeof pattern[0] === "string" && /^[a-z]:$/i.test(pattern[0]);
-      const patternUNC = !patternDrive && pattern[0] === "" && pattern[1] === "" && pattern[2] === "?" && typeof pattern[3] === "string" && /^[a-z]:$/i.test(pattern[3]);
-      const fdi = fileUNC ? 3 : fileDrive ? 0 : void 0;
-      const pdi = patternUNC ? 3 : patternDrive ? 0 : void 0;
-      if (typeof fdi === "number" && typeof pdi === "number") {
-        const [fd, pd] = [
-          file[fdi],
-          pattern[pdi]
-        ];
-        if (fd.toLowerCase() === pd.toLowerCase()) {
-          pattern[pdi] = fd;
-          patternStartIndex = pdi;
-          fileStartIndex = fdi;
-        }
-      }
-    }
-    const { optimizationLevel = 1 } = this.options;
-    if (optimizationLevel >= 2) {
-      file = this.levelTwoFileOptimize(file);
-    }
-    if (pattern.includes(GLOBSTAR)) {
-      return this.#matchGlobstar(file, pattern, partial2, fileStartIndex, patternStartIndex);
-    }
-    return this.#matchOne(file, pattern, partial2, fileStartIndex, patternStartIndex);
-  }
-  #matchGlobstar(file, pattern, partial2, fileIndex, patternIndex) {
-    const firstgs = pattern.indexOf(GLOBSTAR, patternIndex);
-    const lastgs = pattern.lastIndexOf(GLOBSTAR);
-    const [head, body, tail] = partial2 ? [
-      pattern.slice(patternIndex, firstgs),
-      pattern.slice(firstgs + 1),
-      []
-    ] : [
-      pattern.slice(patternIndex, firstgs),
-      pattern.slice(firstgs + 1, lastgs),
-      pattern.slice(lastgs + 1)
-    ];
-    if (head.length) {
-      const fileHead = file.slice(fileIndex, fileIndex + head.length);
-      if (!this.#matchOne(fileHead, head, partial2, 0, 0)) {
-        return false;
-      }
-      fileIndex += head.length;
-      patternIndex += head.length;
-    }
-    let fileTailMatch = 0;
-    if (tail.length) {
-      if (tail.length + fileIndex > file.length)
-        return false;
-      let tailStart = file.length - tail.length;
-      if (this.#matchOne(file, tail, partial2, tailStart, 0)) {
-        fileTailMatch = tail.length;
-      } else {
-        if (file[file.length - 1] !== "" || fileIndex + tail.length === file.length) {
-          return false;
-        }
-        tailStart--;
-        if (!this.#matchOne(file, tail, partial2, tailStart, 0)) {
-          return false;
-        }
-        fileTailMatch = tail.length + 1;
-      }
-    }
-    if (!body.length) {
-      let sawSome = !!fileTailMatch;
-      for (let i3 = fileIndex; i3 < file.length - fileTailMatch; i3++) {
-        const f2 = String(file[i3]);
-        sawSome = true;
-        if (f2 === "." || f2 === ".." || !this.options.dot && f2.startsWith(".")) {
-          return false;
-        }
-      }
-      return partial2 || sawSome;
-    }
-    const bodySegments = [[[], 0]];
-    let currentBody = bodySegments[0];
-    let nonGsParts = 0;
-    const nonGsPartsSums = [0];
-    for (const b2 of body) {
-      if (b2 === GLOBSTAR) {
-        nonGsPartsSums.push(nonGsParts);
-        currentBody = [[], 0];
-        bodySegments.push(currentBody);
-      } else {
-        currentBody[0].push(b2);
-        nonGsParts++;
-      }
-    }
-    let i2 = bodySegments.length - 1;
-    const fileLength = file.length - fileTailMatch;
-    for (const b2 of bodySegments) {
-      b2[1] = fileLength - (nonGsPartsSums[i2--] + b2[0].length);
-    }
-    return !!this.#matchGlobStarBodySections(file, bodySegments, fileIndex, 0, partial2, 0, !!fileTailMatch);
-  }
-  // return false for "nope, not matching"
-  // return null for "not matching, cannot keep trying"
-  #matchGlobStarBodySections(file, bodySegments, fileIndex, bodyIndex, partial2, globStarDepth, sawTail) {
-    const bs = bodySegments[bodyIndex];
-    if (!bs) {
-      for (let i2 = fileIndex; i2 < file.length; i2++) {
-        sawTail = true;
-        const f2 = file[i2];
-        if (f2 === "." || f2 === ".." || !this.options.dot && f2.startsWith(".")) {
-          return false;
-        }
-      }
-      return sawTail;
-    }
-    const [body, after] = bs;
-    while (fileIndex <= after) {
-      const m2 = this.#matchOne(file.slice(0, fileIndex + body.length), body, partial2, fileIndex, 0);
-      if (m2 && globStarDepth < this.maxGlobstarRecursion) {
-        const sub = this.#matchGlobStarBodySections(file, bodySegments, fileIndex + body.length, bodyIndex + 1, partial2, globStarDepth + 1, sawTail);
-        if (sub !== false) {
-          return sub;
-        }
-      }
-      const f2 = file[fileIndex];
-      if (f2 === "." || f2 === ".." || !this.options.dot && f2.startsWith(".")) {
-        return false;
-      }
-      fileIndex++;
-    }
-    return partial2 || null;
-  }
-  #matchOne(file, pattern, partial2, fileIndex, patternIndex) {
-    let fi;
-    let pi;
-    let pl;
-    let fl;
-    for (fi = fileIndex, pi = patternIndex, fl = file.length, pl = pattern.length; fi < fl && pi < pl; fi++, pi++) {
-      this.debug("matchOne loop");
-      let p2 = pattern[pi];
-      let f2 = file[fi];
-      this.debug(pattern, p2, f2);
-      if (p2 === false || p2 === GLOBSTAR) {
-        return false;
-      }
-      let hit;
-      if (typeof p2 === "string") {
-        hit = f2 === p2;
-        this.debug("string match", p2, f2, hit);
-      } else {
-        hit = p2.test(f2);
-        this.debug("pattern match", p2, f2, hit);
-      }
-      if (!hit)
-        return false;
-    }
-    if (fi === fl && pi === pl) {
-      return true;
-    } else if (fi === fl) {
-      return partial2;
-    } else if (pi === pl) {
-      return fi === fl - 1 && file[fi] === "";
-    } else {
-      throw new Error("wtf?");
-    }
-  }
-  braceExpand() {
-    return braceExpand(this.pattern, this.options);
-  }
-  parse(pattern) {
-    assertValidPattern(pattern);
-    const options = this.options;
-    if (pattern === "**")
-      return GLOBSTAR;
-    if (pattern === "")
-      return "";
-    let m2;
-    let fastTest = null;
-    if (m2 = pattern.match(starRE)) {
-      fastTest = options.dot ? starTestDot : starTest;
-    } else if (m2 = pattern.match(starDotExtRE)) {
-      fastTest = (options.nocase ? options.dot ? starDotExtTestNocaseDot : starDotExtTestNocase : options.dot ? starDotExtTestDot : starDotExtTest)(m2[1]);
-    } else if (m2 = pattern.match(qmarksRE)) {
-      fastTest = (options.nocase ? options.dot ? qmarksTestNocaseDot : qmarksTestNocase : options.dot ? qmarksTestDot : qmarksTest)(m2);
-    } else if (m2 = pattern.match(starDotStarRE)) {
-      fastTest = options.dot ? starDotStarTestDot : starDotStarTest;
-    } else if (m2 = pattern.match(dotStarRE)) {
-      fastTest = dotStarTest;
-    }
-    const re2 = AST.fromGlob(pattern, this.options).toMMPattern();
-    if (fastTest && typeof re2 === "object") {
-      Reflect.defineProperty(re2, "test", { value: fastTest });
-    }
-    return re2;
-  }
-  makeRe() {
-    if (this.regexp || this.regexp === false)
-      return this.regexp;
-    const set = this.set;
-    if (!set.length) {
-      this.regexp = false;
-      return this.regexp;
-    }
-    const options = this.options;
-    const twoStar = options.noglobstar ? star2 : options.dot ? twoStarDot : twoStarNoDot;
-    const flags = new Set(options.nocase ? ["i"] : []);
-    let re2 = set.map((pattern) => {
-      const pp = pattern.map((p2) => {
-        if (p2 instanceof RegExp) {
-          for (const f2 of p2.flags.split(""))
-            flags.add(f2);
-        }
-        return typeof p2 === "string" ? regExpEscape2(p2) : p2 === GLOBSTAR ? GLOBSTAR : p2._src;
-      });
-      pp.forEach((p2, i2) => {
-        const next = pp[i2 + 1];
-        const prev = pp[i2 - 1];
-        if (p2 !== GLOBSTAR || prev === GLOBSTAR) {
-          return;
-        }
-        if (prev === void 0) {
-          if (next !== void 0 && next !== GLOBSTAR) {
-            pp[i2 + 1] = "(?:\\/|" + twoStar + "\\/)?" + next;
-          } else {
-            pp[i2] = twoStar;
-          }
-        } else if (next === void 0) {
-          pp[i2 - 1] = prev + "(?:\\/|\\/" + twoStar + ")?";
-        } else if (next !== GLOBSTAR) {
-          pp[i2 - 1] = prev + "(?:\\/|\\/" + twoStar + "\\/)" + next;
-          pp[i2 + 1] = GLOBSTAR;
-        }
-      });
-      const filtered = pp.filter((p2) => p2 !== GLOBSTAR);
-      if (this.partial && filtered.length >= 1) {
-        const prefixes = [];
-        for (let i2 = 1; i2 <= filtered.length; i2++) {
-          prefixes.push(filtered.slice(0, i2).join("/"));
-        }
-        return "(?:" + prefixes.join("|") + ")";
-      }
-      return filtered.join("/");
-    }).join("|");
-    const [open, close] = set.length > 1 ? ["(?:", ")"] : ["", ""];
-    re2 = "^" + open + re2 + close + "$";
-    if (this.partial) {
-      re2 = "^(?:\\/|" + open + re2.slice(1, -1) + close + ")$";
-    }
-    if (this.negate)
-      re2 = "^(?!" + re2 + ").+$";
-    try {
-      this.regexp = new RegExp(re2, [...flags].join(""));
-    } catch {
-      this.regexp = false;
-    }
-    return this.regexp;
-  }
-  slashSplit(p2) {
-    if (this.preserveMultipleSlashes) {
-      return p2.split("/");
-    } else if (this.isWindows && /^\/\/[^/]+/.test(p2)) {
-      return ["", ...p2.split(/\/+/)];
-    } else {
-      return p2.split(/\/+/);
-    }
-  }
-  match(f2, partial2 = this.partial) {
-    this.debug("match", f2, this.pattern);
-    if (this.comment) {
-      return false;
-    }
-    if (this.empty) {
-      return f2 === "";
-    }
-    if (f2 === "/" && partial2) {
-      return true;
-    }
-    const options = this.options;
-    if (this.isWindows) {
-      f2 = f2.split("\\").join("/");
-    }
-    const ff = this.slashSplit(f2);
-    this.debug(this.pattern, "split", ff);
-    const set = this.set;
-    this.debug(this.pattern, "set", set);
-    let filename = ff[ff.length - 1];
-    if (!filename) {
-      for (let i2 = ff.length - 2; !filename && i2 >= 0; i2--) {
-        filename = ff[i2];
-      }
-    }
-    for (const pattern of set) {
-      let file = ff;
-      if (options.matchBase && pattern.length === 1) {
-        file = [filename];
-      }
-      const hit = this.matchOne(file, pattern, partial2);
-      if (hit) {
-        if (options.flipNegate) {
-          return true;
-        }
-        return !this.negate;
-      }
-    }
-    if (options.flipNegate) {
-      return false;
-    }
-    return this.negate;
-  }
-  static defaults(def) {
-    return minimatch.defaults(def).Minimatch;
-  }
-};
-minimatch.AST = AST;
-minimatch.Minimatch = Minimatch;
-minimatch.escape = escape2;
-minimatch.unescape = unescape2;
-
-// packages/memory/dist/automation/rule-engine.js
-function parseCondition(condition) {
-  const notContainsSplit = condition.split(" not_contains ", 2);
-  if (notContainsSplit.length === 2) {
-    return {
-      field: notContainsSplit[0].trim(),
-      operator: "not_contains",
-      value: notContainsSplit[1].trim()
-    };
-  }
-  for (const op of [">=", "<=", "==", "!="]) {
-    const parts = condition.split(` ${op} `, 2);
-    if (parts.length === 2) {
-      return {
-        field: parts[0].trim(),
-        operator: op,
-        value: parts[1].trim()
-      };
-    }
-  }
-  for (const op of [">", "<"]) {
-    const parts = condition.split(` ${op} `, 2);
-    if (parts.length === 2) {
-      return {
-        field: parts[0].trim(),
-        operator: op,
-        value: parts[1].trim()
-      };
-    }
-  }
-  for (const op of ["contains", "matches"]) {
-    const parts = condition.split(` ${op} `, 2);
-    if (parts.length === 2) {
-      return {
-        field: parts[0].trim(),
-        operator: op,
-        value: parts[1].trim()
-      };
-    }
-  }
-  throw new Error(`Cannot parse condition: ${JSON.stringify(condition)}`);
-}
-function parseAction(action) {
-  if (action === "filter") {
-    return { action_type: "filter", value: 0 };
-  }
-  if (action.startsWith("boost:")) {
-    return { action_type: "boost", value: parseFloat(action.slice(6)) };
-  }
-  if (action.startsWith("penalty:")) {
-    return { action_type: "penalty", value: parseFloat(action.slice(8)) };
-  }
-  throw new Error(`Invalid action: ${JSON.stringify(action)}`);
-}
-function validateRule(ruleType, condition, action) {
-  const errors = [];
-  if (ruleType !== "hard" && ruleType !== "soft") {
-    errors.push(`rule_type must be 'hard' or 'soft', got ${JSON.stringify(ruleType)}`);
-  }
-  try {
-    parseCondition(condition);
-  } catch (e2) {
-    errors.push(String(e2));
-  }
-  try {
-    const { action_type } = parseAction(action);
-    if (ruleType === "hard" && action_type !== "filter") {
-      errors.push("Hard rules must use 'filter' action");
-    }
-  } catch (e2) {
-    errors.push(String(e2));
-  }
-  return errors;
-}
-
-// packages/memory/dist/automation/handlers/add-rule.js
-function validateArgs(args) {
-  const { condition, action, rule_type, scope, scope_value } = args;
-  const ruleErrors = validateRule(rule_type, condition, action);
-  if (ruleErrors.length > 0) {
-    return ruleErrors[0] ?? "invalid rule";
-  }
-  if ((scope === "domain" || scope === "directory") && !scope_value) {
-    return `scope_value required when scope=${scope}`;
-  }
-  return null;
-}
-async function addRuleHandler(rawArgs, store) {
-  const parseResult = AddRuleRequestSchema.safeParse(rawArgs);
-  if (!parseResult.success) {
-    return {
-      created: false,
-      reason: parseResult.error.issues[0]?.message ?? "invalid arguments"
-    };
-  }
-  const args = parseResult.data;
-  const validationError = validateArgs(args);
-  if (validationError !== null) {
-    return { created: false, reason: validationError };
-  }
-  const ruleId = await store.insertRule({
-    rule_type: args.rule_type,
-    scope: args.scope,
-    scope_value: args.scope_value ?? null,
-    condition: args.condition,
-    action: args.action,
-    priority: args.priority,
-    is_active: true
-  });
-  return {
-    created: true,
-    rule_id: ruleId,
-    rule_type: args.rule_type,
-    scope: args.scope,
-    scope_value: args.scope_value ?? null,
-    condition: args.condition,
-    action: args.action,
-    priority: args.priority
-  };
-}
-
-// packages/memory/dist/automation/handlers/get-rules.js
-var getRulesInputSchema = external_exports.object({
-  scope: RuleScopeSchema.optional(),
-  rule_type: RuleTypeSchema.optional(),
-  include_inactive: external_exports.boolean().default(false)
-});
-async function getRulesHandler(rawArgs, store) {
-  const parseResult = getRulesInputSchema.safeParse(rawArgs ?? {});
-  const args = parseResult.success ? parseResult.data : { include_inactive: false };
-  const scopeFilter = parseResult.success ? args.scope : void 0;
-  const typeFilter = parseResult.success ? args.rule_type : void 0;
-  const includeInactive = parseResult.success ? args.include_inactive : false;
-  let rules;
-  if (includeInactive && !scopeFilter) {
-    rules = await store.getAllRulesIncludingInactive();
-  } else if (scopeFilter) {
-    rules = await store.getRulesForScope(scopeFilter);
-  } else {
-    rules = await store.getAllActiveRules();
-  }
-  if (typeFilter) {
-    rules = rules.filter((r2) => r2.rule_type === typeFilter);
-  }
-  const byScope = {};
-  for (const rule of rules) {
-    const s2 = rule.scope ?? "global";
-    byScope[s2] = (byScope[s2] ?? 0) + 1;
-  }
-  return { total: rules.length, rules, by_scope: byScope };
-}
-
-// packages/memory/dist/workflow-graph/handlers/query-workflow-graph.js
-var _DEFAULT_LIMIT = 500;
-var _MAX_LIMIT = 5e3;
-function asSet(value) {
-  if (value == null)
-    return null;
-  if (typeof value === "string")
-    return value ? /* @__PURE__ */ new Set([value]) : null;
-  if (Array.isArray(value)) {
-    const out = new Set(value.map(String).filter(Boolean));
-    return out.size > 0 ? out : null;
-  }
-  return null;
-}
-function edgeKindOf(e2) {
-  return String(e2["kind"] ?? e2["type"] ?? "");
-}
-function nodeKindOf(n3) {
-  return String(n3["kind"] ?? n3["type"] ?? "");
-}
-function edgeEndpoints(e2) {
-  const s2 = e2["source"];
-  const t2 = e2["target"];
-  const sId = typeof s2 === "object" && s2 !== null ? String(s2["id"] ?? "") : String(s2 ?? "");
-  const tId = typeof t2 === "object" && t2 !== null ? String(t2["id"] ?? "") : String(t2 ?? "");
-  return [sId, tId];
-}
-function bfsNeighbourhood(nodes, edges, seed, depth) {
-  if (depth < 1)
-    return [/* @__PURE__ */ new Set([seed]), []];
-  const adj = /* @__PURE__ */ new Map();
-  for (const e2 of edges) {
-    const [s2, t2] = edgeEndpoints(e2);
-    if (!s2 || !t2)
-      continue;
-    if (!adj.has(s2))
-      adj.set(s2, []);
-    if (!adj.has(t2))
-      adj.set(t2, []);
-    adj.get(s2).push(t2);
-    adj.get(t2).push(s2);
-  }
-  let frontier = /* @__PURE__ */ new Set([seed]);
-  const reached = /* @__PURE__ */ new Set([seed]);
-  for (let i2 = 0; i2 < depth; i2++) {
-    const nextFrontier = /* @__PURE__ */ new Set();
-    for (const nid of frontier) {
-      for (const other of adj.get(nid) ?? []) {
-        if (!reached.has(other))
-          nextFrontier.add(other);
-      }
-    }
-    for (const n3 of nextFrontier)
-      reached.add(n3);
-    if (nextFrontier.size === 0)
-      break;
-    frontier = nextFrontier;
-  }
-  const keptEdges = edges.filter((e2) => {
-    const [s2, t2] = edgeEndpoints(e2);
-    return reached.has(s2) && reached.has(t2);
-  });
-  return [reached, keptEdges];
-}
-function pruneDanglingEdges(edges, nodeIds) {
-  return edges.filter((e2) => {
-    const [s2, t2] = edgeEndpoints(e2);
-    return nodeIds.has(s2) && nodeIds.has(t2);
-  });
-}
-function capNodesByHeat(nodes, edges, limit) {
-  if (nodes.length <= limit)
-    return [nodes, edges, 0];
-  const sorted = [...nodes].sort((a2, b2) => (parseFloat(String(b2["heat"] ?? b2["size"] ?? 0)) || 0) - (parseFloat(String(a2["heat"] ?? a2["size"] ?? 0)) || 0));
-  const truncated = nodes.length - limit;
-  const kept = sorted.slice(0, limit);
-  const keptIds = new Set(kept.map((n3) => String(n3["id"] ?? "")));
-  return [kept, pruneDanglingEdges(edges, keptIds), truncated];
-}
-function buildMeta(graph, opts) {
-  const meta = { ...graph.meta ?? {} };
-  meta["filtered"] = true;
-  meta["filter"] = {
-    node_kind: opts.nodeKinds ? [...opts.nodeKinds].sort() : null,
-    edge_kind: opts.edgeKinds ? [...opts.edgeKinds].sort() : null,
-    neighbour_of: opts.neighbourOf,
-    depth: opts.neighbourOf ? opts.depth : null,
-    limit_nodes: opts.limitNodes
-  };
-  if (opts.truncated > 0) {
-    meta["truncated_nodes"] = opts.truncated;
-  }
-  return meta;
-}
-function applyFilters(graph, opts) {
-  let nodes = [...graph.nodes ?? []];
-  let edges = [
-    ...graph.edges ?? graph.links ?? []
-  ];
-  if (opts.neighbourOf) {
-    const [reached, keptEdges] = bfsNeighbourhood(nodes, edges, opts.neighbourOf, opts.depth);
-    nodes = nodes.filter((n3) => reached.has(String(n3["id"] ?? "")));
-    edges = keptEdges;
-  }
-  if (opts.edgeKinds !== null) {
-    edges = edges.filter((e2) => opts.edgeKinds.has(edgeKindOf(e2)));
-  }
-  if (opts.nodeKinds !== null) {
-    nodes = nodes.filter((n3) => opts.nodeKinds.has(nodeKindOf(n3)));
-    edges = pruneDanglingEdges(edges, new Set(nodes.map((n3) => String(n3["id"] ?? ""))));
-  }
-  const [cappedNodes, cappedEdges, truncated] = capNodesByHeat(nodes, edges, opts.limitNodes);
-  const meta = buildMeta(graph, { ...opts, truncated });
-  return { nodes: cappedNodes, edges: cappedEdges, links: cappedEdges, meta };
-}
-function queryWorkflowGraph(graph, args = {}) {
-  const depthRaw = args.depth;
-  const depth = depthRaw != null ? Math.max(1, Math.min(2, Math.trunc(Number(depthRaw)))) : 1;
-  const limitRaw = args.limit_nodes;
-  const limitNodes = Math.max(1, Math.min(_MAX_LIMIT, limitRaw != null ? Math.trunc(Number(limitRaw)) : _DEFAULT_LIMIT));
-  return applyFilters(graph, {
-    nodeKinds: asSet(args.node_kind),
-    edgeKinds: asSet(args.edge_kind),
-    neighbourOf: args.neighbour_of ?? null,
-    depth,
-    limitNodes
-  });
-}
-
-// packages/mcp-servers/memory/dist/tools/advanced.js
-var SYNC_MAX_INSIGHTS_DEFAULT = 10;
-var SYNC_MIN_HEAT_DEFAULT = 0.3;
-var ASSESS_STALE_DAYS_DEFAULT = 14;
-var MS_PER_DAY = 864e5;
-var COVERAGE_LOW_THRESHOLD = 0.5;
-var STALE_HEAT_THRESHOLD = 0.1;
-var ROUNDING_FACTOR_2DP = 100;
-function toMemoryReadStore(store) {
-  const ext2 = store;
-  return {
-    getMemoriesForDirectory: async (dir, opts) => {
-      const raw = ext2["getMemoriesForDirectory"]?.(dir, opts.min_heat) ?? [];
-      return raw.map((m2) => m2);
-    },
-    getHotMemories: async (opts) => {
-      const raw = ext2["getHotMemoriesForDirectory"]?.(opts.min_heat, opts.limit) ?? ext2["getHotMemories"]?.(opts.min_heat, opts.limit) ?? [];
-      return raw.map((m2) => m2);
-    }
-  };
-}
-function toProspectiveMemoryStore(store) {
-  const ext2 = store;
-  return {
-    insertProspectiveMemory: async (record3) => {
-      const id2 = ext2["insertProspectiveMemory"]?.(record3) ?? "";
-      return String(id2);
-    },
-    countActiveTriggers: async () => {
-      return ext2["countActiveTriggers"]?.() ?? 0;
-    }
-  };
-}
-function toRuleStore(store) {
-  const ext2 = store;
-  return {
-    insertRule: async (rule) => {
-      const id2 = ext2["insertRule"]?.(rule) ?? 0;
-      return Number(id2);
-    }
-  };
-}
-function toRuleReadStore(store) {
-  const ext2 = store;
-  async function fetchRules(method) {
-    const result = ext2[method]?.();
-    if (result instanceof Promise)
-      return result;
-    return Promise.resolve(result ?? []);
-  }
-  return {
-    getAllActiveRules: () => fetchRules("getAllActiveRules"),
-    getRulesForScope: (scope) => ext2["getRulesForScope"]?.(scope) ?? Promise.resolve([]),
-    getAllRulesIncludingInactive: () => fetchRules("getAllRulesIncludingInactive")
-  };
-}
-function errorText7(tool, err) {
-  const message = err instanceof Error ? err.message : String(err);
-  return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
-}
-function registerAdvancedTools(server2, deps) {
-  server2.registerTool("sync_instructions", {
-    description: "Push top memory insights into CLAUDE.md (or similar instruction file).",
-    inputSchema: {
-      directory: external_exports.string().default("").describe("Directory containing CLAUDE.md"),
-      max_insights: external_exports.number().int().min(1).default(SYNC_MAX_INSIGHTS_DEFAULT).describe("Max insights to include"),
-      min_heat: external_exports.number().min(0).max(1).default(SYNC_MIN_HEAT_DEFAULT).describe("Min heat for insight inclusion"),
-      dry_run: external_exports.boolean().default(false).describe("Preview without writing")
-    }
-  }, async (args) => {
-    try {
-      const response = await syncInstructionsHandler({
-        directory: args.directory,
-        max_insights: args.max_insights,
-        min_heat: args.min_heat,
-        dry_run: args.dry_run
-      }, toMemoryReadStore(deps.store));
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText7("sync_instructions", err);
-    }
-  });
-  server2.registerTool("create_trigger", {
-    description: "Create a prospective memory trigger (stored in prospective_memories table).",
-    inputSchema: {
-      content: external_exports.string().min(1).describe("Trigger content"),
-      trigger_condition: external_exports.string().min(1).describe("Condition that fires the trigger"),
-      trigger_type: external_exports.string().default("keyword").describe("Trigger type"),
-      target_directory: external_exports.string().optional().describe("Directory scope for trigger")
-    }
-  }, async (args) => {
-    try {
-      const response = await createTriggerHandler(args, toProspectiveMemoryStore(deps.store));
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText7("create_trigger", err);
-    }
-  });
-  server2.registerTool("add_rule", {
-    description: "Add a neuro-symbolic rule to the memory store.",
-    inputSchema: {
-      condition: external_exports.string().min(1).describe("Rule condition"),
-      action: external_exports.string().min(1).describe("Rule action"),
-      rule_type: external_exports.enum(["soft", "hard"]).default("soft").describe("Rule type"),
-      scope: external_exports.enum(["global", "domain", "directory"]).default("global").describe("Rule scope"),
-      scope_value: external_exports.string().optional().describe("Scope value (domain name or directory)"),
-      priority: external_exports.number().int().default(0).describe("Rule priority (higher = earlier)")
-    }
-  }, async (args) => {
-    try {
-      const response = await addRuleHandler(args, toRuleStore(deps.store));
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText7("add_rule", err);
-    }
-  });
-  server2.registerTool("get_rules", {
-    description: "List active neuro-symbolic rules.",
-    inputSchema: {
-      scope: external_exports.string().optional().describe("Filter by scope"),
-      rule_type: external_exports.string().optional().describe("Filter by type"),
-      include_inactive: external_exports.boolean().default(false).describe("Include inactive rules")
-    }
-  }, async (args) => {
-    try {
-      const response = await getRulesHandler(args, toRuleReadStore(deps.store));
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText7("get_rules", err);
-    }
-  });
-  server2.registerTool("assess_coverage", {
-    description: "Evaluate knowledge coverage completeness for the current domain/directory.",
-    inputSchema: {
-      directory: external_exports.string().default("").describe("Directory scope"),
-      domain: external_exports.string().default("").describe("Domain scope"),
-      stale_days: external_exports.number().int().min(1).default(ASSESS_STALE_DAYS_DEFAULT).describe("Days before a memory is stale")
-    }
-  }, async (args) => {
-    try {
-      const ext2 = deps.store;
-      const allMems = ext2["getAllMemoriesForDecay"]?.() ?? [];
-      const scoped = allMems.filter((m2) => {
-        if (args.domain && m2["domain"] !== args.domain)
-          return false;
-        if (args.directory && !String(m2["directory"] ?? "").startsWith(args.directory))
-          return false;
-        return true;
-      });
-      const now = Date.now();
-      const staleMs = args.stale_days * MS_PER_DAY;
-      const stale = scoped.filter((m2) => {
-        const heat = m2["heat"] ?? 0;
-        const createdAt = m2["created_at"];
-        if (heat < STALE_HEAT_THRESHOLD)
-          return true;
-        if (createdAt && now - new Date(createdAt).getTime() > staleMs)
-          return true;
-        return false;
-      }).length;
-      const total = scoped.length;
-      const coverageScore = total === 0 ? 0 : Math.round((total - stale) / total * ROUNDING_FACTOR_2DP) / ROUNDING_FACTOR_2DP;
-      const gaps = [];
-      if (stale > 0)
-        gaps.push(`${stale} stale memories (heat < 0.1 or older than ${args.stale_days} days)`);
-      if (total === 0)
-        gaps.push("no memories found for this scope");
-      const recommendations = [];
-      if (coverageScore < COVERAGE_LOW_THRESHOLD)
-        recommendations.push("Run consolidate to decay + refresh stale memories.");
-      if (total === 0)
-        recommendations.push("Run codebase_analyze or backfill_memories to seed coverage.");
-      return { content: [{ type: "text", text: JSON.stringify({
-        coverage_score: coverageScore,
-        total_memories: total,
-        stale_count: stale,
-        gaps,
-        recommendations,
-        directory: args.directory,
-        domain: args.domain
-      }) }] };
-    } catch (err) {
-      return errorText7("assess_coverage", err);
-    }
-  });
-  server2.registerTool("query_workflow_graph", {
-    description: "Return a typed subgraph of the unified workflow graph.",
-    inputSchema: {
-      node_kind: external_exports.union([external_exports.string(), external_exports.array(external_exports.string())]).optional().describe("Node kind filter"),
-      edge_kind: external_exports.union([external_exports.string(), external_exports.array(external_exports.string())]).optional().describe("Edge kind filter"),
-      neighbour_of: external_exports.string().optional().describe("Node ID to find neighbours of"),
-      depth: external_exports.number().int().optional().describe("Traversal depth"),
-      domain: external_exports.string().optional().describe("Domain filter"),
-      limit_nodes: external_exports.number().int().optional().describe("Max nodes to return")
-    }
-  }, async (args) => {
-    try {
-      const emptyGraph = {
-        nodes: [],
-        edges: [],
-        links: [],
-        meta: { node_count: 0, edge_count: 0, built_at: (/* @__PURE__ */ new Date()).toISOString() }
-      };
-      const response = queryWorkflowGraph(emptyGraph, {
-        node_kind: args.node_kind,
-        edge_kind: args.edge_kind,
-        neighbour_of: args.neighbour_of,
-        depth: args.depth,
-        domain: args.domain,
-        limit_nodes: args.limit_nodes
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText7("query_workflow_graph", err);
-    }
-  });
-}
-
-// packages/mcp-servers/memory/dist/tools/wiki.js
-import { mkdirSync as mkdirSync3, writeFileSync as writeFileSync3, rmSync } from "node:fs";
-import { join as join8, resolve as resolve2, dirname as dirname2 } from "node:path";
-import { homedir as homedir5 } from "node:os";
-
-// packages/memory/dist/wiki/types.js
-var WikiExists = class extends Error {
-  constructor(path6) {
-    super(`wiki page already exists: ${path6}`);
-    this.name = "WikiExists";
-  }
-};
-var WikiMissing = class extends Error {
-  constructor(path6) {
-    super(`wiki page not found: ${path6}`);
-    this.name = "WikiMissing";
-  }
-};
-
-// packages/memory/dist/wiki/handlers/wiki-write.js
-async function handler4(args, deps) {
-  const relPath = (args.path ?? "").trim();
-  if (!relPath)
-    return { error: "path is required" };
-  const mode = args.mode ?? "create";
-  const content = args.content;
-  if (!content) {
-    return {
-      error: "content is required \u2014 render the page yourself (e.g. via wiki-adr for ADRs) and pass the final markdown."
-    };
-  }
-  try {
-    const result = await deps.writePage(deps.wikiRoot, relPath, content, mode);
-    const tags = [...args.tags ?? []];
-    if (deps.storePointerMemory) {
-      await deps.storePointerMemory(relPath, content, tags).catch(() => void 0);
-    }
-    return {
-      path: result.path,
-      mode: result.mode,
-      created: result.created,
-      bytes_written: result.bytes_written,
-      root: deps.wikiRoot
-    };
-  } catch (err) {
-    if (err instanceof WikiExists)
-      return { error: `page already exists: ${relPath}` };
-    if (err instanceof WikiMissing)
-      return { error: `page does not exist: ${relPath}` };
-    return { error: `write failed: ${String(err)}` };
-  }
-}
-
-// packages/memory/dist/wiki/handlers/wiki-read.js
-async function handler5(args, deps) {
-  const relPath = (args.path ?? "").trim();
-  if (!relPath)
-    return { error: "path is required" };
-  try {
-    const content = await deps.readPage(deps.wikiRoot, relPath);
-    if (content === null)
-      return { error: `page not found: ${relPath}` };
-    return { path: relPath, content, root: deps.wikiRoot };
-  } catch (err) {
-    return { error: `read failed: ${String(err)}` };
-  }
-}
-
-// packages/memory/dist/wiki/handlers/wiki-list.js
-init_layout();
-async function handler6(args, deps) {
-  const kind2 = args.kind ?? null;
-  if (kind2 && !PAGE_KINDS.includes(kind2)) {
-    return { error: `unknown kind: ${kind2}` };
-  }
-  try {
-    const pages = await deps.listPages(deps.wikiRoot, kind2);
-    return { root: deps.wikiRoot, count: pages.length, pages };
-  } catch (err) {
-    return { error: `list failed: ${String(err)}` };
-  }
-}
-var schema2 = {
-  title: "Wiki \u2014 list pages",
-  description: "Enumerate every authored wiki page under ~/.claude/methodology/wiki/, filesystem-walked from the wiki root. Optionally restrict by kind.",
-  inputSchema: {
-    type: "object",
-    required: [],
-    properties: {
-      kind: {
-        type: "string",
-        enum: [...PAGE_KINDS],
-        description: "Restrict the listing to a single page kind."
-      }
-    }
-  }
-};
-
-// packages/memory/dist/wiki/links.js
-var RELATIONS = {
-  supersedes: "superseded_by",
-  superseded_by: "supersedes",
-  implements: "implemented_by",
-  implemented_by: "implements",
-  depends_on: "depended_on_by",
-  depended_on_by: "depends_on",
-  derived_from: "derives",
-  derives: "derived_from",
-  see_also: "see_also"
-};
-var RELATED_HEADING = "## Related";
-function inverseOf(relation) {
-  const inv = RELATIONS[relation];
-  if (inv === void 0)
-    throw new Error(`unknown relation: ${relation}`);
-  return inv;
-}
-function formatEntry(entry) {
-  return `- ${entry.relation} \u2192 [${entry.target}](${entry.target})`;
-}
-function parseEntry(line) {
-  const stripped = line.trim();
-  if (!stripped.startsWith("- "))
-    return null;
-  const payload = stripped.slice(2);
-  if (!payload.includes(" \u2192 "))
-    return null;
-  const [relPart, rest] = payload.split(" \u2192 ", 2);
-  const rel = relPart.trim();
-  if (!RELATIONS[rel])
-    return null;
-  let target = rest.trim();
-  if (target.startsWith("[") && target.includes("](") && target.endsWith(")")) {
-    target = target.split("](", 2)[1].slice(0, -1);
-  }
-  return { relation: rel, target };
-}
-function splitBodyAndRelated(body) {
-  const lines = body.split("\n");
-  let headingIdx = null;
-  for (let idx2 = 0; idx2 < lines.length; idx2++) {
-    if (lines[idx2].trim() === RELATED_HEADING) {
-      headingIdx = idx2;
-      break;
-    }
-  }
-  if (headingIdx === null)
-    return [body, []];
-  let before = lines.slice(0, headingIdx);
-  const entries = [];
-  let idx = headingIdx + 1;
-  while (idx < lines.length) {
-    const line = lines[idx];
-    if (line.startsWith("## "))
-      break;
-    const parsed = parseEntry(line);
-    if (parsed !== null)
-      entries.push(parsed);
-    idx++;
-  }
-  const after = lines.slice(idx);
-  while (before.length > 0 && before[before.length - 1] === "") {
-    before = before.slice(0, -1);
-  }
-  let rebuilt = before.join("\n");
-  if (after.length > 0) {
-    rebuilt = (rebuilt ? rebuilt + "\n\n" : "") + after.join("\n");
-  }
-  return [rebuilt, entries];
-}
-function renderRelated(entries) {
-  if (!entries.length)
-    return "";
-  const sorted = [...entries].sort((a2, b2) => {
-    const rc = a2.relation.localeCompare(b2.relation);
-    return rc !== 0 ? rc : a2.target.localeCompare(b2.target);
-  });
-  const lines = [RELATED_HEADING, "", ...sorted.map(formatEntry)];
-  return lines.join("\n") + "\n";
-}
-function applyLink(body, entry) {
-  if (!RELATIONS[entry.relation]) {
-    throw new Error(`unknown relation: ${entry.relation}`);
-  }
-  const [base, existing] = splitBodyAndRelated(body);
-  const merged = [...existing];
-  const alreadyPresent = merged.some((e2) => e2.relation === entry.relation && e2.target === entry.target);
-  if (!alreadyPresent)
-    merged.push(entry);
-  const rendered = renderRelated(merged);
-  if (!base)
-    return rendered;
-  const separator = base.endsWith("\n") ? "" : "\n";
-  return `${base}${separator}
-${rendered}`;
-}
-
-// packages/memory/dist/wiki/handlers/wiki-link.js
-async function updatePage(relPath, entry, deps) {
-  const current = await deps.readPage(deps.wikiRoot, relPath);
-  if (current === null)
-    throw new WikiMissing(relPath);
-  const updated = applyLink(current, entry);
-  await deps.writePage(deps.wikiRoot, relPath, updated, "replace");
-}
-async function handler7(args, deps) {
-  const fromPath = (args.from_path ?? "").trim();
-  const toPath = (args.to_path ?? "").trim();
-  const relation = (args.relation ?? "").trim();
-  if (!fromPath || !toPath || !relation) {
-    return { error: "from_path, to_path, and relation are required" };
-  }
-  if (!RELATIONS[relation]) {
-    return { error: `unknown relation: ${relation}` };
-  }
-  try {
-    await updatePage(fromPath, { relation, target: toPath }, deps);
-    await updatePage(toPath, { relation: inverseOf(relation), target: fromPath }, deps);
-  } catch (err) {
-    if (err instanceof WikiMissing)
-      return { error: `page not found: ${String(err.message)}` };
-    return { error: `link failed: ${String(err)}` };
-  }
-  return { from_path: fromPath, to_path: toPath, relation, inverse: inverseOf(relation) };
-}
-var schema3 = {
-  title: "Wiki \u2014 link pages",
-  description: "Add a bidirectional link between two wiki pages: write the forward relation into the ## Related section of the source page and the inverse relation into the target page, in one idempotent operation.",
-  inputSchema: {
-    type: "object",
-    required: ["from_path", "to_path", "relation"],
-    properties: {
-      from_path: { type: "string" },
-      to_path: { type: "string" },
-      relation: { type: "string", enum: Object.keys(RELATIONS) }
-    }
-  }
-};
-
-// packages/memory/dist/wiki/handlers/wiki-adr.js
-init_layout();
-init_pages();
-async function handler8(args, deps) {
-  const title = (args.title ?? "").trim();
-  const context = (args.context ?? "").trim();
-  const decision = (args.decision ?? "").trim();
-  const consequences = (args.consequences ?? "").trim();
-  const status = args.status ?? "accepted";
-  const tags = [...args.tags ?? []];
-  if (!title || !context || !decision || !consequences) {
-    return { error: "title, context, decision and consequences are required" };
-  }
-  if (!ADR_STATUSES.includes(status)) {
-    return { error: `unknown status: ${status}` };
-  }
-  let number3;
-  try {
-    number3 = await deps.nextAdrNumber(deps.wikiRoot);
-  } catch (err) {
-    return { error: `cannot determine next ADR number: ${String(err)}` };
-  }
-  const slug = slugify(title);
-  const filename = adrFilename(number3, slug);
-  const relPath = pagePath("adr", filename);
-  const content = buildAdr({ number: number3, title, context, decision, consequences, status, tags });
-  try {
-    const result = await deps.writePage(deps.wikiRoot, relPath, content, "create");
-    if (deps.storePointerMemory) {
-      await deps.storePointerMemory(relPath, content, ["wiki", "adr", ...tags]).catch(() => void 0);
-    }
-    return {
-      path: result.path,
-      number: number3,
-      title,
-      status,
-      created: result.created,
-      bytes_written: result.bytes_written,
-      root: deps.wikiRoot
-    };
-  } catch (err) {
-    if (err instanceof WikiExists)
-      return { error: `ADR already exists: ${relPath}` };
-    return { error: `write failed: ${String(err)}` };
-  }
-}
-var schema4 = {
-  description: "Create a numbered ADR (Architecture Decision Record) from structured Context/Decision/Consequences fields. Atomically computes the next free ADR number, renders the standard template, writes wiki/adr/<NNNN>-<slug>.md, and registers a protected pointer memory tagged `wiki`+`adr`.",
-  inputSchema: {
-    type: "object",
-    required: ["title", "context", "decision", "consequences"],
-    properties: {
-      title: { type: "string", description: "Short imperative title of the decision." },
-      context: { type: "string", description: "The forces at play. Markdown allowed." },
-      decision: { type: "string", description: "What was decided, in active voice." },
-      consequences: { type: "string", description: "Resulting consequences." },
-      status: { type: "string", enum: [...ADR_STATUSES], default: "accepted" },
-      tags: { type: "array", items: { type: "string" } }
-    }
-  }
-};
-
-// packages/memory/dist/wiki/handlers/wiki-reindex.js
-init_layout();
-var BANNER = "<!-- Generated by Cortex wiki-reindex \u2014 the authored pages are the source of truth. -->";
-function renderIndex(grouped) {
-  const lines = [BANNER, "", "# Wiki Index", ""];
-  const total = Object.values(grouped).reduce((s2, ps) => s2 + ps.length, 0);
-  lines.push(`**${total} authored pages across ${PAGE_KINDS.length} kinds.**`);
-  lines.push("");
-  for (const kind2 of PAGE_KINDS) {
-    const pages = grouped[kind2] ?? [];
-    lines.push(`## ${kind2} (${pages.length})`);
-    lines.push("");
-    if (!pages.length) {
-      lines.push("_No pages yet._");
-      lines.push("");
-      continue;
-    }
-    for (const rel of pages) {
-      const name = rel.split("/").pop() ?? rel;
-      lines.push(`- [${name}](../${rel})`);
-    }
-    lines.push("");
-  }
-  return lines.join("\n");
-}
-async function handler9(_args, deps) {
-  const grouped = {};
-  for (const kind2 of PAGE_KINDS) {
-    try {
-      grouped[kind2] = await deps.listPages(deps.wikiRoot, kind2);
-    } catch {
-      grouped[kind2] = [];
-    }
-  }
-  const content = renderIndex(grouped);
-  const target = deps.joinPath(deps.wikiRoot, indexPath());
-  const dir = target.split("/").slice(0, -1).join("/");
-  try {
-    await deps.ensureDir(dir);
-    await deps.writeFile(target, content);
-  } catch (err) {
-    return { error: `reindex failed: ${String(err)}` };
-  }
-  return {
-    path: indexPath(),
-    total_pages: Object.values(grouped).reduce((s2, ps) => s2 + ps.length, 0),
-    by_kind: Object.fromEntries(Object.entries(grouped).map(([k2, v2]) => [k2, v2.length])),
-    root: deps.wikiRoot
-  };
-}
-
-// packages/memory/dist/wiki/rule-engine.js
-var REJECT_TARGETS = /* @__PURE__ */ new Set(["reject", "-", "", null, "none", void 0]);
-function matches(rule, content, tags) {
-  const pattern = rule.pattern ?? "";
-  const kind2 = (rule.pattern_kind ?? "").toLowerCase();
-  if (!pattern)
-    return false;
-  if (kind2 === "prefix") {
-    return content.trimStart().toLowerCase().startsWith(pattern.toLowerCase());
-  }
-  if (kind2 === "substring") {
-    return content.toLowerCase().includes(pattern.toLowerCase());
-  }
-  if (kind2 === "regex") {
-    try {
-      return new RegExp(pattern, "i").test(content);
-    } catch {
-      return false;
-    }
-  }
-  if (kind2 === "tag") {
-    return tags.has(pattern.toLowerCase());
-  }
-  return false;
-}
-function applyRules2(content, tags, rules) {
-  if (!content || !rules.length) {
-    return {
-      matched_rule: null,
-      target_kind: null,
-      rationale: "no content or no rules loaded"
-    };
-  }
-  const tagSet = new Set((tags ?? []).filter((t2) => typeof t2 === "string").map((t2) => t2.toLowerCase()));
-  const candidates = [];
-  for (let idx = 0; idx < rules.length; idx++) {
-    const rule = rules[idx];
-    if (!rule)
-      continue;
-    if (matches(rule, content, tagSet)) {
-      candidates.push([idx, -(rule.weight ?? 1), rule]);
-    }
-  }
-  if (!candidates.length) {
-    return { matched_rule: null, target_kind: null, rationale: "no rule matched" };
-  }
-  candidates.sort((a2, b2) => a2[0] !== b2[0] ? a2[0] - b2[0] : a2[1] - b2[1]);
-  const best = candidates[0][2];
-  const targetNorm = REJECT_TARGETS.has(best.target_kind ?? null) ? null : best.target_kind ?? null;
-  return {
-    matched_rule: best,
-    target_kind: targetNorm,
-    rationale: `rule [${best.pattern_kind}] ${JSON.stringify(best.pattern)} \u2192 ${best.target_kind ?? "reject"}`
-  };
-}
-
-// packages/memory/dist/wiki/page-classifier.js
-var REJECT_PREFIXES = [
-  "# Tool:",
-  "Tool:",
-  "tool:",
-  "# tool:",
-  "System:",
-  "system:",
-  "<tool_result>",
-  "<result>",
-  "<command-message>",
-  "<command-name>",
-  "# <command-message>",
-  "# <command-name>"
-];
-var REJECT_TITLES = /* @__PURE__ */ new Set([
-  "tool-edit",
-  "tool-bash",
-  "tool-read",
-  "tool-write",
-  "tool-grep",
-  "tool-glob",
-  "tool-search"
-]);
-var REJECT_PATTERNS = [
-  /^#*\s*Implement the following plan/i,
-  /^#*\s*Execute the following/i,
-  /^#*\s*You must respond with only/i,
-  /^#*\s*Perform all verification/i,
-  /^#*\s*Take the code and split/i,
-  /^\s*\{[\s\S]*\}\s*$/,
-  /^\s*\[[\s\S]*\]\s*$/,
-  /<command-(message|name|args)>/i,
-  /^#*\s*Spell:\s*\w+/i,
-  /^#*\s*Shape test content/i
-];
-var ADR_PATTERNS = [
-  /\b(decided to|decision:|the decision is|chose .+ because|rejected .+ (due to|because)|we will use|selected .+ over)\b/i
-];
-var LESSON_PATTERNS = [
-  /\b(the bug was|root cause|lesson learned|mistake was|never again|fix:|fixed by|the issue was|the problem was|turned out)\b/i
-];
-var CONVENTION_PATTERNS = [
-  /\b(always use|never |the canonical|convention:|rule:|standard:|must follow|naming convention|coding standard)\b/i
-];
-var SPEC_TAGS = /* @__PURE__ */ new Set(["spec", "design", "specification", "feature"]);
-var IMPERATIVE_TITLE_PATTERNS = [
-  /^\s*#*\s*(let'?s|lets)\b/i,
-  /^\s*#*\s*(use|fetch|take|give|look at|verify|audit|check|make|do|run|push|remove|rename|adapt|implement|execute|perform|replace|add|delete|update|modify|fix|install|setup|configure|create|build|write|test|sync|import|export|move|copy|ensure|try|go|start|stop|open|close|clean|restart|refactor|migrate|enable|disable|apply|reset|rebuild|regenerate|analyze)\b/i,
-  /^\s*#*\s*you (must|should|need|will|can)\b/i,
-  /^\s*#*\s*(how|what|why|when|where|can|should|is|does)\b[^.]*\?\s*$/
-];
-var FIRST_PERSON_PATTERNS = [
-  /^\s*#*\s*(we|i)\s+(pushed|pulled|did|have|did|tried|ran|found|saw|noticed|got|made|created|added|removed|fixed|broke|updated|changed|deleted|merged|re?-?started|tested|benchmarked|think|need|want|should|re)/i
-];
-var STATUS_PATTERNS = [
-  /^\s*#*\s*(successfully|done|failing|failed|broken|working|not working|finished|completed|in progress|wip|todo|pending)\b/i,
-  /local[-_]command[-_](stdout|stderr|stdin|output)/i,
-  /session[-_]test[-_]session/i,
-  /in domain unknown/i
-];
-var DEIXIS_PATTERNS = [
-  /^\s*#*\s*(just now|just did|previous|earlier|last session|new wip|the one we|like (we|i) (said|did)|yesterday|today|tomorrow|a while ago|recent(ly)?)\b/i
-];
-var PATH_OR_URL_TITLE_PATTERNS = [
-  /^\s*#*\s*[/~]/,
-  /^\s*#*\s*[A-Za-z]:[\\/]/,
-  /^\s*#*\s*(https?|ftp|file|ssh|git):\/\//i,
-  /^\s*#*\s*[\w.-]+\.(pdf|png|jpg|jpeg|svg|gif|zip|tar\.gz|docx?|xlsx?|csv|log|yaml|yml)\b/i
-];
-var AUDIT_TAGS = /* @__PURE__ */ new Set([
-  "_backfill",
-  "imported",
-  "session-summary",
-  "tool-output",
-  "code-review",
-  "stage-1",
-  "stage-2",
-  "stage-3",
-  "stage-4",
-  "stage-5",
-  "stage-6",
-  "stage-7",
-  "stage-8",
-  "stage-9",
-  "stage-10",
-  "stage-11",
-  "audit",
-  "automated",
-  "wip",
-  "progress"
-]);
-var AUDIT_TITLE_PATTERNS = [
-  /\bstage[ -]?\d+\b/i,
-  /\b(code[ -]?review|audit[ -]?report|review[ -]?notes?)\b/i,
-  /\bsession[ -]?(summary|log|report|\d+)\b/i
-];
-function failsHardNegatives(content, firstLine) {
-  for (const pat of IMPERATIVE_TITLE_PATTERNS) {
-    if (pat.test(firstLine))
-      return true;
-  }
-  for (const pat of FIRST_PERSON_PATTERNS) {
-    if (pat.test(firstLine))
-      return true;
-  }
-  const first500 = content.slice(0, 500);
-  for (const pat of STATUS_PATTERNS) {
-    if (pat.test(firstLine))
-      return true;
-    if (pat.test(first500))
-      return true;
-  }
-  for (const pat of DEIXIS_PATTERNS) {
-    if (pat.test(firstLine))
-      return true;
-  }
-  for (const pat of PATH_OR_URL_TITLE_PATTERNS) {
-    if (pat.test(firstLine))
-      return true;
-  }
-  for (const pat of AUDIT_TITLE_PATTERNS) {
-    if (pat.test(firstLine))
-      return true;
-  }
-  return false;
-}
-function failsAuditTagGate(tags) {
-  for (const tag of tags) {
-    if (AUDIT_TAGS.has(tag))
-      return true;
-  }
-  return false;
-}
-var STRUCTURE_HEADING = /^#{1,4}\s+\S/m;
-var STRUCTURE_LIST = /^\s*[-*+]\s+\S/m;
-var STRUCTURE_CODE = /```\w*\n/m;
-var CITATION = /\b(ADR-?\d+|paper|arxiv|doi:|https?:\/\/|\b[A-Z][a-z]+ (et al\.|&) \d{4}|\b[A-Z][a-z]+ \d{4}\b)/;
-var DECLARATIVE = /\b(is|are|means|causes?|because|implies|requires?|enables?|prevents?|produces?|results? in|leads? to|defined? as|consists of)\b/ig;
-var FILE_OR_ENTITY_REF = /\b[a-zA-Z_]\w*\.(py|js|ts|md|json|yaml|sql|go|rs|rb|java)\b|\b[a-z_]+\(\)|\bclass\s+[A-Z]\w+|\bdef\s+[a-z_]\w+/;
-var KNOWLEDGE_TAGS = /* @__PURE__ */ new Set([
-  "decision",
-  "adr",
-  "architecture",
-  "spec",
-  "design",
-  "lesson",
-  "convention",
-  "rule",
-  "standard",
-  "paper",
-  "research",
-  "reference"
-]);
-var POSITIVE_SCORE_THRESHOLD = 4;
-function positiveScore(content, tags) {
-  let score = 0;
-  const length = content.length;
-  const struct = (STRUCTURE_HEADING.test(content) ? 1 : 0) + (STRUCTURE_LIST.test(content) ? 1 : 0) + (STRUCTURE_CODE.test(content) ? 1 : 0);
-  if (struct >= 1)
-    score++;
-  const declarativeMatches = content.match(DECLARATIVE) ?? [];
-  if (declarativeMatches.length >= 2)
-    score++;
-  if (CITATION.test(content))
-    score++;
-  if (length >= 200)
-    score++;
-  for (const tag of tags) {
-    if (KNOWLEDGE_TAGS.has(tag)) {
-      score++;
-      break;
-    }
-  }
-  if (length >= 200 && length <= 3e3)
-    score++;
-  const techTokens = new Set(content.match(/\b(?:[A-Z][a-z]+[A-Z]\w*|[a-z]+_[a-z_]+)\b/g) ?? []);
-  if (techTokens.size >= 3)
-    score++;
-  if (FILE_OR_ENTITY_REF.test(content))
-    score++;
-  return score;
-}
-var userRulesCache = null;
-function loadUserRules(wikiRoot) {
-  if (userRulesCache !== null)
-    return userRulesCache;
-  if (!wikiRoot) {
-    userRulesCache = [];
-    return userRulesCache;
-  }
-  try {
-    const { loadRegistry: loadRegistry2 } = (init_schema_loader(), __toCommonJS(schema_loader_exports));
-    const registry2 = loadRegistry2(wikiRoot);
-    userRulesCache = registry2.rules;
-  } catch {
-    userRulesCache = [];
-  }
-  return userRulesCache;
-}
-function classifyMemory(content, tags, wikiRoot) {
-  if (!content || content.trim().length < 50)
-    return null;
-  const stripped = content.trim();
-  const firstLine = stripped.split("\n")[0]?.trim() ?? "";
-  const tagSetPre = new Set((tags ?? []).map((t2) => t2.toLowerCase()));
-  if (failsAuditTagGate(tagSetPre))
-    return null;
-  const rules = loadUserRules(wikiRoot);
-  if (rules.length > 0) {
-    const match2 = applyRules2(content, tags ?? null, rules);
-    if (match2.matched_rule !== null) {
-      return match2.target_kind;
-    }
-  }
-  for (const prefix of REJECT_PREFIXES) {
-    if (stripped.startsWith(prefix))
-      return null;
-  }
-  for (const pattern of REJECT_PATTERNS) {
-    if (pattern.test(stripped))
-      return null;
-  }
-  if (REJECT_TITLES.has(slugify2(firstLine)))
-    return null;
-  if (failsHardNegatives(content, firstLine))
-    return null;
-  const EXPLICIT_KNOWLEDGE_TAGS = /* @__PURE__ */ new Set([
-    "decision",
-    "adr",
-    "architecture",
-    "spec",
-    "design",
-    "lesson",
-    "convention",
-    "rule",
-    "standard",
-    "paper",
-    "research"
-  ]);
-  let hasExplicitTag = false;
-  for (const tag of tagSetPre) {
-    if (EXPLICIT_KNOWLEDGE_TAGS.has(tag)) {
-      hasExplicitTag = true;
-      break;
-    }
-  }
-  if (!hasExplicitTag) {
-    if (positiveScore(content, tagSetPre) < POSITIVE_SCORE_THRESHOLD)
-      return null;
-  }
-  for (const pat of ADR_PATTERNS) {
-    if (pat.test(content))
-      return "adr";
-  }
-  if (tagSetPre.has("decision") || tagSetPre.has("adr"))
-    return "adr";
-  for (const pat of LESSON_PATTERNS) {
-    if (pat.test(content))
-      return "lesson";
-  }
-  if (tagSetPre.has("lesson") || tagSetPre.has("debugging") || tagSetPre.has("fix") || tagSetPre.has("bug-fix")) {
-    return "lesson";
-  }
-  for (const pat of CONVENTION_PATTERNS) {
-    if (pat.test(content))
-      return "convention";
-  }
-  if (tagSetPre.has("convention") || tagSetPre.has("rule") || tagSetPre.has("standard")) {
-    return "convention";
-  }
-  if (hasTagIn(tagSetPre, SPEC_TAGS) && content.length > 200)
-    return "spec";
-  if ((tagSetPre.has("architecture") || tagSetPre.has("design")) && content.length > 200)
-    return "spec";
-  return "note";
-}
-function hasTagIn(tagSet, candidates) {
-  for (const tag of tagSet) {
-    if (candidates.has(tag))
-      return true;
-  }
-  return false;
-}
-function slugify2(text) {
-  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
-}
-
-// packages/memory/dist/wiki/handlers/wiki-purge.js
-init_pages();
-var PAGE_DIRS = /* @__PURE__ */ new Set(["adr", "conventions", "guides", "journal", "lessons", "notes", "reference", "specs"]);
-function parseTags2(raw) {
-  if (Array.isArray(raw))
-    return raw.map(String);
-  if (typeof raw !== "string")
-    return [];
-  const stripped = raw.trim().replace(/^\[|\]$/g, "");
-  return stripped.split(",").map((t2) => t2.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean);
-}
-function evaluatePage(content) {
-  const doc = parsePage(content);
-  const tags = parseTags2(doc.frontmatter["tags"]);
-  let body = doc.body;
-  const lines = body.trim().split("\n");
-  const bodyLines = lines[0]?.startsWith("# ") ? lines.slice(1) : lines;
-  const bodyText = bodyLines.join("\n").trim() || String(doc.frontmatter["title"] ?? "");
-  return [classifyMemory(bodyText, tags), tags];
-}
-async function handler10(args, deps) {
-  const apply = args.apply ?? false;
-  const kindFilter = args.kind ?? null;
-  if (!deps.wikiRoot)
-    return { error: "wiki root not configured" };
-  let entries;
-  try {
-    entries = await deps.listAllMarkdownFiles(deps.wikiRoot, kindFilter);
-  } catch (err) {
-    return { error: `wiki root does not exist or cannot be listed: ${String(err)}` };
-  }
-  const kept = [];
-  const purged = [];
-  const errors = [];
-  for (const { relPath, content } of entries) {
-    const firstSegment = relPath.split("/")[0] ?? "";
-    if (!PAGE_DIRS.has(firstSegment))
-      continue;
-    try {
-      const [decision] = evaluatePage(content);
-      if (decision === null) {
-        purged.push(relPath);
-        if (apply) {
-          await deps.deleteFile(`${deps.wikiRoot}/${relPath}`).catch((err) => {
-            errors.push(`${relPath}: ${String(err)}`);
-          });
-        }
-      } else {
-        kept.push(relPath);
-      }
-    } catch (err) {
-      errors.push(`${relPath}: ${String(err)}`);
-    }
-  }
-  if (apply && purged.length && deps.removeEmptyDirs) {
-    await deps.removeEmptyDirs(deps.wikiRoot).catch(() => void 0);
-  }
-  return {
-    applied: apply,
-    scanned: kept.length + purged.length,
-    kept: kept.length,
-    purged: purged.length,
-    purged_paths: purged,
-    errors,
-    root: deps.wikiRoot
-  };
-}
-var schema5 = {
-  title: "Wiki \u2014 purge stale",
-  description: "Re-evaluate every authored wiki page against the current classifier and delete the ones that no longer pass the admission gate. Defaults to dry-run; pass apply=true to actually delete.",
-  inputSchema: {
-    type: "object",
-    required: [],
-    properties: {
-      apply: { type: "boolean", default: false },
-      kind: { type: "string", enum: [...PAGE_DIRS] }
-    }
-  }
-};
-
-// packages/memory/dist/wiki/symbol-extract.js
-var IDENT = String.raw`[A-Za-z_][A-Za-z_0-9]{1,}`;
-var BACKTICK_CALL = /`([A-Za-z_][\w.]*(?:\(\)|\([^`]{0,60}\)))`/g;
-var DOTTED_RE = new RegExp(String.raw`\b(${IDENT}(?:\.${IDENT}){1,})\b`, "g");
-var FILE_SUFFIXES = /* @__PURE__ */ new Set([
-  "py",
-  "js",
-  "ts",
-  "tsx",
-  "jsx",
-  "md",
-  "json",
-  "yaml",
-  "yml",
-  "toml",
-  "sql",
-  "go",
-  "rs",
-  "rb",
-  "java",
-  "cpp",
-  "c",
-  "h",
-  "hpp",
-  "sh",
-  "txt",
-  "csv",
-  "ini",
-  "cfg",
-  "lock",
-  "log"
-]);
-function stripCallArgs(s2) {
-  const idx = s2.indexOf("(");
-  return idx >= 0 ? s2.slice(0, idx) : s2;
-}
-function looksLikeFile(qname) {
-  const tail = qname.split(".").pop()?.toLowerCase() ?? "";
-  return FILE_SUFFIXES.has(tail);
-}
-function extractSymbolRefs(text) {
-  if (!text)
-    return [];
-  const seen = /* @__PURE__ */ new Set();
-  const out = [];
-  const backtickRe = new RegExp(BACKTICK_CALL.source, "g");
-  let m2;
-  while ((m2 = backtickRe.exec(text)) !== null) {
-    const q2 = stripCallArgs(m2[1]);
-    if (q2.includes(".")) {
-      if (looksLikeFile(q2))
-        continue;
-    }
-    if (seen.has(q2))
-      continue;
-    seen.add(q2);
-    out.push(q2);
-  }
-  const dottedRe = new RegExp(DOTTED_RE.source, "g");
-  while ((m2 = dottedRe.exec(text)) !== null) {
-    const q2 = m2[1];
-    if (looksLikeFile(q2))
-      continue;
-    if (seen.has(q2))
-      continue;
-    seen.add(q2);
-    out.push(q2);
-  }
-  return out;
-}
-function harvestPageSymbols(page, claimEvidenceSymbols) {
-  const refs = [];
-  const seen = /* @__PURE__ */ new Set();
-  for (const q2 of claimEvidenceSymbols ?? []) {
-    if (q2 && !seen.has(q2)) {
-      seen.add(q2);
-      refs.push(q2);
-    }
-  }
-  function add3(chunk) {
-    for (const q2 of extractSymbolRefs(chunk)) {
-      if (!seen.has(q2)) {
-        seen.add(q2);
-        refs.push(q2);
-      }
-    }
-  }
-  add3(page.lead ?? "");
-  const sections = page.sections;
-  if (sections) {
-    if (Array.isArray(sections)) {
-      for (const s2 of sections)
-        add3(s2.body);
-    } else {
-      for (const body of Object.values(sections))
-        add3(String(body));
-    }
-  }
-  return refs;
-}
-
-// packages/memory/dist/wiki/symbol-verify.js
-var MIN_SYMBOL_REFS = 3;
-var SYMBOL_STALE_THRESHOLD = 0.5;
-function evaluateSymbolStaleness(args) {
-  const { page_id, is_symbol_stale_was, symbol_refs, existence } = args;
-  if (symbol_refs.length < MIN_SYMBOL_REFS) {
-    return {
-      page_id,
-      symbol_refs,
-      missing_refs: [],
-      is_symbol_stale_now: false,
-      is_symbol_stale_was,
-      transitioned: is_symbol_stale_was,
-      rationale: `too few symbol refs (${symbol_refs.length} < ${MIN_SYMBOL_REFS})`
-    };
-  }
-  const missing = symbol_refs.filter((q2) => !existence[q2]);
-  const fraction = missing.length / symbol_refs.length;
-  const isNow = fraction >= SYMBOL_STALE_THRESHOLD;
-  return {
-    page_id,
-    symbol_refs,
-    missing_refs: missing,
-    is_symbol_stale_now: isNow,
-    is_symbol_stale_was,
-    transitioned: isNow !== is_symbol_stale_was,
-    rationale: `${missing.length}/${symbol_refs.length} symbols missing (${Math.round(fraction * 100)}% \u2014 threshold ${Math.round(SYMBOL_STALE_THRESHOLD * 100)}%)`
-  };
-}
-
-// packages/memory/dist/wiki/handlers/wiki-verify.js
-function parseLeadAndSections(md) {
-  const lines = md.split("\n");
-  const leadLines = [];
-  const sections = {};
-  let current = null;
-  const buf = [];
-  for (const line of lines) {
-    if (line.startsWith("## ")) {
-      if (current !== null) {
-        sections[current] = buf.join("\n").trim();
-      } else {
-        leadLines.push(...buf);
-      }
-      current = line.slice(3).trim();
-      buf.length = 0;
-    } else {
-      buf.push(line);
-    }
-  }
-  if (current !== null) {
-    sections[current] = buf.join("\n").trim();
-  } else {
-    leadLines.push(...buf);
-  }
-  return { lead: leadLines.join("\n").trim(), sections };
-}
-async function verifyOne(path6, deps) {
-  const content = await deps.readPage(deps.wikiRoot, path6);
-  if (content === null) {
-    return { page: path6, symbol_refs: [], missing_refs: [], is_symbol_stale: false, rationale: "page not found", error: "page not found" };
-  }
-  const pageStruct = parseLeadAndSections(content);
-  const symbolRefs = harvestPageSymbols(pageStruct).slice(0, 200);
-  const existence = symbolRefs.length > 0 ? await deps.verifySymbols(symbolRefs) : {};
-  const verdict = evaluateSymbolStaleness({
-    page_id: path6,
-    is_symbol_stale_was: false,
-    symbol_refs: symbolRefs,
-    existence
-  });
-  return {
-    page: path6,
-    symbol_refs: verdict.symbol_refs,
-    missing_refs: verdict.missing_refs,
-    is_symbol_stale: verdict.is_symbol_stale_now,
-    rationale: verdict.rationale
-  };
-}
-async function handler11(args, deps) {
-  if (!deps.isApEnabled()) {
-    return {
-      status: "skipped",
-      reason: "ap_disabled",
-      detail: "AP is disabled. Set CORTEX_MEMORY_AP_ENABLED=1 in your MCP config (default) and install automatised-pipeline to run symbol verification."
-    };
-  }
-  const target = (args.path ?? "").trim();
-  if (target) {
-    const result = await verifyOne(target, deps);
-    return {
-      status: "ok",
-      results: [result],
-      threshold: SYMBOL_STALE_THRESHOLD,
-      min_refs: MIN_SYMBOL_REFS
-    };
-  }
-  const pages = await deps.listPages(deps.wikiRoot);
-  const results = await Promise.all(pages.map((p2) => verifyOne(p2, deps)));
-  const stale = results.filter((r2) => r2.is_symbol_stale);
-  return {
-    status: "ok",
-    results,
-    summary: {
-      total: results.length,
-      stale: stale.length,
-      threshold: SYMBOL_STALE_THRESHOLD,
-      min_refs: MIN_SYMBOL_REFS
-    }
-  };
-}
-
-// packages/memory/dist/wiki/storage/wiki-store.js
-init_layout();
-import * as fs4 from "node:fs";
-import * as path4 from "node:path";
-function safeJoin(root, relPath) {
-  if (!relPath || relPath.includes("\0")) {
-    throw new Error("invalid wiki path: empty or contains null byte");
-  }
-  if (path4.isAbsolute(relPath)) {
-    throw new Error(`absolute paths are not allowed: ${JSON.stringify(relPath)}`);
-  }
-  const rootResolved = fs4.realpathSync(root);
-  let candidate;
-  try {
-    candidate = fs4.realpathSync(path4.join(rootResolved, relPath));
-  } catch {
-    candidate = path4.resolve(rootResolved, relPath);
-  }
-  const rel = path4.relative(rootResolved, candidate);
-  if (rel.startsWith("..") || path4.isAbsolute(rel)) {
-    throw new Error(`path escapes wiki root: ${JSON.stringify(relPath)}`);
-  }
-  return candidate;
-}
-function readPage(root, relPath) {
-  if (!relPath || relPath.includes("\0") || path4.isAbsolute(relPath)) {
-    return null;
-  }
-  let fullPath;
-  try {
-    fullPath = safeJoin(root, relPath);
-  } catch {
-    return null;
-  }
-  if (!fs4.existsSync(fullPath))
-    return null;
-  return fs4.readFileSync(fullPath, "utf-8");
-}
-function atomicWriteString(safePath, content) {
-  const dir = path4.dirname(safePath);
-  if (dir && !fs4.existsSync(dir)) {
-    fs4.mkdirSync(dir, { recursive: true });
-  }
-  const tmp = safePath + ".tmp";
-  const data = Buffer.from(content, "utf-8");
-  fs4.writeFileSync(tmp, data);
-  fs4.renameSync(tmp, safePath);
-  return data.byteLength;
-}
-function writePage(root, relPath, content, mode = "create") {
-  const safePath = safeJoin(root, relPath);
-  const existed = fs4.existsSync(safePath);
-  let written;
-  if (mode === "create") {
-    if (existed)
-      throw new WikiExists(relPath);
-    written = atomicWriteString(safePath, content);
-  } else if (mode === "replace") {
-    written = atomicWriteString(safePath, content);
-  } else if (mode === "append") {
-    if (!existed)
-      throw new WikiMissing(relPath);
-    let current = fs4.readFileSync(safePath, "utf-8");
-    if (current && !current.endsWith("\n"))
-      current += "\n";
-    let merged = current + "\n" + content;
-    if (!merged.endsWith("\n"))
-      merged += "\n";
-    written = atomicWriteString(safePath, merged);
-  } else {
-    throw new Error(`unknown write mode: ${mode}`);
-  }
-  return { path: relPath, mode, created: !existed, bytes_written: written };
-}
-function listPages(root, kind2) {
-  if (!fs4.existsSync(root))
-    return [];
-  const kinds = kind2 ? [kind2] : [...PAGE_KINDS];
-  const results = [];
-  for (const k2 of kinds) {
-    if (!PAGE_KINDS.includes(k2))
-      continue;
-    const kindDir = path4.join(root, k2);
-    if (!fs4.existsSync(kindDir))
-      continue;
-    walkMd(kindDir, root, results);
-  }
-  return results.sort();
-}
-function walkMd(dir, root, out) {
-  let entries;
-  try {
-    entries = fs4.readdirSync(dir, { withFileTypes: true });
-  } catch {
-    return;
-  }
-  for (const entry of entries) {
-    const full = path4.join(dir, entry.name);
-    if (entry.isDirectory()) {
-      walkMd(full, root, out);
-    } else if (entry.isFile() && entry.name.endsWith(".md")) {
-      out.push(path4.relative(root, full).replace(/\\/g, "/"));
-    }
-  }
-}
-function nextAdrNumber(root) {
-  const pages = listPages(root, "adr");
-  let maxSeen = 0;
-  for (const rel of pages) {
-    const name = rel.split("/").pop() ?? "";
-    const head = name.split("-")[0] ?? "";
-    const num = parseInt(head, 10);
-    if (!isNaN(num) && num > maxSeen)
-      maxSeen = num;
-  }
-  return maxSeen + 1;
-}
-
-// packages/mcp-servers/memory/dist/tools/wiki.js
-var WIKI_ROOT = process.env["CORTEX_WIKI_ROOT"] ?? join8(homedir5(), ".claude", "methodology", "wiki");
-async function asyncReadPage(root, relPath) {
-  return Promise.resolve(readPage(root, relPath));
-}
-async function asyncWritePage(root, relPath, content, mode) {
-  return Promise.resolve(writePage(root, relPath, content, mode));
-}
-async function asyncListPages(root, kind2) {
-  return Promise.resolve(listPages(root, kind2));
-}
-async function asyncNextAdrNumber(root) {
-  return Promise.resolve(nextAdrNumber(root));
-}
-async function asyncWriteFile(absPath, content) {
-  const dir = dirname2(resolve2(absPath));
-  mkdirSync3(dir, { recursive: true });
-  writeFileSync3(absPath, content, "utf-8");
-}
-async function asyncEnsureDir(absDir) {
-  mkdirSync3(absDir, { recursive: true });
-}
-async function asyncListAllMarkdownFiles(root, kindFilter) {
-  const paths = await asyncListPages(root, kindFilter);
-  const entries = [];
-  for (const relPath of paths) {
-    const content = await asyncReadPage(root, relPath);
-    if (content !== null)
-      entries.push({ relPath, content });
-  }
-  return entries;
-}
-async function asyncDeleteFile(absPath) {
-  try {
-    rmSync(absPath);
-  } catch {
-  }
-}
-var AP_ENABLED = false;
-function errorText8(tool, err) {
-  const message = err instanceof Error ? err.message : String(err);
-  return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
-}
-function registerWikiTools(server2) {
-  server2.registerTool("wiki_write", {
-    description: "Author a wiki page (create/append/replace) with provided Markdown.",
-    inputSchema: {
-      path: external_exports.string().min(1).describe("Wiki page path (relative)"),
-      content: external_exports.string().min(1).describe("Markdown content"),
-      mode: external_exports.enum(["create", "append", "replace"]).default("create").describe("Write mode"),
-      tags: external_exports.array(external_exports.string()).default([]).describe("Page tags")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler4({ path: args.path, content: args.content, mode: args.mode, tags: args.tags }, { wikiRoot: WIKI_ROOT, writePage: asyncWritePage });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_write", err);
-    }
-  });
-  server2.registerTool("wiki_read", {
-    description: "Read the raw Markdown of a wiki page by relative path.",
-    inputSchema: {
-      path: external_exports.string().min(1).describe("Wiki page path")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler5({ path: args.path }, { wikiRoot: WIKI_ROOT, readPage: asyncReadPage });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_read", err);
-    }
-  });
-  server2.registerTool("wiki_list", {
-    description: "List authored wiki pages, optionally filtered by kind.",
-    inputSchema: {
-      kind: external_exports.string().optional().describe("Page kind filter")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler6({ kind: args.kind }, { wikiRoot: WIKI_ROOT, listPages: asyncListPages });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_list", err);
-    }
-  });
-  server2.registerTool("wiki_link", {
-    description: "Add a bidirectional link between two wiki pages (creates Related section entry).",
-    inputSchema: {
-      from_path: external_exports.string().min(1).describe("Source page path"),
-      to_path: external_exports.string().min(1).describe("Target page path"),
-      relation: external_exports.string().min(1).describe("Relationship label")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler7({ from_path: args.from_path, to_path: args.to_path, relation: args.relation }, { wikiRoot: WIKI_ROOT, readPage: asyncReadPage, writePage: asyncWritePage });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_link", err);
-    }
-  });
-  server2.registerTool("wiki_adr", {
-    description: "Create a numbered ADR (Architecture Decision Record) with auto-incremented sequence.",
-    inputSchema: {
-      title: external_exports.string().min(1).describe("ADR title"),
-      context: external_exports.string().min(1).describe("Problem context"),
-      decision: external_exports.string().min(1).describe("Decision made"),
-      consequences: external_exports.string().min(1).describe("Consequences"),
-      status: external_exports.enum(["proposed", "accepted", "deprecated", "superseded"]).default("accepted").describe("ADR status"),
-      tags: external_exports.array(external_exports.string()).default([]).describe("Tags")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler8({
-        title: args.title,
-        context: args.context,
-        decision: args.decision,
-        consequences: args.consequences,
-        status: args.status,
-        tags: args.tags
-      }, {
-        wikiRoot: WIKI_ROOT,
-        nextAdrNumber: asyncNextAdrNumber,
-        writePage: asyncWritePage
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_adr", err);
-    }
-  });
-  server2.registerTool("wiki_reindex", {
-    description: "Regenerate the wiki table of contents at .generated/INDEX.md.",
-    inputSchema: {}
-  }, async (_args) => {
-    try {
-      const response = await handler9({}, {
-        wikiRoot: WIKI_ROOT,
-        listPages: asyncListPages,
-        writeFile: asyncWriteFile,
-        ensureDir: asyncEnsureDir,
-        joinPath: join8
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_reindex", err);
-    }
-  });
-  server2.registerTool("wiki_purge", {
-    description: "Re-evaluate and purge wiki pages that fail the current classifier.",
-    inputSchema: {
-      apply: external_exports.boolean().default(false).describe("Apply purge (false = preview only)"),
-      kind: external_exports.string().optional().describe("Page kind to target")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler10({
-        apply: args.apply,
-        kind: args.kind
-      }, {
-        wikiRoot: WIKI_ROOT,
-        wikiRoot_string: WIKI_ROOT,
-        listAllMarkdownFiles: asyncListAllMarkdownFiles,
-        deleteFile: asyncDeleteFile
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_purge", err);
-    }
-  });
-  server2.registerTool("wiki_verify", {
-    description: "Verify wiki-page symbol citations against AP's code graph (ADR-0046 Phase 2).",
-    // source: docs/ADR/0046-change-impact-analysis.md §Phase 2
-    inputSchema: {
-      path: external_exports.string().optional().describe("Page path (null = all pages)")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler11({ path: args.path ?? null }, {
-        wikiRoot: WIKI_ROOT,
-        isApEnabled: () => AP_ENABLED,
-        readPage: asyncReadPage,
-        listPages: asyncListPages,
-        // source: docs/ADR/0046-change-impact-analysis.md §Phase 2 — stub until AP live
-        verifySymbols: async (_symbols) => ({})
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_verify", err);
-    }
-  });
 }
 
 // packages/memory/dist/shared/types.js
@@ -46965,11 +43038,11 @@ __export(codebase_analysis_exports, {
   buildTypeIndex: () => buildTypeIndex,
   callUpstream: () => callUpstream,
   changeImpactHandler: () => changeImpactHandler,
-  changeImpactSchema: () => schema10,
+  changeImpactSchema: () => schema6,
   classifySchemaMatch: () => classifySchemaMatch,
   codeGraphTag: () => codeGraphTag,
-  codebaseAnalyzeHandler: () => handler12,
-  codebaseAnalyzeSchema: () => schema7,
+  codebaseAnalyzeHandler: () => handler3,
+  codebaseAnalyzeSchema: () => schema2,
   collectAllDiscoveries: () => collectAllDiscoveries,
   computeDuration: () => computeDuration,
   computeImpact: () => computeImpact,
@@ -47015,10 +43088,10 @@ __export(codebase_analysis_exports, {
   generatePredictions: () => generatePredictions,
   groupByProject: () => groupByProject,
   heatForTags: () => heatForTags,
-  ingestCodebaseHandler: () => handler13,
-  ingestCodebaseSchema: () => schema8,
-  ingestPrdHandler: () => handler14,
-  ingestPrdSchema: () => schema9,
+  ingestCodebaseHandler: () => handler4,
+  ingestCodebaseSchema: () => schema3,
+  ingestPrdHandler: () => handler5,
+  ingestPrdSchema: () => schema4,
   isAvailable: () => isAvailable,
   iterToolUses: () => iterToolUses,
   makeImportInfo: () => makeImportInfo,
@@ -47037,8 +43110,8 @@ __export(codebase_analysis_exports, {
   resolveTypeReferences: () => resolveTypeReferences,
   schemaFromDict: () => schemaFromDict,
   schemaToDict: () => schemaToDict,
-  seedProjectHandler: () => handler3,
-  seedProjectSchema: () => schema,
+  seedProjectHandler: () => handler6,
+  seedProjectSchema: () => schema5,
   shouldMergeSchemas: () => shouldMergeSchemas,
   shouldReviseSchema: () => shouldReviseSchema,
   stageCicd: () => stageCicd,
@@ -47286,16 +43359,16 @@ var EXT_TO_LANG = {
   ".h": "c",
   ".m": "objc"
 };
-function detectLanguage(path6) {
+function detectLanguage(path5) {
   for (const [ext2, lang] of Object.entries(EXT_TO_LANG)) {
-    if (path6.endsWith(ext2))
+    if (path5.endsWith(ext2))
       return lang;
   }
   return "unknown";
 }
-function parseFile(path6, content) {
+function parseFile(path5, content) {
   const { IMPORT_EXTRACTORS: IMPORT_EXTRACTORS2, SYMBOL_EXTRACTORS: SYMBOL_EXTRACTORS2, extractDocstring: extractDocstring2 } = codebase_extractors_exports;
-  const language2 = detectLanguage(path6);
+  const language2 = detectLanguage(path5);
   const contentHash = createHash2("sha256").update(content, "utf8").digest("hex").slice(0, 16);
   const importExtractor = IMPORT_EXTRACTORS2[language2] ?? ((_2) => []);
   const symbolExtractor = SYMBOL_EXTRACTORS2[language2] ?? ((_2) => []);
@@ -47303,7 +43376,7 @@ function parseFile(path6, content) {
   const definitions = symbolExtractor(content);
   const docstring = extractDocstring2(content, language2);
   return {
-    path: path6,
+    path: path5,
     language: language2,
     contentHash,
     imports,
@@ -48380,13 +44453,13 @@ function isAvailable() {
   }
   return _treeSitterAvailable;
 }
-function parseFileAst(path6, content) {
-  const language2 = detectLanguage(path6);
+function parseFileAst(path5, content) {
+  const language2 = detectLanguage(path5);
   const contentHash = createHash3("sha256").update(content).digest("hex").slice(0, CONTENT_HASH_HEX_CHARS);
   const text = content.toString("utf8");
   const extractorAndTree = _getExtractorAndTree(language2, content);
   if (!extractorAndTree) {
-    return parseFile(path6, text);
+    return parseFile(path5, text);
   }
   const { extractor, tree } = extractorAndTree;
   const root = tree.rootNode;
@@ -48394,7 +44467,7 @@ function parseFileAst(path6, content) {
   const docstring = _extractModuleDoc(root, language2, content);
   const callsPerFunction = extractCallsPerFunction(root, content);
   return {
-    path: path6,
+    path: path5,
     language: language2,
     contentHash,
     imports,
@@ -48514,7 +44587,7 @@ var _EXTRACTORS = {
 };
 
 // packages/memory/dist/codebase-analysis/scanner-parse.js
-import { statSync as statSync4 } from "node:fs";
+import { statSync as statSync3 } from "node:fs";
 function extractUserText(content) {
   if (typeof content === "string")
     return content;
@@ -48620,7 +44693,7 @@ function buildConversationRecord(meta, stats, filePath, projectName, fallbackId)
   const allText = stats.allText;
   let fileSize = null;
   try {
-    fileSize = statSync4(filePath).size;
+    fileSize = statSync3(filePath).size;
   } catch {
     fileSize = null;
   }
@@ -48645,8 +44718,8 @@ function buildConversationRecord(meta, stats, filePath, projectName, fallbackId)
 }
 
 // packages/memory/dist/codebase-analysis/scanner.js
-import { existsSync as existsSync9, openSync as openSync2, readdirSync as readdirSync5, readSync as readSync2, statSync as statSync5 } from "node:fs";
-import { join as join9 } from "node:path";
+import { existsSync as existsSync4, openSync as openSync2, readdirSync as readdirSync2, readSync as readSync2, statSync as statSync4 } from "node:fs";
+import { join as join4 } from "node:path";
 var HEAD_BYTES2 = 32768;
 var TAIL_BYTES2 = 8192;
 function _parseJsonlLines(lines) {
@@ -48663,10 +44736,10 @@ function _parseJsonlLines(lines) {
   return records;
 }
 function readHeadTail2(filePath) {
-  if (!existsSync9(filePath))
+  if (!existsSync4(filePath))
     return [];
   try {
-    const stat = statSync5(filePath);
+    const stat = statSync4(filePath);
     const fileSize = stat.size;
     const fd = openSync2(filePath, "r");
     const headSize = Math.min(HEAD_BYTES2, fileSize);
@@ -48696,7 +44769,7 @@ function readHeadTail2(filePath) {
   }
 }
 function* iterToolUses(filePath) {
-  if (!existsSync9(filePath))
+  if (!existsSync4(filePath))
     return;
   const { readFileSync: readFileSync13 } = __require("node:fs");
   let content;
@@ -48749,7 +44822,7 @@ function _parseMemoryFile(filePath, projectName, fileName) {
   let modifiedAt = null;
   let createdAt = null;
   try {
-    const st2 = statSync5(filePath);
+    const st2 = statSync4(filePath);
     modifiedAt = _formatTimestamp(st2.mtimeMs);
     createdAt = _formatTimestamp(st2.birthtimeMs ?? st2.ctimeMs);
   } catch {
@@ -48786,26 +44859,26 @@ function _parseYamlFrontmatter(content) {
   return { meta, body };
 }
 function discoverAllMemories(claudeDir) {
-  const projectsDir = join9(claudeDir, "projects");
+  const projectsDir = join4(claudeDir, "projects");
   const memories = [];
   let projectEntries;
   try {
-    projectEntries = readdirSync5(projectsDir);
+    projectEntries = readdirSync2(projectsDir);
   } catch {
     return [];
   }
   for (const pdirName of projectEntries) {
-    const pdirPath = join9(projectsDir, pdirName);
+    const pdirPath = join4(projectsDir, pdirName);
     try {
-      if (!statSync5(pdirPath).isDirectory())
+      if (!statSync4(pdirPath).isDirectory())
         continue;
     } catch {
       continue;
     }
-    const memoryDir = join9(pdirPath, "memory");
+    const memoryDir = join4(pdirPath, "memory");
     let files;
     try {
-      files = readdirSync5(memoryDir);
+      files = readdirSync2(memoryDir);
     } catch {
       continue;
     }
@@ -48813,11 +44886,11 @@ function discoverAllMemories(claudeDir) {
       if (!fileName.endsWith(".md") || fileName === "MEMORY.md")
         continue;
       try {
-        const result = _parseMemoryFile(join9(memoryDir, fileName), pdirName, fileName);
+        const result = _parseMemoryFile(join4(memoryDir, fileName), pdirName, fileName);
         if (result)
           memories.push(result);
       } catch (e2) {
-        process.stderr.write(`[methodology-agent] Failed to read ${join9(memoryDir, fileName)}: ${e2}
+        process.stderr.write(`[methodology-agent] Failed to read ${join4(memoryDir, fileName)}: ${e2}
 `);
       }
     }
@@ -48835,25 +44908,25 @@ function _parseConversationFile(filePath, projectName, fallbackId) {
   return buildConversationRecord(meta, stats, filePath, projectName, fallbackId);
 }
 function discoverConversations(claudeDir) {
-  const projectsDir = join9(claudeDir, "projects");
+  const projectsDir = join4(claudeDir, "projects");
   const conversations = [];
   let projectEntries;
   try {
-    projectEntries = readdirSync5(projectsDir);
+    projectEntries = readdirSync2(projectsDir);
   } catch {
     return [];
   }
   for (const pdirName of projectEntries) {
-    const pdirPath = join9(projectsDir, pdirName);
+    const pdirPath = join4(projectsDir, pdirName);
     try {
-      if (!statSync5(pdirPath).isDirectory())
+      if (!statSync4(pdirPath).isDirectory())
         continue;
     } catch {
       continue;
     }
     let projEntries;
     try {
-      projEntries = readdirSync5(pdirPath);
+      projEntries = readdirSync2(pdirPath);
     } catch {
       continue;
     }
@@ -48862,7 +44935,7 @@ function discoverConversations(claudeDir) {
         continue;
       if (entryName.includes("subagent"))
         continue;
-      const filePath = join9(pdirPath, entryName);
+      const filePath = join4(pdirPath, entryName);
       if (filePath.includes("subagents"))
         continue;
       try {
@@ -48890,13 +44963,13 @@ function groupByProject(conversations) {
 
 // packages/memory/dist/codebase-analysis/handlers/ingest-helpers.js
 import { createHash as createHash4 } from "node:crypto";
-import { resolve as resolve3, basename as basename5 } from "node:path";
+import { resolve, basename as basename2 } from "node:path";
 var CODE_GRAPH_TAG_PREFIX = "_code_graph:";
 var PROJECT_KEY_HASH_LENGTH = 8;
 function projectKey(projectPath) {
-  const p2 = resolve3(projectPath);
+  const p2 = resolve(projectPath);
   const digest = createHash4("sha256").update(p2, "utf8").digest("hex").slice(0, PROJECT_KEY_HASH_LENGTH);
-  return `${basename5(p2)}-${digest}`;
+  return `${basename2(p2)}-${digest}`;
 }
 function codeGraphTag(projectPath) {
   return `${CODE_GRAPH_TAG_PREFIX}${projectKey(projectPath)}`;
@@ -48934,7 +45007,7 @@ function memoiseGraphPath(store, projectPath, graphPath) {
     tags: [tag, "_ingest", "code-graph"],
     source: "ingest_codebase",
     domain: "cortex-ingest",
-    directory_context: resolve3(projectPath),
+    directory_context: resolve(projectPath),
     is_protected: true,
     importance: 1,
     heat: 1
@@ -48978,17 +45051,17 @@ var McpConnectionError2 = class extends Error {
 };
 
 // packages/memory/dist/codebase-analysis/handlers/codebase-analyze.js
-import { existsSync as existsSync10, readFileSync as readFileSync7, statSync as statSync7 } from "node:fs";
-import { extname as extname2 } from "node:path";
+import { existsSync as existsSync5, readFileSync as readFileSync3, statSync as statSync6 } from "node:fs";
+import { extname } from "node:path";
 
 // packages/memory/dist/codebase-analysis/handlers/codebase-analyze-helpers.js
-import { readdirSync as readdirSync6, statSync as statSync6 } from "node:fs";
-import { join as join10, relative as relative4 } from "node:path";
+import { readdirSync as readdirSync3, statSync as statSync5 } from "node:fs";
+import { join as join5, relative } from "node:path";
 var CODEBASE_AGENT_CONTEXT = "codebase";
 var FILE_TAG_PREFIX = "file:";
 var HASH_TAG_PREFIX = "hash:";
 var CANDIDATE_MULTIPLIER = 10;
-var IGNORE_DIRS2 = /* @__PURE__ */ new Set([
+var IGNORE_DIRS = /* @__PURE__ */ new Set([
   ".git",
   "node_modules",
   "__pycache__",
@@ -49009,14 +45082,14 @@ var IGNORE_DIRS2 = /* @__PURE__ */ new Set([
 function* _walkDir(root) {
   let entries;
   try {
-    entries = readdirSync6(root, { withFileTypes: true });
+    entries = readdirSync3(root, { withFileTypes: true });
   } catch {
     return;
   }
   for (const entry of entries) {
-    if (IGNORE_DIRS2.has(entry.name))
+    if (IGNORE_DIRS.has(entry.name))
       continue;
-    const fullPath = join10(root, entry.name);
+    const fullPath = join5(root, entry.name);
     if (entry.isDirectory()) {
       yield* _walkDir(fullPath);
     } else if (entry.isFile()) {
@@ -49045,7 +45118,7 @@ function collectSourceFiles(root, languages, maxFiles, maxBytes) {
     if (langFilter && !langFilter.has(lang))
       continue;
     try {
-      const st2 = statSync6(p2);
+      const st2 = statSync5(p2);
       if (st2.size > maxBytes)
         continue;
     } catch {
@@ -49083,9 +45156,8 @@ function _extractFileHash(tags) {
 function loadExistingHashes(store) {
   const hashes = /* @__PURE__ */ new Map();
   try {
-    const rows = (store.acquireBatch?.() ?? // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-    store).execute("SELECT id, tags FROM memories WHERE agent_context = $1 AND NOT is_stale", [CODEBASE_AGENT_CONTEXT]);
-    for (const row of rows ?? []) {
+    const rows = store.getMemoriesByAgentContext(CODEBASE_AGENT_CONTEXT);
+    for (const row of rows) {
       const memId = row.id;
       const tags = _parseTags(row.tags);
       const [fp, ch] = _extractFileHash(tags);
@@ -49101,7 +45173,7 @@ function markStale(store, memoryIds) {
     return 0;
   try {
     for (const mid of memoryIds) {
-      store.execute("UPDATE memories SET is_stale = TRUE WHERE id = $1", [mid]);
+      store.markMemoryStale(mid, true);
     }
     return memoryIds.length;
   } catch {
@@ -49126,7 +45198,7 @@ function _getOrCreateEntity(store, name, entityType, domain) {
       return existing["id"];
   } catch {
   }
-  return store.insertEntity({ name, type: entityType, domain });
+  return store.upsertEntity(name, entityType, domain);
 }
 function _persistSymbolEntities(store, analysis, fileEid, domain) {
   let entities = 0;
@@ -49222,21 +45294,24 @@ function persistInheritanceEdge(store, edges, domain) {
 function persistCommunityTags(store, communities) {
   if (communities.size === 0)
     return;
+  const allCodebaseMemories = (() => {
+    try {
+      return store.getMemoriesByAgentContext(CODEBASE_AGENT_CONTEXT);
+    } catch {
+      return [];
+    }
+  })();
   for (const [filePath, clusterId] of communities) {
     try {
-      const rows = (
-        // eslint-disable-next-line @typescript-eslint/no-unsafe-call, @typescript-eslint/no-unsafe-member-access
-        store.execute("SELECT id, tags FROM memories WHERE agent_context = 'codebase' AND NOT is_stale AND content LIKE $1", [`%${filePath}%`]) ?? []
-      );
+      const rows = allCodebaseMemories.filter((r2) => typeof r2.tags === "string" && r2.tags.includes(filePath) || store.getMemory?.(r2.id)?.content?.includes(filePath));
       for (const row of rows) {
-        const tags = _parseTags(row["tags"]);
+        const tags = _parseTags(row.tags);
         const tag = `cluster:${clusterId}`;
         if (!tags.includes(tag)) {
           tags.push(tag);
-          store.execute("UPDATE memories SET tags = $1 WHERE id = $2", [
-            JSON.stringify(tags),
-            row["id"]
-          ]);
+          const mem = store.getMemory(row.id);
+          if (mem)
+            store.updateMemoryContent(row.id, mem.content, tags);
         }
       }
     } catch {
@@ -49245,14 +45320,14 @@ function persistCommunityTags(store, communities) {
 }
 function resolveRelativePath(sourcePath, root) {
   try {
-    return relative4(root, sourcePath) || sourcePath;
+    return relative(root, sourcePath) || sourcePath;
   } catch {
     return sourcePath;
   }
 }
 
 // packages/memory/dist/codebase-analysis/handlers/codebase-analyze.js
-var schema7 = {
+var schema2 = {
   title: "Codebase analyze",
   description: "Walk a codebase and store its structure as memories using tree-sitter AST parsing (with regex fallback for unsupported languages). One memory per file, with symbols as entities and imports as relationships; then cross-file symbol resolution, call-graph extraction, and community detection over the call graph. Incremental \u2014 only re-processes files whose content hash changed since last run (tracked via HASH_TAG_PREFIX tags). Use this on first onboarding to a serious codebase, or after a major refactor that invalidates symbol assumptions. Distinct from `seed_project` (5-stage shallow structural sweep, no AST), `backfill_memories` (Claude Code conversations, not source files), `wiki_seed_codebase` (seeds wiki pages from .md docs), and `ingest_codebase` (downstream PRD-generator consumer). Mutates memories + entities + relationships tables.",
   inputSchema: {
@@ -49310,19 +45385,19 @@ var CODEBASE_SOURCE = "codebase_analyze";
 var CODEBASE_TAG = "codebase";
 var LANG_TAG_PREFIX = "lang:";
 var DEFAULT_MAX_FILES = 500;
-var DEFAULT_MAX_FILE_SIZE_KB2 = 100;
+var DEFAULT_MAX_FILE_SIZE_KB = 100;
 var MAX_SYMBOL_TAGS_PER_FILE = 10;
-var BYTES_PER_KB2 = 1024;
+var BYTES_PER_KB = 1024;
 function _parseArgs(args) {
   const a2 = args ?? {};
   const directory = (a2["directory"] ?? process.cwd()).trim() || process.cwd();
   const languages = a2["languages"] ?? null;
   const maxFiles = Number(a2["max_files"] ?? DEFAULT_MAX_FILES);
-  const maxKb = Number(a2["max_file_size_kb"] ?? DEFAULT_MAX_FILE_SIZE_KB2);
+  const maxKb = Number(a2["max_file_size_kb"] ?? DEFAULT_MAX_FILE_SIZE_KB);
   const incremental = a2["incremental"] ?? true;
   const dryRun = a2["dry_run"] ?? false;
   const domain = a2["domain"] ?? "";
-  return { directory, languages, maxFiles, maxBytes: maxKb * BYTES_PER_KB2, incremental, dryRun, domain };
+  return { directory, languages, maxFiles, maxBytes: maxKb * BYTES_PER_KB, incremental, dryRun, domain };
 }
 function _buildTags(relPath, analysis) {
   const tags = [
@@ -49336,11 +45411,11 @@ function _buildTags(relPath, analysis) {
   }
   return tags;
 }
-function _parseOneFile(path6, content) {
+function _parseOneFile(path5, content) {
   if (isAvailable()) {
-    return parseFileAst(path6, Buffer.from(content, "utf8"));
+    return parseFileAst(path5, Buffer.from(content, "utf8"));
   }
-  return parseFile(path6, content);
+  return parseFile(path5, content);
 }
 async function _storeFile(root, relPath, analysis, domain, store) {
   const content = buildMemoryContent(analysis);
@@ -49382,7 +45457,7 @@ async function _processFiles(sourceFiles, root, existing, incremental, domain, s
     seenPaths.add(relPath);
     let content;
     try {
-      content = readFileSync7(sourcePath, "utf8");
+      content = readFileSync3(sourcePath, "utf8");
     } catch {
       continue;
     }
@@ -49437,9 +45512,9 @@ function _runGraphAnalysis(analyses, fileContents, store, domain) {
     inherit_edges_stored: inheritRels
   };
 }
-async function handler12(args, deps) {
+async function handler3(args, deps) {
   const { directory: root, languages, maxFiles, maxBytes, incremental, dryRun, domain } = _parseArgs(args);
-  if (!existsSync10(root) || !statSync7(root).isDirectory()) {
+  if (!existsSync5(root) || !statSync6(root).isDirectory()) {
     return { analyzed: false, reason: `directory not found: ${root}` };
   }
   process.stderr.write(`[codebase-analyze] scanning ${root} (max_files=${maxFiles}, incremental=${incremental})
@@ -49449,7 +45524,7 @@ async function handler12(args, deps) {
 `);
   if (dryRun) {
     const langs = [
-      ...new Set(sourceFiles.map((f2) => EXT_TO_LANG[extname2(f2).toLowerCase()] ?? "?"))
+      ...new Set(sourceFiles.map((f2) => EXT_TO_LANG[extname(f2).toLowerCase()] ?? "?"))
     ];
     return {
       analyzed: false,
@@ -49482,7 +45557,7 @@ async function handler12(args, deps) {
     relationships: totalRelationships,
     graph: graphStats,
     languages: [
-      ...new Set(sourceFiles.map((f2) => EXT_TO_LANG[extname2(f2).toLowerCase()] ?? "?"))
+      ...new Set(sourceFiles.map((f2) => EXT_TO_LANG[extname(f2).toLowerCase()] ?? "?"))
     ]
   };
 }
@@ -49490,16 +45565,16 @@ function _markDeleted(existing, seenPaths, store, incremental) {
   if (!incremental)
     return 0;
   const deletedIds = [];
-  for (const [path6, [mid]] of existing) {
-    if (!seenPaths.has(path6))
+  for (const [path5, [mid]] of existing) {
+    if (!seenPaths.has(path5))
       deletedIds.push(mid);
   }
   return markStale(store, deletedIds);
 }
 
 // packages/memory/dist/codebase-analysis/handlers/ingest-codebase.js
-import { homedir as homedir6 } from "node:os";
-import { join as join13 } from "node:path";
+import { homedir as homedir4 } from "node:os";
+import { join as join8 } from "node:path";
 
 // packages/memory/dist/codebase-analysis/handlers/ingest-codebase-cypher.js
 var _UPSTREAM_SERVER = "codebase";
@@ -49739,22 +45814,22 @@ async function fetchFiles(graphPath, limit) {
 }
 
 // packages/memory/dist/codebase-analysis/handlers/ingest-codebase-graph.js
-import { existsSync as existsSync11, rmSync as rmSync2, statSync as statSync8 } from "node:fs";
-import { join as join11, resolve as resolve4 } from "node:path";
+import { existsSync as existsSync6, rmSync, statSync as statSync7 } from "node:fs";
+import { join as join6, resolve as resolve2 } from "node:path";
 var _UPSTREAM_SERVER2 = "codebase";
 function silentCleanStaleGraphSlot(outputDir) {
-  const slot = join11(outputDir, "graph");
+  const slot = join6(outputDir, "graph");
   try {
-    if (existsSync11(slot) && !statSync8(slot).isDirectory()) {
-      rmSync2(slot);
+    if (existsSync6(slot) && !statSync7(slot).isDirectory()) {
+      rmSync(slot);
     }
   } catch {
   }
 }
 async function _callAnalyze(projectPath, outputDir, language2, pool) {
   return callUpstream(_UPSTREAM_SERVER2, "analyze_codebase", {
-    path: resolve4(projectPath),
-    output_dir: resolve4(outputDir),
+    path: resolve2(projectPath),
+    output_dir: resolve2(outputDir),
     language: language2
   }, pool);
 }
@@ -49775,7 +45850,7 @@ async function ensureGraph(store, projectPath, outputDir, language2, forceReinde
   if (typeof result === "object" && result !== null && result["status"] === "error") {
     throw new McpConnectionError2(`upstream analyze_codebase failed: ${result["message"] ?? "<no message>"}`);
   }
-  const graphPath = result["graph_path"] ?? join11(resolve4(outputDir), "graph");
+  const graphPath = result["graph_path"] ?? join6(resolve2(outputDir), "graph");
   memoiseGraphPath(store, projectPath, graphPath);
   result["graph_path"] = graphPath;
   result["reused_cached"] = false;
@@ -49783,8 +45858,8 @@ async function ensureGraph(store, projectPath, outputDir, language2, forceReinde
 }
 
 // packages/memory/dist/codebase-analysis/handlers/ingest-codebase-pages.js
-import { mkdirSync as mkdirSync4, writeFileSync as writeFileSync4 } from "node:fs";
-import { dirname as dirname3, join as join12 } from "node:path";
+import { mkdirSync as mkdirSync2, writeFileSync as writeFileSync2 } from "node:fs";
+import { dirname, join as join7 } from "node:path";
 function _slug(text) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
 }
@@ -49828,9 +45903,9 @@ function writeProcessPages(processes, wikiRoot) {
   for (const proc of processes) {
     try {
       const [relPath, markdown] = renderProcessPage(proc);
-      const fullPath = join12(wikiRoot, relPath);
-      mkdirSync4(dirname3(fullPath), { recursive: true });
-      writeFileSync4(fullPath, markdown, "utf8");
+      const fullPath = join7(wikiRoot, relPath);
+      mkdirSync2(dirname(fullPath), { recursive: true });
+      writeFileSync2(fullPath, markdown, "utf8");
       written.push(relPath);
     } catch {
     }
@@ -49839,7 +45914,7 @@ function writeProcessPages(processes, wikiRoot) {
 }
 
 // packages/memory/dist/codebase-analysis/handlers/ingest-codebase-schema.js
-var schema8 = {
+var schema3 = {
   description: "Ingest a codebase analysis from the upstream ai-automatised-pipeline MCP server into Cortex's store. Triggers `analyze_codebase` upstream (or reuses a cached graph_path memo), pulls every Function/Method/Struct + every call edge + every File\u2192symbol containment edge via Cypher, then materialises them as memories + KG entities + edges, plus a wiki reference page per detected process entry point. Use this to seed the Wiki / Board / Knowledge / Graph views from a freshly-indexed or re-indexed codebase. Distinct from `codebase_analyze` (Cortex's OWN tree-sitter analyzer, no upstream MCP), `seed_project` (5-stage shallow sweep, no AST), and `wiki_seed_codebase` (consumes existing .md docs, not analysis). Mutates wiki/, memories, entities, relationships. Latency varies (10s-5min depending on cache hit). Cortex only consumes upstream analysis \u2014 it does not drive the pipeline. Returns counts and the wiki paths written.",
   inputSchema: {
     type: "object",
@@ -50049,7 +46124,7 @@ var _UPSTREAM_SERVER3 = "codebase";
 var _DEFAULT_TOP_SYMBOLS = null;
 var _DEFAULT_TOP_PROCESSES = null;
 function _defaultOutputDir(projectPath) {
-  return join13(homedir6(), ".cache", "cortex", "code-graphs", projectKey(projectPath));
+  return join8(homedir4(), ".cache", "cortex", "code-graphs", projectKey(projectPath));
 }
 function _parseIntOrNull(raw) {
   if (raw === null || raw === void 0)
@@ -50125,7 +46200,7 @@ async function _pullProcesses(graphPath, topProcesses, pool) {
     return [];
   }
 }
-async function handler13(args, deps) {
+async function handler4(args, deps) {
   const a2 = args ?? {};
   const projectPath = (a2["project_path"] ?? "").trim();
   if (!projectPath)
@@ -50186,8 +46261,8 @@ async function handler13(args, deps) {
 }
 
 // packages/memory/dist/codebase-analysis/handlers/ingest-prd.js
-import { mkdirSync as mkdirSync5, readFileSync as readFileSync8, writeFileSync as writeFileSync5 } from "node:fs";
-import { dirname as dirname4, join as join14, resolve as resolve5 } from "node:path";
+import { mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync3 } from "node:fs";
+import { dirname as dirname2, join as join9, resolve as resolve3 } from "node:path";
 var _UPSTREAM_SERVER4 = "prd-gen";
 var BULLET_MIN_LENGTH = 8;
 var SLUG_MAX_LENGTH = 80;
@@ -50196,7 +46271,7 @@ var REQUIREMENT_IMPORTANCE = 0.5;
 var INGEST_HEAT = 0.8;
 var SUMMARY_IMPORTANCE = 0.8;
 var SUMMARY_HEAT = 0.9;
-var schema9 = {
+var schema4 = {
   description: "Ingest a PRD (Product Requirements Document) into Cortex's store. Source: a file path, raw markdown, or a prd-gen pipeline state id (fetched via upstream MCP). Writes the PRD as a wiki spec page under specs/<slug>.md, extracts decisions and requirements as separate tagged memories (`decision`, `requirement`), and optionally routes the document through prd-gen's `validate_prd_document` to capture quality signals. Use this after a PRD is authored or generated so Cortex's Wiki/Board/Knowledge views reflect it. Distinct from `wiki_write` (manual single-page write, no decision/requirement extraction), `ingest_codebase` (code symbols, not requirement documents), and `remember` (one memory, no wiki page or structured extraction). Mutates wiki/specs/ + memories table. Latency varies (~500ms-3s depending on validation flag). Returns {wiki_path, memories_created: {summary, decisions, requirements}, validation?: stats}.",
   inputSchema: {
     type: "object",
@@ -50236,15 +46311,15 @@ var schema9 = {
   }
 };
 async function _fetchPrd(args, pool) {
-  const path6 = (args["path"] ?? "").trim();
+  const path5 = (args["path"] ?? "").trim();
   const content = args["content"] ?? "";
   const pipelineId = (args["pipeline_id"] ?? "").trim();
-  const provided = [Boolean(path6), Boolean(content), Boolean(pipelineId)];
+  const provided = [Boolean(path5), Boolean(content), Boolean(pipelineId)];
   if (provided.filter(Boolean).length !== 1) {
     throw new Error("exactly one of path / content / pipeline_id must be supplied");
   }
-  if (path6)
-    return [readFileSync8(resolve5(path6), "utf8"), "path"];
+  if (path5)
+    return [readFileSync4(resolve3(path5), "utf8"), "path"];
   if (content)
     return [content, "content"];
   const payload = await callUpstream(_UPSTREAM_SERVER4, "get_pipeline_state", {
@@ -50336,9 +46411,9 @@ ${text.trim()}`;
   return [relPath, frontmatter.join("\n") + "\n" + body + "\n"];
 }
 function _writePage(wikiRoot, relPath, markdown) {
-  const fullPath = join14(wikiRoot, relPath);
-  mkdirSync5(dirname4(fullPath), { recursive: true });
-  writeFileSync5(fullPath, markdown, "utf8");
+  const fullPath = join9(wikiRoot, relPath);
+  mkdirSync3(dirname2(fullPath), { recursive: true });
+  writeFileSync3(fullPath, markdown, "utf8");
 }
 function _writeBulletMemories(store, bullets, tag, title, domain, directory) {
   const ids = [];
@@ -50374,7 +46449,7 @@ async function _maybeValidate(text, pool) {
     return { skipped: true, reason: e2.constructor.name };
   }
 }
-async function handler14(args, deps) {
+async function handler5(args, deps) {
   const a2 = args ?? {};
   let text;
   let source;
@@ -50393,7 +46468,7 @@ async function handler14(args, deps) {
   const title = _extractTitle(text, a2["title"]);
   const domain = (a2["domain"] ?? "prd").trim() || "prd";
   const rawPath = a2["path"] ?? ".";
-  const directory = dirname4(resolve5(rawPath));
+  const directory = dirname2(resolve3(rawPath));
   const [relPath, markdown] = _renderPrdSpecPage(title, text, source);
   let wikiPath = relPath;
   try {
@@ -50444,6 +46519,536 @@ async function handler14(args, deps) {
     validation
   };
 }
+
+// packages/memory/dist/codebase-analysis/handlers/seed-project.js
+import { existsSync as existsSync8 } from "node:fs";
+import { basename as basename4, resolve as resolvePath } from "node:path";
+
+// packages/memory/dist/codebase-analysis/file-scanner.js
+import { existsSync as existsSync7, readFileSync as readFileSync5, readdirSync as readdirSync4, statSync as statSync8 } from "node:fs";
+import { basename as basename3, extname as extname2, join as join10, relative as relative2 } from "node:path";
+var HEAT_BY_TYPE = {
+  structural_summary: 0.9,
+  // source: cortex@ed33435 seed_project_constants.py:10
+  documentation: 0.85,
+  // source: cortex@ed33435 seed_project_constants.py:11
+  entry_point: 0.8,
+  // source: cortex@ed33435 seed_project_constants.py:12
+  config: 0.7,
+  // source: cortex@ed33435 seed_project_constants.py:13
+  ci_cd: 0.6
+  // source: cortex@ed33435 seed_project_constants.py:14
+};
+var CONFIG_FILES = [
+  "package.json",
+  "package-lock.json",
+  "pyproject.toml",
+  "setup.py",
+  "setup.cfg",
+  "requirements.txt",
+  "Cargo.toml",
+  "Cargo.lock",
+  "go.mod",
+  "go.sum",
+  "pom.xml",
+  "build.gradle",
+  "composer.json",
+  ".ruby-version",
+  "Gemfile",
+  "mix.exs"
+];
+var DOC_GLOBS = ["README", "CLAUDE", "CONTRIBUTING", "CHANGELOG", "ARCHITECTURE"];
+var DOC_DIRS = ["docs", "doc", "documentation", "adr", "docs/adr"];
+var ENTRY_POINT_NAMES = /* @__PURE__ */ new Set([
+  "__main__.py",
+  "main.py",
+  "app.py",
+  "server.py",
+  "cli.py",
+  "index.js",
+  "index.ts",
+  "main.js",
+  "main.ts",
+  "server.js",
+  "main.go",
+  "main.rs",
+  "Main.java"
+]);
+var CI_FILES = [
+  ".github/workflows",
+  "Makefile",
+  "makefile",
+  "Dockerfile",
+  "docker-compose.yml",
+  "docker-compose.yaml",
+  "tox.ini",
+  ".travis.yml",
+  "circle.yml",
+  ".circleci",
+  "Jenkinsfile",
+  ".gitlab-ci.yml",
+  "bitbucket-pipelines.yml"
+];
+var IGNORE_DIRS2 = /* @__PURE__ */ new Set([
+  ".git",
+  ".hg",
+  ".svn",
+  "node_modules",
+  "__pycache__",
+  ".mypy_cache",
+  ".pytest_cache",
+  ".ruff_cache",
+  ".venv",
+  "venv",
+  "env",
+  ".env",
+  "dist",
+  "build",
+  "target",
+  "out",
+  ".next",
+  ".nuxt",
+  "coverage",
+  ".coverage",
+  "htmlcov",
+  "site-packages",
+  ".tox",
+  ".nox"
+]);
+var EXT_MAP = {
+  ".py": "Python",
+  ".js": "JavaScript",
+  ".ts": "TypeScript",
+  ".go": "Go",
+  ".rs": "Rust",
+  ".java": "Java",
+  ".kt": "Kotlin",
+  ".rb": "Ruby",
+  ".php": "PHP",
+  ".cs": "C#",
+  ".cpp": "C++",
+  ".c": "C",
+  ".swift": "Swift",
+  ".ex": "Elixir",
+  ".exs": "Elixir",
+  ".scala": "Scala",
+  ".clj": "Clojure",
+  ".hs": "Haskell"
+};
+var TOP_LEVEL_LAYOUT_CAP = 30;
+var TOP_LANGUAGES_CAP = 5;
+var STAGE_DOCS_CAP = 20;
+var STAGE_ENTRY_POINTS_CAP = 5;
+var STAGE_CICD_CAP = 5;
+var CICD_DIR_YAML_CAP = 3;
+var CICD_MAX_BYTES = 32768;
+function safeRead(filePath, maxBytes) {
+  try {
+    const buf = readFileSync5(filePath);
+    const slice = buf.subarray(0, maxBytes);
+    return slice.toString("utf-8");
+  } catch {
+    return "";
+  }
+}
+function* walkPruned(root) {
+  const stack = [root];
+  while (stack.length > 0) {
+    const dir = stack.pop();
+    if (dir === void 0)
+      break;
+    let entries;
+    try {
+      entries = readdirSync4(dir, { encoding: "utf8" });
+    } catch {
+      continue;
+    }
+    for (const name of entries) {
+      const full = join10(dir, name);
+      let stat;
+      try {
+        stat = statSync8(full, { bigint: false });
+      } catch {
+        continue;
+      }
+      if (stat.isDirectory()) {
+        if (!IGNORE_DIRS2.has(name)) {
+          stack.push(full);
+        }
+      } else if (stat.isFile()) {
+        yield full;
+      }
+    }
+  }
+}
+function detectLanguages(root) {
+  const extCounts = /* @__PURE__ */ new Map();
+  for (const file of walkPruned(root)) {
+    const lang = EXT_MAP[extname2(file).toLowerCase()];
+    if (lang)
+      extCounts.set(lang, (extCounts.get(lang) ?? 0) + 1);
+  }
+  return [...extCounts.entries()].sort((a2, b2) => b2[1] - a2[1]).slice(0, TOP_LANGUAGES_CAP).map(([lang]) => lang);
+}
+function topLevelLayout(root) {
+  const items = [];
+  let entries;
+  try {
+    entries = readdirSync4(root, { encoding: "utf8" });
+  } catch {
+    return [];
+  }
+  for (const name of entries.sort()) {
+    if (name.startsWith(".") && name !== ".github")
+      continue;
+    if (IGNORE_DIRS2.has(name))
+      continue;
+    const full = join10(root, name);
+    let isDir = false;
+    try {
+      isDir = statSync8(full).isDirectory();
+    } catch {
+    }
+    items.push(`${isDir ? "[dir] " : "[file] "}${name}`);
+  }
+  return items.slice(0, TOP_LEVEL_LAYOUT_CAP);
+}
+function stageConfigs(root, maxBytes) {
+  const discoveries = [];
+  for (const name of CONFIG_FILES) {
+    const p2 = join10(root, name);
+    if (!existsSync7(p2))
+      continue;
+    let isFile2 = false;
+    try {
+      isFile2 = statSync8(p2).isFile();
+    } catch {
+      continue;
+    }
+    if (!isFile2)
+      continue;
+    const content = safeRead(p2, maxBytes);
+    if (content.trim()) {
+      discoveries.push({
+        title: `Project config: ${name}`,
+        content: `# ${name}
+
+${content}`,
+        tags: ["config", "project-setup", name.replace(/\./g, "_")]
+      });
+    }
+  }
+  return discoveries;
+}
+function stageDocs(root, maxBytes) {
+  const seen = /* @__PURE__ */ new Set();
+  const discoveries = [];
+  let rootEntries;
+  try {
+    rootEntries = readdirSync4(root, { encoding: "utf8" });
+  } catch {
+    rootEntries = [];
+  }
+  for (const name of rootEntries) {
+    const p2 = join10(root, name);
+    let isFile2 = false;
+    try {
+      isFile2 = statSync8(p2).isFile();
+    } catch {
+      continue;
+    }
+    if (!isFile2)
+      continue;
+    const nameLower = name.toUpperCase();
+    const matchesGlob = DOC_GLOBS.some((prefix) => nameLower.startsWith(prefix));
+    if (!matchesGlob)
+      continue;
+    if (seen.has(p2))
+      continue;
+    seen.add(p2);
+    const content = safeRead(p2, maxBytes);
+    if (content.trim()) {
+      discoveries.push({
+        title: `Documentation: ${name}`,
+        content: `# ${name}
+
+${content}`,
+        tags: ["documentation", "project-context"]
+      });
+    }
+  }
+  const docSuffixes = /* @__PURE__ */ new Set([".md", ".rst", ".txt", ".adoc"]);
+  for (const docDir of DOC_DIRS) {
+    const d2 = join10(root, docDir);
+    if (!existsSync7(d2))
+      continue;
+    let isDir = false;
+    try {
+      isDir = statSync8(d2).isDirectory();
+    } catch {
+      continue;
+    }
+    if (!isDir)
+      continue;
+    let dirEntries;
+    try {
+      dirEntries = readdirSync4(d2, { encoding: "utf8" }).sort();
+    } catch {
+      continue;
+    }
+    for (const name of dirEntries) {
+      const p2 = join10(d2, name);
+      let isFile2 = false;
+      try {
+        isFile2 = statSync8(p2).isFile();
+      } catch {
+        continue;
+      }
+      if (!isFile2)
+        continue;
+      if (!docSuffixes.has(extname2(name).toLowerCase()))
+        continue;
+      if (seen.has(p2))
+        continue;
+      seen.add(p2);
+      const content = safeRead(p2, maxBytes);
+      if (content.trim()) {
+        const relPath = relative2(root, p2);
+        const isAdr = docDir.includes("adr");
+        discoveries.push({
+          title: `Doc: ${relPath}`,
+          content: `# ${name}
+
+${content}`,
+          tags: ["documentation", isAdr ? "adr" : "docs"]
+        });
+      }
+    }
+  }
+  return discoveries.slice(0, STAGE_DOCS_CAP);
+}
+function stageEntryPoints(root, maxBytes) {
+  const discoveries = [];
+  for (const filePath of walkPruned(root)) {
+    if (discoveries.length >= STAGE_ENTRY_POINTS_CAP)
+      break;
+    const name = basename3(filePath);
+    if (!ENTRY_POINT_NAMES.has(name))
+      continue;
+    const content = safeRead(filePath, maxBytes);
+    if (!content.trim())
+      continue;
+    const relPath = relative2(root, filePath);
+    discoveries.push({
+      title: `Entry point: ${relPath}`,
+      content: `# Entry point: ${relPath}
+
+\`\`\`
+${content}
+\`\`\``,
+      tags: ["entry-point", "architecture"]
+    });
+  }
+  return discoveries;
+}
+function stageCicd(root) {
+  const found = [];
+  for (const pathStr of CI_FILES) {
+    if (found.length >= STAGE_CICD_CAP)
+      break;
+    const p2 = join10(root, pathStr);
+    if (!existsSync7(p2))
+      continue;
+    let stat;
+    try {
+      stat = statSync8(p2);
+    } catch {
+      continue;
+    }
+    if (stat.isDirectory()) {
+      let entries;
+      try {
+        entries = readdirSync4(p2, { encoding: "utf8" });
+      } catch {
+        continue;
+      }
+      const yamlFiles = entries.filter((n3) => n3.endsWith(".yml") || n3.endsWith(".yaml")).slice(0, CICD_DIR_YAML_CAP);
+      for (const yamlName of yamlFiles) {
+        if (found.length >= STAGE_CICD_CAP)
+          break;
+        const fp = join10(p2, yamlName);
+        const content = safeRead(fp, CICD_MAX_BYTES);
+        if (content.trim()) {
+          const relPath = relative2(root, fp);
+          found.push({
+            title: `CI/CD: ${relPath}`,
+            content: `# CI/CD: ${relPath}
+
+\`\`\`yaml
+${content}
+\`\`\``,
+            tags: ["ci-cd", "devops"]
+          });
+        }
+      }
+    } else if (stat.isFile()) {
+      const content = safeRead(p2, CICD_MAX_BYTES);
+      if (content.trim()) {
+        found.push({
+          title: `CI/CD: ${basename3(p2)}`,
+          content: `# ${basename3(p2)}
+
+\`\`\`
+${content}
+\`\`\``,
+          tags: ["ci-cd", "devops"]
+        });
+      }
+    }
+  }
+  return found;
+}
+function stageStructuralSummary(root) {
+  const layout = topLevelLayout(root);
+  const languages = detectLanguages(root);
+  const name = basename3(root);
+  const lines = [
+    `# Project structure: ${name}`,
+    `
+**Root:** \`${root}\``,
+    `
+**Primary languages:** ${languages.join(", ") || "unknown"}`,
+    "\n## Top-level layout",
+    ...layout.map((item) => `- ${item}`)
+  ];
+  return {
+    title: `Project structure: ${name}`,
+    content: lines.join("\n"),
+    tags: ["project-structure", "architecture", "seeded"]
+  };
+}
+function collectAllDiscoveries(root, maxBytes) {
+  const discoveries = [];
+  discoveries.push(stageStructuralSummary(root));
+  discoveries.push(...stageConfigs(root, maxBytes));
+  discoveries.push(...stageDocs(root, maxBytes));
+  discoveries.push(...stageEntryPoints(root, maxBytes));
+  discoveries.push(...stageCicd(root));
+  return discoveries;
+}
+var HEAT_FALLBACK = 0.7;
+function heatForTags(tags) {
+  const tagSet = new Set(tags);
+  if (tagSet.has("project-structure") || tagSet.has("structural_summary")) {
+    return HEAT_BY_TYPE["structural_summary"] ?? HEAT_FALLBACK;
+  }
+  if (tagSet.has("documentation"))
+    return HEAT_BY_TYPE["documentation"] ?? HEAT_FALLBACK;
+  if (tagSet.has("entry-point"))
+    return HEAT_BY_TYPE["entry_point"] ?? HEAT_FALLBACK;
+  if (tagSet.has("config") || tagSet.has("project-setup"))
+    return HEAT_BY_TYPE["config"] ?? HEAT_FALLBACK;
+  if (tagSet.has("ci-cd") || tagSet.has("devops"))
+    return HEAT_BY_TYPE["ci_cd"] ?? HEAT_FALLBACK;
+  return HEAT_FALLBACK;
+}
+
+// packages/memory/dist/codebase-analysis/handlers/seed-project.js
+var DEFAULT_MAX_FILE_SIZE_KB2 = 64;
+var BYTES_PER_KB2 = 1024;
+function parseArgs(args) {
+  const raw = args.directory?.trim() || process.cwd();
+  const root = resolvePath(raw);
+  const domain = args.domain?.trim() ?? basename4(root);
+  const maxKb = args.max_file_size_kb ?? DEFAULT_MAX_FILE_SIZE_KB2;
+  const maxBytes = maxKb * BYTES_PER_KB2;
+  const dryRun = args.dry_run ?? false;
+  return { root, domain, maxBytes, dryRun };
+}
+function buildStageCounts(discoveries) {
+  return {
+    structural_summary: 1,
+    configs: discoveries.filter((d2) => d2.tags.includes("config")).length,
+    docs: discoveries.filter((d2) => d2.tags.includes("documentation")).length,
+    entry_points: discoveries.filter((d2) => d2.tags.includes("entry-point")).length,
+    cicd: discoveries.filter((d2) => d2.tags.includes("ci-cd")).length
+  };
+}
+async function storeDiscoveriesAsync(discoveries, root, domain, store) {
+  let stored = 0;
+  let skipped = 0;
+  const memoryIds = [];
+  for (const disc of discoveries) {
+    try {
+      const discTags = [...disc.tags, "seeded"];
+      const initialHeat = heatForTags(discTags);
+      const insertData = {
+        content: disc.content,
+        tags: discTags,
+        domain,
+        directory_context: root,
+        source: "seed_project",
+        importance: initialHeat
+      };
+      let mid;
+      if (store.insertMemoryAsync) {
+        mid = await store.insertMemoryAsync(insertData);
+      } else {
+        mid = store.insertMemory(insertData);
+      }
+      if (mid > 0) {
+        if (store.bumpHeatRawAsync) {
+          await store.bumpHeatRawAsync(mid, initialHeat);
+        } else {
+          store.bumpHeatRaw(mid, initialHeat);
+        }
+        stored++;
+        memoryIds.push(mid);
+      } else {
+        skipped++;
+      }
+    } catch {
+      skipped++;
+    }
+  }
+  return { stored, skipped, memoryIds };
+}
+async function handler6(args, deps) {
+  const { root, domain, maxBytes, dryRun } = parseArgs(args);
+  if (!existsSync8(root)) {
+    return { seeded: false, reason: `directory not found: ${root}` };
+  }
+  const allDiscoveries = collectAllDiscoveries(root, maxBytes);
+  if (dryRun) {
+    return {
+      seeded: false,
+      dry_run: true,
+      discoveries: allDiscoveries.length,
+      titles: allDiscoveries.map((d2) => d2.title)
+    };
+  }
+  let purgedStale = 0;
+  const storeExt = deps.store;
+  if (typeof storeExt.deleteMemoriesByTag === "function") {
+    purgedStale = storeExt.deleteMemoriesByTag("seeded", domain);
+  }
+  const { stored, skipped, memoryIds } = await storeDiscoveriesAsync(allDiscoveries, root, domain, deps.store);
+  return {
+    seeded: true,
+    directory: root,
+    domain,
+    discoveries: allDiscoveries.length,
+    stored,
+    skipped,
+    purged_stale: purgedStale,
+    memory_ids: memoryIds,
+    stages: buildStageCounts(allDiscoveries)
+  };
+}
+var schema5 = {
+  title: "Seed project",
+  description: "Bootstrap the memory store from an existing codebase via a five-stage structural sweep (config extraction, documentation harvesting, entry-point scan, CI/CD detection, structural summary). Each discovery is stored through the standard write gate. Distinct from codebase_analyze (tree-sitter AST per file, much deeper). Returns counts and stored memory IDs."
+};
 
 // packages/memory/dist/codebase-analysis/handlers/change-impact.js
 var IMPACT_BOOST = 0.15;
@@ -50608,8 +47213,8 @@ async function changeImpactHandler(args, deps) {
       detail: String(err instanceof Error ? err.message : err)
     };
   }
-  const storeExt2 = store;
-  const allMemories = (storeExt2.getAllMemoriesForDecay?.() ?? []).slice(0, MAX_MEMORIES_SCANNED);
+  const storeExt = store;
+  const allMemories = (storeExt.getAllMemoriesForDecay?.() ?? []).slice(0, MAX_MEMORIES_SCANNED);
   const matches2 = matchMemories(symbols, files, allMemories);
   const bumped = applyBump ? applyHeatBumps(store, matches2) : 0;
   return {
@@ -50621,12 +47226,26 @@ async function changeImpactHandler(args, deps) {
     heat_bumped: bumped
   };
 }
-var schema10 = {
+var schema6 = {
   title: "Change impact",
   description: (
     // source: cortex@ed33435 mcp_server/handlers/change_impact.py — schema description
     "Report which Cortex memories reference code that changed in a commit. Uses automatised-pipeline's detect_changes and optionally get_impact to compute the symbol/file impact set, then matches against recent memories. Read-only by default; pass apply_heat_bump=true to nudge heat on the top matches. Requires AP enabled (mcpClientPool injected at composition root)."
   )
+};
+
+// packages/memory/dist/wiki/types.js
+var WikiExists = class extends Error {
+  constructor(path5) {
+    super(`wiki page already exists: ${path5}`);
+    this.name = "WikiExists";
+  }
+};
+var WikiMissing = class extends Error {
+  constructor(path5) {
+    super(`wiki page not found: ${path5}`);
+    this.name = "WikiMissing";
+  }
 };
 
 // packages/memory/dist/wiki/index.js
@@ -50647,8 +47266,582 @@ var DEFAULT_CONVENTION = {
   description: "Page: <kebab-slug>.md \u2014 lowercase alphanum + hyphens, no underscores, no leading/trailing hyphens."
 };
 
+// packages/memory/dist/wiki/rule-engine.js
+var REJECT_TARGETS = /* @__PURE__ */ new Set(["reject", "-", "", null, "none", void 0]);
+function matches(rule, content, tags) {
+  const pattern = rule.pattern ?? "";
+  const kind2 = (rule.pattern_kind ?? "").toLowerCase();
+  if (!pattern)
+    return false;
+  if (kind2 === "prefix") {
+    return content.trimStart().toLowerCase().startsWith(pattern.toLowerCase());
+  }
+  if (kind2 === "substring") {
+    return content.toLowerCase().includes(pattern.toLowerCase());
+  }
+  if (kind2 === "regex") {
+    try {
+      return new RegExp(pattern, "i").test(content);
+    } catch {
+      return false;
+    }
+  }
+  if (kind2 === "tag") {
+    return tags.has(pattern.toLowerCase());
+  }
+  return false;
+}
+function applyRules2(content, tags, rules) {
+  if (!content || !rules.length) {
+    return {
+      matched_rule: null,
+      target_kind: null,
+      rationale: "no content or no rules loaded"
+    };
+  }
+  const tagSet = new Set((tags ?? []).filter((t2) => typeof t2 === "string").map((t2) => t2.toLowerCase()));
+  const candidates = [];
+  for (let idx = 0; idx < rules.length; idx++) {
+    const rule = rules[idx];
+    if (!rule)
+      continue;
+    if (matches(rule, content, tagSet)) {
+      candidates.push([idx, -(rule.weight ?? 1), rule]);
+    }
+  }
+  if (!candidates.length) {
+    return { matched_rule: null, target_kind: null, rationale: "no rule matched" };
+  }
+  candidates.sort((a2, b2) => a2[0] !== b2[0] ? a2[0] - b2[0] : a2[1] - b2[1]);
+  const best = candidates[0][2];
+  const targetNorm = REJECT_TARGETS.has(best.target_kind ?? null) ? null : best.target_kind ?? null;
+  return {
+    matched_rule: best,
+    target_kind: targetNorm,
+    rationale: `rule [${best.pattern_kind}] ${JSON.stringify(best.pattern)} \u2192 ${best.target_kind ?? "reject"}`
+  };
+}
+
 // packages/memory/dist/wiki/index.js
 init_schema_loader();
+
+// packages/memory/dist/wiki/page-classifier.js
+var REJECT_PREFIXES = [
+  "# Tool:",
+  "Tool:",
+  "tool:",
+  "# tool:",
+  "System:",
+  "system:",
+  "<tool_result>",
+  "<result>",
+  "<command-message>",
+  "<command-name>",
+  "# <command-message>",
+  "# <command-name>"
+];
+var REJECT_TITLES = /* @__PURE__ */ new Set([
+  "tool-edit",
+  "tool-bash",
+  "tool-read",
+  "tool-write",
+  "tool-grep",
+  "tool-glob",
+  "tool-search"
+]);
+var REJECT_PATTERNS = [
+  /^#*\s*Implement the following plan/i,
+  /^#*\s*Execute the following/i,
+  /^#*\s*You must respond with only/i,
+  /^#*\s*Perform all verification/i,
+  /^#*\s*Take the code and split/i,
+  /^\s*\{[\s\S]*\}\s*$/,
+  /^\s*\[[\s\S]*\]\s*$/,
+  /<command-(message|name|args)>/i,
+  /^#*\s*Spell:\s*\w+/i,
+  /^#*\s*Shape test content/i
+];
+var ADR_PATTERNS = [
+  /\b(decided to|decision:|the decision is|chose .+ because|rejected .+ (due to|because)|we will use|selected .+ over)\b/i
+];
+var LESSON_PATTERNS = [
+  /\b(the bug was|root cause|lesson learned|mistake was|never again|fix:|fixed by|the issue was|the problem was|turned out)\b/i
+];
+var CONVENTION_PATTERNS = [
+  /\b(always use|never |the canonical|convention:|rule:|standard:|must follow|naming convention|coding standard)\b/i
+];
+var SPEC_TAGS = /* @__PURE__ */ new Set(["spec", "design", "specification", "feature"]);
+var IMPERATIVE_TITLE_PATTERNS = [
+  /^\s*#*\s*(let'?s|lets)\b/i,
+  /^\s*#*\s*(use|fetch|take|give|look at|verify|audit|check|make|do|run|push|remove|rename|adapt|implement|execute|perform|replace|add|delete|update|modify|fix|install|setup|configure|create|build|write|test|sync|import|export|move|copy|ensure|try|go|start|stop|open|close|clean|restart|refactor|migrate|enable|disable|apply|reset|rebuild|regenerate|analyze)\b/i,
+  /^\s*#*\s*you (must|should|need|will|can)\b/i,
+  /^\s*#*\s*(how|what|why|when|where|can|should|is|does)\b[^.]*\?\s*$/
+];
+var FIRST_PERSON_PATTERNS = [
+  /^\s*#*\s*(we|i)\s+(pushed|pulled|did|have|did|tried|ran|found|saw|noticed|got|made|created|added|removed|fixed|broke|updated|changed|deleted|merged|re?-?started|tested|benchmarked|think|need|want|should|re)/i
+];
+var STATUS_PATTERNS = [
+  /^\s*#*\s*(successfully|done|failing|failed|broken|working|not working|finished|completed|in progress|wip|todo|pending)\b/i,
+  /local[-_]command[-_](stdout|stderr|stdin|output)/i,
+  /session[-_]test[-_]session/i,
+  /in domain unknown/i
+];
+var DEIXIS_PATTERNS = [
+  /^\s*#*\s*(just now|just did|previous|earlier|last session|new wip|the one we|like (we|i) (said|did)|yesterday|today|tomorrow|a while ago|recent(ly)?)\b/i
+];
+var PATH_OR_URL_TITLE_PATTERNS = [
+  /^\s*#*\s*[/~]/,
+  /^\s*#*\s*[A-Za-z]:[\\/]/,
+  /^\s*#*\s*(https?|ftp|file|ssh|git):\/\//i,
+  /^\s*#*\s*[\w.-]+\.(pdf|png|jpg|jpeg|svg|gif|zip|tar\.gz|docx?|xlsx?|csv|log|yaml|yml)\b/i
+];
+var AUDIT_TAGS = /* @__PURE__ */ new Set([
+  "_backfill",
+  "imported",
+  "session-summary",
+  "tool-output",
+  "code-review",
+  "stage-1",
+  "stage-2",
+  "stage-3",
+  "stage-4",
+  "stage-5",
+  "stage-6",
+  "stage-7",
+  "stage-8",
+  "stage-9",
+  "stage-10",
+  "stage-11",
+  "audit",
+  "automated",
+  "wip",
+  "progress"
+]);
+var AUDIT_TITLE_PATTERNS = [
+  /\bstage[ -]?\d+\b/i,
+  /\b(code[ -]?review|audit[ -]?report|review[ -]?notes?)\b/i,
+  /\bsession[ -]?(summary|log|report|\d+)\b/i
+];
+function failsHardNegatives(content, firstLine) {
+  for (const pat of IMPERATIVE_TITLE_PATTERNS) {
+    if (pat.test(firstLine))
+      return true;
+  }
+  for (const pat of FIRST_PERSON_PATTERNS) {
+    if (pat.test(firstLine))
+      return true;
+  }
+  const first500 = content.slice(0, 500);
+  for (const pat of STATUS_PATTERNS) {
+    if (pat.test(firstLine))
+      return true;
+    if (pat.test(first500))
+      return true;
+  }
+  for (const pat of DEIXIS_PATTERNS) {
+    if (pat.test(firstLine))
+      return true;
+  }
+  for (const pat of PATH_OR_URL_TITLE_PATTERNS) {
+    if (pat.test(firstLine))
+      return true;
+  }
+  for (const pat of AUDIT_TITLE_PATTERNS) {
+    if (pat.test(firstLine))
+      return true;
+  }
+  return false;
+}
+function failsAuditTagGate(tags) {
+  for (const tag of tags) {
+    if (AUDIT_TAGS.has(tag))
+      return true;
+  }
+  return false;
+}
+var STRUCTURE_HEADING = /^#{1,4}\s+\S/m;
+var STRUCTURE_LIST = /^\s*[-*+]\s+\S/m;
+var STRUCTURE_CODE = /```\w*\n/m;
+var CITATION = /\b(ADR-?\d+|paper|arxiv|doi:|https?:\/\/|\b[A-Z][a-z]+ (et al\.|&) \d{4}|\b[A-Z][a-z]+ \d{4}\b)/;
+var DECLARATIVE = /\b(is|are|means|causes?|because|implies|requires?|enables?|prevents?|produces?|results? in|leads? to|defined? as|consists of)\b/ig;
+var FILE_OR_ENTITY_REF = /\b[a-zA-Z_]\w*\.(py|js|ts|md|json|yaml|sql|go|rs|rb|java)\b|\b[a-z_]+\(\)|\bclass\s+[A-Z]\w+|\bdef\s+[a-z_]\w+/;
+var KNOWLEDGE_TAGS = /* @__PURE__ */ new Set([
+  "decision",
+  "adr",
+  "architecture",
+  "spec",
+  "design",
+  "lesson",
+  "convention",
+  "rule",
+  "standard",
+  "paper",
+  "research",
+  "reference"
+]);
+var POSITIVE_SCORE_THRESHOLD = 4;
+function positiveScore(content, tags) {
+  let score = 0;
+  const length = content.length;
+  const struct = (STRUCTURE_HEADING.test(content) ? 1 : 0) + (STRUCTURE_LIST.test(content) ? 1 : 0) + (STRUCTURE_CODE.test(content) ? 1 : 0);
+  if (struct >= 1)
+    score++;
+  const declarativeMatches = content.match(DECLARATIVE) ?? [];
+  if (declarativeMatches.length >= 2)
+    score++;
+  if (CITATION.test(content))
+    score++;
+  if (length >= 200)
+    score++;
+  for (const tag of tags) {
+    if (KNOWLEDGE_TAGS.has(tag)) {
+      score++;
+      break;
+    }
+  }
+  if (length >= 200 && length <= 3e3)
+    score++;
+  const techTokens = new Set(content.match(/\b(?:[A-Z][a-z]+[A-Z]\w*|[a-z]+_[a-z_]+)\b/g) ?? []);
+  if (techTokens.size >= 3)
+    score++;
+  if (FILE_OR_ENTITY_REF.test(content))
+    score++;
+  return score;
+}
+var userRulesCache = null;
+function loadUserRules(wikiRoot) {
+  if (userRulesCache !== null)
+    return userRulesCache;
+  if (!wikiRoot) {
+    userRulesCache = [];
+    return userRulesCache;
+  }
+  try {
+    const { loadRegistry: loadRegistry2 } = (init_schema_loader(), __toCommonJS(schema_loader_exports));
+    const registry2 = loadRegistry2(wikiRoot);
+    userRulesCache = registry2.rules;
+  } catch {
+    userRulesCache = [];
+  }
+  return userRulesCache;
+}
+function classifyMemory(content, tags, wikiRoot) {
+  if (!content || content.trim().length < 50)
+    return null;
+  const stripped = content.trim();
+  const firstLine = stripped.split("\n")[0]?.trim() ?? "";
+  const tagSetPre = new Set((tags ?? []).map((t2) => t2.toLowerCase()));
+  if (failsAuditTagGate(tagSetPre))
+    return null;
+  const rules = loadUserRules(wikiRoot);
+  if (rules.length > 0) {
+    const match2 = applyRules2(content, tags ?? null, rules);
+    if (match2.matched_rule !== null) {
+      return match2.target_kind;
+    }
+  }
+  for (const prefix of REJECT_PREFIXES) {
+    if (stripped.startsWith(prefix))
+      return null;
+  }
+  for (const pattern of REJECT_PATTERNS) {
+    if (pattern.test(stripped))
+      return null;
+  }
+  if (REJECT_TITLES.has(slugify2(firstLine)))
+    return null;
+  if (failsHardNegatives(content, firstLine))
+    return null;
+  const EXPLICIT_KNOWLEDGE_TAGS = /* @__PURE__ */ new Set([
+    "decision",
+    "adr",
+    "architecture",
+    "spec",
+    "design",
+    "lesson",
+    "convention",
+    "rule",
+    "standard",
+    "paper",
+    "research"
+  ]);
+  let hasExplicitTag = false;
+  for (const tag of tagSetPre) {
+    if (EXPLICIT_KNOWLEDGE_TAGS.has(tag)) {
+      hasExplicitTag = true;
+      break;
+    }
+  }
+  if (!hasExplicitTag) {
+    if (positiveScore(content, tagSetPre) < POSITIVE_SCORE_THRESHOLD)
+      return null;
+  }
+  for (const pat of ADR_PATTERNS) {
+    if (pat.test(content))
+      return "adr";
+  }
+  if (tagSetPre.has("decision") || tagSetPre.has("adr"))
+    return "adr";
+  for (const pat of LESSON_PATTERNS) {
+    if (pat.test(content))
+      return "lesson";
+  }
+  if (tagSetPre.has("lesson") || tagSetPre.has("debugging") || tagSetPre.has("fix") || tagSetPre.has("bug-fix")) {
+    return "lesson";
+  }
+  for (const pat of CONVENTION_PATTERNS) {
+    if (pat.test(content))
+      return "convention";
+  }
+  if (tagSetPre.has("convention") || tagSetPre.has("rule") || tagSetPre.has("standard")) {
+    return "convention";
+  }
+  if (hasTagIn(tagSetPre, SPEC_TAGS) && content.length > 200)
+    return "spec";
+  if ((tagSetPre.has("architecture") || tagSetPre.has("design")) && content.length > 200)
+    return "spec";
+  return "note";
+}
+function hasTagIn(tagSet, candidates) {
+  for (const tag of tagSet) {
+    if (candidates.has(tag))
+      return true;
+  }
+  return false;
+}
+function slugify2(text) {
+  return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
+}
+
+// packages/memory/dist/wiki/links.js
+var RELATIONS = {
+  supersedes: "superseded_by",
+  superseded_by: "supersedes",
+  implements: "implemented_by",
+  implemented_by: "implements",
+  depends_on: "depended_on_by",
+  depended_on_by: "depends_on",
+  derived_from: "derives",
+  derives: "derived_from",
+  see_also: "see_also"
+};
+var RELATED_HEADING = "## Related";
+function inverseOf(relation) {
+  const inv = RELATIONS[relation];
+  if (inv === void 0)
+    throw new Error(`unknown relation: ${relation}`);
+  return inv;
+}
+function formatEntry(entry) {
+  return `- ${entry.relation} \u2192 [${entry.target}](${entry.target})`;
+}
+function parseEntry(line) {
+  const stripped = line.trim();
+  if (!stripped.startsWith("- "))
+    return null;
+  const payload = stripped.slice(2);
+  if (!payload.includes(" \u2192 "))
+    return null;
+  const [relPart, rest] = payload.split(" \u2192 ", 2);
+  const rel = relPart.trim();
+  if (!RELATIONS[rel])
+    return null;
+  let target = rest.trim();
+  if (target.startsWith("[") && target.includes("](") && target.endsWith(")")) {
+    target = target.split("](", 2)[1].slice(0, -1);
+  }
+  return { relation: rel, target };
+}
+function splitBodyAndRelated(body) {
+  const lines = body.split("\n");
+  let headingIdx = null;
+  for (let idx2 = 0; idx2 < lines.length; idx2++) {
+    if (lines[idx2].trim() === RELATED_HEADING) {
+      headingIdx = idx2;
+      break;
+    }
+  }
+  if (headingIdx === null)
+    return [body, []];
+  let before = lines.slice(0, headingIdx);
+  const entries = [];
+  let idx = headingIdx + 1;
+  while (idx < lines.length) {
+    const line = lines[idx];
+    if (line.startsWith("## "))
+      break;
+    const parsed = parseEntry(line);
+    if (parsed !== null)
+      entries.push(parsed);
+    idx++;
+  }
+  const after = lines.slice(idx);
+  while (before.length > 0 && before[before.length - 1] === "") {
+    before = before.slice(0, -1);
+  }
+  let rebuilt = before.join("\n");
+  if (after.length > 0) {
+    rebuilt = (rebuilt ? rebuilt + "\n\n" : "") + after.join("\n");
+  }
+  return [rebuilt, entries];
+}
+function renderRelated(entries) {
+  if (!entries.length)
+    return "";
+  const sorted = [...entries].sort((a2, b2) => {
+    const rc = a2.relation.localeCompare(b2.relation);
+    return rc !== 0 ? rc : a2.target.localeCompare(b2.target);
+  });
+  const lines = [RELATED_HEADING, "", ...sorted.map(formatEntry)];
+  return lines.join("\n") + "\n";
+}
+function applyLink(body, entry) {
+  if (!RELATIONS[entry.relation]) {
+    throw new Error(`unknown relation: ${entry.relation}`);
+  }
+  const [base, existing] = splitBodyAndRelated(body);
+  const merged = [...existing];
+  const alreadyPresent = merged.some((e2) => e2.relation === entry.relation && e2.target === entry.target);
+  if (!alreadyPresent)
+    merged.push(entry);
+  const rendered = renderRelated(merged);
+  if (!base)
+    return rendered;
+  const separator = base.endsWith("\n") ? "" : "\n";
+  return `${base}${separator}
+${rendered}`;
+}
+
+// packages/memory/dist/wiki/symbol-extract.js
+var IDENT = String.raw`[A-Za-z_][A-Za-z_0-9]{1,}`;
+var BACKTICK_CALL = /`([A-Za-z_][\w.]*(?:\(\)|\([^`]{0,60}\)))`/g;
+var DOTTED_RE = new RegExp(String.raw`\b(${IDENT}(?:\.${IDENT}){1,})\b`, "g");
+var FILE_SUFFIXES = /* @__PURE__ */ new Set([
+  "py",
+  "js",
+  "ts",
+  "tsx",
+  "jsx",
+  "md",
+  "json",
+  "yaml",
+  "yml",
+  "toml",
+  "sql",
+  "go",
+  "rs",
+  "rb",
+  "java",
+  "cpp",
+  "c",
+  "h",
+  "hpp",
+  "sh",
+  "txt",
+  "csv",
+  "ini",
+  "cfg",
+  "lock",
+  "log"
+]);
+function stripCallArgs(s2) {
+  const idx = s2.indexOf("(");
+  return idx >= 0 ? s2.slice(0, idx) : s2;
+}
+function looksLikeFile(qname) {
+  const tail = qname.split(".").pop()?.toLowerCase() ?? "";
+  return FILE_SUFFIXES.has(tail);
+}
+function extractSymbolRefs(text) {
+  if (!text)
+    return [];
+  const seen = /* @__PURE__ */ new Set();
+  const out = [];
+  const backtickRe = new RegExp(BACKTICK_CALL.source, "g");
+  let m2;
+  while ((m2 = backtickRe.exec(text)) !== null) {
+    const q2 = stripCallArgs(m2[1]);
+    if (q2.includes(".")) {
+      if (looksLikeFile(q2))
+        continue;
+    }
+    if (seen.has(q2))
+      continue;
+    seen.add(q2);
+    out.push(q2);
+  }
+  const dottedRe = new RegExp(DOTTED_RE.source, "g");
+  while ((m2 = dottedRe.exec(text)) !== null) {
+    const q2 = m2[1];
+    if (looksLikeFile(q2))
+      continue;
+    if (seen.has(q2))
+      continue;
+    seen.add(q2);
+    out.push(q2);
+  }
+  return out;
+}
+function harvestPageSymbols(page, claimEvidenceSymbols) {
+  const refs = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const q2 of claimEvidenceSymbols ?? []) {
+    if (q2 && !seen.has(q2)) {
+      seen.add(q2);
+      refs.push(q2);
+    }
+  }
+  function add3(chunk) {
+    for (const q2 of extractSymbolRefs(chunk)) {
+      if (!seen.has(q2)) {
+        seen.add(q2);
+        refs.push(q2);
+      }
+    }
+  }
+  add3(page.lead ?? "");
+  const sections = page.sections;
+  if (sections) {
+    if (Array.isArray(sections)) {
+      for (const s2 of sections)
+        add3(s2.body);
+    } else {
+      for (const body of Object.values(sections))
+        add3(String(body));
+    }
+  }
+  return refs;
+}
+
+// packages/memory/dist/wiki/symbol-verify.js
+var MIN_SYMBOL_REFS = 3;
+var SYMBOL_STALE_THRESHOLD = 0.5;
+function evaluateSymbolStaleness(args) {
+  const { page_id, is_symbol_stale_was, symbol_refs, existence } = args;
+  if (symbol_refs.length < MIN_SYMBOL_REFS) {
+    return {
+      page_id,
+      symbol_refs,
+      missing_refs: [],
+      is_symbol_stale_now: false,
+      is_symbol_stale_was,
+      transitioned: is_symbol_stale_was,
+      rationale: `too few symbol refs (${symbol_refs.length} < ${MIN_SYMBOL_REFS})`
+    };
+  }
+  const missing = symbol_refs.filter((q2) => !existence[q2]);
+  const fraction = missing.length / symbol_refs.length;
+  const isNow = fraction >= SYMBOL_STALE_THRESHOLD;
+  return {
+    page_id,
+    symbol_refs,
+    missing_refs: missing,
+    is_symbol_stale_now: isNow,
+    is_symbol_stale_was,
+    transitioned: isNow !== is_symbol_stale_was,
+    rationale: `${missing.length}/${symbol_refs.length} symbols missing (${Math.round(fraction * 100)}% \u2014 threshold ${Math.round(SYMBOL_STALE_THRESHOLD * 100)}%)`
+  };
+}
 
 // packages/memory/dist/wiki/groomer.js
 init_layout();
@@ -50659,6 +47852,402 @@ init_pages();
 
 // packages/memory/dist/wiki/readme.js
 init_layout();
+
+// packages/memory/dist/wiki/handlers/wiki-write.js
+async function handler7(args, deps) {
+  const relPath = (args.path ?? "").trim();
+  if (!relPath)
+    return { error: "path is required" };
+  const mode = args.mode ?? "create";
+  const content = args.content;
+  if (!content) {
+    return {
+      error: "content is required \u2014 render the page yourself (e.g. via wiki-adr for ADRs) and pass the final markdown."
+    };
+  }
+  try {
+    const result = await deps.writePage(deps.wikiRoot, relPath, content, mode);
+    const tags = [...args.tags ?? []];
+    if (deps.storePointerMemory) {
+      await deps.storePointerMemory(relPath, content, tags).catch(() => void 0);
+    }
+    return {
+      path: result.path,
+      mode: result.mode,
+      created: result.created,
+      bytes_written: result.bytes_written,
+      root: deps.wikiRoot
+    };
+  } catch (err) {
+    if (err instanceof WikiExists)
+      return { error: `page already exists: ${relPath}` };
+    if (err instanceof WikiMissing)
+      return { error: `page does not exist: ${relPath}` };
+    return { error: `write failed: ${String(err)}` };
+  }
+}
+
+// packages/memory/dist/wiki/handlers/wiki-read.js
+async function handler8(args, deps) {
+  const relPath = (args.path ?? "").trim();
+  if (!relPath)
+    return { error: "path is required" };
+  try {
+    const content = await deps.readPage(deps.wikiRoot, relPath);
+    if (content === null)
+      return { error: `page not found: ${relPath}` };
+    return { path: relPath, content, root: deps.wikiRoot };
+  } catch (err) {
+    return { error: `read failed: ${String(err)}` };
+  }
+}
+
+// packages/memory/dist/wiki/handlers/wiki-list.js
+init_layout();
+async function handler9(args, deps) {
+  const kind2 = args.kind ?? null;
+  if (kind2 && !PAGE_KINDS.includes(kind2)) {
+    return { error: `unknown kind: ${kind2}` };
+  }
+  try {
+    const pages = await deps.listPages(deps.wikiRoot, kind2);
+    return { root: deps.wikiRoot, count: pages.length, pages };
+  } catch (err) {
+    return { error: `list failed: ${String(err)}` };
+  }
+}
+var schema7 = {
+  title: "Wiki \u2014 list pages",
+  description: "Enumerate every authored wiki page under ~/.claude/methodology/wiki/, filesystem-walked from the wiki root. Optionally restrict by kind.",
+  inputSchema: {
+    type: "object",
+    required: [],
+    properties: {
+      kind: {
+        type: "string",
+        enum: [...PAGE_KINDS],
+        description: "Restrict the listing to a single page kind."
+      }
+    }
+  }
+};
+
+// packages/memory/dist/wiki/handlers/wiki-adr.js
+init_layout();
+init_pages();
+async function handler10(args, deps) {
+  const title = (args.title ?? "").trim();
+  const context = (args.context ?? "").trim();
+  const decision = (args.decision ?? "").trim();
+  const consequences = (args.consequences ?? "").trim();
+  const status = args.status ?? "accepted";
+  const tags = [...args.tags ?? []];
+  if (!title || !context || !decision || !consequences) {
+    return { error: "title, context, decision and consequences are required" };
+  }
+  if (!ADR_STATUSES.includes(status)) {
+    return { error: `unknown status: ${status}` };
+  }
+  let number3;
+  try {
+    number3 = await deps.nextAdrNumber(deps.wikiRoot);
+  } catch (err) {
+    return { error: `cannot determine next ADR number: ${String(err)}` };
+  }
+  const slug = slugify(title);
+  const filename = adrFilename(number3, slug);
+  const relPath = pagePath("adr", filename);
+  const content = buildAdr({ number: number3, title, context, decision, consequences, status, tags });
+  try {
+    const result = await deps.writePage(deps.wikiRoot, relPath, content, "create");
+    if (deps.storePointerMemory) {
+      await deps.storePointerMemory(relPath, content, ["wiki", "adr", ...tags]).catch(() => void 0);
+    }
+    return {
+      path: result.path,
+      number: number3,
+      title,
+      status,
+      created: result.created,
+      bytes_written: result.bytes_written,
+      root: deps.wikiRoot
+    };
+  } catch (err) {
+    if (err instanceof WikiExists)
+      return { error: `ADR already exists: ${relPath}` };
+    return { error: `write failed: ${String(err)}` };
+  }
+}
+var schema8 = {
+  description: "Create a numbered ADR (Architecture Decision Record) from structured Context/Decision/Consequences fields. Atomically computes the next free ADR number, renders the standard template, writes wiki/adr/<NNNN>-<slug>.md, and registers a protected pointer memory tagged `wiki`+`adr`.",
+  inputSchema: {
+    type: "object",
+    required: ["title", "context", "decision", "consequences"],
+    properties: {
+      title: { type: "string", description: "Short imperative title of the decision." },
+      context: { type: "string", description: "The forces at play. Markdown allowed." },
+      decision: { type: "string", description: "What was decided, in active voice." },
+      consequences: { type: "string", description: "Resulting consequences." },
+      status: { type: "string", enum: [...ADR_STATUSES], default: "accepted" },
+      tags: { type: "array", items: { type: "string" } }
+    }
+  }
+};
+
+// packages/memory/dist/wiki/handlers/wiki-link.js
+async function updatePage(relPath, entry, deps) {
+  const current = await deps.readPage(deps.wikiRoot, relPath);
+  if (current === null)
+    throw new WikiMissing(relPath);
+  const updated = applyLink(current, entry);
+  await deps.writePage(deps.wikiRoot, relPath, updated, "replace");
+}
+async function handler11(args, deps) {
+  const fromPath = (args.from_path ?? "").trim();
+  const toPath = (args.to_path ?? "").trim();
+  const relation = (args.relation ?? "").trim();
+  if (!fromPath || !toPath || !relation) {
+    return { error: "from_path, to_path, and relation are required" };
+  }
+  if (!RELATIONS[relation]) {
+    return { error: `unknown relation: ${relation}` };
+  }
+  try {
+    await updatePage(fromPath, { relation, target: toPath }, deps);
+    await updatePage(toPath, { relation: inverseOf(relation), target: fromPath }, deps);
+  } catch (err) {
+    if (err instanceof WikiMissing)
+      return { error: `page not found: ${String(err.message)}` };
+    return { error: `link failed: ${String(err)}` };
+  }
+  return { from_path: fromPath, to_path: toPath, relation, inverse: inverseOf(relation) };
+}
+var schema9 = {
+  title: "Wiki \u2014 link pages",
+  description: "Add a bidirectional link between two wiki pages: write the forward relation into the ## Related section of the source page and the inverse relation into the target page, in one idempotent operation.",
+  inputSchema: {
+    type: "object",
+    required: ["from_path", "to_path", "relation"],
+    properties: {
+      from_path: { type: "string" },
+      to_path: { type: "string" },
+      relation: { type: "string", enum: Object.keys(RELATIONS) }
+    }
+  }
+};
+
+// packages/memory/dist/wiki/handlers/wiki-reindex.js
+init_layout();
+var BANNER = "<!-- Generated by Cortex wiki-reindex \u2014 the authored pages are the source of truth. -->";
+function renderIndex(grouped) {
+  const lines = [BANNER, "", "# Wiki Index", ""];
+  const total = Object.values(grouped).reduce((s2, ps) => s2 + ps.length, 0);
+  lines.push(`**${total} authored pages across ${PAGE_KINDS.length} kinds.**`);
+  lines.push("");
+  for (const kind2 of PAGE_KINDS) {
+    const pages = grouped[kind2] ?? [];
+    lines.push(`## ${kind2} (${pages.length})`);
+    lines.push("");
+    if (!pages.length) {
+      lines.push("_No pages yet._");
+      lines.push("");
+      continue;
+    }
+    for (const rel of pages) {
+      const name = rel.split("/").pop() ?? rel;
+      lines.push(`- [${name}](../${rel})`);
+    }
+    lines.push("");
+  }
+  return lines.join("\n");
+}
+async function handler12(_args, deps) {
+  const grouped = {};
+  for (const kind2 of PAGE_KINDS) {
+    try {
+      grouped[kind2] = await deps.listPages(deps.wikiRoot, kind2);
+    } catch {
+      grouped[kind2] = [];
+    }
+  }
+  const content = renderIndex(grouped);
+  const target = deps.joinPath(deps.wikiRoot, indexPath());
+  const dir = target.split("/").slice(0, -1).join("/");
+  try {
+    await deps.ensureDir(dir);
+    await deps.writeFile(target, content);
+  } catch (err) {
+    return { error: `reindex failed: ${String(err)}` };
+  }
+  return {
+    path: indexPath(),
+    total_pages: Object.values(grouped).reduce((s2, ps) => s2 + ps.length, 0),
+    by_kind: Object.fromEntries(Object.entries(grouped).map(([k2, v2]) => [k2, v2.length])),
+    root: deps.wikiRoot
+  };
+}
+
+// packages/memory/dist/wiki/handlers/wiki-purge.js
+init_pages();
+var PAGE_DIRS = /* @__PURE__ */ new Set(["adr", "conventions", "guides", "journal", "lessons", "notes", "reference", "specs"]);
+function parseTags2(raw) {
+  if (Array.isArray(raw))
+    return raw.map(String);
+  if (typeof raw !== "string")
+    return [];
+  const stripped = raw.trim().replace(/^\[|\]$/g, "");
+  return stripped.split(",").map((t2) => t2.trim().replace(/^['"]|['"]$/g, "")).filter(Boolean);
+}
+function evaluatePage(content) {
+  const doc = parsePage(content);
+  const tags = parseTags2(doc.frontmatter["tags"]);
+  let body = doc.body;
+  const lines = body.trim().split("\n");
+  const bodyLines = lines[0]?.startsWith("# ") ? lines.slice(1) : lines;
+  const bodyText = bodyLines.join("\n").trim() || String(doc.frontmatter["title"] ?? "");
+  return [classifyMemory(bodyText, tags), tags];
+}
+async function handler13(args, deps) {
+  const apply = args.apply ?? false;
+  const kindFilter = args.kind ?? null;
+  if (!deps.wikiRoot)
+    return { error: "wiki root not configured" };
+  let entries;
+  try {
+    entries = await deps.listAllMarkdownFiles(deps.wikiRoot, kindFilter);
+  } catch (err) {
+    return { error: `wiki root does not exist or cannot be listed: ${String(err)}` };
+  }
+  const kept = [];
+  const purged = [];
+  const errors = [];
+  for (const { relPath, content } of entries) {
+    const firstSegment = relPath.split("/")[0] ?? "";
+    if (!PAGE_DIRS.has(firstSegment))
+      continue;
+    try {
+      const [decision] = evaluatePage(content);
+      if (decision === null) {
+        purged.push(relPath);
+        if (apply) {
+          await deps.deleteFile(`${deps.wikiRoot}/${relPath}`).catch((err) => {
+            errors.push(`${relPath}: ${String(err)}`);
+          });
+        }
+      } else {
+        kept.push(relPath);
+      }
+    } catch (err) {
+      errors.push(`${relPath}: ${String(err)}`);
+    }
+  }
+  if (apply && purged.length && deps.removeEmptyDirs) {
+    await deps.removeEmptyDirs(deps.wikiRoot).catch(() => void 0);
+  }
+  return {
+    applied: apply,
+    scanned: kept.length + purged.length,
+    kept: kept.length,
+    purged: purged.length,
+    purged_paths: purged,
+    errors,
+    root: deps.wikiRoot
+  };
+}
+var schema10 = {
+  title: "Wiki \u2014 purge stale",
+  description: "Re-evaluate every authored wiki page against the current classifier and delete the ones that no longer pass the admission gate. Defaults to dry-run; pass apply=true to actually delete.",
+  inputSchema: {
+    type: "object",
+    required: [],
+    properties: {
+      apply: { type: "boolean", default: false },
+      kind: { type: "string", enum: [...PAGE_DIRS] }
+    }
+  }
+};
+
+// packages/memory/dist/wiki/handlers/wiki-verify.js
+function parseLeadAndSections(md) {
+  const lines = md.split("\n");
+  const leadLines = [];
+  const sections = {};
+  let current = null;
+  const buf = [];
+  for (const line of lines) {
+    if (line.startsWith("## ")) {
+      if (current !== null) {
+        sections[current] = buf.join("\n").trim();
+      } else {
+        leadLines.push(...buf);
+      }
+      current = line.slice(3).trim();
+      buf.length = 0;
+    } else {
+      buf.push(line);
+    }
+  }
+  if (current !== null) {
+    sections[current] = buf.join("\n").trim();
+  } else {
+    leadLines.push(...buf);
+  }
+  return { lead: leadLines.join("\n").trim(), sections };
+}
+async function verifyOne(path5, deps) {
+  const content = await deps.readPage(deps.wikiRoot, path5);
+  if (content === null) {
+    return { page: path5, symbol_refs: [], missing_refs: [], is_symbol_stale: false, rationale: "page not found", error: "page not found" };
+  }
+  const pageStruct = parseLeadAndSections(content);
+  const symbolRefs = harvestPageSymbols(pageStruct).slice(0, 200);
+  const existence = symbolRefs.length > 0 ? await deps.verifySymbols(symbolRefs) : {};
+  const verdict = evaluateSymbolStaleness({
+    page_id: path5,
+    is_symbol_stale_was: false,
+    symbol_refs: symbolRefs,
+    existence
+  });
+  return {
+    page: path5,
+    symbol_refs: verdict.symbol_refs,
+    missing_refs: verdict.missing_refs,
+    is_symbol_stale: verdict.is_symbol_stale_now,
+    rationale: verdict.rationale
+  };
+}
+async function handler14(args, deps) {
+  if (!deps.isApEnabled()) {
+    return {
+      status: "skipped",
+      reason: "ap_disabled",
+      detail: "AP is disabled. Set CORTEX_MEMORY_AP_ENABLED=1 in your MCP config (default) and install automatised-pipeline to run symbol verification."
+    };
+  }
+  const target = (args.path ?? "").trim();
+  if (target) {
+    const result = await verifyOne(target, deps);
+    return {
+      status: "ok",
+      results: [result],
+      threshold: SYMBOL_STALE_THRESHOLD,
+      min_refs: MIN_SYMBOL_REFS
+    };
+  }
+  const pages = await deps.listPages(deps.wikiRoot);
+  const results = await Promise.all(pages.map((p2) => verifyOne(p2, deps)));
+  const stale = results.filter((r2) => r2.is_symbol_stale);
+  return {
+    status: "ok",
+    results,
+    summary: {
+      total: results.length,
+      stale: stale.length,
+      threshold: SYMBOL_STALE_THRESHOLD,
+      min_refs: MIN_SYMBOL_REFS
+    }
+  };
+}
 
 // packages/memory/dist/wiki/handlers/wiki-handlers.js
 init_schema_loader();
@@ -50673,6 +48262,124 @@ init_layout();
 import * as childProcess from "node:child_process";
 import { promisify } from "node:util";
 var execFile2 = promisify(childProcess.execFile);
+
+// packages/memory/dist/wiki/storage/wiki-store.js
+init_layout();
+import * as fs3 from "node:fs";
+import * as path2 from "node:path";
+function safeJoin(root, relPath) {
+  if (!relPath || relPath.includes("\0")) {
+    throw new Error("invalid wiki path: empty or contains null byte");
+  }
+  if (path2.isAbsolute(relPath)) {
+    throw new Error(`absolute paths are not allowed: ${JSON.stringify(relPath)}`);
+  }
+  const rootResolved = fs3.realpathSync(root);
+  let candidate;
+  try {
+    candidate = fs3.realpathSync(path2.join(rootResolved, relPath));
+  } catch {
+    candidate = path2.resolve(rootResolved, relPath);
+  }
+  const rel = path2.relative(rootResolved, candidate);
+  if (rel.startsWith("..") || path2.isAbsolute(rel)) {
+    throw new Error(`path escapes wiki root: ${JSON.stringify(relPath)}`);
+  }
+  return candidate;
+}
+function readPage(root, relPath) {
+  if (!relPath || relPath.includes("\0") || path2.isAbsolute(relPath)) {
+    return null;
+  }
+  let fullPath;
+  try {
+    fullPath = safeJoin(root, relPath);
+  } catch {
+    return null;
+  }
+  if (!fs3.existsSync(fullPath))
+    return null;
+  return fs3.readFileSync(fullPath, "utf-8");
+}
+function atomicWriteString(safePath, content) {
+  const dir = path2.dirname(safePath);
+  if (dir && !fs3.existsSync(dir)) {
+    fs3.mkdirSync(dir, { recursive: true });
+  }
+  const tmp = safePath + ".tmp";
+  const data = Buffer.from(content, "utf-8");
+  fs3.writeFileSync(tmp, data);
+  fs3.renameSync(tmp, safePath);
+  return data.byteLength;
+}
+function writePage(root, relPath, content, mode = "create") {
+  const safePath = safeJoin(root, relPath);
+  const existed = fs3.existsSync(safePath);
+  let written;
+  if (mode === "create") {
+    if (existed)
+      throw new WikiExists(relPath);
+    written = atomicWriteString(safePath, content);
+  } else if (mode === "replace") {
+    written = atomicWriteString(safePath, content);
+  } else if (mode === "append") {
+    if (!existed)
+      throw new WikiMissing(relPath);
+    let current = fs3.readFileSync(safePath, "utf-8");
+    if (current && !current.endsWith("\n"))
+      current += "\n";
+    let merged = current + "\n" + content;
+    if (!merged.endsWith("\n"))
+      merged += "\n";
+    written = atomicWriteString(safePath, merged);
+  } else {
+    throw new Error(`unknown write mode: ${mode}`);
+  }
+  return { path: relPath, mode, created: !existed, bytes_written: written };
+}
+function listPages(root, kind2) {
+  if (!fs3.existsSync(root))
+    return [];
+  const kinds = kind2 ? [kind2] : [...PAGE_KINDS];
+  const results = [];
+  for (const k2 of kinds) {
+    if (!PAGE_KINDS.includes(k2))
+      continue;
+    const kindDir = path2.join(root, k2);
+    if (!fs3.existsSync(kindDir))
+      continue;
+    walkMd(kindDir, root, results);
+  }
+  return results.sort();
+}
+function walkMd(dir, root, out) {
+  let entries;
+  try {
+    entries = fs3.readdirSync(dir, { withFileTypes: true });
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    const full = path2.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      walkMd(full, root, out);
+    } else if (entry.isFile() && entry.name.endsWith(".md")) {
+      out.push(path2.relative(root, full).replace(/\\/g, "/"));
+    }
+  }
+}
+function nextAdrNumber(root) {
+  const pages = listPages(root, "adr");
+  let maxSeen = 0;
+  for (const rel of pages) {
+    const name = rel.split("/").pop() ?? "";
+    const head = name.split("-")[0] ?? "";
+    const num = parseInt(head, 10);
+    if (!isNaN(num) && num > maxSeen)
+      maxSeen = num;
+  }
+  return maxSeen + 1;
+}
 
 // packages/memory/dist/wiki/handlers/wiki-migrate-handler.js
 init_pages();
@@ -50689,6 +48396,504 @@ var RECENCY_THRESHOLDS_MS = [
   [30 * 24 * 3600 * 1e3, 0.4]
   // 30 days
 ];
+
+// packages/memory/dist/narrative/types.js
+var MemoryRecordSchema = external_exports.object({
+  content: external_exports.string(),
+  tags: external_exports.union([external_exports.array(external_exports.string()), external_exports.string()]).default([]),
+  importance: external_exports.number().min(0).max(1).default(0.5),
+  heat: external_exports.number().min(0).max(1).default(0),
+  timestamp: external_exports.string().default(""),
+  session_id: external_exports.string().default("")
+});
+var SessionRecordSchema = external_exports.object({
+  type: external_exports.enum(["user", "assistant", "system"]).optional(),
+  sessionId: external_exports.string().optional(),
+  cwd: external_exports.string().optional(),
+  timestamp: external_exports.string().optional(),
+  isMeta: external_exports.boolean().optional(),
+  toolUseResult: external_exports.unknown().optional(),
+  message: external_exports.object({
+    content: external_exports.union([
+      external_exports.string(),
+      external_exports.array(external_exports.object({
+        type: external_exports.string(),
+        text: external_exports.string().optional(),
+        name: external_exports.string().optional()
+      }))
+    ]).optional()
+  }).optional()
+});
+var MemorableItemSchema = external_exports.object({
+  content: external_exports.string(),
+  tags: external_exports.array(external_exports.string()),
+  importance: external_exports.number().min(0).max(1),
+  timestamp: external_exports.string(),
+  session_id: external_exports.string()
+});
+var SessionSummarySchema = external_exports.object({
+  session_id: external_exports.string(),
+  cwd: external_exports.string(),
+  first_message: external_exports.string(),
+  user_count: external_exports.number().int().nonnegative(),
+  tools_used: external_exports.array(external_exports.string()),
+  start_time: external_exports.string(),
+  end_time: external_exports.string()
+});
+var NarrativeFunctionTypeSchema = external_exports.enum([
+  "orientation",
+  "complication",
+  "resolution"
+]);
+var NarrativeFunctionSchema = external_exports.object({
+  /** Structural function type — what this step DOES in the arc. */
+  type: NarrativeFunctionTypeSchema,
+  /** The memory items that realise this function. */
+  items: external_exports.array(external_exports.string()),
+  /** Whether this function was derived from explicit signal or inferred. */
+  inferred: external_exports.boolean().default(false)
+});
+var NarrativeArcSchema = external_exports.object({
+  orientation: NarrativeFunctionSchema.optional(),
+  complication: NarrativeFunctionSchema.optional(),
+  resolution: NarrativeFunctionSchema.optional()
+});
+var NarrativeRequestSchema = external_exports.object({
+  /** Absolute project directory to narrate. Mutually exclusive with domain. */
+  directory: external_exports.string().optional(),
+  /** Domain identifier (e.g. 'cortex', 'auth-service'). */
+  domain: external_exports.string().optional(),
+  /**
+   * If true, return a one-paragraph executive summary instead of the
+   * full multi-section narrative.
+   */
+  brief: external_exports.boolean().default(false)
+});
+var NarrativeResponseSchema = external_exports.object({
+  /** Full formatted narrative string (absent when brief=true). */
+  narrative: external_exports.string().optional(),
+  /** One-paragraph brief summary (present when brief=true). */
+  summary: external_exports.string().optional(),
+  /** Extracted decision statements. */
+  decisions: external_exports.array(external_exports.string()).default([]),
+  /** Extracted event statements. */
+  events: external_exports.array(external_exports.string()).default([]),
+  /** Top entity names by frequency. */
+  entities: external_exports.array(external_exports.string()).default([]),
+  /** High-heat focus topics. */
+  topics: external_exports.array(external_exports.string()).default([]),
+  /** Structural narrative arc (Proppian function sequence). */
+  arc: NarrativeArcSchema.optional(),
+  /** Total memories analysed. */
+  memory_count: external_exports.number().int().nonnegative()
+});
+var SessionEventSchema = external_exports.object({
+  id: external_exports.string(),
+  type: NarrativeFunctionTypeSchema,
+  content: external_exports.string(),
+  importance: external_exports.number().min(0).max(1).default(0.5),
+  timestamp: external_exports.string().default("")
+});
+
+// packages/memory/dist/narrative/narrative-builder.js
+var CONTENT_TRUNCATION_CHARS = 150;
+var TOPIC_CONTENT_CHARS = 100;
+var BRIEF_SUMMARY_MAX_CHARS = 300;
+var DEFAULT_IMPORTANCE_THRESHOLD = 0.7;
+var DEFAULT_HEAT_THRESHOLD = 0.7;
+var DEFAULT_MAX_ENTITIES = 10;
+var DEFAULT_MAX_TOPICS = 5;
+var DISPLAY_LIMIT = 10;
+var BRIEF_DISPLAY_LIMIT = 2;
+var BRIEF_TOPICS_LIMIT = 3;
+var ELLIPSIS_RESERVE = 3;
+var SENTENCE_BOUNDARY_DIVISOR = 3;
+var DECISION_KEYWORDS = /* @__PURE__ */ new Set([
+  "decided",
+  "chose",
+  "choosing",
+  "switched",
+  "migrated",
+  "replaced",
+  "using",
+  "adopted",
+  "selected",
+  "picked",
+  "went with"
+]);
+var EVENT_KEYWORDS = /* @__PURE__ */ new Set([
+  "error",
+  "fix",
+  "fixed",
+  "bug",
+  "resolved",
+  "broke",
+  "crash",
+  "deployed",
+  "released",
+  "implemented",
+  "completed",
+  "refactored"
+]);
+var DECISION_RE4 = new RegExp("\\b(" + Array.from(DECISION_KEYWORDS).map((k2) => k2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\b", "i");
+var EVENT_RE = new RegExp("\\b(" + Array.from(EVENT_KEYWORDS).map((k2) => k2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")).join("|") + ")\\b", "i");
+var TOOL_HEADER_RE = /^#\s*Tool:\s*\w+\s*\n(?:\*\*(?:File|Command|Read):\*\*\s*`[^`]*`\s*\n)?/gm;
+var OUTPUT_BLOCK_RE = /\*\*Output:\*\*\s*\n```\n?/gm;
+function cleanAutoCaptured(content) {
+  let cleaned = content.replace(TOOL_HEADER_RE, "");
+  cleaned = cleaned.replace(OUTPUT_BLOCK_RE, "");
+  cleaned = cleaned.replace(/```/g, "").trim();
+  const lines = cleaned.split("\n");
+  while (lines.length > 0 && lines[0] !== void 0 && !lines[0].trim()) {
+    lines.shift();
+  }
+  return lines.join("\n").trim();
+}
+function normaliseTags(raw) {
+  if (!raw)
+    return [];
+  if (typeof raw === "string")
+    return raw.split(",").map((t2) => t2.trim());
+  return raw;
+}
+function extractDecisions(memories) {
+  const decisions = [];
+  for (const mem of memories) {
+    const tags = normaliseTags(mem.tags);
+    const isDecision = tags.map((t2) => t2.toLowerCase()).includes("decision") || DECISION_RE4.test(mem.content);
+    if (!isDecision)
+      continue;
+    const cleaned = cleanAutoCaptured(mem.content);
+    const text = cleaned.length > CONTENT_TRUNCATION_CHARS ? cleaned.slice(0, CONTENT_TRUNCATION_CHARS).trim() + "..." : cleaned.slice(0, CONTENT_TRUNCATION_CHARS).trim();
+    decisions.push(text);
+  }
+  return decisions;
+}
+function extractEvents(memories, importanceThreshold = DEFAULT_IMPORTANCE_THRESHOLD) {
+  const events = [];
+  for (const mem of memories) {
+    const isEvent = mem.importance >= importanceThreshold || EVENT_RE.test(mem.content);
+    if (!isEvent)
+      continue;
+    const cleaned = cleanAutoCaptured(mem.content);
+    const text = mem.content.length > CONTENT_TRUNCATION_CHARS ? cleaned.slice(0, CONTENT_TRUNCATION_CHARS).trim() + "..." : cleaned.slice(0, CONTENT_TRUNCATION_CHARS).trim();
+    events.push(text);
+  }
+  return events;
+}
+function extractTopEntities(memories, maxEntities = DEFAULT_MAX_ENTITIES) {
+  const entityCounts = /* @__PURE__ */ new Map();
+  const camelRe = /\b([A-Z][a-z]+(?:[A-Z][a-z]+)+)\b/g;
+  const pathRe = /[\w./]+\.\w{1,4}\b/g;
+  for (const mem of memories) {
+    const content = mem.content;
+    for (const match2 of content.matchAll(camelRe)) {
+      const name = match2[1] ?? match2[0];
+      entityCounts.set(name, (entityCounts.get(name) ?? 0) + 1);
+    }
+    for (const match2 of content.matchAll(pathRe)) {
+      const name = match2[0];
+      if (name.includes("/") || name.includes(".")) {
+        entityCounts.set(name, (entityCounts.get(name) ?? 0) + 1);
+      }
+    }
+  }
+  return Array.from(entityCounts.entries()).sort((a2, b2) => b2[1] - a2[1]).slice(0, maxEntities).map(([name]) => name);
+}
+function extractHotTopics(memories, heatThreshold = DEFAULT_HEAT_THRESHOLD, maxTopics = DEFAULT_MAX_TOPICS) {
+  const hot = memories.filter((m2) => m2.heat >= heatThreshold).sort((a2, b2) => b2.heat - a2.heat);
+  const topics = [];
+  for (const mem of hot.slice(0, maxTopics)) {
+    const content = mem.content.slice(0, TOPIC_CONTENT_CHARS).trim();
+    if (content)
+      topics.push(content);
+  }
+  return topics;
+}
+function mapToFunctionType(mem) {
+  const tags = normaliseTags(mem.tags).map((t2) => t2.toLowerCase());
+  const content = mem.content.toLowerCase();
+  if (tags.includes("error"))
+    return "complication";
+  if (tags.includes("insight"))
+    return "resolution";
+  if (tags.includes("decision") || tags.includes("architecture"))
+    return "orientation";
+  if (/\b(error|bug|crash|broke|failed|failure)\b/.test(content)) {
+    return "complication";
+  }
+  if (/\b(fixed|resolved|completed|deployed|released|refactored)\b/.test(content)) {
+    return "resolution";
+  }
+  return "orientation";
+}
+function detectArc(memories) {
+  const buckets = {
+    orientation: [],
+    complication: [],
+    resolution: []
+  };
+  for (const mem of memories) {
+    const fnType = mapToFunctionType(mem);
+    const cleaned = cleanAutoCaptured(mem.content);
+    const text = cleaned.length > CONTENT_TRUNCATION_CHARS ? cleaned.slice(0, CONTENT_TRUNCATION_CHARS) + "..." : cleaned;
+    buckets[fnType].push(text);
+  }
+  const arc = {};
+  if (buckets.orientation.length > 0) {
+    arc.orientation = {
+      type: "orientation",
+      items: buckets.orientation,
+      inferred: false
+    };
+  }
+  if (buckets.complication.length > 0) {
+    arc.complication = {
+      type: "complication",
+      items: buckets.complication,
+      inferred: false
+    };
+  }
+  if (buckets.resolution.length > 0) {
+    arc.resolution = {
+      type: "resolution",
+      items: buckets.resolution,
+      inferred: false
+    };
+  }
+  return arc;
+}
+function appendSection(lines, heading, items) {
+  if (items.length === 0)
+    return;
+  lines.push(heading);
+  for (const item of items) {
+    lines.push(`- ${item}`);
+  }
+  lines.push("");
+}
+function assembleNarrativeText(memoryCount, decisions, events, entities, topics, directory, periodLabel) {
+  const lines = [];
+  let header = "# Project Narrative";
+  if (directory)
+    header += ` \u2014 ${directory}`;
+  if (periodLabel)
+    header += ` (${periodLabel})`;
+  lines.push(header, "");
+  lines.push(`Based on ${memoryCount} memories.`, "");
+  appendSection(lines, "## Key Decisions", decisions.slice(0, DISPLAY_LIMIT));
+  appendSection(lines, "## Significant Events", events.slice(0, DISPLAY_LIMIT));
+  if (entities.length > 0) {
+    lines.push("## Key Entities");
+    lines.push(entities.join(", "));
+    lines.push("");
+  }
+  appendSection(lines, "## Current Focus", topics);
+  if (decisions.length === 0 && events.length === 0 && topics.length === 0) {
+    lines.push("*No significant activity recorded in this period.*");
+  }
+  return lines.join("\n");
+}
+function generateNarrative(memories, directory = "", periodLabel = "") {
+  const decisions = extractDecisions(memories);
+  const events = extractEvents(memories);
+  const entities = extractTopEntities(memories);
+  const topics = extractHotTopics(memories);
+  const arc = detectArc(memories);
+  const narrative = assembleNarrativeText(memories.length, decisions, events, entities, topics, directory, periodLabel);
+  return {
+    narrative,
+    decisions,
+    events,
+    entities,
+    topics,
+    arc,
+    memory_count: memories.length
+  };
+}
+function generateBriefSummary(memories, maxChars = BRIEF_SUMMARY_MAX_CHARS) {
+  const decisions = extractDecisions(memories);
+  const events = extractEvents(memories);
+  const topics = extractHotTopics(memories, DEFAULT_HEAT_THRESHOLD, BRIEF_TOPICS_LIMIT);
+  const parts = [];
+  if (topics.length > 0)
+    parts.push(`Focus: ${topics.slice(0, BRIEF_TOPICS_LIMIT).join(", ")}`);
+  if (decisions.length > 0)
+    parts.push(`Decisions: ${decisions.slice(0, BRIEF_DISPLAY_LIMIT).join("; ")}`);
+  if (events.length > 0)
+    parts.push(`Events: ${events.slice(0, BRIEF_DISPLAY_LIMIT).join("; ")}`);
+  let summary = parts.join(". ");
+  if (summary.length <= maxChars)
+    return summary;
+  const truncated = summary.slice(0, maxChars - ELLIPSIS_RESERVE);
+  const lastEnd = Math.max(truncated.lastIndexOf(". "), truncated.lastIndexOf("! "), truncated.lastIndexOf("? "));
+  if (lastEnd > Math.floor(maxChars / SENTENCE_BOUNDARY_DIVISOR)) {
+    return truncated.slice(0, lastEnd + 1);
+  }
+  const lastSpace = truncated.lastIndexOf(" ");
+  if (lastSpace > Math.floor(maxChars / SENTENCE_BOUNDARY_DIVISOR)) {
+    return truncated.slice(0, lastSpace) + "...";
+  }
+  return truncated + "...";
+}
+
+// packages/memory/dist/narrative/handlers/narrative.js
+var MEMORY_FETCH_LIMIT = 200;
+var HOT_MEMORY_MIN_HEAT = 0.1;
+var NARRATIVE_POLISH_MAX_TOKENS = 1024;
+var NARRATIVE_POLISH_TEMPERATURE = 0.7;
+var PROSE_POLISH_SYSTEM = `You are a technical writing assistant. You receive a structured project narrative in Markdown and rewrite it as flowing, readable prose. Preserve every factual claim, decision, and entity exactly. Do not add new information. Return only the rewritten text with the same section headings.`;
+function buildPolishPrompt(structuredNarrative) {
+  return `Rewrite the following structured project narrative as flowing prose. Keep all section headings. Do not add information not present in the input.
+
+${structuredNarrative}`;
+}
+async function narrativeHandler(store, rawArgs, llmClient2 = null) {
+  const args = NarrativeRequestSchema.parse(rawArgs ?? {});
+  const { directory = "", domain = "", brief } = args;
+  let memories;
+  if (directory) {
+    memories = store.getMemoriesForDirectory(directory, 0);
+  } else if (domain) {
+    memories = store.getMemoriesForDomain(domain, 0, MEMORY_FETCH_LIMIT);
+  } else {
+    memories = store.getHotMemories(HOT_MEMORY_MIN_HEAT, MEMORY_FETCH_LIMIT);
+  }
+  if (brief) {
+    const summary = generateBriefSummary(memories);
+    return {
+      summary,
+      decisions: [],
+      events: [],
+      entities: [],
+      topics: [],
+      memory_count: memories.length
+    };
+  }
+  const result = generateNarrative(memories, directory || domain);
+  const structuralNarrative = result.narrative;
+  if (llmClient2 !== null && typeof structuralNarrative === "string" && structuralNarrative.length > 0) {
+    const polished = await llmClient2.complete({
+      system: PROSE_POLISH_SYSTEM,
+      prompt: buildPolishPrompt(structuralNarrative),
+      maxTokens: NARRATIVE_POLISH_MAX_TOKENS,
+      temperature: NARRATIVE_POLISH_TEMPERATURE
+    });
+    return { ...result, narrative: polished };
+  }
+  return result;
+}
+
+// packages/memory/dist/narrative/handlers/get-project-story.js
+var GET_PROJECT_STORY_DEFAULT_LIMIT = 50;
+var HOT_MEMORY_HEAT_THRESHOLD = 0.5;
+var GET_PROJECT_STORY_MAX_TOPICS = 10;
+function getProjectStoryHandler(store, args) {
+  const domain = args.domain?.trim() ?? "default";
+  const limit = args.max_chapters ?? args.max_memories ?? GET_PROJECT_STORY_DEFAULT_LIMIT;
+  const memories = store.getMemoriesForDomain(domain, 0, limit);
+  const hotMemories = memories.filter((m2) => m2.heat >= HOT_MEMORY_HEAT_THRESHOLD);
+  const hotTopics = hotMemories.flatMap((m2) => Array.isArray(m2.tags) ? m2.tags : []);
+  const uniqueTopics = [...new Set(hotTopics)].slice(0, GET_PROJECT_STORY_MAX_TOPICS);
+  const summary = memories.length === 0 ? `No memories found for domain "${domain}".` : `Found ${memories.length.toString()} memories for domain "${domain}". Hot topics: ${uniqueTopics.join(", ") || "none"}.`;
+  return { domain, memoriesFound: memories.length, summary, hotTopics: uniqueTopics, sessionCount: 0 };
+}
+
+// packages/memory/dist/narrative/handlers/unified-search.js
+var MEMORY_FETCH_LIMIT2 = 200;
+var HOT_MEMORY_MIN_HEAT2 = 0.1;
+var AP_SEARCH_LIMIT = 20;
+var MAX_RESULTS_CAP = 50;
+var MIN_RESULTS = 1;
+var SCORE_DECIMAL_SHIFT = 1e4;
+var UnifiedSearchRequestSchema = external_exports.object({
+  query: external_exports.string().min(1),
+  domain: external_exports.string().optional(),
+  max_results: external_exports.number().int().min(MIN_RESULTS).max(MAX_RESULTS_CAP).default(10),
+  // source: Cormack, Clarke, Buettcher (2009) SIGIR — K=60 canonical
+  k: external_exports.number().int().min(1).default(DEFAULT_RRF_K),
+  // source: cortex@ed33435 unified_search.py — optional graph_path for AP leg
+  graph_path: external_exports.string().optional()
+});
+function scoreRecord(query, record3) {
+  const queryTokens = new Set(query.toLowerCase().split(/\s+/).filter((t2) => t2.length > 2));
+  const contentLower = record3.content.toLowerCase();
+  if (queryTokens.size === 0)
+    return 0;
+  let hits = 0;
+  for (const token of queryTokens)
+    if (contentLower.includes(token))
+      hits++;
+  return hits / queryTokens.size;
+}
+function apSymbolToResult(symbol, score) {
+  const name = typeof symbol["name"] === "string" ? symbol["name"] : "";
+  const kind2 = typeof symbol["kind"] === "string" ? symbol["kind"] : "";
+  const filePath = typeof symbol["filePath"] === "string" ? symbol["filePath"] : "";
+  return {
+    source: "ap",
+    score: Math.round(score * SCORE_DECIMAL_SHIFT) / SCORE_DECIMAL_SHIFT,
+    content: `${filePath}::${name} [${kind2}]`,
+    tags: ["code-symbol", kind2].filter(Boolean),
+    heat: 0
+  };
+}
+async function unifiedSearchHandler(deps, rawArgs) {
+  const args = UnifiedSearchRequestSchema.parse(rawArgs ?? {});
+  const { query, domain, max_results, k: k2, graph_path } = args;
+  const { memoryPort, codebasePort } = deps;
+  let memories;
+  if (domain) {
+    memories = memoryPort.getMemoriesForDomain(domain, 0, MEMORY_FETCH_LIMIT2);
+  } else {
+    memories = memoryPort.getHotMemories(HOT_MEMORY_MIN_HEAT2, MEMORY_FETCH_LIMIT2);
+  }
+  const textScores = memories.map((m2, idx) => [idx, scoreRecord(query, m2)]);
+  const heatScores = memories.map((m2, idx) => [idx, m2.heat]);
+  const textRanked = textScores.sort((a2, b2) => b2[1] - a2[1]).map(([id2]) => id2);
+  const heatRanked = heatScores.sort((a2, b2) => b2[1] - a2[1]).map(([id2]) => id2);
+  const cortexCount = memories.length;
+  let apSymbols = [];
+  const activeRankLists = [["text", textRanked], ["heat", heatRanked]];
+  if (codebasePort !== void 0 && graph_path !== void 0 && graph_path.length > 0) {
+    try {
+      const apInput = { graphPath: graph_path, query, limit: AP_SEARCH_LIMIT };
+      const apResult = await codebasePort.searchCodebase(apInput);
+      apSymbols = apResult.results;
+      const apRanked = apSymbols.map((_2, i2) => cortexCount + i2);
+      activeRankLists.push(["ap", apRanked]);
+    } catch {
+    }
+  }
+  const fused = rrfFuseIds(activeRankLists, k2);
+  const results = fused.slice(0, max_results).flatMap(([idx, score]) => {
+    if (idx < cortexCount) {
+      const record3 = memories[idx];
+      if (!record3)
+        return [];
+      return [{
+        source: "cortex",
+        score: Math.round(score * SCORE_DECIMAL_SHIFT) / SCORE_DECIMAL_SHIFT,
+        content: record3.content,
+        tags: Array.isArray(record3.tags) ? record3.tags : [],
+        heat: record3.heat
+      }];
+    }
+    const sym = apSymbols[idx - cortexCount];
+    if (!sym)
+      return [];
+    return [apSymbolToResult(sym, score)];
+  });
+  return {
+    status: "ok",
+    results,
+    query,
+    total: results.length,
+    sources: activeRankLists.map(([name]) => name),
+    counts: { cortex: cortexCount, ap: apSymbols.length },
+    k: k2
+  };
+}
 
 // packages/memory/dist/workflow-graph/schema-enums.js
 var NodeKind = {
@@ -50775,12 +48980,2407 @@ for (const t2 of Object.values(ToolKind)) {
 }
 
 // packages/memory/dist/workflow-graph/sources/source-jsonl.js
-import { join as join15 } from "node:path";
-import { homedir as homedir7 } from "node:os";
-var CLAUDE_DIR2 = join15(homedir7(), ".claude");
+import { join as join13 } from "node:path";
+import { homedir as homedir5 } from "node:os";
+var CLAUDE_DIR2 = join13(homedir5(), ".claude");
 
 // packages/memory/dist/workflow-graph/sources/source-pg.js
 var _MEMORY_PASSTHROUGH_KEYS = "heat_base arousal emotional_valence dominant_emotion importance surprise_score confidence access_count useful_count replay_count reconsolidation_count plasticity stability excitability hippocampal_dependency schema_match_score schema_id separation_index interference_score encoding_strength hours_in_stage stage_entered_at no_decay is_protected is_stale is_benchmark is_global store_type last_accessed created_at compression_level compressed tags".split(" ");
+
+// packages/memory/dist/workflow-graph/handlers/query-workflow-graph.js
+var _DEFAULT_LIMIT = 500;
+var _MAX_LIMIT = 5e3;
+function asSet(value) {
+  if (value == null)
+    return null;
+  if (typeof value === "string")
+    return value ? /* @__PURE__ */ new Set([value]) : null;
+  if (Array.isArray(value)) {
+    const out = new Set(value.map(String).filter(Boolean));
+    return out.size > 0 ? out : null;
+  }
+  return null;
+}
+function edgeKindOf(e2) {
+  return String(e2["kind"] ?? e2["type"] ?? "");
+}
+function nodeKindOf(n3) {
+  return String(n3["kind"] ?? n3["type"] ?? "");
+}
+function edgeEndpoints(e2) {
+  const s2 = e2["source"];
+  const t2 = e2["target"];
+  const sId = typeof s2 === "object" && s2 !== null ? String(s2["id"] ?? "") : String(s2 ?? "");
+  const tId = typeof t2 === "object" && t2 !== null ? String(t2["id"] ?? "") : String(t2 ?? "");
+  return [sId, tId];
+}
+function bfsNeighbourhood(nodes, edges, seed, depth) {
+  if (depth < 1)
+    return [/* @__PURE__ */ new Set([seed]), []];
+  const adj = /* @__PURE__ */ new Map();
+  for (const e2 of edges) {
+    const [s2, t2] = edgeEndpoints(e2);
+    if (!s2 || !t2)
+      continue;
+    if (!adj.has(s2))
+      adj.set(s2, []);
+    if (!adj.has(t2))
+      adj.set(t2, []);
+    adj.get(s2).push(t2);
+    adj.get(t2).push(s2);
+  }
+  let frontier = /* @__PURE__ */ new Set([seed]);
+  const reached = /* @__PURE__ */ new Set([seed]);
+  for (let i2 = 0; i2 < depth; i2++) {
+    const nextFrontier = /* @__PURE__ */ new Set();
+    for (const nid of frontier) {
+      for (const other of adj.get(nid) ?? []) {
+        if (!reached.has(other))
+          nextFrontier.add(other);
+      }
+    }
+    for (const n3 of nextFrontier)
+      reached.add(n3);
+    if (nextFrontier.size === 0)
+      break;
+    frontier = nextFrontier;
+  }
+  const keptEdges = edges.filter((e2) => {
+    const [s2, t2] = edgeEndpoints(e2);
+    return reached.has(s2) && reached.has(t2);
+  });
+  return [reached, keptEdges];
+}
+function pruneDanglingEdges(edges, nodeIds) {
+  return edges.filter((e2) => {
+    const [s2, t2] = edgeEndpoints(e2);
+    return nodeIds.has(s2) && nodeIds.has(t2);
+  });
+}
+function capNodesByHeat(nodes, edges, limit) {
+  if (nodes.length <= limit)
+    return [nodes, edges, 0];
+  const sorted = [...nodes].sort((a2, b2) => (parseFloat(String(b2["heat"] ?? b2["size"] ?? 0)) || 0) - (parseFloat(String(a2["heat"] ?? a2["size"] ?? 0)) || 0));
+  const truncated = nodes.length - limit;
+  const kept = sorted.slice(0, limit);
+  const keptIds = new Set(kept.map((n3) => String(n3["id"] ?? "")));
+  return [kept, pruneDanglingEdges(edges, keptIds), truncated];
+}
+function buildMeta(graph, opts) {
+  const meta = { ...graph.meta ?? {} };
+  meta["filtered"] = true;
+  meta["filter"] = {
+    node_kind: opts.nodeKinds ? [...opts.nodeKinds].sort() : null,
+    edge_kind: opts.edgeKinds ? [...opts.edgeKinds].sort() : null,
+    neighbour_of: opts.neighbourOf,
+    depth: opts.neighbourOf ? opts.depth : null,
+    limit_nodes: opts.limitNodes
+  };
+  if (opts.truncated > 0) {
+    meta["truncated_nodes"] = opts.truncated;
+  }
+  return meta;
+}
+function applyFilters(graph, opts) {
+  let nodes = [...graph.nodes ?? []];
+  let edges = [
+    ...graph.edges ?? graph.links ?? []
+  ];
+  if (opts.neighbourOf) {
+    const [reached, keptEdges] = bfsNeighbourhood(nodes, edges, opts.neighbourOf, opts.depth);
+    nodes = nodes.filter((n3) => reached.has(String(n3["id"] ?? "")));
+    edges = keptEdges;
+  }
+  if (opts.edgeKinds !== null) {
+    edges = edges.filter((e2) => opts.edgeKinds.has(edgeKindOf(e2)));
+  }
+  if (opts.nodeKinds !== null) {
+    nodes = nodes.filter((n3) => opts.nodeKinds.has(nodeKindOf(n3)));
+    edges = pruneDanglingEdges(edges, new Set(nodes.map((n3) => String(n3["id"] ?? ""))));
+  }
+  const [cappedNodes, cappedEdges, truncated] = capNodesByHeat(nodes, edges, opts.limitNodes);
+  const meta = buildMeta(graph, { ...opts, truncated });
+  return { nodes: cappedNodes, edges: cappedEdges, links: cappedEdges, meta };
+}
+function queryWorkflowGraph(graph, args = {}) {
+  const depthRaw = args.depth;
+  const depth = depthRaw != null ? Math.max(1, Math.min(2, Math.trunc(Number(depthRaw)))) : 1;
+  const limitRaw = args.limit_nodes;
+  const limitNodes = Math.max(1, Math.min(_MAX_LIMIT, limitRaw != null ? Math.trunc(Number(limitRaw)) : _DEFAULT_LIMIT));
+  return applyFilters(graph, {
+    nodeKinds: asSet(args.node_kind),
+    edgeKinds: asSet(args.edge_kind),
+    neighbourOf: args.neighbour_of ?? null,
+    depth,
+    limitNodes
+  });
+}
+
+// packages/memory/dist/automation/types.js
+var TriggerTypeSchema = external_exports.enum([
+  "keyword",
+  "time",
+  "file",
+  "domain",
+  "keyword_match",
+  "directory_match",
+  "entity_match",
+  "time_based"
+]);
+var TriggerSchema = external_exports.object({
+  id: external_exports.string().optional(),
+  content: external_exports.string().min(1),
+  trigger_condition: external_exports.string().min(1),
+  trigger_type: TriggerTypeSchema.default("keyword"),
+  target_directory: external_exports.string().nullable().optional(),
+  is_active: external_exports.boolean().default(true),
+  triggered_count: external_exports.number().int().nonnegative().default(0),
+  created_at: external_exports.string().datetime().optional()
+});
+var TriggerContextSchema = external_exports.object({
+  directory: external_exports.string().default(""),
+  content: external_exports.string().default(""),
+  entities: external_exports.array(external_exports.string()).default([]),
+  /** ISO 8601 datetime string; defaults to now when omitted */
+  current_time: external_exports.string().datetime().optional()
+});
+var TriggerConditionSchema = external_exports.object({
+  trigger: TriggerSchema,
+  context: TriggerContextSchema
+});
+var RuleTypeSchema = external_exports.enum(["hard", "soft", "tag"]);
+var RuleScopeSchema = external_exports.enum(["global", "domain", "directory"]);
+var RuleSchema = external_exports.object({
+  id: external_exports.number().int().optional(),
+  rule_type: RuleTypeSchema.default("soft"),
+  scope: RuleScopeSchema.default("global"),
+  scope_value: external_exports.string().nullable().optional(),
+  condition: external_exports.string().min(1),
+  action: external_exports.string().min(1),
+  priority: external_exports.number().int().min(-100).max(100).default(0),
+  is_active: external_exports.boolean().default(true),
+  created_at: external_exports.string().datetime().optional()
+});
+var ParsedConditionSchema = external_exports.object({
+  field: external_exports.string(),
+  operator: external_exports.enum([
+    "==",
+    "!=",
+    "contains",
+    "not_contains",
+    ">",
+    "<",
+    ">=",
+    "<=",
+    "matches"
+  ]),
+  value: external_exports.string()
+});
+var ParsedActionSchema = external_exports.object({
+  action_type: external_exports.enum(["filter", "boost", "penalty"]),
+  value: external_exports.number().default(0)
+});
+var RuleActionSchema = external_exports.object({
+  rule_id: external_exports.number().int().optional(),
+  rule_type: RuleTypeSchema,
+  matched: external_exports.boolean(),
+  action: external_exports.string()
+});
+var PatternKindSchema = external_exports.enum(["prefix", "regex", "substring", "tag"]);
+var ClassifierRuleSchema = external_exports.object({
+  pattern_kind: PatternKindSchema,
+  pattern: external_exports.string(),
+  target_kind: external_exports.string().nullable().optional(),
+  weight: external_exports.number().default(1),
+  note: external_exports.string().optional()
+});
+var RuleMatchSchema = external_exports.object({
+  matched_rule: ClassifierRuleSchema.nullable(),
+  target_kind: external_exports.string().nullable(),
+  rationale: external_exports.string()
+});
+var AddRuleRequestSchema = external_exports.object({
+  condition: external_exports.string().min(1),
+  action: external_exports.string().min(1),
+  rule_type: RuleTypeSchema.default("soft"),
+  scope: RuleScopeSchema.default("global"),
+  scope_value: external_exports.string().optional(),
+  priority: external_exports.number().int().min(-100).max(100).default(0)
+});
+var AddRuleResponseSchema = external_exports.object({
+  created: external_exports.boolean(),
+  rule_id: external_exports.number().int().optional(),
+  rule_type: RuleTypeSchema.optional(),
+  scope: RuleScopeSchema.optional(),
+  scope_value: external_exports.string().nullable().optional(),
+  condition: external_exports.string().optional(),
+  action: external_exports.string().optional(),
+  priority: external_exports.number().int().optional(),
+  reason: external_exports.string().optional()
+});
+var CreateTriggerRequestSchema = external_exports.object({
+  content: external_exports.string().min(1),
+  trigger_condition: external_exports.string().min(1),
+  trigger_type: TriggerTypeSchema.default("keyword"),
+  target_directory: external_exports.string().optional()
+});
+var CreateTriggerResponseSchema = external_exports.object({
+  created: external_exports.boolean(),
+  trigger_id: external_exports.string().optional(),
+  trigger_type: TriggerTypeSchema.optional(),
+  trigger_condition: external_exports.string().optional(),
+  content: external_exports.string().optional(),
+  target_directory: external_exports.string().nullable().optional(),
+  active_triggers: external_exports.number().int().optional(),
+  reason: external_exports.string().optional()
+});
+var SyncInstructionsRequestSchema = external_exports.object({
+  directory: external_exports.string().optional(),
+  max_insights: external_exports.number().int().min(1).max(50).default(10),
+  min_heat: external_exports.number().min(0).max(1).default(0.3),
+  dry_run: external_exports.boolean().default(false)
+});
+var SyncInstructionsResponseSchema = external_exports.object({
+  synced: external_exports.boolean(),
+  action: external_exports.string().optional(),
+  path: external_exports.string().optional(),
+  insights_count: external_exports.number().int().optional(),
+  memory_count: external_exports.number().int().optional(),
+  dry_run: external_exports.boolean().optional(),
+  preview: external_exports.string().optional(),
+  reason: external_exports.string().optional(),
+  directory: external_exports.string().optional()
+});
+var AutomationRequestSchema = external_exports.discriminatedUnion("operation", [
+  external_exports.object({ operation: external_exports.literal("add_rule"), params: AddRuleRequestSchema }),
+  external_exports.object({
+    operation: external_exports.literal("create_trigger"),
+    params: CreateTriggerRequestSchema
+  }),
+  external_exports.object({
+    operation: external_exports.literal("sync_instructions"),
+    params: SyncInstructionsRequestSchema
+  })
+]);
+
+// node_modules/.pnpm/balanced-match@4.0.4/node_modules/balanced-match/dist/esm/index.js
+var balanced = (a2, b2, str) => {
+  const ma = a2 instanceof RegExp ? maybeMatch(a2, str) : a2;
+  const mb = b2 instanceof RegExp ? maybeMatch(b2, str) : b2;
+  const r2 = ma !== null && mb != null && range(ma, mb, str);
+  return r2 && {
+    start: r2[0],
+    end: r2[1],
+    pre: str.slice(0, r2[0]),
+    body: str.slice(r2[0] + ma.length, r2[1]),
+    post: str.slice(r2[1] + mb.length)
+  };
+};
+var maybeMatch = (reg, str) => {
+  const m2 = str.match(reg);
+  return m2 ? m2[0] : null;
+};
+var range = (a2, b2, str) => {
+  let begs, beg, left, right = void 0, result;
+  let ai = str.indexOf(a2);
+  let bi = str.indexOf(b2, ai + 1);
+  let i2 = ai;
+  if (ai >= 0 && bi > 0) {
+    if (a2 === b2) {
+      return [ai, bi];
+    }
+    begs = [];
+    left = str.length;
+    while (i2 >= 0 && !result) {
+      if (i2 === ai) {
+        begs.push(i2);
+        ai = str.indexOf(a2, i2 + 1);
+      } else if (begs.length === 1) {
+        const r2 = begs.pop();
+        if (r2 !== void 0)
+          result = [r2, bi];
+      } else {
+        beg = begs.pop();
+        if (beg !== void 0 && beg < left) {
+          left = beg;
+          right = bi;
+        }
+        bi = str.indexOf(b2, i2 + 1);
+      }
+      i2 = ai < bi && ai >= 0 ? ai : bi;
+    }
+    if (begs.length && right !== void 0) {
+      result = [left, right];
+    }
+  }
+  return result;
+};
+
+// node_modules/.pnpm/brace-expansion@5.0.5/node_modules/brace-expansion/dist/esm/index.js
+var escSlash = "\0SLASH" + Math.random() + "\0";
+var escOpen = "\0OPEN" + Math.random() + "\0";
+var escClose = "\0CLOSE" + Math.random() + "\0";
+var escComma = "\0COMMA" + Math.random() + "\0";
+var escPeriod = "\0PERIOD" + Math.random() + "\0";
+var escSlashPattern = new RegExp(escSlash, "g");
+var escOpenPattern = new RegExp(escOpen, "g");
+var escClosePattern = new RegExp(escClose, "g");
+var escCommaPattern = new RegExp(escComma, "g");
+var escPeriodPattern = new RegExp(escPeriod, "g");
+var slashPattern = /\\\\/g;
+var openPattern = /\\{/g;
+var closePattern = /\\}/g;
+var commaPattern = /\\,/g;
+var periodPattern = /\\\./g;
+var EXPANSION_MAX = 1e5;
+function numeric(str) {
+  return !isNaN(str) ? parseInt(str, 10) : str.charCodeAt(0);
+}
+function escapeBraces(str) {
+  return str.replace(slashPattern, escSlash).replace(openPattern, escOpen).replace(closePattern, escClose).replace(commaPattern, escComma).replace(periodPattern, escPeriod);
+}
+function unescapeBraces(str) {
+  return str.replace(escSlashPattern, "\\").replace(escOpenPattern, "{").replace(escClosePattern, "}").replace(escCommaPattern, ",").replace(escPeriodPattern, ".");
+}
+function parseCommaParts(str) {
+  if (!str) {
+    return [""];
+  }
+  const parts = [];
+  const m2 = balanced("{", "}", str);
+  if (!m2) {
+    return str.split(",");
+  }
+  const { pre, body, post } = m2;
+  const p2 = pre.split(",");
+  p2[p2.length - 1] += "{" + body + "}";
+  const postParts = parseCommaParts(post);
+  if (post.length) {
+    ;
+    p2[p2.length - 1] += postParts.shift();
+    p2.push.apply(p2, postParts);
+  }
+  parts.push.apply(parts, p2);
+  return parts;
+}
+function expand(str, options = {}) {
+  if (!str) {
+    return [];
+  }
+  const { max = EXPANSION_MAX } = options;
+  if (str.slice(0, 2) === "{}") {
+    str = "\\{\\}" + str.slice(2);
+  }
+  return expand_(escapeBraces(str), max, true).map(unescapeBraces);
+}
+function embrace(str) {
+  return "{" + str + "}";
+}
+function isPadded(el) {
+  return /^-?0\d/.test(el);
+}
+function lte(i2, y2) {
+  return i2 <= y2;
+}
+function gte(i2, y2) {
+  return i2 >= y2;
+}
+function expand_(str, max, isTop) {
+  const expansions = [];
+  const m2 = balanced("{", "}", str);
+  if (!m2)
+    return [str];
+  const pre = m2.pre;
+  const post = m2.post.length ? expand_(m2.post, max, false) : [""];
+  if (/\$$/.test(m2.pre)) {
+    for (let k2 = 0; k2 < post.length && k2 < max; k2++) {
+      const expansion = pre + "{" + m2.body + "}" + post[k2];
+      expansions.push(expansion);
+    }
+  } else {
+    const isNumericSequence = /^-?\d+\.\.-?\d+(?:\.\.-?\d+)?$/.test(m2.body);
+    const isAlphaSequence = /^[a-zA-Z]\.\.[a-zA-Z](?:\.\.-?\d+)?$/.test(m2.body);
+    const isSequence = isNumericSequence || isAlphaSequence;
+    const isOptions = m2.body.indexOf(",") >= 0;
+    if (!isSequence && !isOptions) {
+      if (m2.post.match(/,(?!,).*\}/)) {
+        str = m2.pre + "{" + m2.body + escClose + m2.post;
+        return expand_(str, max, true);
+      }
+      return [str];
+    }
+    let n3;
+    if (isSequence) {
+      n3 = m2.body.split(/\.\./);
+    } else {
+      n3 = parseCommaParts(m2.body);
+      if (n3.length === 1 && n3[0] !== void 0) {
+        n3 = expand_(n3[0], max, false).map(embrace);
+        if (n3.length === 1) {
+          return post.map((p2) => m2.pre + n3[0] + p2);
+        }
+      }
+    }
+    let N2;
+    if (isSequence && n3[0] !== void 0 && n3[1] !== void 0) {
+      const x2 = numeric(n3[0]);
+      const y2 = numeric(n3[1]);
+      const width = Math.max(n3[0].length, n3[1].length);
+      let incr = n3.length === 3 && n3[2] !== void 0 ? Math.max(Math.abs(numeric(n3[2])), 1) : 1;
+      let test = lte;
+      const reverse = y2 < x2;
+      if (reverse) {
+        incr *= -1;
+        test = gte;
+      }
+      const pad = n3.some(isPadded);
+      N2 = [];
+      for (let i2 = x2; test(i2, y2); i2 += incr) {
+        let c2;
+        if (isAlphaSequence) {
+          c2 = String.fromCharCode(i2);
+          if (c2 === "\\") {
+            c2 = "";
+          }
+        } else {
+          c2 = String(i2);
+          if (pad) {
+            const need = width - c2.length;
+            if (need > 0) {
+              const z2 = new Array(need + 1).join("0");
+              if (i2 < 0) {
+                c2 = "-" + z2 + c2.slice(1);
+              } else {
+                c2 = z2 + c2;
+              }
+            }
+          }
+        }
+        N2.push(c2);
+      }
+    } else {
+      N2 = [];
+      for (let j2 = 0; j2 < n3.length; j2++) {
+        N2.push.apply(N2, expand_(n3[j2], max, false));
+      }
+    }
+    for (let j2 = 0; j2 < N2.length; j2++) {
+      for (let k2 = 0; k2 < post.length && expansions.length < max; k2++) {
+        const expansion = pre + N2[j2] + post[k2];
+        if (!isTop || isSequence || expansion) {
+          expansions.push(expansion);
+        }
+      }
+    }
+  }
+  return expansions;
+}
+
+// node_modules/.pnpm/minimatch@10.2.5/node_modules/minimatch/dist/esm/assert-valid-pattern.js
+var MAX_PATTERN_LENGTH = 1024 * 64;
+var assertValidPattern = (pattern) => {
+  if (typeof pattern !== "string") {
+    throw new TypeError("invalid pattern");
+  }
+  if (pattern.length > MAX_PATTERN_LENGTH) {
+    throw new TypeError("pattern is too long");
+  }
+};
+
+// node_modules/.pnpm/minimatch@10.2.5/node_modules/minimatch/dist/esm/brace-expressions.js
+var posixClasses = {
+  "[:alnum:]": ["\\p{L}\\p{Nl}\\p{Nd}", true],
+  "[:alpha:]": ["\\p{L}\\p{Nl}", true],
+  "[:ascii:]": ["\\x00-\\x7f", false],
+  "[:blank:]": ["\\p{Zs}\\t", true],
+  "[:cntrl:]": ["\\p{Cc}", true],
+  "[:digit:]": ["\\p{Nd}", true],
+  "[:graph:]": ["\\p{Z}\\p{C}", true, true],
+  "[:lower:]": ["\\p{Ll}", true],
+  "[:print:]": ["\\p{C}", true],
+  "[:punct:]": ["\\p{P}", true],
+  "[:space:]": ["\\p{Z}\\t\\r\\n\\v\\f", true],
+  "[:upper:]": ["\\p{Lu}", true],
+  "[:word:]": ["\\p{L}\\p{Nl}\\p{Nd}\\p{Pc}", true],
+  "[:xdigit:]": ["A-Fa-f0-9", false]
+};
+var braceEscape = (s2) => s2.replace(/[[\]\\-]/g, "\\$&");
+var regexpEscape = (s2) => s2.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+var rangesToString = (ranges) => ranges.join("");
+var parseClass = (glob, position) => {
+  const pos = position;
+  if (glob.charAt(pos) !== "[") {
+    throw new Error("not in a brace expression");
+  }
+  const ranges = [];
+  const negs = [];
+  let i2 = pos + 1;
+  let sawStart = false;
+  let uflag = false;
+  let escaping = false;
+  let negate = false;
+  let endPos = pos;
+  let rangeStart = "";
+  WHILE: while (i2 < glob.length) {
+    const c2 = glob.charAt(i2);
+    if ((c2 === "!" || c2 === "^") && i2 === pos + 1) {
+      negate = true;
+      i2++;
+      continue;
+    }
+    if (c2 === "]" && sawStart && !escaping) {
+      endPos = i2 + 1;
+      break;
+    }
+    sawStart = true;
+    if (c2 === "\\") {
+      if (!escaping) {
+        escaping = true;
+        i2++;
+        continue;
+      }
+    }
+    if (c2 === "[" && !escaping) {
+      for (const [cls, [unip, u2, neg]] of Object.entries(posixClasses)) {
+        if (glob.startsWith(cls, i2)) {
+          if (rangeStart) {
+            return ["$.", false, glob.length - pos, true];
+          }
+          i2 += cls.length;
+          if (neg)
+            negs.push(unip);
+          else
+            ranges.push(unip);
+          uflag = uflag || u2;
+          continue WHILE;
+        }
+      }
+    }
+    escaping = false;
+    if (rangeStart) {
+      if (c2 > rangeStart) {
+        ranges.push(braceEscape(rangeStart) + "-" + braceEscape(c2));
+      } else if (c2 === rangeStart) {
+        ranges.push(braceEscape(c2));
+      }
+      rangeStart = "";
+      i2++;
+      continue;
+    }
+    if (glob.startsWith("-]", i2 + 1)) {
+      ranges.push(braceEscape(c2 + "-"));
+      i2 += 2;
+      continue;
+    }
+    if (glob.startsWith("-", i2 + 1)) {
+      rangeStart = c2;
+      i2 += 2;
+      continue;
+    }
+    ranges.push(braceEscape(c2));
+    i2++;
+  }
+  if (endPos < i2) {
+    return ["", false, 0, false];
+  }
+  if (!ranges.length && !negs.length) {
+    return ["$.", false, glob.length - pos, true];
+  }
+  if (negs.length === 0 && ranges.length === 1 && /^\\?.$/.test(ranges[0]) && !negate) {
+    const r2 = ranges[0].length === 2 ? ranges[0].slice(-1) : ranges[0];
+    return [regexpEscape(r2), false, endPos - pos, false];
+  }
+  const sranges = "[" + (negate ? "^" : "") + rangesToString(ranges) + "]";
+  const snegs = "[" + (negate ? "" : "^") + rangesToString(negs) + "]";
+  const comb = ranges.length && negs.length ? "(" + sranges + "|" + snegs + ")" : ranges.length ? sranges : snegs;
+  return [comb, uflag, endPos - pos, true];
+};
+
+// node_modules/.pnpm/minimatch@10.2.5/node_modules/minimatch/dist/esm/unescape.js
+var unescape2 = (s2, { windowsPathsNoEscape = false, magicalBraces = true } = {}) => {
+  if (magicalBraces) {
+    return windowsPathsNoEscape ? s2.replace(/\[([^/\\])\]/g, "$1") : s2.replace(/((?!\\).|^)\[([^/\\])\]/g, "$1$2").replace(/\\([^/])/g, "$1");
+  }
+  return windowsPathsNoEscape ? s2.replace(/\[([^/\\{}])\]/g, "$1") : s2.replace(/((?!\\).|^)\[([^/\\{}])\]/g, "$1$2").replace(/\\([^/{}])/g, "$1");
+};
+
+// node_modules/.pnpm/minimatch@10.2.5/node_modules/minimatch/dist/esm/ast.js
+var _a2;
+var types = /* @__PURE__ */ new Set(["!", "?", "+", "*", "@"]);
+var isExtglobType = (c2) => types.has(c2);
+var isExtglobAST = (c2) => isExtglobType(c2.type);
+var adoptionMap = /* @__PURE__ */ new Map([
+  ["!", ["@"]],
+  ["?", ["?", "@"]],
+  ["@", ["@"]],
+  ["*", ["*", "+", "?", "@"]],
+  ["+", ["+", "@"]]
+]);
+var adoptionWithSpaceMap = /* @__PURE__ */ new Map([
+  ["!", ["?"]],
+  ["@", ["?"]],
+  ["+", ["?", "*"]]
+]);
+var adoptionAnyMap = /* @__PURE__ */ new Map([
+  ["!", ["?", "@"]],
+  ["?", ["?", "@"]],
+  ["@", ["?", "@"]],
+  ["*", ["*", "+", "?", "@"]],
+  ["+", ["+", "@", "?", "*"]]
+]);
+var usurpMap = /* @__PURE__ */ new Map([
+  ["!", /* @__PURE__ */ new Map([["!", "@"]])],
+  [
+    "?",
+    /* @__PURE__ */ new Map([
+      ["*", "*"],
+      ["+", "*"]
+    ])
+  ],
+  [
+    "@",
+    /* @__PURE__ */ new Map([
+      ["!", "!"],
+      ["?", "?"],
+      ["@", "@"],
+      ["*", "*"],
+      ["+", "+"]
+    ])
+  ],
+  [
+    "+",
+    /* @__PURE__ */ new Map([
+      ["?", "*"],
+      ["*", "*"]
+    ])
+  ]
+]);
+var startNoTraversal = "(?!(?:^|/)\\.\\.?(?:$|/))";
+var startNoDot = "(?!\\.)";
+var addPatternStart = /* @__PURE__ */ new Set(["[", "."]);
+var justDots = /* @__PURE__ */ new Set(["..", "."]);
+var reSpecials = new Set("().*{}+?[]^$\\!");
+var regExpEscape = (s2) => s2.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+var qmark = "[^/]";
+var star = qmark + "*?";
+var starNoEmpty = qmark + "+?";
+var ID = 0;
+var AST = class {
+  type;
+  #root;
+  #hasMagic;
+  #uflag = false;
+  #parts = [];
+  #parent;
+  #parentIndex;
+  #negs;
+  #filledNegs = false;
+  #options;
+  #toString;
+  // set to true if it's an extglob with no children
+  // (which really means one child of '')
+  #emptyExt = false;
+  id = ++ID;
+  get depth() {
+    return (this.#parent?.depth ?? -1) + 1;
+  }
+  [/* @__PURE__ */ Symbol.for("nodejs.util.inspect.custom")]() {
+    return {
+      "@@type": "AST",
+      id: this.id,
+      type: this.type,
+      root: this.#root.id,
+      parent: this.#parent?.id,
+      depth: this.depth,
+      partsLength: this.#parts.length,
+      parts: this.#parts
+    };
+  }
+  constructor(type, parent, options = {}) {
+    this.type = type;
+    if (type)
+      this.#hasMagic = true;
+    this.#parent = parent;
+    this.#root = this.#parent ? this.#parent.#root : this;
+    this.#options = this.#root === this ? options : this.#root.#options;
+    this.#negs = this.#root === this ? [] : this.#root.#negs;
+    if (type === "!" && !this.#root.#filledNegs)
+      this.#negs.push(this);
+    this.#parentIndex = this.#parent ? this.#parent.#parts.length : 0;
+  }
+  get hasMagic() {
+    if (this.#hasMagic !== void 0)
+      return this.#hasMagic;
+    for (const p2 of this.#parts) {
+      if (typeof p2 === "string")
+        continue;
+      if (p2.type || p2.hasMagic)
+        return this.#hasMagic = true;
+    }
+    return this.#hasMagic;
+  }
+  // reconstructs the pattern
+  toString() {
+    return this.#toString !== void 0 ? this.#toString : !this.type ? this.#toString = this.#parts.map((p2) => String(p2)).join("") : this.#toString = this.type + "(" + this.#parts.map((p2) => String(p2)).join("|") + ")";
+  }
+  #fillNegs() {
+    if (this !== this.#root)
+      throw new Error("should only call on root");
+    if (this.#filledNegs)
+      return this;
+    this.toString();
+    this.#filledNegs = true;
+    let n3;
+    while (n3 = this.#negs.pop()) {
+      if (n3.type !== "!")
+        continue;
+      let p2 = n3;
+      let pp = p2.#parent;
+      while (pp) {
+        for (let i2 = p2.#parentIndex + 1; !pp.type && i2 < pp.#parts.length; i2++) {
+          for (const part of n3.#parts) {
+            if (typeof part === "string") {
+              throw new Error("string part in extglob AST??");
+            }
+            part.copyIn(pp.#parts[i2]);
+          }
+        }
+        p2 = pp;
+        pp = p2.#parent;
+      }
+    }
+    return this;
+  }
+  push(...parts) {
+    for (const p2 of parts) {
+      if (p2 === "")
+        continue;
+      if (typeof p2 !== "string" && !(p2 instanceof _a2 && p2.#parent === this)) {
+        throw new Error("invalid part: " + p2);
+      }
+      this.#parts.push(p2);
+    }
+  }
+  toJSON() {
+    const ret = this.type === null ? this.#parts.slice().map((p2) => typeof p2 === "string" ? p2 : p2.toJSON()) : [this.type, ...this.#parts.map((p2) => p2.toJSON())];
+    if (this.isStart() && !this.type)
+      ret.unshift([]);
+    if (this.isEnd() && (this === this.#root || this.#root.#filledNegs && this.#parent?.type === "!")) {
+      ret.push({});
+    }
+    return ret;
+  }
+  isStart() {
+    if (this.#root === this)
+      return true;
+    if (!this.#parent?.isStart())
+      return false;
+    if (this.#parentIndex === 0)
+      return true;
+    const p2 = this.#parent;
+    for (let i2 = 0; i2 < this.#parentIndex; i2++) {
+      const pp = p2.#parts[i2];
+      if (!(pp instanceof _a2 && pp.type === "!")) {
+        return false;
+      }
+    }
+    return true;
+  }
+  isEnd() {
+    if (this.#root === this)
+      return true;
+    if (this.#parent?.type === "!")
+      return true;
+    if (!this.#parent?.isEnd())
+      return false;
+    if (!this.type)
+      return this.#parent?.isEnd();
+    const pl = this.#parent ? this.#parent.#parts.length : 0;
+    return this.#parentIndex === pl - 1;
+  }
+  copyIn(part) {
+    if (typeof part === "string")
+      this.push(part);
+    else
+      this.push(part.clone(this));
+  }
+  clone(parent) {
+    const c2 = new _a2(this.type, parent);
+    for (const p2 of this.#parts) {
+      c2.copyIn(p2);
+    }
+    return c2;
+  }
+  static #parseAST(str, ast, pos, opt, extDepth) {
+    const maxDepth = opt.maxExtglobRecursion ?? 2;
+    let escaping = false;
+    let inBrace = false;
+    let braceStart = -1;
+    let braceNeg = false;
+    if (ast.type === null) {
+      let i3 = pos;
+      let acc2 = "";
+      while (i3 < str.length) {
+        const c2 = str.charAt(i3++);
+        if (escaping || c2 === "\\") {
+          escaping = !escaping;
+          acc2 += c2;
+          continue;
+        }
+        if (inBrace) {
+          if (i3 === braceStart + 1) {
+            if (c2 === "^" || c2 === "!") {
+              braceNeg = true;
+            }
+          } else if (c2 === "]" && !(i3 === braceStart + 2 && braceNeg)) {
+            inBrace = false;
+          }
+          acc2 += c2;
+          continue;
+        } else if (c2 === "[") {
+          inBrace = true;
+          braceStart = i3;
+          braceNeg = false;
+          acc2 += c2;
+          continue;
+        }
+        const doRecurse = !opt.noext && isExtglobType(c2) && str.charAt(i3) === "(" && extDepth <= maxDepth;
+        if (doRecurse) {
+          ast.push(acc2);
+          acc2 = "";
+          const ext2 = new _a2(c2, ast);
+          i3 = _a2.#parseAST(str, ext2, i3, opt, extDepth + 1);
+          ast.push(ext2);
+          continue;
+        }
+        acc2 += c2;
+      }
+      ast.push(acc2);
+      return i3;
+    }
+    let i2 = pos + 1;
+    let part = new _a2(null, ast);
+    const parts = [];
+    let acc = "";
+    while (i2 < str.length) {
+      const c2 = str.charAt(i2++);
+      if (escaping || c2 === "\\") {
+        escaping = !escaping;
+        acc += c2;
+        continue;
+      }
+      if (inBrace) {
+        if (i2 === braceStart + 1) {
+          if (c2 === "^" || c2 === "!") {
+            braceNeg = true;
+          }
+        } else if (c2 === "]" && !(i2 === braceStart + 2 && braceNeg)) {
+          inBrace = false;
+        }
+        acc += c2;
+        continue;
+      } else if (c2 === "[") {
+        inBrace = true;
+        braceStart = i2;
+        braceNeg = false;
+        acc += c2;
+        continue;
+      }
+      const doRecurse = !opt.noext && isExtglobType(c2) && str.charAt(i2) === "(" && /* c8 ignore start - the maxDepth is sufficient here */
+      (extDepth <= maxDepth || ast && ast.#canAdoptType(c2));
+      if (doRecurse) {
+        const depthAdd = ast && ast.#canAdoptType(c2) ? 0 : 1;
+        part.push(acc);
+        acc = "";
+        const ext2 = new _a2(c2, part);
+        part.push(ext2);
+        i2 = _a2.#parseAST(str, ext2, i2, opt, extDepth + depthAdd);
+        continue;
+      }
+      if (c2 === "|") {
+        part.push(acc);
+        acc = "";
+        parts.push(part);
+        part = new _a2(null, ast);
+        continue;
+      }
+      if (c2 === ")") {
+        if (acc === "" && ast.#parts.length === 0) {
+          ast.#emptyExt = true;
+        }
+        part.push(acc);
+        acc = "";
+        ast.push(...parts, part);
+        return i2;
+      }
+      acc += c2;
+    }
+    ast.type = null;
+    ast.#hasMagic = void 0;
+    ast.#parts = [str.substring(pos - 1)];
+    return i2;
+  }
+  #canAdoptWithSpace(child) {
+    return this.#canAdopt(child, adoptionWithSpaceMap);
+  }
+  #canAdopt(child, map = adoptionMap) {
+    if (!child || typeof child !== "object" || child.type !== null || child.#parts.length !== 1 || this.type === null) {
+      return false;
+    }
+    const gc = child.#parts[0];
+    if (!gc || typeof gc !== "object" || gc.type === null) {
+      return false;
+    }
+    return this.#canAdoptType(gc.type, map);
+  }
+  #canAdoptType(c2, map = adoptionAnyMap) {
+    return !!map.get(this.type)?.includes(c2);
+  }
+  #adoptWithSpace(child, index) {
+    const gc = child.#parts[0];
+    const blank = new _a2(null, gc, this.options);
+    blank.#parts.push("");
+    gc.push(blank);
+    this.#adopt(child, index);
+  }
+  #adopt(child, index) {
+    const gc = child.#parts[0];
+    this.#parts.splice(index, 1, ...gc.#parts);
+    for (const p2 of gc.#parts) {
+      if (typeof p2 === "object")
+        p2.#parent = this;
+    }
+    this.#toString = void 0;
+  }
+  #canUsurpType(c2) {
+    const m2 = usurpMap.get(this.type);
+    return !!m2?.has(c2);
+  }
+  #canUsurp(child) {
+    if (!child || typeof child !== "object" || child.type !== null || child.#parts.length !== 1 || this.type === null || this.#parts.length !== 1) {
+      return false;
+    }
+    const gc = child.#parts[0];
+    if (!gc || typeof gc !== "object" || gc.type === null) {
+      return false;
+    }
+    return this.#canUsurpType(gc.type);
+  }
+  #usurp(child) {
+    const m2 = usurpMap.get(this.type);
+    const gc = child.#parts[0];
+    const nt2 = m2?.get(gc.type);
+    if (!nt2)
+      return false;
+    this.#parts = gc.#parts;
+    for (const p2 of this.#parts) {
+      if (typeof p2 === "object") {
+        p2.#parent = this;
+      }
+    }
+    this.type = nt2;
+    this.#toString = void 0;
+    this.#emptyExt = false;
+  }
+  static fromGlob(pattern, options = {}) {
+    const ast = new _a2(null, void 0, options);
+    _a2.#parseAST(pattern, ast, 0, options, 0);
+    return ast;
+  }
+  // returns the regular expression if there's magic, or the unescaped
+  // string if not.
+  toMMPattern() {
+    if (this !== this.#root)
+      return this.#root.toMMPattern();
+    const glob = this.toString();
+    const [re2, body, hasMagic, uflag] = this.toRegExpSource();
+    const anyMagic = hasMagic || this.#hasMagic || this.#options.nocase && !this.#options.nocaseMagicOnly && glob.toUpperCase() !== glob.toLowerCase();
+    if (!anyMagic) {
+      return body;
+    }
+    const flags = (this.#options.nocase ? "i" : "") + (uflag ? "u" : "");
+    return Object.assign(new RegExp(`^${re2}$`, flags), {
+      _src: re2,
+      _glob: glob
+    });
+  }
+  get options() {
+    return this.#options;
+  }
+  // returns the string match, the regexp source, whether there's magic
+  // in the regexp (so a regular expression is required) and whether or
+  // not the uflag is needed for the regular expression (for posix classes)
+  // TODO: instead of injecting the start/end at this point, just return
+  // the BODY of the regexp, along with the start/end portions suitable
+  // for binding the start/end in either a joined full-path makeRe context
+  // (where we bind to (^|/), or a standalone matchPart context (where
+  // we bind to ^, and not /).  Otherwise slashes get duped!
+  //
+  // In part-matching mode, the start is:
+  // - if not isStart: nothing
+  // - if traversal possible, but not allowed: ^(?!\.\.?$)
+  // - if dots allowed or not possible: ^
+  // - if dots possible and not allowed: ^(?!\.)
+  // end is:
+  // - if not isEnd(): nothing
+  // - else: $
+  //
+  // In full-path matching mode, we put the slash at the START of the
+  // pattern, so start is:
+  // - if first pattern: same as part-matching mode
+  // - if not isStart(): nothing
+  // - if traversal possible, but not allowed: /(?!\.\.?(?:$|/))
+  // - if dots allowed or not possible: /
+  // - if dots possible and not allowed: /(?!\.)
+  // end is:
+  // - if last pattern, same as part-matching mode
+  // - else nothing
+  //
+  // Always put the (?:$|/) on negated tails, though, because that has to be
+  // there to bind the end of the negated pattern portion, and it's easier to
+  // just stick it in now rather than try to inject it later in the middle of
+  // the pattern.
+  //
+  // We can just always return the same end, and leave it up to the caller
+  // to know whether it's going to be used joined or in parts.
+  // And, if the start is adjusted slightly, can do the same there:
+  // - if not isStart: nothing
+  // - if traversal possible, but not allowed: (?:/|^)(?!\.\.?$)
+  // - if dots allowed or not possible: (?:/|^)
+  // - if dots possible and not allowed: (?:/|^)(?!\.)
+  //
+  // But it's better to have a simpler binding without a conditional, for
+  // performance, so probably better to return both start options.
+  //
+  // Then the caller just ignores the end if it's not the first pattern,
+  // and the start always gets applied.
+  //
+  // But that's always going to be $ if it's the ending pattern, or nothing,
+  // so the caller can just attach $ at the end of the pattern when building.
+  //
+  // So the todo is:
+  // - better detect what kind of start is needed
+  // - return both flavors of starting pattern
+  // - attach $ at the end of the pattern when creating the actual RegExp
+  //
+  // Ah, but wait, no, that all only applies to the root when the first pattern
+  // is not an extglob. If the first pattern IS an extglob, then we need all
+  // that dot prevention biz to live in the extglob portions, because eg
+  // +(*|.x*) can match .xy but not .yx.
+  //
+  // So, return the two flavors if it's #root and the first child is not an
+  // AST, otherwise leave it to the child AST to handle it, and there,
+  // use the (?:^|/) style of start binding.
+  //
+  // Even simplified further:
+  // - Since the start for a join is eg /(?!\.) and the start for a part
+  // is ^(?!\.), we can just prepend (?!\.) to the pattern (either root
+  // or start or whatever) and prepend ^ or / at the Regexp construction.
+  toRegExpSource(allowDot) {
+    const dot4 = allowDot ?? !!this.#options.dot;
+    if (this.#root === this) {
+      this.#flatten();
+      this.#fillNegs();
+    }
+    if (!isExtglobAST(this)) {
+      const noEmpty = this.isStart() && this.isEnd() && !this.#parts.some((s2) => typeof s2 !== "string");
+      const src = this.#parts.map((p2) => {
+        const [re2, _2, hasMagic, uflag] = typeof p2 === "string" ? _a2.#parseGlob(p2, this.#hasMagic, noEmpty) : p2.toRegExpSource(allowDot);
+        this.#hasMagic = this.#hasMagic || hasMagic;
+        this.#uflag = this.#uflag || uflag;
+        return re2;
+      }).join("");
+      let start2 = "";
+      if (this.isStart()) {
+        if (typeof this.#parts[0] === "string") {
+          const dotTravAllowed = this.#parts.length === 1 && justDots.has(this.#parts[0]);
+          if (!dotTravAllowed) {
+            const aps = addPatternStart;
+            const needNoTrav = (
+              // dots are allowed, and the pattern starts with [ or .
+              dot4 && aps.has(src.charAt(0)) || // the pattern starts with \., and then [ or .
+              src.startsWith("\\.") && aps.has(src.charAt(2)) || // the pattern starts with \.\., and then [ or .
+              src.startsWith("\\.\\.") && aps.has(src.charAt(4))
+            );
+            const needNoDot = !dot4 && !allowDot && aps.has(src.charAt(0));
+            start2 = needNoTrav ? startNoTraversal : needNoDot ? startNoDot : "";
+          }
+        }
+      }
+      let end = "";
+      if (this.isEnd() && this.#root.#filledNegs && this.#parent?.type === "!") {
+        end = "(?:$|\\/)";
+      }
+      const final2 = start2 + src + end;
+      return [
+        final2,
+        unescape2(src),
+        this.#hasMagic = !!this.#hasMagic,
+        this.#uflag
+      ];
+    }
+    const repeated = this.type === "*" || this.type === "+";
+    const start = this.type === "!" ? "(?:(?!(?:" : "(?:";
+    let body = this.#partsToRegExp(dot4);
+    if (this.isStart() && this.isEnd() && !body && this.type !== "!") {
+      const s2 = this.toString();
+      const me2 = this;
+      me2.#parts = [s2];
+      me2.type = null;
+      me2.#hasMagic = void 0;
+      return [s2, unescape2(this.toString()), false, false];
+    }
+    let bodyDotAllowed = !repeated || allowDot || dot4 || !startNoDot ? "" : this.#partsToRegExp(true);
+    if (bodyDotAllowed === body) {
+      bodyDotAllowed = "";
+    }
+    if (bodyDotAllowed) {
+      body = `(?:${body})(?:${bodyDotAllowed})*?`;
+    }
+    let final = "";
+    if (this.type === "!" && this.#emptyExt) {
+      final = (this.isStart() && !dot4 ? startNoDot : "") + starNoEmpty;
+    } else {
+      const close = this.type === "!" ? (
+        // !() must match something,but !(x) can match ''
+        "))" + (this.isStart() && !dot4 && !allowDot ? startNoDot : "") + star + ")"
+      ) : this.type === "@" ? ")" : this.type === "?" ? ")?" : this.type === "+" && bodyDotAllowed ? ")" : this.type === "*" && bodyDotAllowed ? `)?` : `)${this.type}`;
+      final = start + body + close;
+    }
+    return [
+      final,
+      unescape2(body),
+      this.#hasMagic = !!this.#hasMagic,
+      this.#uflag
+    ];
+  }
+  #flatten() {
+    if (!isExtglobAST(this)) {
+      for (const p2 of this.#parts) {
+        if (typeof p2 === "object") {
+          p2.#flatten();
+        }
+      }
+    } else {
+      let iterations = 0;
+      let done = false;
+      do {
+        done = true;
+        for (let i2 = 0; i2 < this.#parts.length; i2++) {
+          const c2 = this.#parts[i2];
+          if (typeof c2 === "object") {
+            c2.#flatten();
+            if (this.#canAdopt(c2)) {
+              done = false;
+              this.#adopt(c2, i2);
+            } else if (this.#canAdoptWithSpace(c2)) {
+              done = false;
+              this.#adoptWithSpace(c2, i2);
+            } else if (this.#canUsurp(c2)) {
+              done = false;
+              this.#usurp(c2);
+            }
+          }
+        }
+      } while (!done && ++iterations < 10);
+    }
+    this.#toString = void 0;
+  }
+  #partsToRegExp(dot4) {
+    return this.#parts.map((p2) => {
+      if (typeof p2 === "string") {
+        throw new Error("string type in extglob ast??");
+      }
+      const [re2, _2, _hasMagic, uflag] = p2.toRegExpSource(dot4);
+      this.#uflag = this.#uflag || uflag;
+      return re2;
+    }).filter((p2) => !(this.isStart() && this.isEnd()) || !!p2).join("|");
+  }
+  static #parseGlob(glob, hasMagic, noEmpty = false) {
+    let escaping = false;
+    let re2 = "";
+    let uflag = false;
+    let inStar = false;
+    for (let i2 = 0; i2 < glob.length; i2++) {
+      const c2 = glob.charAt(i2);
+      if (escaping) {
+        escaping = false;
+        re2 += (reSpecials.has(c2) ? "\\" : "") + c2;
+        continue;
+      }
+      if (c2 === "*") {
+        if (inStar)
+          continue;
+        inStar = true;
+        re2 += noEmpty && /^[*]+$/.test(glob) ? starNoEmpty : star;
+        hasMagic = true;
+        continue;
+      } else {
+        inStar = false;
+      }
+      if (c2 === "\\") {
+        if (i2 === glob.length - 1) {
+          re2 += "\\\\";
+        } else {
+          escaping = true;
+        }
+        continue;
+      }
+      if (c2 === "[") {
+        const [src, needUflag, consumed, magic] = parseClass(glob, i2);
+        if (consumed) {
+          re2 += src;
+          uflag = uflag || needUflag;
+          i2 += consumed - 1;
+          hasMagic = hasMagic || magic;
+          continue;
+        }
+      }
+      if (c2 === "?") {
+        re2 += qmark;
+        hasMagic = true;
+        continue;
+      }
+      re2 += regExpEscape(c2);
+    }
+    return [re2, unescape2(glob), !!hasMagic, uflag];
+  }
+};
+_a2 = AST;
+
+// node_modules/.pnpm/minimatch@10.2.5/node_modules/minimatch/dist/esm/escape.js
+var escape2 = (s2, { windowsPathsNoEscape = false, magicalBraces = false } = {}) => {
+  if (magicalBraces) {
+    return windowsPathsNoEscape ? s2.replace(/[?*()[\]{}]/g, "[$&]") : s2.replace(/[?*()[\]\\{}]/g, "\\$&");
+  }
+  return windowsPathsNoEscape ? s2.replace(/[?*()[\]]/g, "[$&]") : s2.replace(/[?*()[\]\\]/g, "\\$&");
+};
+
+// node_modules/.pnpm/minimatch@10.2.5/node_modules/minimatch/dist/esm/index.js
+var minimatch = (p2, pattern, options = {}) => {
+  assertValidPattern(pattern);
+  if (!options.nocomment && pattern.charAt(0) === "#") {
+    return false;
+  }
+  return new Minimatch(pattern, options).match(p2);
+};
+var starDotExtRE = /^\*+([^+@!?*[(]*)$/;
+var starDotExtTest = (ext2) => (f2) => !f2.startsWith(".") && f2.endsWith(ext2);
+var starDotExtTestDot = (ext2) => (f2) => f2.endsWith(ext2);
+var starDotExtTestNocase = (ext2) => {
+  ext2 = ext2.toLowerCase();
+  return (f2) => !f2.startsWith(".") && f2.toLowerCase().endsWith(ext2);
+};
+var starDotExtTestNocaseDot = (ext2) => {
+  ext2 = ext2.toLowerCase();
+  return (f2) => f2.toLowerCase().endsWith(ext2);
+};
+var starDotStarRE = /^\*+\.\*+$/;
+var starDotStarTest = (f2) => !f2.startsWith(".") && f2.includes(".");
+var starDotStarTestDot = (f2) => f2 !== "." && f2 !== ".." && f2.includes(".");
+var dotStarRE = /^\.\*+$/;
+var dotStarTest = (f2) => f2 !== "." && f2 !== ".." && f2.startsWith(".");
+var starRE = /^\*+$/;
+var starTest = (f2) => f2.length !== 0 && !f2.startsWith(".");
+var starTestDot = (f2) => f2.length !== 0 && f2 !== "." && f2 !== "..";
+var qmarksRE = /^\?+([^+@!?*[(]*)?$/;
+var qmarksTestNocase = ([$0, ext2 = ""]) => {
+  const noext = qmarksTestNoExt([$0]);
+  if (!ext2)
+    return noext;
+  ext2 = ext2.toLowerCase();
+  return (f2) => noext(f2) && f2.toLowerCase().endsWith(ext2);
+};
+var qmarksTestNocaseDot = ([$0, ext2 = ""]) => {
+  const noext = qmarksTestNoExtDot([$0]);
+  if (!ext2)
+    return noext;
+  ext2 = ext2.toLowerCase();
+  return (f2) => noext(f2) && f2.toLowerCase().endsWith(ext2);
+};
+var qmarksTestDot = ([$0, ext2 = ""]) => {
+  const noext = qmarksTestNoExtDot([$0]);
+  return !ext2 ? noext : (f2) => noext(f2) && f2.endsWith(ext2);
+};
+var qmarksTest = ([$0, ext2 = ""]) => {
+  const noext = qmarksTestNoExt([$0]);
+  return !ext2 ? noext : (f2) => noext(f2) && f2.endsWith(ext2);
+};
+var qmarksTestNoExt = ([$0]) => {
+  const len = $0.length;
+  return (f2) => f2.length === len && !f2.startsWith(".");
+};
+var qmarksTestNoExtDot = ([$0]) => {
+  const len = $0.length;
+  return (f2) => f2.length === len && f2 !== "." && f2 !== "..";
+};
+var defaultPlatform = typeof process === "object" && process ? typeof process.env === "object" && process.env && process.env.__MINIMATCH_TESTING_PLATFORM__ || process.platform : "posix";
+var path3 = {
+  win32: { sep: "\\" },
+  posix: { sep: "/" }
+};
+var sep = defaultPlatform === "win32" ? path3.win32.sep : path3.posix.sep;
+minimatch.sep = sep;
+var GLOBSTAR = /* @__PURE__ */ Symbol("globstar **");
+minimatch.GLOBSTAR = GLOBSTAR;
+var qmark2 = "[^/]";
+var star2 = qmark2 + "*?";
+var twoStarDot = "(?:(?!(?:\\/|^)(?:\\.{1,2})($|\\/)).)*?";
+var twoStarNoDot = "(?:(?!(?:\\/|^)\\.).)*?";
+var filter = (pattern, options = {}) => (p2) => minimatch(p2, pattern, options);
+minimatch.filter = filter;
+var ext = (a2, b2 = {}) => Object.assign({}, a2, b2);
+var defaults = (def) => {
+  if (!def || typeof def !== "object" || !Object.keys(def).length) {
+    return minimatch;
+  }
+  const orig = minimatch;
+  const m2 = (p2, pattern, options = {}) => orig(p2, pattern, ext(def, options));
+  return Object.assign(m2, {
+    Minimatch: class Minimatch extends orig.Minimatch {
+      constructor(pattern, options = {}) {
+        super(pattern, ext(def, options));
+      }
+      static defaults(options) {
+        return orig.defaults(ext(def, options)).Minimatch;
+      }
+    },
+    AST: class AST extends orig.AST {
+      /* c8 ignore start */
+      constructor(type, parent, options = {}) {
+        super(type, parent, ext(def, options));
+      }
+      /* c8 ignore stop */
+      static fromGlob(pattern, options = {}) {
+        return orig.AST.fromGlob(pattern, ext(def, options));
+      }
+    },
+    unescape: (s2, options = {}) => orig.unescape(s2, ext(def, options)),
+    escape: (s2, options = {}) => orig.escape(s2, ext(def, options)),
+    filter: (pattern, options = {}) => orig.filter(pattern, ext(def, options)),
+    defaults: (options) => orig.defaults(ext(def, options)),
+    makeRe: (pattern, options = {}) => orig.makeRe(pattern, ext(def, options)),
+    braceExpand: (pattern, options = {}) => orig.braceExpand(pattern, ext(def, options)),
+    match: (list, pattern, options = {}) => orig.match(list, pattern, ext(def, options)),
+    sep: orig.sep,
+    GLOBSTAR
+  });
+};
+minimatch.defaults = defaults;
+var braceExpand = (pattern, options = {}) => {
+  assertValidPattern(pattern);
+  if (options.nobrace || !/\{(?:(?!\{).)*\}/.test(pattern)) {
+    return [pattern];
+  }
+  return expand(pattern, { max: options.braceExpandMax });
+};
+minimatch.braceExpand = braceExpand;
+var makeRe = (pattern, options = {}) => new Minimatch(pattern, options).makeRe();
+minimatch.makeRe = makeRe;
+var match = (list, pattern, options = {}) => {
+  const mm = new Minimatch(pattern, options);
+  list = list.filter((f2) => mm.match(f2));
+  if (mm.options.nonull && !list.length) {
+    list.push(pattern);
+  }
+  return list;
+};
+minimatch.match = match;
+var globMagic = /[?*]|[+@!]\(.*?\)|\[|\]/;
+var regExpEscape2 = (s2) => s2.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, "\\$&");
+var Minimatch = class {
+  options;
+  set;
+  pattern;
+  windowsPathsNoEscape;
+  nonegate;
+  negate;
+  comment;
+  empty;
+  preserveMultipleSlashes;
+  partial;
+  globSet;
+  globParts;
+  nocase;
+  isWindows;
+  platform;
+  windowsNoMagicRoot;
+  maxGlobstarRecursion;
+  regexp;
+  constructor(pattern, options = {}) {
+    assertValidPattern(pattern);
+    options = options || {};
+    this.options = options;
+    this.maxGlobstarRecursion = options.maxGlobstarRecursion ?? 200;
+    this.pattern = pattern;
+    this.platform = options.platform || defaultPlatform;
+    this.isWindows = this.platform === "win32";
+    const awe = "allowWindowsEscape";
+    this.windowsPathsNoEscape = !!options.windowsPathsNoEscape || options[awe] === false;
+    if (this.windowsPathsNoEscape) {
+      this.pattern = this.pattern.replace(/\\/g, "/");
+    }
+    this.preserveMultipleSlashes = !!options.preserveMultipleSlashes;
+    this.regexp = null;
+    this.negate = false;
+    this.nonegate = !!options.nonegate;
+    this.comment = false;
+    this.empty = false;
+    this.partial = !!options.partial;
+    this.nocase = !!this.options.nocase;
+    this.windowsNoMagicRoot = options.windowsNoMagicRoot !== void 0 ? options.windowsNoMagicRoot : !!(this.isWindows && this.nocase);
+    this.globSet = [];
+    this.globParts = [];
+    this.set = [];
+    this.make();
+  }
+  hasMagic() {
+    if (this.options.magicalBraces && this.set.length > 1) {
+      return true;
+    }
+    for (const pattern of this.set) {
+      for (const part of pattern) {
+        if (typeof part !== "string")
+          return true;
+      }
+    }
+    return false;
+  }
+  debug(..._2) {
+  }
+  make() {
+    const pattern = this.pattern;
+    const options = this.options;
+    if (!options.nocomment && pattern.charAt(0) === "#") {
+      this.comment = true;
+      return;
+    }
+    if (!pattern) {
+      this.empty = true;
+      return;
+    }
+    this.parseNegate();
+    this.globSet = [...new Set(this.braceExpand())];
+    if (options.debug) {
+      this.debug = (...args) => console.error(...args);
+    }
+    this.debug(this.pattern, this.globSet);
+    const rawGlobParts = this.globSet.map((s2) => this.slashSplit(s2));
+    this.globParts = this.preprocess(rawGlobParts);
+    this.debug(this.pattern, this.globParts);
+    let set = this.globParts.map((s2, _2, __) => {
+      if (this.isWindows && this.windowsNoMagicRoot) {
+        const isUNC = s2[0] === "" && s2[1] === "" && (s2[2] === "?" || !globMagic.test(s2[2])) && !globMagic.test(s2[3]);
+        const isDrive = /^[a-z]:/i.test(s2[0]);
+        if (isUNC) {
+          return [
+            ...s2.slice(0, 4),
+            ...s2.slice(4).map((ss) => this.parse(ss))
+          ];
+        } else if (isDrive) {
+          return [s2[0], ...s2.slice(1).map((ss) => this.parse(ss))];
+        }
+      }
+      return s2.map((ss) => this.parse(ss));
+    });
+    this.debug(this.pattern, set);
+    this.set = set.filter((s2) => s2.indexOf(false) === -1);
+    if (this.isWindows) {
+      for (let i2 = 0; i2 < this.set.length; i2++) {
+        const p2 = this.set[i2];
+        if (p2[0] === "" && p2[1] === "" && this.globParts[i2][2] === "?" && typeof p2[3] === "string" && /^[a-z]:$/i.test(p2[3])) {
+          p2[2] = "?";
+        }
+      }
+    }
+    this.debug(this.pattern, this.set);
+  }
+  // various transforms to equivalent pattern sets that are
+  // faster to process in a filesystem walk.  The goal is to
+  // eliminate what we can, and push all ** patterns as far
+  // to the right as possible, even if it increases the number
+  // of patterns that we have to process.
+  preprocess(globParts) {
+    if (this.options.noglobstar) {
+      for (const partset of globParts) {
+        for (let j2 = 0; j2 < partset.length; j2++) {
+          if (partset[j2] === "**") {
+            partset[j2] = "*";
+          }
+        }
+      }
+    }
+    const { optimizationLevel = 1 } = this.options;
+    if (optimizationLevel >= 2) {
+      globParts = this.firstPhasePreProcess(globParts);
+      globParts = this.secondPhasePreProcess(globParts);
+    } else if (optimizationLevel >= 1) {
+      globParts = this.levelOneOptimize(globParts);
+    } else {
+      globParts = this.adjascentGlobstarOptimize(globParts);
+    }
+    return globParts;
+  }
+  // just get rid of adjascent ** portions
+  adjascentGlobstarOptimize(globParts) {
+    return globParts.map((parts) => {
+      let gs = -1;
+      while (-1 !== (gs = parts.indexOf("**", gs + 1))) {
+        let i2 = gs;
+        while (parts[i2 + 1] === "**") {
+          i2++;
+        }
+        if (i2 !== gs) {
+          parts.splice(gs, i2 - gs);
+        }
+      }
+      return parts;
+    });
+  }
+  // get rid of adjascent ** and resolve .. portions
+  levelOneOptimize(globParts) {
+    return globParts.map((parts) => {
+      parts = parts.reduce((set, part) => {
+        const prev = set[set.length - 1];
+        if (part === "**" && prev === "**") {
+          return set;
+        }
+        if (part === "..") {
+          if (prev && prev !== ".." && prev !== "." && prev !== "**") {
+            set.pop();
+            return set;
+          }
+        }
+        set.push(part);
+        return set;
+      }, []);
+      return parts.length === 0 ? [""] : parts;
+    });
+  }
+  levelTwoFileOptimize(parts) {
+    if (!Array.isArray(parts)) {
+      parts = this.slashSplit(parts);
+    }
+    let didSomething = false;
+    do {
+      didSomething = false;
+      if (!this.preserveMultipleSlashes) {
+        for (let i2 = 1; i2 < parts.length - 1; i2++) {
+          const p2 = parts[i2];
+          if (i2 === 1 && p2 === "" && parts[0] === "")
+            continue;
+          if (p2 === "." || p2 === "") {
+            didSomething = true;
+            parts.splice(i2, 1);
+            i2--;
+          }
+        }
+        if (parts[0] === "." && parts.length === 2 && (parts[1] === "." || parts[1] === "")) {
+          didSomething = true;
+          parts.pop();
+        }
+      }
+      let dd = 0;
+      while (-1 !== (dd = parts.indexOf("..", dd + 1))) {
+        const p2 = parts[dd - 1];
+        if (p2 && p2 !== "." && p2 !== ".." && p2 !== "**" && !(this.isWindows && /^[a-z]:$/i.test(p2))) {
+          didSomething = true;
+          parts.splice(dd - 1, 2);
+          dd -= 2;
+        }
+      }
+    } while (didSomething);
+    return parts.length === 0 ? [""] : parts;
+  }
+  // First phase: single-pattern processing
+  // <pre> is 1 or more portions
+  // <rest> is 1 or more portions
+  // <p> is any portion other than ., .., '', or **
+  // <e> is . or ''
+  //
+  // **/.. is *brutal* for filesystem walking performance, because
+  // it effectively resets the recursive walk each time it occurs,
+  // and ** cannot be reduced out by a .. pattern part like a regexp
+  // or most strings (other than .., ., and '') can be.
+  //
+  // <pre>/**/../<p>/<p>/<rest> -> {<pre>/../<p>/<p>/<rest>,<pre>/**/<p>/<p>/<rest>}
+  // <pre>/<e>/<rest> -> <pre>/<rest>
+  // <pre>/<p>/../<rest> -> <pre>/<rest>
+  // **/**/<rest> -> **/<rest>
+  //
+  // **/*/<rest> -> */**/<rest> <== not valid because ** doesn't follow
+  // this WOULD be allowed if ** did follow symlinks, or * didn't
+  firstPhasePreProcess(globParts) {
+    let didSomething = false;
+    do {
+      didSomething = false;
+      for (let parts of globParts) {
+        let gs = -1;
+        while (-1 !== (gs = parts.indexOf("**", gs + 1))) {
+          let gss = gs;
+          while (parts[gss + 1] === "**") {
+            gss++;
+          }
+          if (gss > gs) {
+            parts.splice(gs + 1, gss - gs);
+          }
+          let next = parts[gs + 1];
+          const p2 = parts[gs + 2];
+          const p22 = parts[gs + 3];
+          if (next !== "..")
+            continue;
+          if (!p2 || p2 === "." || p2 === ".." || !p22 || p22 === "." || p22 === "..") {
+            continue;
+          }
+          didSomething = true;
+          parts.splice(gs, 1);
+          const other = parts.slice(0);
+          other[gs] = "**";
+          globParts.push(other);
+          gs--;
+        }
+        if (!this.preserveMultipleSlashes) {
+          for (let i2 = 1; i2 < parts.length - 1; i2++) {
+            const p2 = parts[i2];
+            if (i2 === 1 && p2 === "" && parts[0] === "")
+              continue;
+            if (p2 === "." || p2 === "") {
+              didSomething = true;
+              parts.splice(i2, 1);
+              i2--;
+            }
+          }
+          if (parts[0] === "." && parts.length === 2 && (parts[1] === "." || parts[1] === "")) {
+            didSomething = true;
+            parts.pop();
+          }
+        }
+        let dd = 0;
+        while (-1 !== (dd = parts.indexOf("..", dd + 1))) {
+          const p2 = parts[dd - 1];
+          if (p2 && p2 !== "." && p2 !== ".." && p2 !== "**") {
+            didSomething = true;
+            const needDot = dd === 1 && parts[dd + 1] === "**";
+            const splin = needDot ? ["."] : [];
+            parts.splice(dd - 1, 2, ...splin);
+            if (parts.length === 0)
+              parts.push("");
+            dd -= 2;
+          }
+        }
+      }
+    } while (didSomething);
+    return globParts;
+  }
+  // second phase: multi-pattern dedupes
+  // {<pre>/*/<rest>,<pre>/<p>/<rest>} -> <pre>/*/<rest>
+  // {<pre>/<rest>,<pre>/<rest>} -> <pre>/<rest>
+  // {<pre>/**/<rest>,<pre>/<rest>} -> <pre>/**/<rest>
+  //
+  // {<pre>/**/<rest>,<pre>/**/<p>/<rest>} -> <pre>/**/<rest>
+  // ^-- not valid because ** doens't follow symlinks
+  secondPhasePreProcess(globParts) {
+    for (let i2 = 0; i2 < globParts.length - 1; i2++) {
+      for (let j2 = i2 + 1; j2 < globParts.length; j2++) {
+        const matched = this.partsMatch(globParts[i2], globParts[j2], !this.preserveMultipleSlashes);
+        if (matched) {
+          globParts[i2] = [];
+          globParts[j2] = matched;
+          break;
+        }
+      }
+    }
+    return globParts.filter((gs) => gs.length);
+  }
+  partsMatch(a2, b2, emptyGSMatch = false) {
+    let ai = 0;
+    let bi = 0;
+    let result = [];
+    let which = "";
+    while (ai < a2.length && bi < b2.length) {
+      if (a2[ai] === b2[bi]) {
+        result.push(which === "b" ? b2[bi] : a2[ai]);
+        ai++;
+        bi++;
+      } else if (emptyGSMatch && a2[ai] === "**" && b2[bi] === a2[ai + 1]) {
+        result.push(a2[ai]);
+        ai++;
+      } else if (emptyGSMatch && b2[bi] === "**" && a2[ai] === b2[bi + 1]) {
+        result.push(b2[bi]);
+        bi++;
+      } else if (a2[ai] === "*" && b2[bi] && (this.options.dot || !b2[bi].startsWith(".")) && b2[bi] !== "**") {
+        if (which === "b")
+          return false;
+        which = "a";
+        result.push(a2[ai]);
+        ai++;
+        bi++;
+      } else if (b2[bi] === "*" && a2[ai] && (this.options.dot || !a2[ai].startsWith(".")) && a2[ai] !== "**") {
+        if (which === "a")
+          return false;
+        which = "b";
+        result.push(b2[bi]);
+        ai++;
+        bi++;
+      } else {
+        return false;
+      }
+    }
+    return a2.length === b2.length && result;
+  }
+  parseNegate() {
+    if (this.nonegate)
+      return;
+    const pattern = this.pattern;
+    let negate = false;
+    let negateOffset = 0;
+    for (let i2 = 0; i2 < pattern.length && pattern.charAt(i2) === "!"; i2++) {
+      negate = !negate;
+      negateOffset++;
+    }
+    if (negateOffset)
+      this.pattern = pattern.slice(negateOffset);
+    this.negate = negate;
+  }
+  // set partial to true to test if, for example,
+  // "/a/b" matches the start of "/*/b/*/d"
+  // Partial means, if you run out of file before you run
+  // out of pattern, then that's fine, as long as all
+  // the parts match.
+  matchOne(file, pattern, partial2 = false) {
+    let fileStartIndex = 0;
+    let patternStartIndex = 0;
+    if (this.isWindows) {
+      const fileDrive = typeof file[0] === "string" && /^[a-z]:$/i.test(file[0]);
+      const fileUNC = !fileDrive && file[0] === "" && file[1] === "" && file[2] === "?" && /^[a-z]:$/i.test(file[3]);
+      const patternDrive = typeof pattern[0] === "string" && /^[a-z]:$/i.test(pattern[0]);
+      const patternUNC = !patternDrive && pattern[0] === "" && pattern[1] === "" && pattern[2] === "?" && typeof pattern[3] === "string" && /^[a-z]:$/i.test(pattern[3]);
+      const fdi = fileUNC ? 3 : fileDrive ? 0 : void 0;
+      const pdi = patternUNC ? 3 : patternDrive ? 0 : void 0;
+      if (typeof fdi === "number" && typeof pdi === "number") {
+        const [fd, pd] = [
+          file[fdi],
+          pattern[pdi]
+        ];
+        if (fd.toLowerCase() === pd.toLowerCase()) {
+          pattern[pdi] = fd;
+          patternStartIndex = pdi;
+          fileStartIndex = fdi;
+        }
+      }
+    }
+    const { optimizationLevel = 1 } = this.options;
+    if (optimizationLevel >= 2) {
+      file = this.levelTwoFileOptimize(file);
+    }
+    if (pattern.includes(GLOBSTAR)) {
+      return this.#matchGlobstar(file, pattern, partial2, fileStartIndex, patternStartIndex);
+    }
+    return this.#matchOne(file, pattern, partial2, fileStartIndex, patternStartIndex);
+  }
+  #matchGlobstar(file, pattern, partial2, fileIndex, patternIndex) {
+    const firstgs = pattern.indexOf(GLOBSTAR, patternIndex);
+    const lastgs = pattern.lastIndexOf(GLOBSTAR);
+    const [head, body, tail] = partial2 ? [
+      pattern.slice(patternIndex, firstgs),
+      pattern.slice(firstgs + 1),
+      []
+    ] : [
+      pattern.slice(patternIndex, firstgs),
+      pattern.slice(firstgs + 1, lastgs),
+      pattern.slice(lastgs + 1)
+    ];
+    if (head.length) {
+      const fileHead = file.slice(fileIndex, fileIndex + head.length);
+      if (!this.#matchOne(fileHead, head, partial2, 0, 0)) {
+        return false;
+      }
+      fileIndex += head.length;
+      patternIndex += head.length;
+    }
+    let fileTailMatch = 0;
+    if (tail.length) {
+      if (tail.length + fileIndex > file.length)
+        return false;
+      let tailStart = file.length - tail.length;
+      if (this.#matchOne(file, tail, partial2, tailStart, 0)) {
+        fileTailMatch = tail.length;
+      } else {
+        if (file[file.length - 1] !== "" || fileIndex + tail.length === file.length) {
+          return false;
+        }
+        tailStart--;
+        if (!this.#matchOne(file, tail, partial2, tailStart, 0)) {
+          return false;
+        }
+        fileTailMatch = tail.length + 1;
+      }
+    }
+    if (!body.length) {
+      let sawSome = !!fileTailMatch;
+      for (let i3 = fileIndex; i3 < file.length - fileTailMatch; i3++) {
+        const f2 = String(file[i3]);
+        sawSome = true;
+        if (f2 === "." || f2 === ".." || !this.options.dot && f2.startsWith(".")) {
+          return false;
+        }
+      }
+      return partial2 || sawSome;
+    }
+    const bodySegments = [[[], 0]];
+    let currentBody = bodySegments[0];
+    let nonGsParts = 0;
+    const nonGsPartsSums = [0];
+    for (const b2 of body) {
+      if (b2 === GLOBSTAR) {
+        nonGsPartsSums.push(nonGsParts);
+        currentBody = [[], 0];
+        bodySegments.push(currentBody);
+      } else {
+        currentBody[0].push(b2);
+        nonGsParts++;
+      }
+    }
+    let i2 = bodySegments.length - 1;
+    const fileLength = file.length - fileTailMatch;
+    for (const b2 of bodySegments) {
+      b2[1] = fileLength - (nonGsPartsSums[i2--] + b2[0].length);
+    }
+    return !!this.#matchGlobStarBodySections(file, bodySegments, fileIndex, 0, partial2, 0, !!fileTailMatch);
+  }
+  // return false for "nope, not matching"
+  // return null for "not matching, cannot keep trying"
+  #matchGlobStarBodySections(file, bodySegments, fileIndex, bodyIndex, partial2, globStarDepth, sawTail) {
+    const bs = bodySegments[bodyIndex];
+    if (!bs) {
+      for (let i2 = fileIndex; i2 < file.length; i2++) {
+        sawTail = true;
+        const f2 = file[i2];
+        if (f2 === "." || f2 === ".." || !this.options.dot && f2.startsWith(".")) {
+          return false;
+        }
+      }
+      return sawTail;
+    }
+    const [body, after] = bs;
+    while (fileIndex <= after) {
+      const m2 = this.#matchOne(file.slice(0, fileIndex + body.length), body, partial2, fileIndex, 0);
+      if (m2 && globStarDepth < this.maxGlobstarRecursion) {
+        const sub = this.#matchGlobStarBodySections(file, bodySegments, fileIndex + body.length, bodyIndex + 1, partial2, globStarDepth + 1, sawTail);
+        if (sub !== false) {
+          return sub;
+        }
+      }
+      const f2 = file[fileIndex];
+      if (f2 === "." || f2 === ".." || !this.options.dot && f2.startsWith(".")) {
+        return false;
+      }
+      fileIndex++;
+    }
+    return partial2 || null;
+  }
+  #matchOne(file, pattern, partial2, fileIndex, patternIndex) {
+    let fi;
+    let pi;
+    let pl;
+    let fl;
+    for (fi = fileIndex, pi = patternIndex, fl = file.length, pl = pattern.length; fi < fl && pi < pl; fi++, pi++) {
+      this.debug("matchOne loop");
+      let p2 = pattern[pi];
+      let f2 = file[fi];
+      this.debug(pattern, p2, f2);
+      if (p2 === false || p2 === GLOBSTAR) {
+        return false;
+      }
+      let hit;
+      if (typeof p2 === "string") {
+        hit = f2 === p2;
+        this.debug("string match", p2, f2, hit);
+      } else {
+        hit = p2.test(f2);
+        this.debug("pattern match", p2, f2, hit);
+      }
+      if (!hit)
+        return false;
+    }
+    if (fi === fl && pi === pl) {
+      return true;
+    } else if (fi === fl) {
+      return partial2;
+    } else if (pi === pl) {
+      return fi === fl - 1 && file[fi] === "";
+    } else {
+      throw new Error("wtf?");
+    }
+  }
+  braceExpand() {
+    return braceExpand(this.pattern, this.options);
+  }
+  parse(pattern) {
+    assertValidPattern(pattern);
+    const options = this.options;
+    if (pattern === "**")
+      return GLOBSTAR;
+    if (pattern === "")
+      return "";
+    let m2;
+    let fastTest = null;
+    if (m2 = pattern.match(starRE)) {
+      fastTest = options.dot ? starTestDot : starTest;
+    } else if (m2 = pattern.match(starDotExtRE)) {
+      fastTest = (options.nocase ? options.dot ? starDotExtTestNocaseDot : starDotExtTestNocase : options.dot ? starDotExtTestDot : starDotExtTest)(m2[1]);
+    } else if (m2 = pattern.match(qmarksRE)) {
+      fastTest = (options.nocase ? options.dot ? qmarksTestNocaseDot : qmarksTestNocase : options.dot ? qmarksTestDot : qmarksTest)(m2);
+    } else if (m2 = pattern.match(starDotStarRE)) {
+      fastTest = options.dot ? starDotStarTestDot : starDotStarTest;
+    } else if (m2 = pattern.match(dotStarRE)) {
+      fastTest = dotStarTest;
+    }
+    const re2 = AST.fromGlob(pattern, this.options).toMMPattern();
+    if (fastTest && typeof re2 === "object") {
+      Reflect.defineProperty(re2, "test", { value: fastTest });
+    }
+    return re2;
+  }
+  makeRe() {
+    if (this.regexp || this.regexp === false)
+      return this.regexp;
+    const set = this.set;
+    if (!set.length) {
+      this.regexp = false;
+      return this.regexp;
+    }
+    const options = this.options;
+    const twoStar = options.noglobstar ? star2 : options.dot ? twoStarDot : twoStarNoDot;
+    const flags = new Set(options.nocase ? ["i"] : []);
+    let re2 = set.map((pattern) => {
+      const pp = pattern.map((p2) => {
+        if (p2 instanceof RegExp) {
+          for (const f2 of p2.flags.split(""))
+            flags.add(f2);
+        }
+        return typeof p2 === "string" ? regExpEscape2(p2) : p2 === GLOBSTAR ? GLOBSTAR : p2._src;
+      });
+      pp.forEach((p2, i2) => {
+        const next = pp[i2 + 1];
+        const prev = pp[i2 - 1];
+        if (p2 !== GLOBSTAR || prev === GLOBSTAR) {
+          return;
+        }
+        if (prev === void 0) {
+          if (next !== void 0 && next !== GLOBSTAR) {
+            pp[i2 + 1] = "(?:\\/|" + twoStar + "\\/)?" + next;
+          } else {
+            pp[i2] = twoStar;
+          }
+        } else if (next === void 0) {
+          pp[i2 - 1] = prev + "(?:\\/|\\/" + twoStar + ")?";
+        } else if (next !== GLOBSTAR) {
+          pp[i2 - 1] = prev + "(?:\\/|\\/" + twoStar + "\\/)" + next;
+          pp[i2 + 1] = GLOBSTAR;
+        }
+      });
+      const filtered = pp.filter((p2) => p2 !== GLOBSTAR);
+      if (this.partial && filtered.length >= 1) {
+        const prefixes = [];
+        for (let i2 = 1; i2 <= filtered.length; i2++) {
+          prefixes.push(filtered.slice(0, i2).join("/"));
+        }
+        return "(?:" + prefixes.join("|") + ")";
+      }
+      return filtered.join("/");
+    }).join("|");
+    const [open, close] = set.length > 1 ? ["(?:", ")"] : ["", ""];
+    re2 = "^" + open + re2 + close + "$";
+    if (this.partial) {
+      re2 = "^(?:\\/|" + open + re2.slice(1, -1) + close + ")$";
+    }
+    if (this.negate)
+      re2 = "^(?!" + re2 + ").+$";
+    try {
+      this.regexp = new RegExp(re2, [...flags].join(""));
+    } catch {
+      this.regexp = false;
+    }
+    return this.regexp;
+  }
+  slashSplit(p2) {
+    if (this.preserveMultipleSlashes) {
+      return p2.split("/");
+    } else if (this.isWindows && /^\/\/[^/]+/.test(p2)) {
+      return ["", ...p2.split(/\/+/)];
+    } else {
+      return p2.split(/\/+/);
+    }
+  }
+  match(f2, partial2 = this.partial) {
+    this.debug("match", f2, this.pattern);
+    if (this.comment) {
+      return false;
+    }
+    if (this.empty) {
+      return f2 === "";
+    }
+    if (f2 === "/" && partial2) {
+      return true;
+    }
+    const options = this.options;
+    if (this.isWindows) {
+      f2 = f2.split("\\").join("/");
+    }
+    const ff = this.slashSplit(f2);
+    this.debug(this.pattern, "split", ff);
+    const set = this.set;
+    this.debug(this.pattern, "set", set);
+    let filename = ff[ff.length - 1];
+    if (!filename) {
+      for (let i2 = ff.length - 2; !filename && i2 >= 0; i2--) {
+        filename = ff[i2];
+      }
+    }
+    for (const pattern of set) {
+      let file = ff;
+      if (options.matchBase && pattern.length === 1) {
+        file = [filename];
+      }
+      const hit = this.matchOne(file, pattern, partial2);
+      if (hit) {
+        if (options.flipNegate) {
+          return true;
+        }
+        return !this.negate;
+      }
+    }
+    if (options.flipNegate) {
+      return false;
+    }
+    return this.negate;
+  }
+  static defaults(def) {
+    return minimatch.defaults(def).Minimatch;
+  }
+};
+minimatch.AST = AST;
+minimatch.Minimatch = Minimatch;
+minimatch.escape = escape2;
+minimatch.unescape = unescape2;
+
+// packages/memory/dist/automation/rule-engine.js
+function parseCondition(condition) {
+  const notContainsSplit = condition.split(" not_contains ", 2);
+  if (notContainsSplit.length === 2) {
+    return {
+      field: notContainsSplit[0].trim(),
+      operator: "not_contains",
+      value: notContainsSplit[1].trim()
+    };
+  }
+  for (const op of [">=", "<=", "==", "!="]) {
+    const parts = condition.split(` ${op} `, 2);
+    if (parts.length === 2) {
+      return {
+        field: parts[0].trim(),
+        operator: op,
+        value: parts[1].trim()
+      };
+    }
+  }
+  for (const op of [">", "<"]) {
+    const parts = condition.split(` ${op} `, 2);
+    if (parts.length === 2) {
+      return {
+        field: parts[0].trim(),
+        operator: op,
+        value: parts[1].trim()
+      };
+    }
+  }
+  for (const op of ["contains", "matches"]) {
+    const parts = condition.split(` ${op} `, 2);
+    if (parts.length === 2) {
+      return {
+        field: parts[0].trim(),
+        operator: op,
+        value: parts[1].trim()
+      };
+    }
+  }
+  throw new Error(`Cannot parse condition: ${JSON.stringify(condition)}`);
+}
+function parseAction(action) {
+  if (action === "filter") {
+    return { action_type: "filter", value: 0 };
+  }
+  if (action.startsWith("boost:")) {
+    return { action_type: "boost", value: parseFloat(action.slice(6)) };
+  }
+  if (action.startsWith("penalty:")) {
+    return { action_type: "penalty", value: parseFloat(action.slice(8)) };
+  }
+  throw new Error(`Invalid action: ${JSON.stringify(action)}`);
+}
+function validateRule(ruleType, condition, action) {
+  const errors = [];
+  if (ruleType !== "hard" && ruleType !== "soft") {
+    errors.push(`rule_type must be 'hard' or 'soft', got ${JSON.stringify(ruleType)}`);
+  }
+  try {
+    parseCondition(condition);
+  } catch (e2) {
+    errors.push(String(e2));
+  }
+  try {
+    const { action_type } = parseAction(action);
+    if (ruleType === "hard" && action_type !== "filter") {
+      errors.push("Hard rules must use 'filter' action");
+    }
+  } catch (e2) {
+    errors.push(String(e2));
+  }
+  return errors;
+}
+
+// packages/memory/dist/automation/handlers/add-rule.js
+function validateArgs(args) {
+  const { condition, action, rule_type, scope, scope_value } = args;
+  const ruleErrors = validateRule(rule_type, condition, action);
+  if (ruleErrors.length > 0) {
+    return ruleErrors[0] ?? "invalid rule";
+  }
+  if ((scope === "domain" || scope === "directory") && !scope_value) {
+    return `scope_value required when scope=${scope}`;
+  }
+  return null;
+}
+async function addRuleHandler(rawArgs, store) {
+  const parseResult = AddRuleRequestSchema.safeParse(rawArgs);
+  if (!parseResult.success) {
+    return {
+      created: false,
+      reason: parseResult.error.issues[0]?.message ?? "invalid arguments"
+    };
+  }
+  const args = parseResult.data;
+  const validationError = validateArgs(args);
+  if (validationError !== null) {
+    return { created: false, reason: validationError };
+  }
+  const ruleId = await store.insertRule({
+    rule_type: args.rule_type,
+    scope: args.scope,
+    scope_value: args.scope_value ?? null,
+    condition: args.condition,
+    action: args.action,
+    priority: args.priority,
+    is_active: true
+  });
+  return {
+    created: true,
+    rule_id: ruleId,
+    rule_type: args.rule_type,
+    scope: args.scope,
+    scope_value: args.scope_value ?? null,
+    condition: args.condition,
+    action: args.action,
+    priority: args.priority
+  };
+}
+
+// packages/memory/dist/automation/handlers/create-trigger.js
+async function createTriggerHandler(rawArgs, store) {
+  const parseResult = CreateTriggerRequestSchema.safeParse(rawArgs);
+  if (!parseResult.success) {
+    return {
+      created: false,
+      reason: parseResult.error.issues[0]?.message ?? "invalid arguments"
+    };
+  }
+  const args = parseResult.data;
+  const validTypes = TriggerTypeSchema.options;
+  if (!validTypes.includes(args.trigger_type)) {
+    return {
+      created: false,
+      reason: `invalid trigger_type: ${args.trigger_type}`
+    };
+  }
+  const triggerId = await store.insertProspectiveMemory({
+    content: args.content,
+    trigger_condition: args.trigger_condition,
+    trigger_type: args.trigger_type,
+    target_directory: args.target_directory ?? null,
+    is_active: true,
+    triggered_count: 0
+  });
+  const activeCount = await store.countActiveTriggers();
+  return {
+    created: true,
+    trigger_id: triggerId,
+    trigger_type: args.trigger_type,
+    trigger_condition: args.trigger_condition,
+    content: args.content,
+    target_directory: args.target_directory ?? null,
+    active_triggers: activeCount
+  };
+}
+
+// packages/memory/dist/automation/handlers/get-rules.js
+var getRulesInputSchema = external_exports.object({
+  scope: RuleScopeSchema.optional(),
+  rule_type: RuleTypeSchema.optional(),
+  include_inactive: external_exports.boolean().default(false)
+});
+async function getRulesHandler(rawArgs, store) {
+  const parseResult = getRulesInputSchema.safeParse(rawArgs ?? {});
+  const args = parseResult.success ? parseResult.data : { include_inactive: false };
+  const scopeFilter = parseResult.success ? args.scope : void 0;
+  const typeFilter = parseResult.success ? args.rule_type : void 0;
+  const includeInactive = parseResult.success ? args.include_inactive : false;
+  let rules;
+  if (includeInactive && !scopeFilter) {
+    rules = await store.getAllRulesIncludingInactive();
+  } else if (scopeFilter) {
+    rules = await store.getRulesForScope(scopeFilter);
+  } else {
+    rules = await store.getAllActiveRules();
+  }
+  if (typeFilter) {
+    rules = rules.filter((r2) => r2.rule_type === typeFilter);
+  }
+  const byScope = {};
+  for (const rule of rules) {
+    const s2 = rule.scope ?? "global";
+    byScope[s2] = (byScope[s2] ?? 0) + 1;
+  }
+  return { total: rules.length, rules, by_scope: byScope };
+}
+
+// packages/memory/dist/automation/handlers/sync-to-claude-md.js
+import { promises as fs4 } from "node:fs";
+import path4 from "node:path";
+var SECTION_START = "<!-- cortex:memory-insights:start -->";
+var SECTION_END = "<!-- cortex:memory-insights:end -->";
+var DECISION_RE5 = /\b(decided|chose|switching|migrated|using|adopted|went with|replaced)\b/i;
+function extractInsights(memories, maxInsights) {
+  const decisions = memories.filter((m2) => DECISION_RE5.test(m2.content ?? ""));
+  const others = memories.filter((m2) => !DECISION_RE5.test(m2.content ?? ""));
+  const ordered = [
+    ...decisions.sort((a2, b2) => (b2.heat ?? 0) - (a2.heat ?? 0)),
+    ...others.sort((a2, b2) => (b2.importance ?? 0) - (a2.importance ?? 0))
+  ];
+  const insights = [];
+  const seen = /* @__PURE__ */ new Set();
+  for (const mem of ordered.slice(0, maxInsights * 2)) {
+    const text = (mem.content ?? "").trim();
+    if (!text)
+      continue;
+    const bullet = text.slice(0, 120).replace(/\n/g, " ");
+    if (seen.has(bullet))
+      continue;
+    seen.add(bullet);
+    insights.push(bullet);
+    if (insights.length >= maxInsights)
+      break;
+  }
+  return insights;
+}
+function buildSection(insights) {
+  const lines = [
+    SECTION_START,
+    "## Memory Insights",
+    "",
+    "Auto-synced from Cortex memory. Do not edit manually.",
+    "",
+    ...insights.map((i2) => `- ${i2}`),
+    "",
+    SECTION_END
+  ];
+  return lines.join("\n");
+}
+async function updateClaudeMd(claudeMdPath, section, dryRun) {
+  let exists = false;
+  try {
+    await fs4.access(claudeMdPath);
+    exists = true;
+  } catch {
+  }
+  if (!exists) {
+    if (dryRun) {
+      return { action: "would_create", path: claudeMdPath };
+    }
+    await fs4.writeFile(claudeMdPath, section + "\n", "utf-8");
+    return { action: "created", path: claudeMdPath };
+  }
+  const original = await fs4.readFile(claudeMdPath, "utf-8");
+  const startIdx = original.indexOf(SECTION_START);
+  const endIdx = original.indexOf(SECTION_END);
+  let updated;
+  let action;
+  if (startIdx !== -1 && endIdx !== -1) {
+    const before = original.slice(0, startIdx);
+    const after = original.slice(endIdx + SECTION_END.length);
+    updated = before + section + after;
+    action = "updated";
+  } else {
+    updated = original.trimEnd() + "\n\n" + section + "\n";
+    action = "appended";
+  }
+  if (dryRun) {
+    return { action: `would_${action}`, path: claudeMdPath, preview: section };
+  }
+  await fs4.writeFile(claudeMdPath, updated, "utf-8");
+  return { action, path: claudeMdPath };
+}
+async function findClaudeMd(directory) {
+  const resolved = path4.resolve(directory);
+  const candidate = path4.join(resolved, "CLAUDE.md");
+  try {
+    await fs4.access(candidate);
+    return candidate;
+  } catch {
+    const parent = path4.join(path4.dirname(resolved), "CLAUDE.md");
+    try {
+      await fs4.access(parent);
+      return parent;
+    } catch {
+      return candidate;
+    }
+  }
+}
+async function syncInstructionsHandler(rawArgs, store) {
+  const parseResult = SyncInstructionsRequestSchema.safeParse(rawArgs ?? {});
+  const args = parseResult.success ? parseResult.data : { directory: void 0, max_insights: 10, min_heat: 0.3, dry_run: false };
+  const directory = args.directory ?? process.cwd();
+  const maxInsights = args.max_insights;
+  const minHeat = args.min_heat;
+  const dryRun = args.dry_run;
+  let memories = await store.getMemoriesForDirectory(directory, { min_heat: minHeat });
+  if (memories.length === 0) {
+    memories = await store.getHotMemories({ min_heat: minHeat, limit: 50 });
+  }
+  if (memories.length === 0) {
+    return { synced: false, reason: "no_memories_found", directory };
+  }
+  const insights = extractInsights(memories, maxInsights);
+  if (insights.length === 0) {
+    return {
+      synced: false,
+      reason: "no_insights_extracted",
+      memory_count: memories.length
+    };
+  }
+  const claudeMdPath = await findClaudeMd(directory);
+  const section = buildSection(insights);
+  const result = await updateClaudeMd(claudeMdPath, section, dryRun);
+  return {
+    synced: true,
+    action: result.action,
+    path: result.path,
+    preview: result.preview,
+    insights_count: insights.length,
+    memory_count: memories.length,
+    dry_run: dryRun
+  };
+}
 
 // packages/memory/dist/hooks/types.js
 var BaseEventSchema = external_exports.object({
@@ -50857,16 +51457,16 @@ var HOOK_TIMEOUTS_MS = {
 };
 
 // packages/memory/dist/hooks/session-start.js
-import { existsSync as existsSync12, readdirSync as readdirSync7, statSync as statSync9 } from "node:fs";
-import { homedir as homedir8 } from "node:os";
-import { join as join16, basename as basename6 } from "node:path";
+import { existsSync as existsSync11, readdirSync as readdirSync7, statSync as statSync9 } from "node:fs";
+import { homedir as homedir6 } from "node:os";
+import { join as join14, basename as basename6 } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 
 // packages/memory/dist/hooks/db.js
-async function openConnection(databaseUrl2) {
+async function openConnection(databaseUrl) {
   try {
     const { default: pg } = await import("pg");
-    const client = new pg.Client({ connectionString: databaseUrl2 });
+    const client = new pg.Client({ connectionString: databaseUrl });
     await client.connect();
     return client;
   } catch {
@@ -50903,8 +51503,8 @@ function parseTags3(val) {
   }
   return [];
 }
-async function fetchAnchors(databaseUrl2, limit) {
-  const conn = await openConnection(databaseUrl2);
+async function fetchAnchors(databaseUrl, limit) {
+  const conn = await openConnection(databaseUrl);
   if (!conn)
     return [];
   try {
@@ -50923,8 +51523,8 @@ async function fetchAnchors(databaseUrl2, limit) {
     await conn.end();
   }
 }
-async function fetchTeamDecisions(databaseUrl2, excludeIds) {
-  const conn = await openConnection(databaseUrl2);
+async function fetchTeamDecisions(databaseUrl, excludeIds) {
+  const conn = await openConnection(databaseUrl);
   if (!conn)
     return [];
   try {
@@ -50942,8 +51542,8 @@ async function fetchTeamDecisions(databaseUrl2, excludeIds) {
     await conn.end();
   }
 }
-async function fetchHotMemories(databaseUrl2, minHeat, limit, excludeIds) {
-  const conn = await openConnection(databaseUrl2);
+async function fetchHotMemories(databaseUrl, minHeat, limit, excludeIds) {
+  const conn = await openConnection(databaseUrl);
   if (!conn)
     return [];
   try {
@@ -50959,8 +51559,8 @@ async function fetchHotMemories(databaseUrl2, minHeat, limit, excludeIds) {
     await conn.end();
   }
 }
-async function fetchCheckpoint(databaseUrl2) {
-  const conn = await openConnection(databaseUrl2);
+async function fetchCheckpoint(databaseUrl) {
+  const conn = await openConnection(databaseUrl);
   if (!conn)
     return null;
   try {
@@ -50987,8 +51587,8 @@ async function fetchCheckpoint(databaseUrl2) {
     await conn.end();
   }
 }
-async function countMemories(databaseUrl2) {
-  const conn = await openConnection(databaseUrl2);
+async function countMemories(databaseUrl) {
+  const conn = await openConnection(databaseUrl);
   if (!conn)
     return 0;
   try {
@@ -51001,8 +51601,8 @@ async function countMemories(databaseUrl2) {
     await conn.end();
   }
 }
-async function ftsRecall(databaseUrl2, query, minHeat, limit) {
-  const conn = await openConnection(databaseUrl2);
+async function ftsRecall(databaseUrl, query, minHeat, limit) {
+  const conn = await openConnection(databaseUrl);
   if (!conn)
     return [];
   try {
@@ -51022,10 +51622,10 @@ async function ftsRecall(databaseUrl2, query, minHeat, limit) {
     await conn.end();
   }
 }
-async function fetchAgentMemories(databaseUrl2, agentName, keywords, minHeat, limit) {
+async function fetchAgentMemories(databaseUrl, agentName, keywords, minHeat, limit) {
   if (!keywords.length)
     return [];
-  const conn = await openConnection(databaseUrl2);
+  const conn = await openConnection(databaseUrl);
   if (!conn)
     return [];
   try {
@@ -51044,8 +51644,8 @@ async function fetchAgentMemories(databaseUrl2, agentName, keywords, minHeat, li
     await conn.end();
   }
 }
-async function fetchTeamDecisionsForAgent(databaseUrl2, excludeAgent, limit) {
-  const conn = await openConnection(databaseUrl2);
+async function fetchTeamDecisionsForAgent(databaseUrl, excludeAgent, limit) {
+  const conn = await openConnection(databaseUrl);
   if (!conn)
     return [];
   try {
@@ -51064,8 +51664,8 @@ async function fetchTeamDecisionsForAgent(databaseUrl2, excludeAgent, limit) {
     await conn.end();
   }
 }
-async function bumpHeatByPath(databaseUrl2, filePath, boost) {
-  const conn = await openConnection(databaseUrl2);
+async function bumpHeatByPath(databaseUrl, filePath, boost) {
+  const conn = await openConnection(databaseUrl);
   if (!conn)
     return 0;
   const filename = filePath.split("/").pop() ?? filePath;
@@ -51085,10 +51685,10 @@ async function bumpHeatByPath(databaseUrl2, filePath, boost) {
     await conn.end();
   }
 }
-async function bumpHeatBySymbols(databaseUrl2, symbolNames, boost, maxBumps) {
+async function bumpHeatBySymbols(databaseUrl, symbolNames, boost, maxBumps) {
   if (!symbolNames.length)
     return 0;
-  const conn = await openConnection(databaseUrl2);
+  const conn = await openConnection(databaseUrl);
   if (!conn)
     return 0;
   const names = symbolNames.slice(0, maxBumps);
@@ -51250,7 +51850,7 @@ var HOT_LIMIT = parseInt(process.env["CORTEX_SESSION_START_LIMIT"] ?? "8", 10);
 var MIN_HEAT = parseFloat(process.env["CORTEX_SESSION_START_MIN_HEAT"] ?? "0.4");
 var ANCHOR_LIMIT = parseInt(process.env["CORTEX_SESSION_START_ANCHOR_LIMIT"] ?? "5", 10);
 function autoBackfill() {
-  const { pluginRoot, databaseUrl: databaseUrl2 } = loadHookConfig();
+  const { pluginRoot, databaseUrl } = loadHookConfig();
   if (!pluginRoot) {
     log("auto-backfill skipped: no plugin root");
     return 0;
@@ -51270,7 +51870,7 @@ print(json.dumps({"backfilled": r.get("backfilled", 0), "cascade_advanced": r.ge
       // source: cortex@ed33435 mcp_server/hooks/session_start.py — backfill budget; 60s for historical JSONL scan
       env: {
         ...process.env,
-        DATABASE_URL: databaseUrl2,
+        DATABASE_URL: databaseUrl,
         PYTHONPATH: pluginRoot
       }
     });
@@ -51322,11 +51922,11 @@ function maybeBackgroundReanalyze() {
     const pluginRoot = config2.pluginRoot;
     if (!pluginRoot)
       return;
-    const launcherPath = join16(pluginRoot, "scripts", "launcher.py");
-    if (!existsSync12(launcherPath))
+    const launcherPath = join14(pluginRoot, "scripts", "launcher.py");
+    if (!existsSync11(launcherPath))
       return;
-    const logDir = join16(homedir8(), ".claude", "methodology");
-    const logPath = join16(logDir, "pipeline_reanalyze.log");
+    const logDir = join14(homedir6(), ".claude", "methodology");
+    const logPath = join14(logDir, "pipeline_reanalyze.log");
     const child = spawn(PYTHON_BIN, [launcherPath, "mcp_server.hooks.ingest_codebase_background", config2.projectRoot], {
       detached: true,
       stdio: ["ignore", "ignore", "ignore"]
@@ -51338,13 +51938,13 @@ function maybeBackgroundReanalyze() {
   }
 }
 function countSessionFiles() {
-  const projectsDir = join16(homedir8(), ".claude", "projects");
-  if (!existsSync12(projectsDir))
+  const projectsDir = join14(homedir6(), ".claude", "projects");
+  if (!existsSync11(projectsDir))
     return 0;
   let count = 0;
   try {
     for (const entry of readdirSync7(projectsDir)) {
-      const fullPath = join16(projectsDir, entry);
+      const fullPath = join14(projectsDir, entry);
       if (statSync9(fullPath).isDirectory()) {
         for (const f2 of readdirSync7(fullPath)) {
           if (f2.endsWith(".jsonl"))
@@ -51358,12 +51958,12 @@ function countSessionFiles() {
 }
 function detectExternalSources() {
   const sources = [];
-  const claudeMemDb = join16(homedir8(), ".claude-mem", "claude-mem.db");
-  if (existsSync12(claudeMemDb)) {
+  const claudeMemDb = join14(homedir6(), ".claude-mem", "claude-mem.db");
+  if (existsSync11(claudeMemDb)) {
     sources.push({ name: "claude-mem", count: 0, path: claudeMemDb });
   }
-  const cursorDir = join16(homedir8(), ".cursor");
-  if (existsSync12(cursorDir)) {
+  const cursorDir = join14(homedir6(), ".cursor");
+  if (existsSync11(cursorDir)) {
     try {
       const files = readdirSync7(cursorDir, { recursive: true });
       const jsonlFiles = files.filter((f2) => basename6(f2).endsWith(".jsonl"));
@@ -51373,8 +51973,8 @@ function detectExternalSources() {
     } catch {
     }
   }
-  const downloads = join16(homedir8(), "Downloads");
-  if (existsSync12(downloads)) {
+  const downloads = join14(homedir6(), "Downloads");
+  if (existsSync11(downloads)) {
     try {
       const conversationFiles = readdirSync7(downloads, { recursive: true });
       const chatGptFiles = conversationFiles.filter((f2) => basename6(f2) === "conversations.json");
@@ -51382,7 +51982,7 @@ function detectExternalSources() {
         sources.push({
           name: "ChatGPT",
           count: chatGptFiles.length,
-          path: join16(downloads, chatGptFiles[0] ?? "")
+          path: join14(downloads, chatGptFiles[0] ?? "")
         });
       }
     } catch {
@@ -51513,9 +52113,9 @@ async function processEvent(event) {
   const query = extractQuery(event);
   if (!query || shouldSkip(query))
     return;
-  const { databaseUrl: databaseUrl2 } = loadHookConfig();
+  const { databaseUrl } = loadHookConfig();
   const memories = await Promise.race([
-    ftsRecall(databaseUrl2, query, MIN_HEAT2, MAX_MEMORIES),
+    ftsRecall(databaseUrl, query, MIN_HEAT2, MAX_MEMORIES),
     new Promise((_2, reject) => setTimeout(() => reject(new Error("recall timeout")), HOOK_TIMEOUTS_MS.USER_PROMPT_SUBMIT - 200))
   ]);
   if (!memories.length)
@@ -51694,8 +52294,8 @@ function buildTags(toolName, output) {
   return tags;
 }
 async function storeMemory2(content, tags, directory, toolName) {
-  const { databaseUrl: databaseUrl2 } = loadHookConfig();
-  const store = new PgMemoryStore(databaseUrl2);
+  const { databaseUrl } = loadHookConfig();
+  const store = new PgMemoryStore(databaseUrl);
   try {
     const memoryId = await store.insertMemoryAsync({
       content,
@@ -51721,8 +52321,8 @@ async function processEvent2(event) {
   toolCallCounter++;
   if (toolCallCounter >= CASCADE_INTERVAL) {
     toolCallCounter = 0;
-    const { databaseUrl: databaseUrl2 } = loadHookConfig();
-    const cascadeStore = new PgMemoryStore(databaseUrl2);
+    const { databaseUrl } = loadHookConfig();
+    const cascadeStore = new PgMemoryStore(databaseUrl);
     try {
       const result = await runCascadeAdvancement({
         getMemoriesByStage: (stage, limit) => cascadeStore.runAsync((c2) => c2.query(`SELECT * FROM memories WHERE consolidation_stage = $1 LIMIT $2`, [stage, limit]).then((r2) => r2.rows)),
@@ -51790,9 +52390,9 @@ if (process.argv[1]?.endsWith("post-tool-capture.js") === true) {
 }
 
 // packages/memory/dist/hooks/agent-briefing.js
-import { existsSync as existsSync13, readdirSync as readdirSync8, readFileSync as readFileSync9 } from "node:fs";
-import { homedir as homedir9 } from "node:os";
-import { join as join17 } from "node:path";
+import { existsSync as existsSync12, readdirSync as readdirSync8, readFileSync as readFileSync8 } from "node:fs";
+import { homedir as homedir7 } from "node:os";
+import { join as join15 } from "node:path";
 var LOG_PREFIX4 = "[cortex-agent-briefing]";
 var MAX_MEMORIES2 = 3;
 var MIN_HEAT3 = 0.2;
@@ -51815,7 +52415,7 @@ function log4(msg) {
 }
 function parseFrontmatterName(filePath) {
   try {
-    const head = readFileSync9(filePath, "utf-8").slice(0, 4096);
+    const head = readFileSync8(filePath, "utf-8").slice(0, 4096);
     const m2 = YAML_NAME_RE.exec(head);
     return m2?.[1]?.trim() ?? null;
   } catch {
@@ -51823,18 +52423,18 @@ function parseFrontmatterName(filePath) {
   }
 }
 function loadSpecialistAgents() {
-  const agentsDir = join17(homedir9(), ".claude", "agents");
-  if (!existsSync13(agentsDir))
+  const agentsDir = join15(homedir7(), ".claude", "agents");
+  if (!existsSync12(agentsDir))
     return FALLBACK_AGENTS;
   const names = /* @__PURE__ */ new Set();
   try {
-    for (const pattern of [agentsDir, join17(agentsDir, "genius")]) {
-      if (!existsSync13(pattern))
+    for (const pattern of [agentsDir, join15(agentsDir, "genius")]) {
+      if (!existsSync12(pattern))
         continue;
       for (const entry of readdirSync8(pattern)) {
         if (entry === "INDEX.md" || !entry.endsWith(".md"))
           continue;
-        const name = parseFrontmatterName(join17(pattern, entry));
+        const name = parseFrontmatterName(join15(pattern, entry));
         if (name)
           names.add(name);
       }
@@ -51934,13 +52534,13 @@ async function processEvent3(event) {
     log4("skip: no keywords extracted");
     return;
   }
-  const { databaseUrl: databaseUrl2 } = loadHookConfig();
+  const { databaseUrl } = loadHookConfig();
   const agentMemories = await Promise.race([
-    fetchAgentMemories(databaseUrl2, agentName, keywords, MIN_HEAT3, MAX_MEMORIES2),
+    fetchAgentMemories(databaseUrl, agentName, keywords, MIN_HEAT3, MAX_MEMORIES2),
     new Promise((_2, reject) => setTimeout(() => reject(new Error("agent query timeout")), HOOK_TIMEOUTS_MS.SUBAGENT_START - 500))
   ]);
   const remaining = MAX_MEMORIES2 - agentMemories.length;
-  const teamDecisions = remaining > 0 ? await fetchTeamDecisionsForAgent(databaseUrl2, agentName, remaining) : [];
+  const teamDecisions = remaining > 0 ? await fetchTeamDecisionsForAgent(databaseUrl, agentName, remaining) : [];
   const memories = [
     ...agentMemories.map((m2) => ({
       content: m2.content.slice(0, 300),
@@ -51998,9 +52598,9 @@ function log5(msg) {
 `);
 }
 async function saveCheckpointAndCascade(event) {
-  const { databaseUrl: databaseUrl2 } = loadHookConfig();
+  const { databaseUrl } = loadHookConfig();
   const sessionId = event?.session_id ?? "auto-compaction";
-  const store = new PgMemoryStore(databaseUrl2);
+  const store = new PgMemoryStore(databaseUrl);
   try {
     await store.runAsync(async (client) => {
       await client.query(`UPDATE checkpoints SET is_active = FALSE WHERE session_id = $1`, [sessionId]);
@@ -52066,9 +52666,9 @@ if (process.argv[1]?.endsWith("compaction-checkpoint.js") === true) {
 }
 
 // packages/memory/dist/hooks/session-lifecycle.js
-import { readFileSync as readFileSync10, writeFileSync as writeFileSync6, existsSync as existsSync14, mkdirSync as mkdirSync6 } from "node:fs";
-import { homedir as homedir10 } from "node:os";
-import { join as join18 } from "node:path";
+import { readFileSync as readFileSync9, writeFileSync as writeFileSync5, existsSync as existsSync13, mkdirSync as mkdirSync5 } from "node:fs";
+import { homedir as homedir8 } from "node:os";
+import { join as join16 } from "node:path";
 var LOG_PREFIX6 = "[methodology-hook]";
 var MAX_SESSION_LOG_ENTRIES = 1e3;
 function log6(msg) {
@@ -52076,43 +52676,43 @@ function log6(msg) {
 `);
 }
 function methodologyDir3() {
-  return join18(homedir10(), ".claude", "methodology");
+  return join16(homedir8(), ".claude", "methodology");
 }
 function loadProfiles3() {
-  const profilePath = join18(methodologyDir3(), "profiles.json");
-  if (!existsSync14(profilePath))
+  const profilePath = join16(methodologyDir3(), "profiles.json");
+  if (!existsSync13(profilePath))
     return {};
   try {
-    return JSON.parse(readFileSync10(profilePath, "utf-8"));
+    return JSON.parse(readFileSync9(profilePath, "utf-8"));
   } catch {
     return {};
   }
 }
 function saveProfile(domainId, profile) {
   const dir = methodologyDir3();
-  mkdirSync6(dir, { recursive: true });
-  const profilePath = join18(dir, "profiles.json");
+  mkdirSync5(dir, { recursive: true });
+  const profilePath = join16(dir, "profiles.json");
   const profiles = loadProfiles3();
   const domains = profiles["domains"] ?? {};
   domains[domainId] = profile;
   profiles["domains"] = domains;
-  writeFileSync6(profilePath, JSON.stringify(profiles, null, 2), "utf-8");
+  writeFileSync5(profilePath, JSON.stringify(profiles, null, 2), "utf-8");
 }
 function loadSessionLog() {
-  const logPath = join18(methodologyDir3(), "session_log.json");
-  if (!existsSync14(logPath))
+  const logPath = join16(methodologyDir3(), "session_log.json");
+  if (!existsSync13(logPath))
     return { sessions: [] };
   try {
-    return JSON.parse(readFileSync10(logPath, "utf-8"));
+    return JSON.parse(readFileSync9(logPath, "utf-8"));
   } catch {
     return { sessions: [] };
   }
 }
 function saveSessionLog(log9) {
   const dir = methodologyDir3();
-  mkdirSync6(dir, { recursive: true });
-  const logPath = join18(dir, "session_log.json");
-  writeFileSync6(logPath, JSON.stringify(log9, null, 2), "utf-8");
+  mkdirSync5(dir, { recursive: true });
+  const logPath = join16(dir, "session_log.json");
+  writeFileSync5(logPath, JSON.stringify(log9, null, 2), "utf-8");
 }
 var PROJECT_ID_PATH_DEPTH = 2;
 function cwdToProjectId3(cwd) {
@@ -52175,8 +52775,8 @@ var CONSOLIDATION_LIGHT_THRESHOLD = 5;
 var CONSOLIDATION_STANDARD_THRESHOLD = 20;
 async function runConsolidation(turnCount) {
   const mode = turnCount < CONSOLIDATION_LIGHT_THRESHOLD ? "light" : turnCount < CONSOLIDATION_STANDARD_THRESHOLD ? "standard" : "full";
-  const { databaseUrl: databaseUrl2 } = loadHookConfig();
-  const store = new PgMemoryStore(databaseUrl2);
+  const { databaseUrl } = loadHookConfig();
+  const store = new PgMemoryStore(databaseUrl);
   try {
     const result = await runCascadeAdvancement({
       getMemoriesByStage: (stage, limit) => store.runAsync((c2) => c2.query(`SELECT * FROM memories WHERE consolidation_stage = $1 LIMIT $2`, [stage, limit]).then((r2) => r2.rows)),
@@ -52264,13 +52864,13 @@ if (process.argv[1]?.endsWith("session-lifecycle.js") === true) {
 }
 
 // packages/memory/dist/hooks/preemptive-context.js
-import { existsSync as existsSync15, readFileSync as readFileSync11, writeFileSync as writeFileSync7 } from "node:fs";
+import { existsSync as existsSync14, readFileSync as readFileSync10, writeFileSync as writeFileSync6 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
-import { join as join19 } from "node:path";
+import { join as join17 } from "node:path";
 var LOG_PREFIX7 = "[cortex-preemptive]";
 var HEAT_BOOST = 0.1;
 var COOLDOWN_SECONDS = 60;
-var COOLDOWN_FILE = join19(tmpdir2(), "cortex_preemptive_cooldown.json");
+var COOLDOWN_FILE = join17(tmpdir2(), "cortex_preemptive_cooldown.json");
 var FILE_TOOLS = /* @__PURE__ */ new Set(["Edit", "Write", "Read"]);
 function log7(msg) {
   process.stderr.write(`${LOG_PREFIX7} ${msg}
@@ -52278,8 +52878,8 @@ function log7(msg) {
 }
 function checkCooldown(filePath) {
   try {
-    if (existsSync15(COOLDOWN_FILE)) {
-      const data = JSON.parse(readFileSync11(COOLDOWN_FILE, "utf-8"));
+    if (existsSync14(COOLDOWN_FILE)) {
+      const data = JSON.parse(readFileSync10(COOLDOWN_FILE, "utf-8"));
       const lastTime = data[filePath] ?? 0;
       if (Date.now() / 1e3 - lastTime < COOLDOWN_SECONDS)
         return true;
@@ -52291,15 +52891,15 @@ function checkCooldown(filePath) {
 function updateCooldown(filePath) {
   try {
     let data = {};
-    if (existsSync15(COOLDOWN_FILE)) {
-      data = JSON.parse(readFileSync11(COOLDOWN_FILE, "utf-8"));
+    if (existsSync14(COOLDOWN_FILE)) {
+      data = JSON.parse(readFileSync10(COOLDOWN_FILE, "utf-8"));
     }
     data[filePath] = Date.now() / 1e3;
     if (Object.keys(data).length > 50) {
       const sorted = Object.entries(data).sort(([, a2], [, b2]) => b2 - a2);
       data = Object.fromEntries(sorted.slice(0, 50));
     }
-    writeFileSync7(COOLDOWN_FILE, JSON.stringify(data), "utf-8");
+    writeFileSync6(COOLDOWN_FILE, JSON.stringify(data), "utf-8");
   } catch {
   }
 }
@@ -52313,8 +52913,8 @@ async function processEvent6(event) {
     return;
   if (checkCooldown(filePath))
     return;
-  const { databaseUrl: databaseUrl2 } = loadHookConfig();
-  const count = await bumpHeatByPath(databaseUrl2, filePath, HEAT_BOOST);
+  const { databaseUrl } = loadHookConfig();
+  const count = await bumpHeatByPath(databaseUrl, filePath, HEAT_BOOST);
   if (count > 0) {
     updateCooldown(filePath);
     const filename = filePath.split("/").pop() ?? filePath;
@@ -52347,12 +52947,12 @@ if (process.argv[1]?.endsWith("preemptive-context.js") === true) {
 }
 
 // packages/memory/dist/hooks/pipeline-impact-bump.js
-import { existsSync as existsSync16, readFileSync as readFileSync12, writeFileSync as writeFileSync8 } from "node:fs";
+import { existsSync as existsSync15, readFileSync as readFileSync11, writeFileSync as writeFileSync7 } from "node:fs";
 import { tmpdir as tmpdir3 } from "node:os";
-import { join as join20 } from "node:path";
+import { join as join18 } from "node:path";
 var LOG_PREFIX8 = "[pipeline-impact-bump]";
 var COOLDOWN_SECONDS2 = 30;
-var COOLDOWN_FILE2 = join20(tmpdir3(), "cortex_pipeline_impact_cooldown.json");
+var COOLDOWN_FILE2 = join18(tmpdir3(), "cortex_pipeline_impact_cooldown.json");
 var FILE_TOOLS2 = /* @__PURE__ */ new Set(["Edit", "Write", "MultiEdit"]);
 var IMPACT_BOOST2 = 0.15;
 var MAX_BUMPS = 20;
@@ -52362,8 +52962,8 @@ function log8(msg) {
 }
 function checkCooldown2(filePath) {
   try {
-    if (existsSync16(COOLDOWN_FILE2)) {
-      const data = JSON.parse(readFileSync12(COOLDOWN_FILE2, "utf-8"));
+    if (existsSync15(COOLDOWN_FILE2)) {
+      const data = JSON.parse(readFileSync11(COOLDOWN_FILE2, "utf-8"));
       const last = data[filePath] ?? 0;
       if (Date.now() / 1e3 - last < COOLDOWN_SECONDS2)
         return true;
@@ -52375,15 +52975,15 @@ function checkCooldown2(filePath) {
 function updateCooldown2(filePath) {
   try {
     let data = {};
-    if (existsSync16(COOLDOWN_FILE2)) {
-      data = JSON.parse(readFileSync12(COOLDOWN_FILE2, "utf-8"));
+    if (existsSync15(COOLDOWN_FILE2)) {
+      data = JSON.parse(readFileSync11(COOLDOWN_FILE2, "utf-8"));
     }
     data[filePath] = Date.now() / 1e3;
     if (Object.keys(data).length > 50) {
       const sorted = Object.entries(data).sort(([, a2], [, b2]) => b2 - a2);
       data = Object.fromEntries(sorted.slice(0, 50));
     }
-    writeFileSync8(COOLDOWN_FILE2, JSON.stringify(data), "utf-8");
+    writeFileSync7(COOLDOWN_FILE2, JSON.stringify(data), "utf-8");
   } catch {
   }
 }
@@ -52450,11 +53050,11 @@ async function processEvent7(event) {
     return;
   if (checkCooldown2(filePath))
     return;
-  const { projectRoot, databaseUrl: databaseUrl2 } = loadHookConfig();
+  const { projectRoot, databaseUrl } = loadHookConfig();
   const symbols = await pipelineDetectChanges(projectRoot, filePath).catch(() => []);
   if (!symbols.length)
     return;
-  const count = await bumpHeatBySymbols(databaseUrl2, symbols, IMPACT_BOOST2, MAX_BUMPS);
+  const count = await bumpHeatBySymbols(databaseUrl, symbols, IMPACT_BOOST2, MAX_BUMPS);
   if (count > 0) {
     updateCooldown2(filePath);
     log8(`bumped ${count} memories for ${symbols.length} impacted symbols`);
@@ -52485,138 +53085,714 @@ if (process.argv[1]?.endsWith("pipeline-impact-bump.js") === true) {
   main8().catch(() => process.exit(0));
 }
 
-// packages/memory-dashboard/dist/launcher.js
-import { spawn as spawn2, exec } from "node:child_process";
-import { createServer } from "node:net";
-import { fileURLToPath } from "node:url";
-import path5 from "node:path";
-var DEFAULT_PORT = 3458;
-var SPAWN_TIMEOUT_MS = 5e3;
-var __dirname2 = path5.dirname(fileURLToPath(import.meta.url));
-async function probePort(port) {
-  return new Promise((resolve7) => {
-    const sock = createServer();
-    sock.once("error", (err) => {
-      if (err.code === "EADDRINUSE") {
-        resolve7(`http://127.0.0.1:${port}`);
-      } else {
-        resolve7(null);
-      }
-    });
-    sock.once("listening", () => {
-      sock.close(() => resolve7(null));
-    });
-    sock.listen(port, "127.0.0.1");
-  });
+// packages/mcp-servers/memory/dist/tools/management.js
+var VALIDATE_STALENESS_DEFAULT = 0.5;
+var VALIDATE_ERROR_CAP = 10;
+var SEED_MAX_FILE_SIZE_KB = 64;
+var BACKFILL_MAX_FILES_DEFAULT = 20;
+var BACKFILL_MIN_IMPORTANCE = 0.35;
+var CODEBASE_MAX_FILES = 500;
+var CODEBASE_MAX_FILE_SIZE_KB = 100;
+function loadProfilesRaw() {
+  const profilePath = join19(homedir9(), ".claude", "methodology", "profiles.json");
+  if (!existsSync16(profilePath))
+    return { domains: {} };
+  try {
+    return JSON.parse(readFileSync12(profilePath, "utf-8"));
+  } catch {
+    return { domains: {} };
+  }
 }
-function killPort(port) {
-  return new Promise((resolve7) => {
-    if (process.platform === "win32") {
-      exec(`netstat -ano -p TCP`, (_err, stdout) => {
-        const portStr = `:${port} `;
-        for (const line of stdout.split("\n")) {
-          if (!line.includes(portStr))
+function errorText5(tool, err) {
+  const message = err instanceof Error ? err.message : String(err);
+  return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
+}
+function registerManagementTools(server2, deps) {
+  server2.registerTool("validate_memory", {
+    description: "Validate memories against current filesystem state (mark stale if referenced files no longer exist).",
+    inputSchema: {
+      memory_id: external_exports.number().int().optional().describe("Specific memory ID or null for batch"),
+      domain: external_exports.string().optional().describe("Domain filter"),
+      directory: external_exports.string().optional().describe("Directory filter"),
+      base_dir: external_exports.string().default("").describe("Base directory for path resolution"),
+      staleness_threshold: external_exports.number().min(0).max(1).default(VALIDATE_STALENESS_DEFAULT).describe("Heat threshold for stale mark"),
+      dry_run: external_exports.boolean().default(false).describe("Preview without writing")
+    }
+  }, async (args) => {
+    try {
+      const allMems = deps.store.getAllMemoriesForDecay();
+      const candidates = args.memory_id !== void 0 ? allMems.filter((m2) => m2["id"] === args.memory_id) : allMems.filter((m2) => {
+        if (args.domain && m2["domain"] !== args.domain)
+          return false;
+        if (args.directory && !String(m2["directory"] ?? "").startsWith(args.directory))
+          return false;
+        return true;
+      });
+      let validated = 0;
+      let staleMarked = 0;
+      const errors = [];
+      for (const mem of candidates) {
+        try {
+          validated++;
+          const heat = mem["heat"] ?? 0;
+          if (heat >= args.staleness_threshold)
             continue;
-          const parts = line.trim().split(/\s+/);
-          const pid = parseInt(parts[parts.length - 1] ?? "", 10);
-          if (!isNaN(pid) && pid > 0) {
-            try {
-              process.kill(pid, "SIGTERM");
-            } catch {
-            }
+          const tags = mem["tags"] ?? [];
+          const fileRef = tags.find((t2) => t2.startsWith("file:") || t2.startsWith("path:"));
+          if (!fileRef)
+            continue;
+          const filePath = fileRef.replace(/^(?:file:|path:)/, "");
+          const absPath = args.base_dir ? join19(args.base_dir, filePath) : filePath;
+          if (existsSync16(absPath))
+            continue;
+          if (!args.dry_run) {
+            deps.store.markMemoryStale(Number(mem["id"]), true);
           }
+          staleMarked++;
+        } catch (e2) {
+          errors.push(String(e2));
         }
-        resolve7();
-      });
-    } else {
-      exec(`lsof -t -i :${port}`, (_err, stdout) => {
-        const pids = stdout.trim().split("\n").filter(Boolean);
-        for (const pid of pids) {
-          try {
-            process.kill(parseInt(pid, 10), "SIGTERM");
-          } catch {
-          }
+      }
+      return { content: [{ type: "text", text: JSON.stringify({
+        validated,
+        stale_marked: staleMarked,
+        dry_run: args.dry_run,
+        errors: errors.slice(0, VALIDATE_ERROR_CAP)
+      }) }] };
+    } catch (err) {
+      return errorText5("validate_memory", err);
+    }
+  });
+  server2.registerTool("seed_project", {
+    description: "Bootstrap memory from an existing codebase by scanning files and creating structured memories.",
+    inputSchema: {
+      directory: external_exports.string().default("").describe("Project directory to seed from"),
+      domain: external_exports.string().default("").describe("Domain to assign"),
+      max_file_size_kb: external_exports.number().int().min(1).default(SEED_MAX_FILE_SIZE_KB).describe("Max file size in KB"),
+      dry_run: external_exports.boolean().default(false).describe("Preview without writing")
+    }
+  }, async (args) => {
+    try {
+      const response = await handler6({
+        directory: args.directory,
+        domain: args.domain,
+        max_file_size_kb: args.max_file_size_kb,
+        dry_run: args.dry_run
+      }, { store: deps.store });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText5("seed_project", err);
+    }
+  });
+  server2.registerTool("backfill_memories", {
+    description: "Auto-import prior Claude Code conversation JSONL files, applying Ebbinghaus-decay initial heat.",
+    inputSchema: {
+      project: external_exports.string().default("").describe("Project identifier"),
+      max_files: external_exports.number().int().min(1).default(BACKFILL_MAX_FILES_DEFAULT).describe("Max JSONL files to process"),
+      // source: Ebbinghaus retention curve — min_importance threshold of 0.35
+      // per MCP_TOOLS.md §backfill_memories default
+      min_importance: external_exports.number().min(0).max(1).default(BACKFILL_MIN_IMPORTANCE).describe("Minimum importance score"),
+      dry_run: external_exports.boolean().default(false).describe("Preview without writing"),
+      force_reprocess: external_exports.boolean().default(false).describe("Reprocess already-imported files")
+    }
+  }, async (args) => {
+    try {
+      const rememberFn = (rawArgs) => {
+        const result = remember(rawArgs, deps.store);
+        return Promise.resolve(result.stored ? { stored: true } : null);
+      };
+      const response = await importHandler({
+        project: args.project,
+        domain: "",
+        min_importance: args.min_importance,
+        max_sessions: args.max_files,
+        dry_run: args.dry_run
+      }, rememberFn);
+      return { content: [{ type: "text", text: JSON.stringify({
+        backfilled: response.imported,
+        skipped: response.skipped,
+        files_processed: response.total_files,
+        dry_run: args.dry_run
+      }) }] };
+    } catch (err) {
+      return errorText5("backfill_memories", err);
+    }
+  });
+  server2.registerTool("codebase_analyze", {
+    description: "Analyze codebase and store structural memories (functions, classes, imports, relationships).",
+    inputSchema: {
+      directory: external_exports.string().default("").describe("Directory to analyze"),
+      languages: external_exports.array(external_exports.string()).optional().describe("Languages to analyze (null = auto)"),
+      max_files: external_exports.number().int().min(1).default(CODEBASE_MAX_FILES).describe("Max files to analyze"),
+      max_file_size_kb: external_exports.number().int().min(1).default(CODEBASE_MAX_FILE_SIZE_KB).describe("Max file size in KB"),
+      incremental: external_exports.boolean().default(true).describe("Incremental analysis (skip unchanged)"),
+      dry_run: external_exports.boolean().default(false).describe("Preview without storing"),
+      domain: external_exports.string().default("").describe("Domain to assign")
+    }
+  }, async (args) => {
+    try {
+      const analyzeDeps = { store: deps.store };
+      const result = await codebase_analysis_exports.codebaseAnalyzeHandler(args, analyzeDeps);
+      return { content: [{ type: "text", text: JSON.stringify(result) }] };
+    } catch (err) {
+      return errorText5("codebase_analyze", err);
+    }
+  });
+  server2.registerTool("get_methodology_graph", {
+    description: "Returns methodology map as graph data for 3D visualisation.",
+    inputSchema: {
+      domain: external_exports.string().optional().describe("Domain to visualise")
+    }
+  }, async (args) => {
+    try {
+      const profiles = loadProfilesRaw();
+      const domains = profiles["domains"] ?? {};
+      const nodes = [];
+      const edges = [];
+      let edgeId = 0;
+      for (const [id2, domain] of Object.entries(domains)) {
+        if (args.domain && id2 !== args.domain)
+          continue;
+        nodes.push({
+          id: id2,
+          label: domain["label"] ?? id2,
+          session_count: domain["sessionCount"] ?? 0,
+          confidence: domain["confidence"] ?? 0
+        });
+        const bridges = domain["connectionBridges"] ?? [];
+        for (const bridge of bridges) {
+          const target = bridge["targetDomain"];
+          if (!target)
+            continue;
+          edges.push({
+            id: edgeId++,
+            source: id2,
+            target,
+            bridge_type: bridge["bridgeType"] ?? "unknown",
+            strength: bridge["strength"] ?? 0
+          });
         }
-        resolve7();
-      });
+      }
+      return { content: [{ type: "text", text: JSON.stringify({ nodes, edges }) }] };
+    } catch (err) {
+      return errorText5("get_methodology_graph", err);
     }
   });
 }
-async function spawnServer(port) {
-  const serverScript = path5.resolve(__dirname2, "server.js");
-  const env = { ...process.env, DASHBOARD_PORT: String(port) };
-  const child = spawn2(process.execPath, [serverScript], {
-    detached: true,
-    stdio: ["ignore", "pipe", "ignore"],
-    env
+
+// packages/mcp-servers/memory/dist/tools/narrative.js
+var MAX_CHAPTERS_MAX = 20;
+var MAX_CHAPTERS_DEFAULT = 5;
+var MAX_RESULTS_MAX = 50;
+var MAX_RESULTS_DEFAULT2 = 10;
+var RRF_K_DEFAULT = 60;
+function errorText6(tool, err) {
+  const message = err instanceof Error ? err.message : String(err);
+  return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
+}
+function registerNarrativeTools(server2, deps = null) {
+  const narrativeDeps = deps !== null && typeof deps === "object" && "store" in deps ? deps : null;
+  const llmClient2 = narrativeDeps?.llmClient ?? (deps !== null && typeof deps === "object" && !("store" in deps) ? deps : null);
+  server2.registerTool("narrative", {
+    description: "Generate project narrative from stored memories (structured summary).",
+    inputSchema: {
+      directory: external_exports.string().optional().describe("Directory scope"),
+      domain: external_exports.string().optional().describe("Domain scope"),
+      brief: external_exports.boolean().default(false).describe("Brief mode (condensed output)")
+    }
+  }, async (args) => {
+    try {
+      if (!narrativeDeps) {
+        return { content: [{ type: "text", text: JSON.stringify({
+          narrative: "",
+          memory_count: 0,
+          note: "no MemoryStore configured \u2014 configure CORTEX_DB_PATH"
+        }) }] };
+      }
+      const response = await narrativeHandler(narrativeDeps.store, {
+        directory: args.directory,
+        domain: args.domain,
+        brief: args.brief
+      }, llmClient2);
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText6("narrative", err);
+    }
   });
-  return new Promise((resolve7, reject) => {
-    const timer = setTimeout(() => {
-      child.unref();
-      reject(new Error(`memory-dashboard did not start within 5 s on port ${port}`));
-    }, SPAWN_TIMEOUT_MS);
-    let buf = "";
-    child.stdout?.on("data", (chunk) => {
-      buf += chunk.toString();
-      const nl = buf.indexOf("\n");
-      if (nl !== -1) {
-        clearTimeout(timer);
-        child.stdout?.destroy();
-        child.unref();
-        try {
-          const info = JSON.parse(buf.slice(0, nl));
-          resolve7(info.url);
-        } catch {
-          resolve7(`http://127.0.0.1:${port}`);
+  server2.registerTool("get_project_story", {
+    description: "Generate a period-based autobiographical narrative (week/month/all).",
+    inputSchema: {
+      directory: external_exports.string().optional().describe("Directory scope"),
+      domain: external_exports.string().optional().describe("Domain scope"),
+      period: external_exports.enum(["day", "week", "month", "all"]).default("week").describe("Time period"),
+      max_chapters: external_exports.number().int().min(1).max(MAX_CHAPTERS_MAX).default(MAX_CHAPTERS_DEFAULT).describe("Max chapters")
+    }
+  }, async (args) => {
+    try {
+      if (!narrativeDeps) {
+        return { content: [{ type: "text", text: JSON.stringify({
+          chapters: [],
+          period: args.period,
+          note: "no MemoryStore configured"
+        }) }] };
+      }
+      const response = getProjectStoryHandler(narrativeDeps.store, {
+        directory: args.directory,
+        domain: args.domain,
+        period: args.period,
+        max_chapters: args.max_chapters
+      });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText6("get_project_story", err);
+    }
+  });
+  server2.registerTool("unified_search", {
+    description: (
+      // source: docs/ADR/0046 — unified search design
+      "RRF-fuse Cortex memory recall with AP code search (ADR-0046 P3)."
+    ),
+    inputSchema: {
+      query: external_exports.string().min(1).describe("Search query"),
+      domain: external_exports.string().optional().describe("Domain filter"),
+      max_results: external_exports.number().int().min(1).max(MAX_RESULTS_MAX).default(MAX_RESULTS_DEFAULT2).describe("Max results"),
+      // source: Cormack & Clarke (2009) "Reciprocal Rank Fusion" — k=60 canonical value
+      k: external_exports.number().int().min(1).default(RRF_K_DEFAULT).describe("RRF k parameter")
+    }
+  }, async (args) => {
+    try {
+      if (!narrativeDeps) {
+        return { content: [{ type: "text", text: JSON.stringify({
+          results: [],
+          query: args.query,
+          note: "no MemoryStore configured"
+        }) }] };
+      }
+      const response = unifiedSearchHandler(
+        // source: packages/memory/src/narrative/handlers/unified-search.ts::UnifiedSearchDeps
+        { memoryPort: narrativeDeps.store },
+        {
+          query: args.query,
+          domain: args.domain,
+          max_results: args.max_results,
+          k: args.k
         }
-      }
-    });
-    child.once("error", (err) => {
-      clearTimeout(timer);
-      reject(err);
-    });
-    child.once("exit", (code) => {
-      if (code !== null && code !== 0) {
-        clearTimeout(timer);
-        reject(new Error(`memory-dashboard process exited with code ${code}`));
-      }
-    });
+      );
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText6("unified_search", err);
+    }
   });
 }
-function openInBrowser(url) {
-  if (!/^https?:\/\/127\.0\.0\.1:\d{1,5}(\/.*)?$/.test(url))
-    return;
-  let cmd;
-  let args;
-  if (process.platform === "darwin") {
-    cmd = "open";
-    args = [url];
-  } else if (process.platform === "win32") {
-    cmd = "cmd";
-    args = ["/c", "start", "", url];
-  } else {
-    cmd = "xdg-open";
-    args = [url];
-  }
-  spawn2(cmd, args, { stdio: "ignore", detached: true }).unref();
+
+// packages/mcp-servers/memory/dist/tools/advanced.js
+var SYNC_MAX_INSIGHTS_DEFAULT = 10;
+var SYNC_MIN_HEAT_DEFAULT = 0.3;
+var ASSESS_STALE_DAYS_DEFAULT = 14;
+var MS_PER_DAY = 864e5;
+var COVERAGE_LOW_THRESHOLD = 0.5;
+var STALE_HEAT_THRESHOLD = 0.1;
+var ROUNDING_FACTOR_2DP = 100;
+function toMemoryReadStore(store) {
+  return {
+    // getMemoriesForDirectory is on MemoryStoreExt — no escape-hatch needed.
+    getMemoriesForDirectory: async (dir, opts) => {
+      const raw = store.getMemoriesForDirectory(dir, opts.min_heat);
+      return raw.map((m2) => m2);
+    },
+    // getHotMemories is on MemoryStoreExt — no escape-hatch needed.
+    getHotMemories: async (opts) => {
+      const raw = store.getHotMemories(opts.min_heat, opts.limit);
+      return raw.map((m2) => m2);
+    }
+  };
 }
-async function launchDashboard(opts = {}) {
-  const port = opts.port ?? DEFAULT_PORT;
-  const openBrowser = opts.openBrowser ?? true;
-  const existing = await probePort(port);
-  if (existing) {
-    if (openBrowser)
-      openInBrowser(existing);
-    return existing;
+function toProspectiveMemoryStore(store) {
+  const pgStore = store;
+  return {
+    insertProspectiveMemory: async (record3) => {
+      const id2 = pgStore.insertProspectiveMemoryAsync != null ? await pgStore.insertProspectiveMemoryAsync(record3) : store.insertProspectiveMemory(record3);
+      return String(id2);
+    },
+    countActiveTriggers: async () => {
+      return pgStore.countActiveTriggersAsync != null ? pgStore.countActiveTriggersAsync() : Promise.resolve(store.countActiveTriggers());
+    }
+  };
+}
+function toRuleStore(store) {
+  const pgStore = store;
+  return {
+    insertRule: async (rule) => {
+      return pgStore.insertRuleAsync != null ? pgStore.insertRuleAsync(rule) : Promise.resolve(store.insertRule(rule));
+    }
+  };
+}
+function toRuleReadStore(store) {
+  const pgStore = store;
+  return {
+    getAllActiveRules: () => pgStore.getAllActiveRulesAsync != null ? pgStore.getAllActiveRulesAsync() : Promise.resolve(store.getAllActiveRules()),
+    getRulesForScope: (scope) => pgStore.getRulesForScopeAsync != null ? pgStore.getRulesForScopeAsync(scope) : Promise.resolve(store.getRulesForScope(scope)),
+    getAllRulesIncludingInactive: () => pgStore.getAllRulesIncludingInactiveAsync != null ? pgStore.getAllRulesIncludingInactiveAsync() : Promise.resolve(store.getAllRulesIncludingInactive())
+  };
+}
+function errorText7(tool, err) {
+  const message = err instanceof Error ? err.message : String(err);
+  return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
+}
+function registerAdvancedTools(server2, deps) {
+  server2.registerTool("sync_instructions", {
+    description: "Push top memory insights into CLAUDE.md (or similar instruction file).",
+    inputSchema: {
+      directory: external_exports.string().default("").describe("Directory containing CLAUDE.md"),
+      max_insights: external_exports.number().int().min(1).default(SYNC_MAX_INSIGHTS_DEFAULT).describe("Max insights to include"),
+      min_heat: external_exports.number().min(0).max(1).default(SYNC_MIN_HEAT_DEFAULT).describe("Min heat for insight inclusion"),
+      dry_run: external_exports.boolean().default(false).describe("Preview without writing")
+    }
+  }, async (args) => {
+    try {
+      const response = await syncInstructionsHandler({
+        directory: args.directory,
+        max_insights: args.max_insights,
+        min_heat: args.min_heat,
+        dry_run: args.dry_run
+      }, toMemoryReadStore(deps.store));
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText7("sync_instructions", err);
+    }
+  });
+  server2.registerTool("create_trigger", {
+    description: "Create a prospective memory trigger (stored in prospective_memories table).",
+    inputSchema: {
+      content: external_exports.string().min(1).describe("Trigger content"),
+      trigger_condition: external_exports.string().min(1).describe("Condition that fires the trigger"),
+      trigger_type: external_exports.string().default("keyword").describe("Trigger type"),
+      target_directory: external_exports.string().optional().describe("Directory scope for trigger")
+    }
+  }, async (args) => {
+    try {
+      const response = await createTriggerHandler(args, toProspectiveMemoryStore(deps.store));
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText7("create_trigger", err);
+    }
+  });
+  server2.registerTool("add_rule", {
+    description: "Add a neuro-symbolic rule to the memory store.",
+    inputSchema: {
+      condition: external_exports.string().min(1).describe("Rule condition"),
+      action: external_exports.string().min(1).describe("Rule action"),
+      rule_type: external_exports.enum(["soft", "hard"]).default("soft").describe("Rule type"),
+      scope: external_exports.enum(["global", "domain", "directory"]).default("global").describe("Rule scope"),
+      scope_value: external_exports.string().optional().describe("Scope value (domain name or directory)"),
+      priority: external_exports.number().int().default(0).describe("Rule priority (higher = earlier)")
+    }
+  }, async (args) => {
+    try {
+      const response = await addRuleHandler(args, toRuleStore(deps.store));
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText7("add_rule", err);
+    }
+  });
+  server2.registerTool("get_rules", {
+    description: "List active neuro-symbolic rules.",
+    inputSchema: {
+      scope: external_exports.string().optional().describe("Filter by scope"),
+      rule_type: external_exports.string().optional().describe("Filter by type"),
+      include_inactive: external_exports.boolean().default(false).describe("Include inactive rules")
+    }
+  }, async (args) => {
+    try {
+      const response = await getRulesHandler(args, toRuleReadStore(deps.store));
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText7("get_rules", err);
+    }
+  });
+  server2.registerTool("assess_coverage", {
+    description: "Evaluate knowledge coverage completeness for the current domain/directory.",
+    inputSchema: {
+      directory: external_exports.string().default("").describe("Directory scope"),
+      domain: external_exports.string().default("").describe("Domain scope"),
+      stale_days: external_exports.number().int().min(1).default(ASSESS_STALE_DAYS_DEFAULT).describe("Days before a memory is stale")
+    }
+  }, async (args) => {
+    try {
+      const allMems = deps.store.getAllMemoriesForDecay();
+      const scoped = allMems.filter((m2) => {
+        if (args.domain && m2["domain"] !== args.domain)
+          return false;
+        if (args.directory && !String(m2["directory"] ?? "").startsWith(args.directory))
+          return false;
+        return true;
+      });
+      const now = Date.now();
+      const staleMs = args.stale_days * MS_PER_DAY;
+      const stale = scoped.filter((m2) => {
+        const heat = m2["heat"] ?? 0;
+        const createdAt = m2["created_at"];
+        if (heat < STALE_HEAT_THRESHOLD)
+          return true;
+        if (createdAt && now - new Date(createdAt).getTime() > staleMs)
+          return true;
+        return false;
+      }).length;
+      const total = scoped.length;
+      const coverageScore = total === 0 ? 0 : Math.round((total - stale) / total * ROUNDING_FACTOR_2DP) / ROUNDING_FACTOR_2DP;
+      const gaps = [];
+      if (stale > 0)
+        gaps.push(`${stale} stale memories (heat < 0.1 or older than ${args.stale_days} days)`);
+      if (total === 0)
+        gaps.push("no memories found for this scope");
+      const recommendations = [];
+      if (coverageScore < COVERAGE_LOW_THRESHOLD)
+        recommendations.push("Run consolidate to decay + refresh stale memories.");
+      if (total === 0)
+        recommendations.push("Run codebase_analyze or backfill_memories to seed coverage.");
+      return { content: [{ type: "text", text: JSON.stringify({
+        coverage_score: coverageScore,
+        total_memories: total,
+        stale_count: stale,
+        gaps,
+        recommendations,
+        directory: args.directory,
+        domain: args.domain
+      }) }] };
+    } catch (err) {
+      return errorText7("assess_coverage", err);
+    }
+  });
+  server2.registerTool("query_workflow_graph", {
+    description: "Return a typed subgraph of the unified workflow graph.",
+    inputSchema: {
+      node_kind: external_exports.union([external_exports.string(), external_exports.array(external_exports.string())]).optional().describe("Node kind filter"),
+      edge_kind: external_exports.union([external_exports.string(), external_exports.array(external_exports.string())]).optional().describe("Edge kind filter"),
+      neighbour_of: external_exports.string().optional().describe("Node ID to find neighbours of"),
+      depth: external_exports.number().int().optional().describe("Traversal depth"),
+      domain: external_exports.string().optional().describe("Domain filter"),
+      limit_nodes: external_exports.number().int().optional().describe("Max nodes to return")
+    }
+  }, async (args) => {
+    try {
+      const emptyGraph = {
+        nodes: [],
+        edges: [],
+        links: [],
+        meta: { node_count: 0, edge_count: 0, built_at: (/* @__PURE__ */ new Date()).toISOString() }
+      };
+      const response = queryWorkflowGraph(emptyGraph, {
+        node_kind: args.node_kind,
+        edge_kind: args.edge_kind,
+        neighbour_of: args.neighbour_of,
+        depth: args.depth,
+        domain: args.domain,
+        limit_nodes: args.limit_nodes
+      });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText7("query_workflow_graph", err);
+    }
+  });
+}
+
+// packages/mcp-servers/memory/dist/tools/wiki.js
+import { mkdirSync as mkdirSync6, writeFileSync as writeFileSync8, rmSync as rmSync2 } from "node:fs";
+import { join as join20, resolve as resolve6, dirname as dirname4 } from "node:path";
+import { homedir as homedir10 } from "node:os";
+var WIKI_ROOT = process.env["CORTEX_WIKI_ROOT"] ?? join20(homedir10(), ".claude", "methodology", "wiki");
+async function asyncReadPage(root, relPath) {
+  return Promise.resolve(readPage(root, relPath));
+}
+async function asyncWritePage(root, relPath, content, mode) {
+  return Promise.resolve(writePage(root, relPath, content, mode));
+}
+async function asyncListPages(root, kind2) {
+  return Promise.resolve(listPages(root, kind2));
+}
+async function asyncNextAdrNumber(root) {
+  return Promise.resolve(nextAdrNumber(root));
+}
+async function asyncWriteFile(absPath, content) {
+  const dir = dirname4(resolve6(absPath));
+  mkdirSync6(dir, { recursive: true });
+  writeFileSync8(absPath, content, "utf-8");
+}
+async function asyncEnsureDir(absDir) {
+  mkdirSync6(absDir, { recursive: true });
+}
+async function asyncListAllMarkdownFiles(root, kindFilter) {
+  const paths = await asyncListPages(root, kindFilter);
+  const entries = [];
+  for (const relPath of paths) {
+    const content = await asyncReadPage(root, relPath);
+    if (content !== null)
+      entries.push({ relPath, content });
   }
-  await killPort(port);
-  const url = await spawnServer(port);
-  if (openBrowser)
-    openInBrowser(url);
-  return url;
+  return entries;
+}
+async function asyncDeleteFile(absPath) {
+  try {
+    rmSync2(absPath);
+  } catch {
+  }
+}
+var AP_ENABLED = false;
+function errorText8(tool, err) {
+  const message = err instanceof Error ? err.message : String(err);
+  return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
+}
+function registerWikiTools(server2) {
+  server2.registerTool("wiki_write", {
+    description: "Author a wiki page (create/append/replace) with provided Markdown.",
+    inputSchema: {
+      path: external_exports.string().min(1).describe("Wiki page path (relative)"),
+      content: external_exports.string().min(1).describe("Markdown content"),
+      mode: external_exports.enum(["create", "append", "replace"]).default("create").describe("Write mode"),
+      tags: external_exports.array(external_exports.string()).default([]).describe("Page tags")
+    }
+  }, async (args) => {
+    try {
+      const response = await handler7({ path: args.path, content: args.content, mode: args.mode, tags: args.tags }, { wikiRoot: WIKI_ROOT, writePage: asyncWritePage });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText8("wiki_write", err);
+    }
+  });
+  server2.registerTool("wiki_read", {
+    description: "Read the raw Markdown of a wiki page by relative path.",
+    inputSchema: {
+      path: external_exports.string().min(1).describe("Wiki page path")
+    }
+  }, async (args) => {
+    try {
+      const response = await handler8({ path: args.path }, { wikiRoot: WIKI_ROOT, readPage: asyncReadPage });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText8("wiki_read", err);
+    }
+  });
+  server2.registerTool("wiki_list", {
+    description: "List authored wiki pages, optionally filtered by kind.",
+    inputSchema: {
+      kind: external_exports.string().optional().describe("Page kind filter")
+    }
+  }, async (args) => {
+    try {
+      const response = await handler9({ kind: args.kind }, { wikiRoot: WIKI_ROOT, listPages: asyncListPages });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText8("wiki_list", err);
+    }
+  });
+  server2.registerTool("wiki_link", {
+    description: "Add a bidirectional link between two wiki pages (creates Related section entry).",
+    inputSchema: {
+      from_path: external_exports.string().min(1).describe("Source page path"),
+      to_path: external_exports.string().min(1).describe("Target page path"),
+      relation: external_exports.string().min(1).describe("Relationship label")
+    }
+  }, async (args) => {
+    try {
+      const response = await handler11({ from_path: args.from_path, to_path: args.to_path, relation: args.relation }, { wikiRoot: WIKI_ROOT, readPage: asyncReadPage, writePage: asyncWritePage });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText8("wiki_link", err);
+    }
+  });
+  server2.registerTool("wiki_adr", {
+    description: "Create a numbered ADR (Architecture Decision Record) with auto-incremented sequence.",
+    inputSchema: {
+      title: external_exports.string().min(1).describe("ADR title"),
+      context: external_exports.string().min(1).describe("Problem context"),
+      decision: external_exports.string().min(1).describe("Decision made"),
+      consequences: external_exports.string().min(1).describe("Consequences"),
+      status: external_exports.enum(["proposed", "accepted", "deprecated", "superseded"]).default("accepted").describe("ADR status"),
+      tags: external_exports.array(external_exports.string()).default([]).describe("Tags")
+    }
+  }, async (args) => {
+    try {
+      const response = await handler10({
+        title: args.title,
+        context: args.context,
+        decision: args.decision,
+        consequences: args.consequences,
+        status: args.status,
+        tags: args.tags
+      }, {
+        wikiRoot: WIKI_ROOT,
+        nextAdrNumber: asyncNextAdrNumber,
+        writePage: asyncWritePage
+      });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText8("wiki_adr", err);
+    }
+  });
+  server2.registerTool("wiki_reindex", {
+    description: "Regenerate the wiki table of contents at .generated/INDEX.md.",
+    inputSchema: {}
+  }, async (_args) => {
+    try {
+      const response = await handler12({}, {
+        wikiRoot: WIKI_ROOT,
+        listPages: asyncListPages,
+        writeFile: asyncWriteFile,
+        ensureDir: asyncEnsureDir,
+        joinPath: join20
+      });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText8("wiki_reindex", err);
+    }
+  });
+  server2.registerTool("wiki_purge", {
+    description: "Re-evaluate and purge wiki pages that fail the current classifier.",
+    inputSchema: {
+      apply: external_exports.boolean().default(false).describe("Apply purge (false = preview only)"),
+      kind: external_exports.string().optional().describe("Page kind to target")
+    }
+  }, async (args) => {
+    try {
+      const response = await handler13({
+        apply: args.apply,
+        kind: args.kind
+      }, {
+        wikiRoot: WIKI_ROOT,
+        wikiRoot_string: WIKI_ROOT,
+        listAllMarkdownFiles: asyncListAllMarkdownFiles,
+        deleteFile: asyncDeleteFile
+      });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText8("wiki_purge", err);
+    }
+  });
+  server2.registerTool("wiki_verify", {
+    description: "Verify wiki-page symbol citations against AP's code graph (ADR-0046 Phase 2).",
+    // source: docs/ADR/0046-change-impact-analysis.md §Phase 2
+    inputSchema: {
+      path: external_exports.string().optional().describe("Page path (null = all pages)")
+    }
+  }, async (args) => {
+    try {
+      const response = await handler14({ path: args.path ?? null }, {
+        wikiRoot: WIKI_ROOT,
+        isApEnabled: () => AP_ENABLED,
+        readPage: asyncReadPage,
+        listPages: asyncListPages,
+        // source: docs/ADR/0046-change-impact-analysis.md §Phase 2 — stub until AP live
+        verifySymbols: async (_symbols) => ({})
+      });
+      return { content: [{ type: "text", text: JSON.stringify(response) }] };
+    } catch (err) {
+      return errorText8("wiki_verify", err);
+    }
+  });
 }
 
 // packages/mcp-servers/memory/dist/tools/ingest.js
+import { launchDashboard } from "@agentic/memory-dashboard/launcher";
 var MIN_IMPORTANCE_DEFAULT = 0.4;
 var TOP_SYMBOLS_DEFAULT = 50;
 var TOP_PROCESSES_DEFAULT = 10;
@@ -52933,8 +54109,7 @@ function registerNavigationTools(server2, deps) {
       const temporalGaps = [];
       const recommendations = [];
       if (args.include_temporal_gaps) {
-        const storeExt2 = deps.store;
-        const allMems = storeExt2.getAllMemoriesForDecay?.() ?? [];
+        const allMems = deps.store.getAllMemoriesForDecay();
         for (const mem of allMems) {
           const createdAt = mem["created_at"];
           const heat = mem["heat"] ?? 0;
@@ -52977,129 +54152,126 @@ if (llmClient !== null) {
 } else {
   process.stderr.write("[mcp-server-memory] ANTHROPIC_API_KEY absent \u2014 LLM client disabled (graceful degradation)\n");
 }
-var databaseUrl = process.env["DATABASE_URL"];
+var rawDatabaseUrl = process.env["DATABASE_URL"] ?? "";
+if (rawDatabaseUrl) {
+  try {
+    const u2 = new URL(rawDatabaseUrl);
+    const dbName = u2.pathname.replace(/^\//, "");
+    if (dbName === "cortex") {
+      process.stderr.write("[mcp-server-memory] FATAL: DATABASE_URL points to a database named 'cortex' which is reserved for the standalone Python Cortex plugin. Set DATABASE_URL to a different database (e.g. postgresql://localhost/cortex_agentic).\n");
+      process.exit(1);
+    }
+  } catch {
+  }
+}
 var memoryStore;
-var isPgStore = false;
-if (databaseUrl) {
-  assertNotForbiddenDb(databaseUrl);
-  process.stderr.write(`[mcp-server-memory] DATABASE_URL set \u2014 using PgMemoryStore
+var narrativeStore;
+if (rawDatabaseUrl) {
+  const pgStore = new PgMemoryStore(rawDatabaseUrl);
+  memoryStore = pgStore;
+  narrativeStore = new PgNarrativeAdapter(pgStore);
+  process.stderr.write(`[mcp-server-memory] PostgreSQL store active (DATABASE_URL set)
 `);
-  memoryStore = new PgMemoryStore(databaseUrl);
-  isPgStore = true;
 } else {
   const dbPath = process.env["CORTEX_DB_PATH"] ?? join21(homedir11(), ".cortex", "cortex.db");
-  memoryStore = new SqliteMemoryStore(dbPath);
+  const sqliteStore = new SqliteMemoryStore(dbPath);
+  memoryStore = sqliteStore;
+  const narrativeDb = sqliteStore._db;
+  narrativeStore = new SqliteNarrativeAdapter(narrativeDb);
   process.stderr.write(`[mcp-server-memory] SQLite store open: ${dbPath}
 `);
 }
-var narrativeStore = isPgStore ? null : (() => {
-  const narrativeDb = memoryStore._db;
-  return new SqliteNarrativeAdapter(narrativeDb);
-})();
-var pgStore = isPgStore ? memoryStore : null;
-var storeExt = memoryStore;
 var recallStore = {
   // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py::vec_search
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store.py::search_vectors
   searchByVector: async (embedding, topK, minHeat) => {
     const buf = Buffer.from(new Float32Array(embedding).buffer);
-    if (pgStore) {
-      const hits2 = await pgStore.searchVectorsAsync(buf, topK, minHeat);
-      return hits2.map(([memory_id, distance]) => ({ memory_id, distance }));
-    }
     const hits = memoryStore.searchVectors(buf, topK, minHeat);
     return hits.map(([memory_id, distance]) => ({ memory_id, distance }));
   },
+  // LSP-VIOLATION CLOSED (#3): searchFts is now on MemoryStoreExt.
+  // SQLite: uses FTS5 MATCH. PG: uses websearch_to_tsquery on content_tsv.
   // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py::fts_search
-  // SqliteMemoryStore.searchFts returns Array<[memoryId, score]>; the legacy
-  // ftsSearch fallback returns Array<{id, rank}>. Detect both shapes so the
-  // recall pipeline never receives `memory_id: undefined`.
+  // source: PostgreSQL 11+ websearch_to_tsquery
   searchByFts: async (query, limit) => {
-    const tupleSearch = memoryStore.searchFts;
-    if (tupleSearch) {
-      return tupleSearch(query, limit).map(([memory_id, score]) => ({ memory_id, score }));
-    }
-    const raw = storeExt["ftsSearch"]?.(query, limit) ?? [];
-    return raw.map((r2) => ({
-      memory_id: r2["id"],
-      score: r2["rank"] ?? r2["score"] ?? 0
-    }));
+    return memoryStore.searchFts(query, limit).map(([memory_id, score]) => ({ memory_id, score }));
   },
-  // source: packages/memory/src/remember/storage/sqlite-store.ts::getMemory
+  // source: packages/memory/src/remember/storage/memory-store.ts::getMemory
   getMemory: async (id2) => {
-    if (pgStore)
-      return await pgStore.getMemoryAsync(id2);
     return memoryStore.getMemory(id2);
   },
-  // source: packages/memory/src/remember/storage/sqlite-store.ts::getByIds (escape hatch)
+  // LSP-VIOLATION CLOSED (#2): getByIds is now on MemoryStoreExt.
+  // source: packages/memory/src/remember/storage/memory-store.ts::getByIds
   getByIds: async (ids) => {
-    if (pgStore) {
-      const results = await Promise.all(ids.map((id2) => pgStore.getMemoryAsync(id2)));
-      return results.filter((r2) => r2 !== null);
-    }
-    const raw = storeExt["getByIds"]?.(ids) ?? ids.map((id2) => memoryStore.getMemory(id2)).filter(Boolean);
-    return raw.filter(Boolean);
+    return memoryStore.getByIds(ids);
   },
+  // LSP-VIOLATION CLOSED (#2): getMemoriesForDomain is now on MemoryStoreExt.
   // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store.py::get_memories_for_domain
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py::getMemoriesForDomain
   getMemoriesForDomain: async (domain, minHeat, limit) => {
-    const raw = storeExt["getMemoriesForDomain"]?.(domain, minHeat, limit) ?? [];
-    return raw;
+    return memoryStore.getMemoriesForDomain(domain, minHeat, limit);
   },
+  // LSP-VIOLATION CLOSED (#2): getMemoriesForDirectory is now on MemoryStoreExt.
   // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store.py::get_memories_for_directory
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py::getMemoriesForDirectory
   getMemoriesForDirectory: async (directory, minHeat) => {
-    const raw = storeExt["getMemoriesForDirectory"]?.(directory, minHeat) ?? [];
-    return raw;
+    return memoryStore.getMemoriesForDirectory(directory, minHeat);
   },
+  // LSP-VIOLATION CLOSED (#2): getHotMemories is now on MemoryStoreExt.
   // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store.py::get_hot_memories
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py::getHotMemories
   getHotMemories: async (minHeat, limit) => {
-    const raw = storeExt["getHotMemories"]?.(minHeat, limit) ?? [];
-    return raw;
+    return memoryStore.getHotMemories(minHeat, limit);
   },
+  // getAllActiveRules: not on MemoryStoreExt (rules are SQLite-only for now).
+  // Returns [] on PG — this is a documented limitation, not a hidden failure.
   // source: packages/memory/src/recall/port.ts::getAllActiveRules
   getAllActiveRules: async () => {
-    return storeExt["getAllActiveRules"]?.() ?? [];
+    const store = memoryStore;
+    return store.getAllActiveRules?.() ?? [];
   },
+  // getActiveProspectiveMemories: on MemoryStoreExt.
   // source: packages/memory/src/recall/port.ts::getActiveProspectiveMemories
   getActiveProspectiveMemories: async () => {
-    return storeExt["getActiveProspectiveMemories"]?.() ?? [];
+    return memoryStore.getActiveProspectiveMemories();
   },
-  // source: packages/memory/src/remember/storage/sqlite-store.ts::updateMemoryAccess
+  // source: packages/memory/src/remember/storage/memory-store.ts::updateMemoryAccess
   updateMemoryAccess: async (memoryId) => {
     memoryStore.updateMemoryAccess(memoryId);
   },
+  // incrementReplayCount: on MemoryStoreExt.
   // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store.py::increment_replay_count
   incrementReplayCount: async (memoryId) => {
-    storeExt["incrementReplayCount"]?.(memoryId);
+    memoryStore.incrementReplayCount(memoryId);
   },
+  // reinforceOrCreateRelationship: on MemoryStoreExt.
   // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store.py::reinforce_or_create_relationship
   reinforceOrCreateRelationship: async (entityA, entityB, learningRate) => {
-    storeExt["reinforceOrCreateRelationship"]?.(entityA, entityB, learningRate);
+    memoryStore.reinforceOrCreateRelationship(entityA, entityB, learningRate);
   }
 };
 var graphPort = {
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:90-101
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:48-52
   getRecentlyAccessedMemories: async (limit, minAccessCount) => {
-    const raw = storeExt["getRecentlyAccessedMemories"]?.(limit, minAccessCount) ?? [];
+    const raw = memoryStore.getRecentlyAccessedMemories(limit, minAccessCount);
     return raw.map((m2) => ({
       id: Number(m2["id"]),
       content: String(m2["content"] ?? ""),
       lastAccessed: m2["last_accessed"],
-      heat: m2["heat"],
+      heat: m2["heat_base"] ?? m2["heat"],
       domain: m2["domain"],
       tags: Array.isArray(m2["tags"]) ? m2["tags"] : []
     }));
   },
   getMemory: async (memoryId) => {
-    let mem;
-    if (pgStore) {
-      mem = await pgStore.getMemoryAsync(memoryId);
-    } else {
-      mem = memoryStore.getMemory(memoryId);
-    }
+    const mem = memoryStore.getMemory(memoryId);
     if (!mem)
       return void 0;
     return {
       id: mem.id,
       content: mem.content,
-      lastAccessed: mem.last_accessed ?? mem.lastAccessed,
+      lastAccessed: mem.last_accessed,
       heat: mem.heat,
       domain: mem.domain,
       tags: Array.isArray(mem.tags) ? mem.tags : []
@@ -53108,8 +54280,9 @@ var graphPort = {
   updateMemoryAccess: async (memoryId) => {
     memoryStore.updateMemoryAccess(memoryId);
   },
+  // incrementReplayCount is now on MemoryStoreExt — no escape-hatch needed.
   incrementReplayCount: async (memoryId) => {
-    storeExt["incrementReplayCount"]?.(memoryId);
+    memoryStore.incrementReplayCount(memoryId);
   }
 };
 registerRecallTools(server, { store: recallStore, embedder: null, graphPort });
@@ -53117,7 +54290,7 @@ registerRememberTools(server, { store: memoryStore });
 registerMethodologyTools(server);
 registerConsolidationTools(server, { store: memoryStore });
 registerManagementTools(server, { store: memoryStore });
-registerNarrativeTools(server, narrativeStore ? { store: narrativeStore, llmClient } : null);
+registerNarrativeTools(server, { store: narrativeStore, llmClient });
 registerAdvancedTools(server, { store: memoryStore });
 registerWikiTools(server);
 registerIngestTools(server, { store: memoryStore, wikiRoot: process.env["CORTEX_WIKI_ROOT"] ?? join21(homedir11(), ".claude", "methodology", "wiki"), mcpClientPool: null });
@@ -53126,9 +54299,6 @@ async function main9() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   process.stderr.write("[mcp-server-memory] running on stdio, tools registered\n");
-  if (isPgStore) {
-    process.stderr.write("[mcp-server-memory] backend: PostgreSQL (DATABASE_URL)\n");
-  }
 }
 main9().catch((err) => {
   process.stderr.write(`[mcp-server-memory] fatal: ${String(err)}

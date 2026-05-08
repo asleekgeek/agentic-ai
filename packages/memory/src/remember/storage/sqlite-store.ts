@@ -1598,4 +1598,132 @@ export class SqliteMemoryStore implements MemoryStoreExt {
       // best-effort: table may not exist in all schema versions
     }
   }
+
+  // ── Rule engine ────────────────────────────────────────────────────────
+  //
+  // LSP-VIOLATION CLOSED: these methods were previously in SqliteRuleMixin /
+  // SqliteStatsMixin / SqliteAuxiliaryMixin standalone classes, not on
+  // SqliteMemoryStore. The production store therefore returned undefined for
+  // escape-hatch calls, silently breaking the rule engine on BOTH backends.
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:9-70
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+
+  /**
+   * precondition:  rule.condition and rule.action are non-empty.
+   * postcondition: returned id > 0; row in memory_rules with is_active = rule.is_active.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:14-31
+   */
+  insertRule(rule: {
+    rule_type: string;
+    scope: string;
+    scope_value: string | null;
+    condition: string;
+    action: string;
+    priority: number;
+    is_active: boolean;
+  }): number {
+    const result = this._db
+      .prepare(
+        "INSERT INTO memory_rules " +
+          "(rule_type, scope, scope_value, condition, action, priority, " +
+          "is_active, created_at) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+      )
+      .run(
+        rule.rule_type ?? "soft",
+        rule.scope ?? "global",
+        rule.scope_value ?? null,
+        rule.condition,
+        rule.action,
+        rule.priority ?? 0,
+        rule.is_active !== false ? 1 : 0,
+      );
+    return result.lastInsertRowid as number;
+  }
+
+  /**
+   * postcondition: returns every row where is_active = true, ordered by
+   *   scope ASC, priority DESC. Returns [] if no rules exist.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:41-45
+   */
+  getAllActiveRules(): Record<string, unknown>[] {
+    return this._db
+      .prepare(
+        "SELECT * FROM memory_rules WHERE is_active ORDER BY scope, priority DESC",
+      )
+      .all() as Record<string, unknown>[];
+  }
+
+  /**
+   * postcondition: returns rows where scope = scope AND is_active = true,
+   *   ordered by priority DESC. Returns [] if none.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:33-39
+   */
+  getRulesForScope(scope: string): Record<string, unknown>[] {
+    return this._db
+      .prepare(
+        "SELECT * FROM memory_rules WHERE scope = ? AND is_active " +
+          "ORDER BY priority DESC",
+      )
+      .all(scope) as Record<string, unknown>[];
+  }
+
+  /**
+   * postcondition: returns every row in memory_rules ordered by scope ASC,
+   *   priority DESC. Returns [] if table is empty.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py
+   */
+  getAllRulesIncludingInactive(): Record<string, unknown>[] {
+    return this._db
+      .prepare(
+        "SELECT * FROM memory_rules ORDER BY scope, priority DESC",
+      )
+      .all() as Record<string, unknown>[];
+  }
+
+  /**
+   * postcondition: returns COUNT(*) WHERE is_active = true from
+   *   prospective_memories. Returns 0 if table is empty.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
+   */
+  countActiveTriggers(): number {
+    const row = this._db
+      .prepare("SELECT COUNT(*) AS c FROM prospective_memories WHERE is_active")
+      .get() as { c: number } | undefined;
+    return row?.c ?? 0;
+  }
+
+  /**
+   * precondition:  record.content, record.trigger_condition, record.trigger_type
+   *   are non-empty strings.
+   * postcondition: returned id > 0; row in prospective_memories with is_active = true.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+   */
+  insertProspectiveMemory(record: {
+    content: string;
+    trigger_condition: string;
+    trigger_type: string;
+    target_directory?: string | null;
+    is_active?: boolean;
+    triggered_count?: number;
+  }): number {
+    const result = this._db
+      .prepare(
+        "INSERT INTO prospective_memories " +
+          "(content, trigger_condition, trigger_type, " +
+          "target_directory, is_active, triggered_count) " +
+          "VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        record.content,
+        record.trigger_condition,
+        record.trigger_type,
+        record.target_directory ?? null,
+        record.is_active !== false ? 1 : 0,
+        record.triggered_count ?? 0,
+      );
+    return result.lastInsertRowid as number;
+  }
 }
