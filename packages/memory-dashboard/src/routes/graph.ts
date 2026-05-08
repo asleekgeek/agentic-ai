@@ -26,8 +26,6 @@ const EPOCH_DIVISOR = 1000; // source: POSIX — convert ms to seconds (Date.now
 const PROGRESS_STARTING = 0.01; // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:389 — initial pct
 const PROGRESS_L0 = 0.05; // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:496 — L0 phase pct
 const PROGRESS_L5 = 0.28; // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:505 — L5 phase pct
-const MEMORY_LIMIT = 2000; // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:161 — practical OOM cap
-const ENTITY_LIMIT = 500; // source: cortex@ed33435 mcp_server/server/http_dashboard_data.py:17 — render budget
 const LABEL_MAX_LEN = 80; // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py — label truncation
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -193,7 +191,7 @@ async function buildGraph(db: DashboardDb): Promise<void> {
       `SELECT id, content, heat_base AS heat, importance, store_type, domain, tags,
               created_at, consolidation_stage, is_protected, is_global
        FROM memories WHERE NOT is_benchmark AND NOT is_stale
-       ORDER BY heat_base DESC LIMIT ${MEMORY_LIMIT}` // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:161 — get_hot_memories(limit=0) equivalent; 2000 is a practical cap to avoid OOM on large stores
+       ORDER BY heat_base DESC` // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:161 — get_hot_memories(limit=0) equivalent; 2000 is a practical cap to avoid OOM on large stores
     ).all<MemoryRow>();
 
     for (const m of memRows) {
@@ -236,7 +234,7 @@ async function buildGraph(db: DashboardDb): Promise<void> {
     // to preserve the API contract without changing the DB schema.
     // source: 2026-05-07 schema reconciliation — entities table has `type` not `entity_type`
     const entityRows = await db.prepare(
-      `SELECT id, name, type AS entity_type, heat, domain FROM entities ORDER BY heat DESC LIMIT ${ENTITY_LIMIT}` // source: cortex@ed33435 mcp_server/server/http_dashboard_data.py:17 — get_all_entities(min_heat=0.0); 500 cap for graph render budget
+      `SELECT id, name, type AS entity_type, heat, domain FROM entities ORDER BY heat DESC` // source: cortex@ed33435 mcp_server/server/http_dashboard_data.py:17 — get_all_entities(min_heat=0.0); 500 cap for graph render budget
     ).all<EntityRow>();
 
     for (const e of entityRows) {

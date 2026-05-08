@@ -40685,8 +40685,6 @@ var EPOCH_DIVISOR = 1e3;
 var PROGRESS_STARTING = 0.01;
 var PROGRESS_L0 = 0.05;
 var PROGRESS_L5 = 0.28;
-var MEMORY_LIMIT = 2e3;
-var ENTITY_LIMIT = 500;
 var LABEL_MAX_LEN = 80;
 var _graphCache = null;
 var _buildRunning = false;
@@ -40749,7 +40747,7 @@ async function buildGraph(db) {
       `SELECT id, content, heat_base AS heat, importance, store_type, domain, tags,
               created_at, consolidation_stage, is_protected, is_global
        FROM memories WHERE NOT is_benchmark AND NOT is_stale
-       ORDER BY heat_base DESC LIMIT ${MEMORY_LIMIT}`
+       ORDER BY heat_base DESC`
       // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:161 — get_hot_memories(limit=0) equivalent; 2000 is a practical cap to avoid OOM on large stores
     ).all();
     for (const m of memRows) {
@@ -40781,7 +40779,7 @@ async function buildGraph(db) {
       }
     }
     const entityRows = await db.prepare(
-      `SELECT id, name, type AS entity_type, heat, domain FROM entities ORDER BY heat DESC LIMIT ${ENTITY_LIMIT}`
+      `SELECT id, name, type AS entity_type, heat, domain FROM entities ORDER BY heat DESC`
       // source: cortex@ed33435 mcp_server/server/http_dashboard_data.py:17 — get_all_entities(min_heat=0.0); 500 cap for graph render budget
     ).all();
     for (const e of entityRows) {
