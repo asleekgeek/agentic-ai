@@ -1,8 +1,9 @@
 /**
  * management.ts — MCP tool adapters for the memory management topic.
  *
- * Tools registered (4):
- *   validate_memory, seed_project, backfill_memories, get_methodology_graph
+ * Tools registered (5):
+ *   validate_memory, seed_project, backfill_memories, get_methodology_graph,
+ *   get_telemetry
  *
  * Phase 7 Group D — DI wiring:
  *   - validate_memory: marks stale memories whose source files no longer exist.
@@ -12,6 +13,8 @@
  *     source: packages/memory/src/import/handler.ts::importHandler
  *   - get_methodology_graph: builds graph from profiles.json.
  *     Ported from cortex@ed33435 mcp_server/handlers/get_methodology_graph.py.
+ *   - get_telemetry: returns in-process telemetry counters + read/write ratio.
+ *     Ported from cortex@ed33435 mcp_server/handlers/get_telemetry.py.
  *
  * NOTE: codebase_analyze is registered exclusively in tools/ingest.ts.
  *   The duplicate registration here was removed to prevent "Tool already registered"
@@ -19,6 +22,7 @@
  *
  * source: worktrees/port-inventory-cortex/inventory/MCP_TOOLS.md
  *         §Tier1Manage, §Tier1Core (get_methodology_graph)
+ * source: cortex@ed33435 mcp_server/handlers/get_telemetry.py
  */
 
 import { existsSync, readFileSync } from "node:fs";
@@ -30,6 +34,7 @@ import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-sto
 import { importHandler } from "@agentic/memory/import/handler.js";
 import { rememberAsync } from "@agentic/memory/remember/handlers/remember.js";
 import { handler as seedProjectHandlerFn } from "@agentic/memory/codebase-analysis/handlers/seed-project.js";
+import { summary as telemetrySummary } from "@agentic/memory/shared/telemetry.js";
 
 // ── Named constants ───────────────────────────────────────────────────────────
 // source: cortex@ed33435 validate_memory.py — default staleness threshold 0.5
@@ -274,6 +279,32 @@ export function registerManagementTools(server: McpServer, deps: ManagementDeps)
         return { content: [{ type: "text" as const, text: JSON.stringify({ nodes, edges }) }] };
       } catch (err) {
         return errorText("get_methodology_graph", err);
+      }
+    },
+  );
+
+  // ── get_telemetry ─────────────────────────────────────────────────────────
+  server.registerTool(
+    "get_telemetry",
+    {
+      description:
+        "Return in-process telemetry snapshot: per-op call counts, latency, byte volume, " +
+        "success/failure split, and the computed read/write ratio. " +
+        "Use this to verify Cortex's empirical read/write workload distribution " +
+        // source: cortex@ed33435 mcp_server/handlers/get_telemetry.py — Popper C6 claim grounded in measurement
+        "(Popper C6 — grounds the read-heavy workload claim in " +
+        "measurement, not assertion). Counters are per-process and reset on restart; " +
+        "the durable record is the JSONL at ~/.claude/methodology/telemetry.jsonl.",
+      inputSchema: {},
+    },
+    async (_args) => {
+      try {
+        // source: cortex@ed33435 mcp_server/handlers/get_telemetry.py::handler
+        // source: cortex@ed33435 mcp_server/core/telemetry.py::summary
+        const result = telemetrySummary();
+        return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+      } catch (err) {
+        return errorText("get_telemetry", err);
       }
     },
   );

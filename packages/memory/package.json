@@ -218,6 +218,10 @@
     "./recall/recall-pipeline-stages.js": {
       "import": "./dist/recall/recall-pipeline-stages.js",
       "types": "./dist/recall/recall-pipeline-stages.d.ts"
+    },
+    "./shared/telemetry.js": {
+      "import": "./dist/shared/telemetry.js",
+      "types": "./dist/shared/telemetry.d.ts"
     }
   },
   "scripts": {

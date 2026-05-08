@@ -1531,4 +1531,106 @@ export class SqliteMemoryStore implements MemoryStoreExt {
       // best-effort: table may not exist in all schema versions
     }
   }
+
+  // ── Prospective memory write ───────────────────────────────────────────
+
+  /**
+   * Insert a prospective memory record and return its id.
+   *
+   * postcondition: new row in prospective_memories with is_active = true.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+   */
+  insertProspectiveMemory(data: Record<string, unknown>): number {
+    const result = this._db
+      .prepare(
+        "INSERT INTO prospective_memories " +
+          "(content, trigger_condition, trigger_type, " +
+          "target_directory, is_active, triggered_count) " +
+          "VALUES (?, ?, ?, ?, ?, ?)",
+      )
+      .run(
+        data["content"] as string,
+        data["trigger_condition"] as string,
+        (data["trigger_type"] as string) ?? "keyword",
+        (data["target_directory"] as string | null) ?? null,
+        data["is_active"] !== false && data["is_active"] !== 0 ? 1 : 0,
+        (data["triggered_count"] as number) ?? 0,
+      );
+    return result.lastInsertRowid as number;
+  }
+
+  /**
+   * Return the count of currently active prospective memory triggers.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:355
+   */
+  countActiveTriggers(): number {
+    const row = this._db
+      .prepare("SELECT COUNT(*) as c FROM prospective_memories WHERE is_active")
+      .get() as { c: number } | undefined;
+    return row?.c ?? 0;
+  }
+
+  // ── Rules ────────────────────────────────────────────────────────────
+
+  /**
+   * Insert a memory rule and return its id.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:14-31
+   */
+  insertRule(data: Record<string, unknown>): number {
+    const result = this._db
+      .prepare(
+        "INSERT INTO memory_rules " +
+          "(rule_type, scope, scope_value, condition, action, priority, " +
+          "is_active, created_at) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
+      )
+      .run(
+        (data["rule_type"] as string) ?? "soft",
+        (data["scope"] as string) ?? "global",
+        (data["scope_value"] as string | null) ?? null,
+        data["condition"] as string,
+        data["action"] as string,
+        (data["priority"] as number) ?? 0,
+        data["is_active"] !== false && data["is_active"] !== 0 ? 1 : 0,
+      );
+    return result.lastInsertRowid as number;
+  }
+
+  /**
+   * Return all active rules ordered by scope and priority descending.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:41-45
+   */
+  getAllActiveRules(): Record<string, unknown>[] {
+    return this._db
+      .prepare(
+        "SELECT * FROM memory_rules WHERE is_active ORDER BY scope, priority DESC",
+      )
+      .all() as Record<string, unknown>[];
+  }
+
+  /**
+   * Return all active rules for a given scope.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:33-39
+   */
+  getRulesForScope(scope: string): Record<string, unknown>[] {
+    return this._db
+      .prepare(
+        "SELECT * FROM memory_rules WHERE scope = ? AND is_active " +
+          "ORDER BY priority DESC",
+      )
+      .all(scope) as Record<string, unknown>[];
+  }
+
+  /**
+   * Return all rules including inactive ones.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:47-70
+   */
+  getAllRulesIncludingInactive(): Record<string, unknown>[] {
+    return this._db
+      .prepare(
+        "SELECT * FROM memory_rules ORDER BY scope, priority DESC",
+      )
+      .all() as Record<string, unknown>[];
+  }
 }

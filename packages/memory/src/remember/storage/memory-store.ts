@@ -112,6 +112,28 @@ export interface MemoryStore {
    */
   bumpHeatRaw(memoryId: number, newHeatBase: number): void;
 
+  /**
+   * Async variant of bumpHeatRaw for PG backend.
+   * Optional: present on PgMemoryStore, absent on SqliteMemoryStore.
+   * Callers use: store.bumpHeatRawAsync ? await store.bumpHeatRawAsync(id, h) : store.bumpHeatRaw(id, h)
+   * source: ADR-0042 — async-when-available pattern for PG/SQLite parity.
+   */
+  bumpHeatRawAsync?(memoryId: number, newHeatBase: number): Promise<void>;
+
+  /**
+   * Async variant of getMemory for PG backend.
+   * Optional: present on PgMemoryStore, absent on SqliteMemoryStore.
+   * source: ADR-0042 — async-when-available pattern for PG/SQLite parity.
+   */
+  getMemoryAsync?(memoryId: number): Promise<MemoryItem | null>;
+
+  /**
+   * Async variant of deleteMemory for PG backend.
+   * Optional: present on PgMemoryStore, absent on SqliteMemoryStore.
+   * source: ADR-0042 — async-when-available pattern for PG/SQLite parity.
+   */
+  deleteMemoryAsync?(memoryId: number): Promise<boolean>;
+
   /** Thin wrapper: calls bumpHeatRaw. Kept for backward compat. */
   updateMemoryHeat(memoryId: number, heat: number): void;
 
@@ -481,4 +503,78 @@ export interface MemoryStoreExt extends MemoryStore {
 
   /** Log a consolidation run. */
   logConsolidation(data: Record<string, unknown>): void;
+
+  // ── Prospective memory write ───────────────────────────────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:29-36
+
+  /**
+   * Insert a prospective memory record and return its id.
+   *
+   * postcondition: new row in prospective_memories with is_active = true.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:insertProspectiveMemory
+   */
+  insertProspectiveMemory(data: Record<string, unknown>): number;
+
+  /**
+   * Return the count of currently active prospective memory triggers.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:countActiveTriggers
+   */
+  countActiveTriggers(): number;
+
+  // ── Rules ─────────────────────────────────────────────────────────────
+  //
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_rules.py
+
+  /**
+   * Insert a memory rule and return its id.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:insertRule
+   */
+  insertRule(data: Record<string, unknown>): number;
+
+  /**
+   * Return all active rules, optionally filtered by scope.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:getAllActiveRules
+   */
+  getAllActiveRules(): Record<string, unknown>[];
+
+  /**
+   * Return all active rules for a given scope.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:getRulesForScope
+   */
+  getRulesForScope(scope: string): Record<string, unknown>[];
+
+  /**
+   * Return all rules including inactive ones (for admin/audit).
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:getAllRulesIncludingInactive
+   */
+  getAllRulesIncludingInactive(): Record<string, unknown>[];
+
+  // ── PG-only async variants (optional on SQLite backend) ────────────���───
+  //
+  // These are declared as optional because SqliteMemoryStore uses synchronous
+  // better-sqlite3 and does not need async variants. PgMemoryStore provides
+  // them to avoid the _runSync() throw path.
+  // source: ADR-0042 — async-when-available pattern.
+
+  /** Async variant of insertProspectiveMemory (PG only). */
+  insertProspectiveMemoryAsync?(data: Record<string, unknown>): Promise<number>;
+
+  /** Async variant of countActiveTriggers (PG only). */
+  countActiveTriggersAsync?(): Promise<number>;
+
+  /** Async variant of insertRule (PG only). */
+  insertRuleAsync?(data: Record<string, unknown>): Promise<number>;
+
+  /** Async variant of getAllActiveRules (PG only). */
+  getAllActiveRulesAsync?(): Promise<Record<string, unknown>[]>;
+
+  /** Async variant of getRulesForScope (PG only). */
+  getRulesForScopeAsync?(scope: string): Promise<Record<string, unknown>[]>;
+
+  /** Async variant of getAllRulesIncludingInactive (PG only). */
+  getAllRulesIncludingInactiveAsync?(): Promise<Record<string, unknown>[]>;
 }

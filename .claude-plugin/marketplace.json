@@ -5,7 +5,7 @@
     "email": "admin@ai-architect.tools"
   },
   "metadata": {
-    "description": "Agentic AI — four plugins for Claude Code: persistent memory (Cortex, ported to TS), codebase intelligence (Rust binary kept as subprocess), genius reasoning (zetetic team), and PRD generation. All four share one install / one update path.",
+    "description": "Agentic AI \u2014 four plugins for Claude Code: persistent memory (Cortex, ported to TS), codebase intelligence (Rust binary kept as subprocess), genius reasoning (zetetic team), and PRD generation. All four share one install / one update path.",
     "version": "2026.05",
     "homepage": "https://github.com/cdeust/agentic-ai",
     "repository": "https://github.com/cdeust/agentic-ai"
@@ -14,8 +14,8 @@
     {
       "name": "memory",
       "source": "./plugins/memory/",
-      "description": "Persistent memory for Claude Code — TS port of Cortex. Thermodynamic heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence integration. SQLite by default; PostgreSQL + pgvector when DATABASE_URL is set. 41 published papers as sources. 0.0.23: fix import_sessions/backfill_memories async-on-PG bug — rememberAsync now routes insertMemory through PgMemoryStore.insertMemoryAsync, closing the backfilled:0 regression.",
-      "version": "0.0.23",
+      "description": "Persistent memory for Claude Code \u2014 TS port of Cortex. Thermodynamic heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence integration. SQLite by default; PostgreSQL + pgvector when DATABASE_URL is set. 41 published papers as sources. 0.0.23: fix import_sessions/backfill_memories async-on-PG bug \u2014 rememberAsync now routes insertMemory through PgMemoryStore.insertMemoryAsync, closing the backfilled:0 regression.",
+      "version": "0.1.0",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"
@@ -38,7 +38,7 @@
     {
       "name": "codebase",
       "source": "./plugins/codebase/",
-      "description": "Codebase intelligence — `automatised-pipeline` Rust binary (Cargo crate `ai-architect-mcp`) kept as a subprocess. Indexes Rust/Python/TypeScript into a LadybugDB property graph. Resolves imports + call chains, detects communities via Leiden, traces execution flows. BM25+TF-IDF+RRF hybrid search. Prebuilt binaries for darwin-arm64 / darwin-x86_64 / linux-x86_64 / linux-aarch64 are downloaded from GitHub Releases on first launch.",
+      "description": "Codebase intelligence \u2014 `automatised-pipeline` Rust binary (Cargo crate `ai-architect-mcp`) kept as a subprocess. Indexes Rust/Python/TypeScript into a LadybugDB property graph. Resolves imports + call chains, detects communities via Leiden, traces execution flows. BM25+TF-IDF+RRF hybrid search. Prebuilt binaries for darwin-arm64 / darwin-x86_64 / linux-x86_64 / linux-aarch64 are downloaded from GitHub Releases on first launch.",
       "version": "0.0.6",
       "author": {
         "name": "Clement Deust",

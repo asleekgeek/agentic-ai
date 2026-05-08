@@ -28672,9 +28672,9 @@ var StdioServerTransport = class {
   }
 };
 
-// packages/mcp-servers/memory/dist/index.js
-import { homedir as homedir11 } from "node:os";
-import { join as join21 } from "node:path";
+// packages/mcp-servers/memory/src/index.ts
+import { homedir as homedir12 } from "node:os";
+import { join as join22 } from "node:path";
 
 // node_modules/.pnpm/@anthropic-ai+sdk@0.39.0/node_modules/@anthropic-ai/sdk/version.mjs
 var VERSION = "0.39.0";
@@ -31222,36 +31222,36 @@ var BetaMessageStream = class _BetaMessageStream {
     if (this.ended) {
       throw new AnthropicError(`stream has ended, this shouldn't happen`);
     }
-    const snapshot = __classPrivateFieldGet8(this, _BetaMessageStream_currentMessageSnapshot, "f");
-    if (!snapshot) {
+    const snapshot2 = __classPrivateFieldGet8(this, _BetaMessageStream_currentMessageSnapshot, "f");
+    if (!snapshot2) {
       throw new AnthropicError(`request ended without sending any chunks`);
     }
     __classPrivateFieldSet7(this, _BetaMessageStream_currentMessageSnapshot, void 0, "f");
-    return snapshot;
+    return snapshot2;
   }, _BetaMessageStream_accumulateMessage = function _BetaMessageStream_accumulateMessage2(event) {
-    let snapshot = __classPrivateFieldGet8(this, _BetaMessageStream_currentMessageSnapshot, "f");
+    let snapshot2 = __classPrivateFieldGet8(this, _BetaMessageStream_currentMessageSnapshot, "f");
     if (event.type === "message_start") {
-      if (snapshot) {
+      if (snapshot2) {
         throw new AnthropicError(`Unexpected event order, got ${event.type} before receiving "message_stop"`);
       }
       return event.message;
     }
-    if (!snapshot) {
+    if (!snapshot2) {
       throw new AnthropicError(`Unexpected event order, got ${event.type} before "message_start"`);
     }
     switch (event.type) {
       case "message_stop":
-        return snapshot;
+        return snapshot2;
       case "message_delta":
-        snapshot.stop_reason = event.delta.stop_reason;
-        snapshot.stop_sequence = event.delta.stop_sequence;
-        snapshot.usage.output_tokens = event.usage.output_tokens;
-        return snapshot;
+        snapshot2.stop_reason = event.delta.stop_reason;
+        snapshot2.stop_sequence = event.delta.stop_sequence;
+        snapshot2.usage.output_tokens = event.usage.output_tokens;
+        return snapshot2;
       case "content_block_start":
-        snapshot.content.push(event.content_block);
-        return snapshot;
+        snapshot2.content.push(event.content_block);
+        return snapshot2;
       case "content_block_delta": {
-        const snapshotContent = snapshot.content.at(event.index);
+        const snapshotContent = snapshot2.content.at(event.index);
         switch (event.delta.type) {
           case "text_delta": {
             if (snapshotContent?.type === "text") {
@@ -31296,10 +31296,10 @@ var BetaMessageStream = class _BetaMessageStream {
           default:
             checkNever(event.delta);
         }
-        return snapshot;
+        return snapshot2;
       }
       case "content_block_stop":
-        return snapshot;
+        return snapshot2;
     }
   }, Symbol.asyncIterator)]() {
     const pushQueue = [];
@@ -31947,36 +31947,36 @@ var MessageStream = class _MessageStream {
     if (this.ended) {
       throw new AnthropicError(`stream has ended, this shouldn't happen`);
     }
-    const snapshot = __classPrivateFieldGet9(this, _MessageStream_currentMessageSnapshot, "f");
-    if (!snapshot) {
+    const snapshot2 = __classPrivateFieldGet9(this, _MessageStream_currentMessageSnapshot, "f");
+    if (!snapshot2) {
       throw new AnthropicError(`request ended without sending any chunks`);
     }
     __classPrivateFieldSet8(this, _MessageStream_currentMessageSnapshot, void 0, "f");
-    return snapshot;
+    return snapshot2;
   }, _MessageStream_accumulateMessage = function _MessageStream_accumulateMessage2(event) {
-    let snapshot = __classPrivateFieldGet9(this, _MessageStream_currentMessageSnapshot, "f");
+    let snapshot2 = __classPrivateFieldGet9(this, _MessageStream_currentMessageSnapshot, "f");
     if (event.type === "message_start") {
-      if (snapshot) {
+      if (snapshot2) {
         throw new AnthropicError(`Unexpected event order, got ${event.type} before receiving "message_stop"`);
       }
       return event.message;
     }
-    if (!snapshot) {
+    if (!snapshot2) {
       throw new AnthropicError(`Unexpected event order, got ${event.type} before "message_start"`);
     }
     switch (event.type) {
       case "message_stop":
-        return snapshot;
+        return snapshot2;
       case "message_delta":
-        snapshot.stop_reason = event.delta.stop_reason;
-        snapshot.stop_sequence = event.delta.stop_sequence;
-        snapshot.usage.output_tokens = event.usage.output_tokens;
-        return snapshot;
+        snapshot2.stop_reason = event.delta.stop_reason;
+        snapshot2.stop_sequence = event.delta.stop_sequence;
+        snapshot2.usage.output_tokens = event.usage.output_tokens;
+        return snapshot2;
       case "content_block_start":
-        snapshot.content.push(event.content_block);
-        return snapshot;
+        snapshot2.content.push(event.content_block);
+        return snapshot2;
       case "content_block_delta": {
-        const snapshotContent = snapshot.content.at(event.index);
+        const snapshotContent = snapshot2.content.at(event.index);
         switch (event.delta.type) {
           case "text_delta": {
             if (snapshotContent?.type === "text") {
@@ -32021,10 +32021,10 @@ var MessageStream = class _MessageStream {
           default:
             checkNever2(event.delta);
         }
-        return snapshot;
+        return snapshot2;
       }
       case "content_block_stop":
-        return snapshot;
+        return snapshot2;
     }
   }, Symbol.asyncIterator)]() {
     const pushQueue = [];
@@ -33541,6 +33541,56 @@ var SqliteMemoryStore = class {
     } catch {
     }
   }
+  // ── Prospective memory write ───────────────────────────────────────────
+  /**
+   * Insert a prospective memory record and return its id.
+   *
+   * postcondition: new row in prospective_memories with is_active = true.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+   */
+  insertProspectiveMemory(data) {
+    const result = this._db.prepare("INSERT INTO prospective_memories (content, trigger_condition, trigger_type, target_directory, is_active, triggered_count) VALUES (?, ?, ?, ?, ?, ?)").run(data["content"], data["trigger_condition"], data["trigger_type"] ?? "keyword", data["target_directory"] ?? null, data["is_active"] !== false && data["is_active"] !== 0 ? 1 : 0, data["triggered_count"] ?? 0);
+    return result.lastInsertRowid;
+  }
+  /**
+   * Return the count of currently active prospective memory triggers.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:355
+   */
+  countActiveTriggers() {
+    const row = this._db.prepare("SELECT COUNT(*) as c FROM prospective_memories WHERE is_active").get();
+    return row?.c ?? 0;
+  }
+  // ── Rules ────────────────────────────────────────────────────────────
+  /**
+   * Insert a memory rule and return its id.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:14-31
+   */
+  insertRule(data) {
+    const result = this._db.prepare("INSERT INTO memory_rules (rule_type, scope, scope_value, condition, action, priority, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))").run(data["rule_type"] ?? "soft", data["scope"] ?? "global", data["scope_value"] ?? null, data["condition"], data["action"], data["priority"] ?? 0, data["is_active"] !== false && data["is_active"] !== 0 ? 1 : 0);
+    return result.lastInsertRowid;
+  }
+  /**
+   * Return all active rules ordered by scope and priority descending.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:41-45
+   */
+  getAllActiveRules() {
+    return this._db.prepare("SELECT * FROM memory_rules WHERE is_active ORDER BY scope, priority DESC").all();
+  }
+  /**
+   * Return all active rules for a given scope.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:33-39
+   */
+  getRulesForScope(scope) {
+    return this._db.prepare("SELECT * FROM memory_rules WHERE scope = ? AND is_active ORDER BY priority DESC").all(scope);
+  }
+  /**
+   * Return all rules including inactive ones.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:47-70
+   */
+  getAllRulesIncludingInactive() {
+    return this._db.prepare("SELECT * FROM memory_rules ORDER BY scope, priority DESC").all();
+  }
 };
 
 // packages/memory/dist/remember/storage/pg-store.js
@@ -33812,6 +33862,59 @@ async function insertArchive(client, data, bytesToVector) {
 }
 async function getSchemasForDomain(client, domain) {
   return (await client.query("SELECT * FROM schemas WHERE domain = $1 ORDER BY formation_count DESC", [domain])).rows;
+}
+
+// packages/memory/dist/remember/storage/pg-store-rules.js
+async function insertRule(client, data) {
+  const result = await client.query(`INSERT INTO memory_rules
+       (rule_type, scope, scope_value, condition, action, priority, is_active, created_at)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
+     RETURNING id`, [
+    data.rule_type ?? "soft",
+    data.scope ?? "global",
+    data.scope_value ?? null,
+    data.condition,
+    data.action,
+    data.priority ?? 0,
+    data.is_active !== false
+  ]);
+  const row = result.rows[0];
+  if (row == null)
+    throw new Error("insertRule: no id returned from PG");
+  return row.id;
+}
+async function getAllActiveRules(client) {
+  const result = await client.query("SELECT * FROM memory_rules WHERE is_active ORDER BY scope, priority DESC");
+  return result.rows;
+}
+async function getRulesForScope(client, scope) {
+  const result = await client.query("SELECT * FROM memory_rules WHERE scope = $1 AND is_active ORDER BY priority DESC", [scope]);
+  return result.rows;
+}
+async function getAllRulesIncludingInactive(client) {
+  const result = await client.query("SELECT * FROM memory_rules ORDER BY scope, priority DESC");
+  return result.rows;
+}
+async function countActiveTriggers(client) {
+  const result = await client.query("SELECT COUNT(*) AS c FROM prospective_memories WHERE is_active");
+  return result.rows[0]?.c ?? 0;
+}
+async function insertProspectiveMemory(client, data) {
+  const result = await client.query(`INSERT INTO prospective_memories
+       (content, trigger_condition, trigger_type, target_directory, is_active, triggered_count)
+     VALUES ($1, $2, $3, $4, $5, $6)
+     RETURNING id`, [
+    data.content,
+    data.trigger_condition,
+    data.trigger_type,
+    data.target_directory ?? null,
+    data.is_active !== false,
+    data.triggered_count ?? 0
+  ]);
+  const row = result.rows[0];
+  if (row == null)
+    throw new Error("insertProspectiveMemory: no id returned from PG");
+  return row.id;
 }
 
 // packages/memory/dist/remember/storage/pg-store.js
@@ -34595,6 +34698,121 @@ var PgMemoryStore = class {
   }
   async close() {
     await this._pool.end();
+  }
+  // ── MemoryStoreExt: prospective memory write ──────────────────────────
+  /**
+   * Sync façade — fires-and-forgets the async insertProspectiveMemory.
+   * Returns 0 on PG because we cannot block for the result.
+   * Use insertProspectiveMemoryAsync for the real id.
+   *
+   * source: ADR-0042 — sync wrapper fire-and-forgets async op.
+   */
+  insertProspectiveMemory(data) {
+    void this.runAsync((c2) => insertProspectiveMemory(c2, {
+      content: data["content"],
+      trigger_condition: data["trigger_condition"],
+      trigger_type: data["trigger_type"] ?? "keyword",
+      target_directory: data["target_directory"] ?? null,
+      is_active: data["is_active"] !== false,
+      triggered_count: data["triggered_count"] ?? 0
+    }));
+    return 0;
+  }
+  /**
+   * Async variant — returns the real row id.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:22-38
+   */
+  async insertProspectiveMemoryAsync(data) {
+    return this.runAsync((c2) => insertProspectiveMemory(c2, {
+      content: data["content"],
+      trigger_condition: data["trigger_condition"],
+      trigger_type: data["trigger_type"] ?? "keyword",
+      target_directory: data["target_directory"] ?? null,
+      is_active: data["is_active"] !== false,
+      triggered_count: data["triggered_count"] ?? 0
+    }));
+  }
+  /**
+   * Sync façade for countActiveTriggers. Returns 0 on PG (fire-and-forget).
+   * Use countActiveTriggersAsync for the real count.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
+   */
+  countActiveTriggers() {
+    return 0;
+  }
+  /**
+   * Async variant — returns the real trigger count.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:190
+   */
+  async countActiveTriggersAsync() {
+    return this.runAsync((c2) => countActiveTriggers(c2));
+  }
+  // ── MemoryStoreExt: rules ─────────────────────────────────────────────
+  /**
+   * Sync façade — fires-and-forgets the async insertRule. Returns 0 on PG.
+   * Use insertRuleAsync for the real id.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:14-31
+   */
+  insertRule(data) {
+    void this.runAsync((c2) => insertRule(c2, {
+      rule_type: data["rule_type"] ?? "soft",
+      scope: data["scope"] ?? "global",
+      scope_value: data["scope_value"] ?? null,
+      condition: data["condition"],
+      action: data["action"],
+      priority: data["priority"] ?? 0,
+      is_active: data["is_active"] !== false
+    }));
+    return 0;
+  }
+  /**
+   * Async variant — returns the real rule id.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_rules.py
+   */
+  async insertRuleAsync(data) {
+    return this.runAsync((c2) => insertRule(c2, {
+      rule_type: data["rule_type"] ?? "soft",
+      scope: data["scope"] ?? "global",
+      scope_value: data["scope_value"] ?? null,
+      condition: data["condition"],
+      action: data["action"],
+      priority: data["priority"] ?? 0,
+      is_active: data["is_active"] !== false
+    }));
+  }
+  /**
+   * Sync façade — fires-and-forgets. Returns [] on PG.
+   * Use getAllActiveRulesAsync for real data.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:41-45
+   */
+  getAllActiveRules() {
+    return [];
+  }
+  async getAllActiveRulesAsync() {
+    return this.runAsync((c2) => getAllActiveRules(c2));
+  }
+  /**
+   * Sync façade — returns [] on PG.
+   * Use getRulesForScopeAsync for real data.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:33-39
+   */
+  getRulesForScope(scope) {
+    void scope;
+    return [];
+  }
+  async getRulesForScopeAsync(scope) {
+    return this.runAsync((c2) => getRulesForScope(c2, scope));
+  }
+  /**
+   * Sync façade — returns [] on PG.
+   * Use getAllRulesIncludingInactiveAsync for real data.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py admin listing
+   */
+  getAllRulesIncludingInactive() {
+    return [];
+  }
+  async getAllRulesIncludingInactiveAsync() {
+    return this.runAsync((c2) => getAllRulesIncludingInactive(c2));
   }
   // ── Entity row normalization ──────────────────────────────────────────
   _normalizeEntityRow(row) {
@@ -36783,7 +37001,7 @@ async function drillDownHandler(args, deps) {
   return { cluster_id: clusterId, children: clusterChildren, child_count: clusterChildren.length };
 }
 
-// packages/mcp-servers/memory/dist/tools/recall.js
+// packages/mcp-servers/memory/src/tools/recall.ts
 var RECALL_MAX_RESULTS_CAP = 100;
 var RECALL_DEFAULT_RESULTS = 10;
 var RECALL_MIN_HEAT_DEFAULT = 0.05;
@@ -36794,99 +37012,131 @@ function errorText(tool, err) {
   return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
 }
 function registerRecallTools(server2, deps) {
-  server2.registerTool("recall", {
-    description: "Retrieve memories using multi-signal fusion (vector + BM25 + heat + spreading activation).",
-    inputSchema: {
-      query: external_exports.string().min(1).describe("Search query"),
-      domain: external_exports.string().optional().describe("Domain filter"),
-      directory: external_exports.string().optional().describe("Directory filter"),
-      max_results: external_exports.number().int().min(1).max(RECALL_MAX_RESULTS_CAP).default(RECALL_DEFAULT_RESULTS).describe("Max memories to return"),
-      // source: MCP_TOOLS.md §recall max_results cap=100
-      min_heat: external_exports.number().min(0).max(1).default(RECALL_MIN_HEAT_DEFAULT).describe("Minimum heat threshold"),
-      // source: MCP_TOOLS.md §recall min_heat default=0.05
-      agent_topic: external_exports.string().optional().describe("Agent topic scope")
+  server2.registerTool(
+    "recall",
+    {
+      description: "Retrieve memories using multi-signal fusion (vector + BM25 + heat + spreading activation).",
+      inputSchema: {
+        query: external_exports.string().min(1).describe("Search query"),
+        domain: external_exports.string().optional().describe("Domain filter"),
+        directory: external_exports.string().optional().describe("Directory filter"),
+        max_results: external_exports.number().int().min(1).max(RECALL_MAX_RESULTS_CAP).default(RECALL_DEFAULT_RESULTS).describe("Max memories to return"),
+        // source: MCP_TOOLS.md §recall max_results cap=100
+        min_heat: external_exports.number().min(0).max(1).default(RECALL_MIN_HEAT_DEFAULT).describe("Minimum heat threshold"),
+        // source: MCP_TOOLS.md §recall min_heat default=0.05
+        agent_topic: external_exports.string().optional().describe("Agent topic scope")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await recallHandler(
+          {
+            query: args.query,
+            domain: args.domain,
+            directory: args.directory,
+            max_results: args.max_results,
+            min_heat: args.min_heat,
+            agent_topic: args.agent_topic
+          },
+          deps.store,
+          deps.embedder,
+          DEFAULT_RECALL_SETTINGS
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText("recall", err);
+      }
     }
-  }, async (args) => {
-    try {
-      const response = await recallHandler({
-        query: args.query,
-        domain: args.domain,
-        directory: args.directory,
-        max_results: args.max_results,
-        min_heat: args.min_heat,
-        agent_topic: args.agent_topic
-      }, deps.store, deps.embedder, DEFAULT_RECALL_SETTINGS);
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText("recall", err);
+  );
+  server2.registerTool(
+    "recall_hierarchical",
+    {
+      description: "Retrieve memories using fractal hierarchy \u2014 groups semantically similar results into clusters.",
+      inputSchema: {
+        query: external_exports.string().min(1).describe("Search query"),
+        domain: external_exports.string().optional().describe("Domain filter"),
+        max_results: external_exports.number().int().min(1).max(RECALL_MAX_RESULTS_CAP).default(RECALL_DEFAULT_RESULTS).describe("Max memories"),
+        // source: MCP_TOOLS.md §recall_hierarchical max_results cap=100
+        min_heat: external_exports.number().min(0).max(1).default(RECALL_MIN_HEAT_DEFAULT).describe("Minimum heat"),
+        // source: MCP_TOOLS.md §recall_hierarchical min_heat default=0.05
+        cluster_threshold: external_exports.number().min(0).max(1).default(RECALL_CLUSTER_THRESHOLD_DEFAULT).describe("Cluster similarity threshold")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await recallHierarchicalHandler(
+          {
+            query: args.query,
+            domain: args.domain,
+            max_results: args.max_results,
+            min_heat: args.min_heat,
+            cluster_threshold: args.cluster_threshold
+          },
+          deps.store,
+          deps.embedder,
+          DEFAULT_RECALL_SETTINGS
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText("recall_hierarchical", err);
+      }
     }
-  });
-  server2.registerTool("recall_hierarchical", {
-    description: "Retrieve memories using fractal hierarchy \u2014 groups semantically similar results into clusters.",
-    inputSchema: {
-      query: external_exports.string().min(1).describe("Search query"),
-      domain: external_exports.string().optional().describe("Domain filter"),
-      max_results: external_exports.number().int().min(1).max(RECALL_MAX_RESULTS_CAP).default(RECALL_DEFAULT_RESULTS).describe("Max memories"),
-      // source: MCP_TOOLS.md §recall_hierarchical max_results cap=100
-      min_heat: external_exports.number().min(0).max(1).default(RECALL_MIN_HEAT_DEFAULT).describe("Minimum heat"),
-      // source: MCP_TOOLS.md §recall_hierarchical min_heat default=0.05
-      cluster_threshold: external_exports.number().min(0).max(1).default(RECALL_CLUSTER_THRESHOLD_DEFAULT).describe("Cluster similarity threshold")
+  );
+  server2.registerTool(
+    "navigate_memory",
+    {
+      description: "Navigate memory space using Successor Representation \u2014 returns temporally and semantically adjacent memories.",
+      inputSchema: {
+        memory_id: external_exports.number().int().min(1).describe("Memory ID to navigate from"),
+        max_depth: external_exports.number().int().min(1).max(NAVIGATE_MAX_DEPTH_CAP).default(2).describe("Traversal depth"),
+        include_2d_map: external_exports.boolean().default(false).describe("Include 2D spatial map"),
+        window_hours: external_exports.number().min(0).default(2).describe("Temporal window in hours")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await handler(
+          {
+            memory_id: args.memory_id,
+            max_depth: args.max_depth,
+            include_2d_map: args.include_2d_map,
+            window_hours: args.window_hours
+          },
+          deps.graphPort
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText("navigate_memory", err);
+      }
     }
-  }, async (args) => {
-    try {
-      const response = await recallHierarchicalHandler({
-        query: args.query,
-        domain: args.domain,
-        max_results: args.max_results,
-        min_heat: args.min_heat,
-        cluster_threshold: args.cluster_threshold
-      }, deps.store, deps.embedder, DEFAULT_RECALL_SETTINGS);
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText("recall_hierarchical", err);
+  );
+  server2.registerTool(
+    "drill_down",
+    {
+      description: "Navigate into a fractal memory cluster by cluster_id.",
+      inputSchema: {
+        cluster_id: external_exports.string().min(1).describe("Cluster ID to navigate into"),
+        domain: external_exports.string().optional().describe("Domain filter"),
+        // source: MCP_TOOLS.md §drill_down min_heat=0.05 default value
+        min_heat: external_exports.number().min(0).max(1).default(RECALL_MIN_HEAT_DEFAULT).describe("Minimum heat")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await drillDownHandler(
+          {
+            cluster_id: args.cluster_id,
+            domain: args.domain,
+            min_heat: args.min_heat
+          },
+          { store: deps.store, embedder: deps.embedder }
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText("drill_down", err);
+      }
     }
-  });
-  server2.registerTool("navigate_memory", {
-    description: "Navigate memory space using Successor Representation \u2014 returns temporally and semantically adjacent memories.",
-    inputSchema: {
-      memory_id: external_exports.number().int().min(1).describe("Memory ID to navigate from"),
-      max_depth: external_exports.number().int().min(1).max(NAVIGATE_MAX_DEPTH_CAP).default(2).describe("Traversal depth"),
-      include_2d_map: external_exports.boolean().default(false).describe("Include 2D spatial map"),
-      window_hours: external_exports.number().min(0).default(2).describe("Temporal window in hours")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler({
-        memory_id: args.memory_id,
-        max_depth: args.max_depth,
-        include_2d_map: args.include_2d_map,
-        window_hours: args.window_hours
-      }, deps.graphPort);
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText("navigate_memory", err);
-    }
-  });
-  server2.registerTool("drill_down", {
-    description: "Navigate into a fractal memory cluster by cluster_id.",
-    inputSchema: {
-      cluster_id: external_exports.string().min(1).describe("Cluster ID to navigate into"),
-      domain: external_exports.string().optional().describe("Domain filter"),
-      // source: MCP_TOOLS.md §drill_down min_heat=0.05 default value
-      min_heat: external_exports.number().min(0).max(1).default(RECALL_MIN_HEAT_DEFAULT).describe("Minimum heat")
-    }
-  }, async (args) => {
-    try {
-      const response = await drillDownHandler({
-        cluster_id: args.cluster_id,
-        domain: args.domain,
-        min_heat: args.min_heat
-      }, { store: deps.store, embedder: deps.embedder });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText("drill_down", err);
-    }
-  });
+  );
 }
 
 // packages/memory/dist/remember/predictive-coding.js
@@ -37316,94 +37566,6 @@ function getRecentContents(store, domain) {
     return [];
   }
 }
-function remember(rawArgs, store) {
-  const args = RememberRequestSchema.parse(rawArgs);
-  if (!args.content.trim()) {
-    return { stored: false, reason: "no_content" };
-  }
-  const content = args.content.trim();
-  const tags = args.tags;
-  const force = args.force;
-  const domain = args.domain ?? "";
-  const source = args.source;
-  const agentTopic = args.agent_topic;
-  const isGlobal = args.is_global;
-  const baselineHeat = args.initial_heat !== void 0 ? args.initial_heat : 1;
-  const vecHits = store.searchVectors(Buffer.alloc(0), VECTOR_SEARCH_TOP_K, 0);
-  const similarities = [];
-  let hoursSinceSimilar = null;
-  if (vecHits.length > 0) {
-    for (const [, dist] of vecHits) {
-      similarities.push(Math.max(0, 1 - dist));
-    }
-    const bestId = vecHits[0]?.[0];
-    if (bestId !== void 0) {
-      const bestMem = store.getMemory(bestId);
-      if (bestMem?.created_at) {
-        hoursSinceSimilar = parseHoursSince(bestMem.created_at);
-      }
-    }
-  }
-  let newEntityNames = [];
-  let knownEntityNames = /* @__PURE__ */ new Set();
-  try {
-    newEntityNames = extractEntityNamesFromContent(content);
-    knownEntityNames = new Set(newEntityNames.filter((n3) => store.getEntityByName(n3) !== null));
-  } catch {
-  }
-  const recentContents = getRecentContents(store, domain);
-  const threshold = effectiveThreshold(domain);
-  const [bypass] = determineBypass(force, content, tags);
-  const score = scoreCandidate({
-    content,
-    tags,
-    force,
-    similarities,
-    newEntityNames,
-    knownEntityNames,
-    recentContents,
-    hoursSinceSimilar,
-    threshold
-  });
-  record2(domain, score.shouldStore);
-  if (!score.shouldStore && !bypass) {
-    const importance2 = estimateImportance(content, tags);
-    return buildRejectionResponse(score, importance2);
-  }
-  const heat = applySurpriseBoost(baselineHeat, score.combinedNovelty);
-  const importance = estimateImportance(content, tags);
-  const memoryId = store.insertMemory({
-    content,
-    tags,
-    source,
-    domain,
-    heat,
-    importance,
-    surprise_score: score.combinedNovelty,
-    store_type: "episodic",
-    agent_context: agentTopic,
-    is_global: isGlobal,
-    created_at: args.created_at
-  });
-  try {
-    for (const entityName of newEntityNames) {
-      if (!knownEntityNames.has(entityName)) {
-        const entityId = store.upsertEntity(entityName, "concept", domain);
-        if (entityId > 0) {
-          store.linkMemoryEntity(memoryId, entityId);
-        }
-      }
-    }
-  } catch {
-  }
-  return {
-    stored: true,
-    action: "stored",
-    memory_id: memoryId,
-    heat,
-    is_global: isGlobal
-  };
-}
 async function rememberAsync(rawArgs, store) {
   const args = RememberRequestSchema.parse(rawArgs);
   if (!args.content.trim()) {
@@ -37546,14 +37708,15 @@ function extractEntityNamesFromContent(content) {
 }
 
 // packages/memory/dist/remember/handlers/forget.js
-function forget(args, store) {
+var FORGET_CONTENT_PREVIEW_CHARS = 80;
+async function forgetAsync(args, store) {
   const memoryId = args.memory_id;
   const soft = args.soft ?? false;
   const force = args.force ?? false;
   if (!memoryId || memoryId < 1) {
     return { deleted: false, reason: "no_memory_id" };
   }
-  const mem = store.getMemory(memoryId);
+  const mem = store.getMemoryAsync ? await store.getMemoryAsync(memoryId) : store.getMemory(memoryId);
   if (mem === null) {
     return { deleted: false, reason: "not_found", memory_id: memoryId };
   }
@@ -37566,20 +37729,24 @@ function forget(args, store) {
   }
   if (soft) {
     store.markMemoryStale(memoryId, true);
-    store.bumpHeatRaw(memoryId, 0);
+    if (store.bumpHeatRawAsync) {
+      await store.bumpHeatRawAsync(memoryId, 0);
+    } else {
+      store.bumpHeatRaw(memoryId, 0);
+    }
     return {
       deleted: true,
       method: "soft",
       memory_id: memoryId,
-      content_preview: mem.content.slice(0, 80)
+      content_preview: mem.content.slice(0, FORGET_CONTENT_PREVIEW_CHARS)
     };
   }
-  const deleted = store.deleteMemory(memoryId);
+  const deleted = store.deleteMemoryAsync ? await store.deleteMemoryAsync(memoryId) : store.deleteMemory(memoryId);
   return {
     deleted,
     method: "hard",
     memory_id: memoryId,
-    content_preview: mem.content.slice(0, 80)
+    content_preview: mem.content.slice(0, FORGET_CONTENT_PREVIEW_CHARS)
   };
 }
 
@@ -37603,20 +37770,24 @@ function buildAnchorContent(content, reason) {
   }
   return content;
 }
-function anchor(args, store) {
+async function anchorAsync(args, store) {
   const memoryId = args.memory_id;
   const reason = (args.reason ?? "").trim();
   const isGlobal = args.is_global ?? false;
   if (!memoryId || memoryId < 1) {
     return { anchored: false, error: "memory_id is required and must be >= 1" };
   }
-  const mem = store.getMemory(memoryId);
+  const mem = store.getMemoryAsync ? await store.getMemoryAsync(memoryId) : store.getMemory(memoryId);
   if (mem === null) {
     return { anchored: false, error: `memory not found: ${memoryId}` };
   }
   const tags = buildAnchorTags(mem.tags, reason);
   const content = buildAnchorContent(mem.content, reason);
-  store.bumpHeatRaw(memoryId, 1);
+  if (store.bumpHeatRawAsync) {
+    await store.bumpHeatRawAsync(memoryId, 1);
+  } else {
+    store.bumpHeatRaw(memoryId, 1);
+  }
   store.setMemoryProtected(memoryId, true);
   store.updateMemoryImportance(memoryId, 1);
   store.updateMemoryContent(memoryId, content, tags);
@@ -37631,23 +37802,29 @@ function anchor(args, store) {
 }
 
 // packages/memory/dist/remember/handlers/rate-memory.js
+var CONFIDENCE_MIN_SAMPLES = 3;
+var CONFIDENCE_ROUNDING_FACTOR = 1e4;
+var RATE_CONTENT_PREVIEW_CHARS = 80;
+var WILSON_Z = 1;
+var WILSON_DENOMINATOR_HALVING = 2;
+var WILSON_VARIANCE_CORRECTION = 4;
 function computeMetamemoryConfidence(accessCount, usefulCount) {
-  if (accessCount < 3)
+  if (accessCount < CONFIDENCE_MIN_SAMPLES)
     return null;
-  const z2 = 1;
+  const z2 = WILSON_Z;
   const p2 = usefulCount / accessCount;
   const n3 = accessCount;
-  const numerator = p2 + z2 ** 2 / (2 * n3) - z2 * Math.sqrt((p2 * (1 - p2) + z2 ** 2 / (4 * n3)) / n3);
+  const numerator = p2 + z2 ** 2 / (WILSON_DENOMINATOR_HALVING * n3) - z2 * Math.sqrt((p2 * (1 - p2) + z2 ** 2 / (WILSON_VARIANCE_CORRECTION * n3)) / n3);
   const denominator = 1 + z2 ** 2 / n3;
   return Math.max(0, Math.min(1, numerator / denominator));
 }
-function rateMemory(args, store) {
+async function rateMemoryAsync(args, store) {
   const memoryId = args.memory_id;
   const useful = args.useful;
   if (!memoryId || memoryId < 1) {
     return { rated: false, reason: "no_memory_id" };
   }
-  const mem = store.getMemory(memoryId);
+  const mem = store.getMemoryAsync ? await store.getMemoryAsync(memoryId) : store.getMemory(memoryId);
   if (mem === null) {
     return { rated: false, reason: "not_found", memory_id: memoryId };
   }
@@ -37662,82 +37839,98 @@ function rateMemory(args, store) {
     useful,
     access_count: accessCount,
     useful_count: usefulCount,
-    confidence: Math.round(confidence * 1e4) / 1e4,
-    content_preview: mem.content.slice(0, 80)
+    confidence: Math.round(confidence * CONFIDENCE_ROUNDING_FACTOR) / CONFIDENCE_ROUNDING_FACTOR,
+    content_preview: mem.content.slice(0, RATE_CONTENT_PREVIEW_CHARS)
   };
 }
 
-// packages/mcp-servers/memory/dist/tools/remember.js
+// packages/mcp-servers/memory/src/tools/remember.ts
 function errorText2(tool, err) {
   const message = err instanceof Error ? err.message : String(err);
   return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
 }
 function registerRememberTools(server2, deps) {
-  server2.registerTool("remember", {
-    description: "Store a memory through the predictive coding write gate.",
-    inputSchema: {
-      content: external_exports.string().min(1).describe("Memory content to store"),
-      tags: external_exports.array(external_exports.string()).default([]).describe("Tags for categorisation"),
-      directory: external_exports.string().default("").describe("Project directory"),
-      domain: external_exports.string().optional().describe("Cognitive domain"),
-      source: external_exports.enum(["session", "tool", "user", "consolidation", "import"]).default("user").describe("Memory source"),
-      force: external_exports.boolean().default(false).describe("Bypass write gate"),
-      agent_topic: external_exports.string().default("").describe("Agent topic scope")
+  server2.registerTool(
+    "remember",
+    {
+      description: "Store a memory through the predictive coding write gate.",
+      inputSchema: {
+        content: external_exports.string().min(1).describe("Memory content to store"),
+        tags: external_exports.array(external_exports.string()).default([]).describe("Tags for categorisation"),
+        directory: external_exports.string().default("").describe("Project directory"),
+        domain: external_exports.string().optional().describe("Cognitive domain"),
+        source: external_exports.enum(["session", "tool", "user", "consolidation", "import"]).default("user").describe("Memory source"),
+        force: external_exports.boolean().default(false).describe("Bypass write gate"),
+        agent_topic: external_exports.string().default("").describe("Agent topic scope")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await rememberAsync(args, deps.store);
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText2("remember", err);
+      }
     }
-  }, async (args) => {
-    try {
-      const response = remember(args, deps.store);
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText2("remember", err);
+  );
+  server2.registerTool(
+    "forget",
+    {
+      description: "Delete or soft-delete a memory by integer ID.",
+      inputSchema: {
+        memory_id: external_exports.number().int().min(1).describe("Memory ID to delete"),
+        soft: external_exports.boolean().default(false).describe("Soft-delete (archive rather than purge)"),
+        force: external_exports.boolean().default(false).describe("Force delete even if protected")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await forgetAsync(args, deps.store);
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText2("forget", err);
+      }
     }
-  });
-  server2.registerTool("forget", {
-    description: "Delete or soft-delete a memory by integer ID.",
-    inputSchema: {
-      memory_id: external_exports.number().int().min(1).describe("Memory ID to delete"),
-      soft: external_exports.boolean().default(false).describe("Soft-delete (archive rather than purge)"),
-      force: external_exports.boolean().default(false).describe("Force delete even if protected")
+  );
+  server2.registerTool(
+    "anchor",
+    {
+      description: "Mark a memory as compaction-resistant (heat_base=1.0, no_decay=true, is_protected=true).",
+      inputSchema: {
+        memory_id: external_exports.number().int().min(1).describe("Memory ID to anchor"),
+        reason: external_exports.string().default("").describe("Reason for anchoring")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await anchorAsync(args, deps.store);
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText2("anchor", err);
+      }
     }
-  }, async (args) => {
-    try {
-      const response = forget(args, deps.store);
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText2("forget", err);
+  );
+  server2.registerTool(
+    "rate_memory",
+    {
+      description: "Rate a memory as useful or not to update metamemory confidence and useful_count.",
+      inputSchema: {
+        memory_id: external_exports.number().int().min(1).describe("Memory ID to rate"),
+        useful: external_exports.boolean().describe("Whether the memory was useful")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await rateMemoryAsync(args, deps.store);
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText2("rate_memory", err);
+      }
     }
-  });
-  server2.registerTool("anchor", {
-    description: "Mark a memory as compaction-resistant (heat_base=1.0, no_decay=true, is_protected=true).",
-    inputSchema: {
-      memory_id: external_exports.number().int().min(1).describe("Memory ID to anchor"),
-      reason: external_exports.string().default("").describe("Reason for anchoring")
-    }
-  }, async (args) => {
-    try {
-      const response = anchor(args, deps.store);
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText2("anchor", err);
-    }
-  });
-  server2.registerTool("rate_memory", {
-    description: "Rate a memory as useful or not to update metamemory confidence and useful_count.",
-    inputSchema: {
-      memory_id: external_exports.number().int().min(1).describe("Memory ID to rate"),
-      useful: external_exports.boolean().describe("Whether the memory was useful")
-    }
-  }, async (args) => {
-    try {
-      const response = rateMemory(args, deps.store);
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText2("rate_memory", err);
-    }
-  });
+  );
 }
 
-// packages/mcp-servers/memory/dist/tools/methodology.js
+// packages/mcp-servers/memory/src/tools/methodology.ts
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
@@ -38864,18 +39057,16 @@ function exploreFeatures(args, profiles) {
   }
 }
 
-// packages/mcp-servers/memory/dist/tools/methodology.js
+// packages/mcp-servers/memory/src/tools/methodology.ts
 function methodologyDir() {
   return join(homedir(), ".claude", "methodology");
 }
 function loadProfiles() {
   const profilePath = join(methodologyDir(), "profiles.json");
-  if (!existsSync(profilePath))
-    return { domains: {} };
+  if (!existsSync(profilePath)) return { domains: {} };
   try {
     const raw = JSON.parse(readFileSync(profilePath, "utf-8"));
-    if (!raw.domains)
-      raw.domains = {};
+    if (!raw.domains) raw.domains = {};
     return raw;
   } catch {
     return { domains: {} };
@@ -38886,108 +39077,137 @@ function errorText3(tool, err) {
   return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
 }
 function registerMethodologyTools(server2) {
-  server2.registerTool("query_methodology", {
-    description: "Returns cognitive profile for the current domain (thinking style, entry patterns, blind spots, cross-domain bridges).",
-    inputSchema: {
-      cwd: external_exports.string().optional().describe("Current working directory"),
-      project: external_exports.string().optional().describe("Project identifier"),
-      first_message: external_exports.string().optional().describe("First message of the session")
-    }
-  }, async (args) => {
-    try {
-      const profiles = loadProfiles();
-      const response = queryMethodology({ cwd: args.cwd, project: args.project, firstMessage: args.first_message }, profiles);
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText3("query_methodology", err);
-    }
-  });
-  server2.registerTool("detect_domain", {
-    description: "Lightweight domain classification from cwd/project without full profile assembly.",
-    inputSchema: {
-      cwd: external_exports.string().optional().describe("Current working directory"),
-      project: external_exports.string().optional().describe("Project identifier"),
-      first_message: external_exports.string().optional().describe("First message for hint")
-    }
-  }, async (args) => {
-    try {
-      const profiles = loadProfiles();
-      const response = detectDomainHandler({ cwd: args.cwd, project: args.project, firstMessage: args.first_message }, profiles);
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText3("detect_domain", err);
-    }
-  });
-  server2.registerTool("rebuild_profiles", {
-    description: "Full rescan of all session data to rebuild methodology profiles from scratch.",
-    inputSchema: {
-      domain: external_exports.string().optional().describe("Limit rebuild to a single domain"),
-      force: external_exports.boolean().default(false).describe("Force rebuild even if fresh")
-    }
-  }, async (args) => {
-    try {
-      const existingProfiles = loadProfiles();
-      const skipCheck = checkSkip(existingProfiles, args.force);
-      if (skipCheck.skip) {
-        return { content: [{ type: "text", text: JSON.stringify({
-          rebuilt: skipCheck.domains ?? [],
-          duration_ms: 0,
-          skipped: true,
-          reason: skipCheck.reason
-        }) }] };
+  server2.registerTool(
+    "query_methodology",
+    {
+      description: "Returns cognitive profile for the current domain (thinking style, entry patterns, blind spots, cross-domain bridges).",
+      inputSchema: {
+        cwd: external_exports.string().optional().describe("Current working directory"),
+        project: external_exports.string().optional().describe("Project identifier"),
+        first_message: external_exports.string().optional().describe("First message of the session")
       }
-      const result = rebuildProfiles({
-        byProject: {},
-        existingProfiles,
-        targetDomain: args.domain
-      });
-      return { content: [{ type: "text", text: JSON.stringify({
-        rebuilt: result.domains,
-        total_sessions: result.totalSessions,
-        duration_ms: 0
-      }) }] };
-    } catch (err) {
-      return errorText3("rebuild_profiles", err);
+    },
+    async (args) => {
+      try {
+        const profiles = loadProfiles();
+        const response = queryMethodology(
+          { cwd: args.cwd, project: args.project, firstMessage: args.first_message },
+          profiles
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText3("query_methodology", err);
+      }
     }
-  });
-  server2.registerTool("list_domains", {
-    description: "Overview of all detected cognitive domains with session counts and last-seen dates.",
-    inputSchema: {}
-  }, async (_args) => {
-    try {
-      const profiles = loadProfiles();
-      const domains = Object.entries(profiles.domains).map(([id2, domain]) => ({
-        id: id2,
-        label: domain.label ?? id2,
-        session_count: domain.sessionCount ?? 0,
-        last_active: domain.lastUpdated ?? null,
-        confidence: domain.confidence ?? 0,
-        projects: domain.projects ?? []
-      }));
-      return { content: [{ type: "text", text: JSON.stringify({ domains }) }] };
-    } catch (err) {
-      return errorText3("list_domains", err);
+  );
+  server2.registerTool(
+    "detect_domain",
+    {
+      description: "Lightweight domain classification from cwd/project without full profile assembly.",
+      inputSchema: {
+        cwd: external_exports.string().optional().describe("Current working directory"),
+        project: external_exports.string().optional().describe("Project identifier"),
+        first_message: external_exports.string().optional().describe("First message for hint")
+      }
+    },
+    async (args) => {
+      try {
+        const profiles = loadProfiles();
+        const response = detectDomainHandler(
+          { cwd: args.cwd, project: args.project, firstMessage: args.first_message },
+          profiles
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText3("detect_domain", err);
+      }
     }
-  });
-  server2.registerTool("explore_features", {
-    description: "Explore interpretability features: persona vector, attribution trace, crosscoder patterns.",
-    inputSchema: {
-      mode: external_exports.enum(["features", "persona", "attribution", "crosscoder"]).describe("Exploration mode"),
-      domain: external_exports.string().optional().describe("Domain filter"),
-      compare_domain: external_exports.string().optional().describe("Domain to compare against")
+  );
+  server2.registerTool(
+    "rebuild_profiles",
+    {
+      description: "Full rescan of all session data to rebuild methodology profiles from scratch.",
+      inputSchema: {
+        domain: external_exports.string().optional().describe("Limit rebuild to a single domain"),
+        force: external_exports.boolean().default(false).describe("Force rebuild even if fresh")
+      }
+    },
+    async (args) => {
+      try {
+        const existingProfiles = loadProfiles();
+        const skipCheck = checkSkip(existingProfiles, args.force);
+        if (skipCheck.skip) {
+          return { content: [{ type: "text", text: JSON.stringify({
+            rebuilt: skipCheck.domains ?? [],
+            duration_ms: 0,
+            skipped: true,
+            reason: skipCheck.reason
+          }) }] };
+        }
+        const result = rebuildProfiles({
+          byProject: {},
+          existingProfiles,
+          targetDomain: args.domain
+        });
+        return { content: [{ type: "text", text: JSON.stringify({
+          rebuilt: result.domains,
+          total_sessions: result.totalSessions,
+          duration_ms: 0
+        }) }] };
+      } catch (err) {
+        return errorText3("rebuild_profiles", err);
+      }
     }
-  }, async (args) => {
-    try {
-      const profiles = loadProfiles();
-      const response = exploreFeatures({ mode: args.mode, domain: args.domain, compareDomain: args.compare_domain }, profiles);
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText3("explore_features", err);
+  );
+  server2.registerTool(
+    "list_domains",
+    {
+      description: "Overview of all detected cognitive domains with session counts and last-seen dates.",
+      inputSchema: {}
+    },
+    async (_args) => {
+      try {
+        const profiles = loadProfiles();
+        const domains = Object.entries(profiles.domains).map(([id2, domain]) => ({
+          id: id2,
+          label: domain.label ?? id2,
+          session_count: domain.sessionCount ?? 0,
+          last_active: domain.lastUpdated ?? null,
+          confidence: domain.confidence ?? 0,
+          projects: domain.projects ?? []
+        }));
+        return { content: [{ type: "text", text: JSON.stringify({ domains }) }] };
+      } catch (err) {
+        return errorText3("list_domains", err);
+      }
     }
-  });
+  );
+  server2.registerTool(
+    "explore_features",
+    {
+      description: "Explore interpretability features: persona vector, attribution trace, crosscoder patterns.",
+      inputSchema: {
+        mode: external_exports.enum(["features", "persona", "attribution", "crosscoder"]).describe("Exploration mode"),
+        domain: external_exports.string().optional().describe("Domain filter"),
+        compare_domain: external_exports.string().optional().describe("Domain to compare against")
+      }
+    },
+    async (args) => {
+      try {
+        const profiles = loadProfiles();
+        const response = exploreFeatures(
+          { mode: args.mode, domain: args.domain, compareDomain: args.compare_domain },
+          profiles
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText3("explore_features", err);
+      }
+    }
+  );
 }
 
-// packages/mcp-servers/memory/dist/tools/consolidation.js
+// packages/mcp-servers/memory/src/tools/consolidation.ts
 import { existsSync as existsSync2, readFileSync as readFileSync2, mkdirSync, writeFileSync } from "node:fs";
 import { join as join2 } from "node:path";
 import { homedir as homedir2 } from "node:os";
@@ -39579,17 +39799,17 @@ function formatCreatedDate(memory) {
     return String(created).slice(0, 10);
   }
 }
-function truncateTagRepr(summary, tagPart, dateStr, entityList) {
-  let tagRepr = `${summary} | Tags: ${tagPart} | Created: ${dateStr}`;
+function truncateTagRepr(summary2, tagPart, dateStr, entityList) {
+  let tagRepr = `${summary2} | Tags: ${tagPart} | Created: ${dateStr}`;
   if (tagRepr.length > 200) {
     const suffix = ` | Tags: ${tagPart} | Created: ${dateStr}`;
     const available = 200 - suffix.length;
-    let s2 = summary;
+    let s2 = summary2;
     let tp = tagPart;
     if (available > 10) {
-      s2 = summary.slice(0, available - 3) + "...";
+      s2 = summary2.slice(0, available - 3) + "...";
     } else {
-      s2 = summary.slice(0, 30) + "...";
+      s2 = summary2.slice(0, 30) + "...";
       tp = entityList.length > 0 ? entityList.slice(0, 2).join(", ") : "general";
     }
     tagRepr = `${s2} | Tags: ${tp} | Created: ${dateStr}`;
@@ -39601,10 +39821,10 @@ function truncateTagRepr(summary, tagPart, dateStr, entityList) {
 function generateTag(content, memory) {
   const entityList = extractTagEntities(content, memory);
   const sentences = splitSentences(content);
-  const summary = sentences[0] ?? content.slice(0, 80);
+  const summary2 = sentences[0] ?? content.slice(0, 80);
   const dateStr = formatCreatedDate(memory);
   const tagPart = entityList.length > 0 ? entityList.join(", ") : "general";
-  return truncateTagRepr(summary, tagPart, dateStr, entityList);
+  return truncateTagRepr(summary2, tagPart, dateStr, entityList);
 }
 async function compressFullToGist(store, embeddings, mem, stats) {
   const original = mem["content"];
@@ -41050,11 +41270,11 @@ function summarizeClusters(clusters) {
     const texts = mems.map((m2) => m2["content"] ?? "").filter((t2) => t2.length > 0);
     if (texts.length === 0)
       continue;
-    const summary = `[${texts.length} memories] ${centroidSentence(texts)}`;
+    const summary2 = `[${texts.length} memories] ${centroidSentence(texts)}`;
     results.push({
       cluster_id: cluster["cluster_id"],
       level: cluster["level"] ?? 1,
-      summary,
+      summary: summary2,
       memory_count: texts.length
     });
   }
@@ -41388,7 +41608,7 @@ async function handler2(store, settings, embeddings, args = {}) {
   };
 }
 
-// packages/mcp-servers/memory/dist/tools/consolidation.js
+// packages/mcp-servers/memory/src/tools/consolidation.ts
 var ROUNDING_FACTOR_4DP = 1e4;
 var EMA_ALPHA = 0.1;
 function methodologyDir2() {
@@ -41396,12 +41616,10 @@ function methodologyDir2() {
 }
 function loadProfiles2() {
   const profilePath = join2(methodologyDir2(), "profiles.json");
-  if (!existsSync2(profilePath))
-    return { domains: {} };
+  if (!existsSync2(profilePath)) return { domains: {} };
   try {
     const raw = JSON.parse(readFileSync2(profilePath, "utf-8"));
-    if (!raw.domains)
-      raw.domains = {};
+    if (!raw.domains) raw.domains = {};
     return raw;
   } catch {
     return { domains: {} };
@@ -41526,162 +41744,183 @@ function errorText4(tool, err) {
   return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
 }
 function registerConsolidationTools(server2, deps) {
-  server2.registerTool("consolidate", {
-    description: "Run memory maintenance pipeline: decay, compression, CLS transfer, memify, pruning.",
-    inputSchema: {
-      decay: external_exports.boolean().default(true).describe("Run decay cycle"),
-      compress: external_exports.boolean().default(true).describe("Run compression cycle"),
-      cls: external_exports.boolean().default(true).describe("Run CLS transfer"),
-      memify: external_exports.boolean().default(true).describe("Run memify cycle"),
-      deep: external_exports.boolean().default(false).describe("Deep consolidation (slower)")
+  server2.registerTool(
+    "consolidate",
+    {
+      description: "Run memory maintenance pipeline: decay, compression, CLS transfer, memify, pruning.",
+      inputSchema: {
+        decay: external_exports.boolean().default(true).describe("Run decay cycle"),
+        compress: external_exports.boolean().default(true).describe("Run compression cycle"),
+        cls: external_exports.boolean().default(true).describe("Run CLS transfer"),
+        memify: external_exports.boolean().default(true).describe("Run memify cycle"),
+        deep: external_exports.boolean().default(false).describe("Deep consolidation (slower)")
+      }
+    },
+    async (args) => {
+      try {
+        const consolidationStore = toConsolidationStore(deps.store);
+        const result = await handler2(
+          consolidationStore,
+          DEFAULT_CONSOLIDATION_SETTINGS,
+          NULL_EMBEDDING_ENGINE,
+          {
+            decay: args.decay,
+            compress: args.compress,
+            cls: args.cls,
+            memify: args.memify,
+            deep: args.deep
+          }
+        );
+        return { content: [{ type: "text", text: JSON.stringify(result) }] };
+      } catch (err) {
+        return errorText4("consolidate", err);
+      }
     }
-  }, async (args) => {
-    try {
-      const consolidationStore = toConsolidationStore(deps.store);
-      const result = await handler2(consolidationStore, DEFAULT_CONSOLIDATION_SETTINGS, NULL_EMBEDDING_ENGINE, {
-        decay: args.decay,
-        compress: args.compress,
-        cls: args.cls,
-        memify: args.memify,
-        deep: args.deep
-      });
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
-    } catch (err) {
-      return errorText4("consolidate", err);
-    }
-  });
-  server2.registerTool("checkpoint", {
-    description: "Save or restore working state for hippocampal replay.",
-    inputSchema: {
-      action: external_exports.enum(["save", "restore", "list"]).describe("Checkpoint action"),
-      directory: external_exports.string().default("").describe("Project directory"),
-      current_task: external_exports.string().default("").describe("Current task description"),
-      files_being_edited: external_exports.array(external_exports.string()).default([]).describe("Files currently open"),
-      key_decisions: external_exports.array(external_exports.string()).default([]).describe("Key decisions made"),
-      open_questions: external_exports.array(external_exports.string()).default([]).describe("Open questions"),
-      next_steps: external_exports.array(external_exports.string()).default([]).describe("Planned next steps"),
-      active_errors: external_exports.array(external_exports.string()).default([]).describe("Active errors"),
-      custom_context: external_exports.string().default("").describe("Extra context"),
-      session_id: external_exports.string().default("default").describe("Session ID")
-    }
-  }, async (args) => {
-    try {
-      if (args.action === "save") {
-        const content = [
-          `[CHECKPOINT] session=${args.session_id}`,
-          `task: ${args.current_task}`,
-          `files: ${args.files_being_edited.join(", ")}`,
-          `decisions: ${args.key_decisions.join("; ")}`,
-          `open: ${args.open_questions.join("; ")}`,
-          `next: ${args.next_steps.join("; ")}`,
-          `errors: ${args.active_errors.join("; ")}`,
-          args.custom_context
-        ].filter(Boolean).join("\n");
-        const memId = deps.store.insertMemory({
-          content,
-          tags: ["_checkpoint", `session:${args.session_id}`],
-          source: "session",
-          domain: "",
-          heat: 1,
-          importance: 1,
-          store_type: "episodic"
-        });
-        deps.store.setMemoryProtected(memId, true);
+  );
+  server2.registerTool(
+    "checkpoint",
+    {
+      description: "Save or restore working state for hippocampal replay.",
+      inputSchema: {
+        action: external_exports.enum(["save", "restore", "list"]).describe("Checkpoint action"),
+        directory: external_exports.string().default("").describe("Project directory"),
+        current_task: external_exports.string().default("").describe("Current task description"),
+        files_being_edited: external_exports.array(external_exports.string()).default([]).describe("Files currently open"),
+        key_decisions: external_exports.array(external_exports.string()).default([]).describe("Key decisions made"),
+        open_questions: external_exports.array(external_exports.string()).default([]).describe("Open questions"),
+        next_steps: external_exports.array(external_exports.string()).default([]).describe("Planned next steps"),
+        active_errors: external_exports.array(external_exports.string()).default([]).describe("Active errors"),
+        custom_context: external_exports.string().default("").describe("Extra context"),
+        session_id: external_exports.string().default("default").describe("Session ID")
+      }
+    },
+    async (args) => {
+      try {
+        if (args.action === "save") {
+          const content = [
+            `[CHECKPOINT] session=${args.session_id}`,
+            `task: ${args.current_task}`,
+            `files: ${args.files_being_edited.join(", ")}`,
+            `decisions: ${args.key_decisions.join("; ")}`,
+            `open: ${args.open_questions.join("; ")}`,
+            `next: ${args.next_steps.join("; ")}`,
+            `errors: ${args.active_errors.join("; ")}`,
+            args.custom_context
+          ].filter(Boolean).join("\n");
+          const memId = deps.store.insertMemory({
+            content,
+            tags: ["_checkpoint", `session:${args.session_id}`],
+            source: "session",
+            domain: "",
+            heat: 1,
+            importance: 1,
+            store_type: "episodic"
+          });
+          deps.store.setMemoryProtected(memId, true);
+          return { content: [{ type: "text", text: JSON.stringify({
+            action: "save",
+            checkpoint_id: String(memId),
+            session_id: args.session_id
+          }) }] };
+        }
         return { content: [{ type: "text", text: JSON.stringify({
-          action: "save",
-          checkpoint_id: String(memId),
-          session_id: args.session_id
+          action: args.action,
+          checkpoint: null,
+          note: "checkpoint list/restore: query hot memories tagged _checkpoint"
         }) }] };
+      } catch (err) {
+        return errorText4("checkpoint", err);
       }
-      return { content: [{ type: "text", text: JSON.stringify({
-        action: args.action,
-        checkpoint: null,
-        note: "checkpoint list/restore: query hot memories tagged _checkpoint"
-      }) }] };
-    } catch (err) {
-      return errorText4("checkpoint", err);
     }
-  });
-  server2.registerTool("memory_stats", {
-    description: "Memory system diagnostics \u2014 counts, heat distribution, store sizes.",
-    inputSchema: {}
-  }, async (_args) => {
-    try {
-      const allMems = deps.store.getAllMemoriesForDecay();
-      const total = allMems.length;
-      const episodic = allMems.filter((m2) => m2["store_type"] === "episodic").length;
-      const semantic = allMems.filter((m2) => m2["store_type"] === "semantic").length;
-      const active = allMems.filter((m2) => !m2["is_stale"] && !m2["is_archived"]).length;
-      const stale = allMems.filter((m2) => m2["is_stale"]).length;
-      const protected_ = allMems.filter((m2) => m2["is_protected"]).length;
-      const avgHeat = total > 0 ? Math.round(allMems.reduce((s2, m2) => s2 + (m2["heat"] ?? 0), 0) / total * ROUNDING_FACTOR_4DP) / ROUNDING_FACTOR_4DP : 0;
-      const domainCounts = {};
-      for (const m2 of allMems) {
-        const d2 = m2["domain"] ?? "";
-        domainCounts[d2] = (domainCounts[d2] ?? 0) + 1;
+  );
+  server2.registerTool(
+    "memory_stats",
+    {
+      description: "Memory system diagnostics \u2014 counts, heat distribution, store sizes.",
+      inputSchema: {}
+    },
+    async (_args) => {
+      try {
+        const allMems = deps.store.getAllMemoriesForDecay();
+        const total = allMems.length;
+        const episodic = allMems.filter((m2) => m2["store_type"] === "episodic").length;
+        const semantic = allMems.filter((m2) => m2["store_type"] === "semantic").length;
+        const active = allMems.filter((m2) => !m2["is_stale"] && !m2["is_archived"]).length;
+        const stale = allMems.filter((m2) => m2["is_stale"]).length;
+        const protected_ = allMems.filter((m2) => m2["is_protected"]).length;
+        const avgHeat = total > 0 ? Math.round(allMems.reduce((s2, m2) => s2 + (m2["heat"] ?? 0), 0) / total * ROUNDING_FACTOR_4DP) / ROUNDING_FACTOR_4DP : 0;
+        const domainCounts = {};
+        for (const m2 of allMems) {
+          const d2 = m2["domain"] ?? "";
+          domainCounts[d2] = (domainCounts[d2] ?? 0) + 1;
+        }
+        return { content: [{ type: "text", text: JSON.stringify({
+          total_memories: total,
+          episodic_count: episodic,
+          semantic_count: semantic,
+          active_count: active,
+          stale_count: stale,
+          protected_count: protected_,
+          avg_heat: avgHeat,
+          domains: domainCounts
+        }) }] };
+      } catch (err) {
+        return errorText4("memory_stats", err);
       }
-      return { content: [{ type: "text", text: JSON.stringify({
-        total_memories: total,
-        episodic_count: episodic,
-        semantic_count: semantic,
-        active_count: active,
-        stale_count: stale,
-        protected_count: protected_,
-        avg_heat: avgHeat,
-        domains: domainCounts
-      }) }] };
-    } catch (err) {
-      return errorText4("memory_stats", err);
     }
-  });
-  server2.registerTool("record_session_end", {
-    description: "Incremental EMA profile update after a session ends.",
-    inputSchema: {
-      session_id: external_exports.string().min(1).describe("Session identifier"),
-      domain: external_exports.string().optional().describe("Cognitive domain"),
-      tools_used: external_exports.array(external_exports.string()).optional().describe("Tools used in this session"),
-      duration: external_exports.number().optional().describe("Session duration in seconds"),
-      turn_count: external_exports.number().int().optional().describe("Number of conversation turns"),
-      keywords: external_exports.array(external_exports.string()).optional().describe("Session keywords"),
-      cwd: external_exports.string().optional().describe("Working directory"),
-      project: external_exports.string().optional().describe("Project identifier")
-    }
-  }, async (args) => {
-    try {
-      const profiles = loadProfiles2();
-      const domainId = args.domain ?? "unknown";
-      if (domainId && profiles.domains[domainId]) {
-        const dp = profiles.domains[domainId];
-        const alpha = EMA_ALPHA;
-        if (args.tools_used && dp.toolPreferences) {
-          for (const tool of args.tools_used) {
-            const prev = dp.toolPreferences[tool];
-            if (prev) {
-              prev["ratio"] = (1 - alpha) * (prev["ratio"] ?? 0) + alpha;
-            } else {
-              dp.toolPreferences[tool] = { ratio: alpha, avgPerSession: 1 };
+  );
+  server2.registerTool(
+    "record_session_end",
+    {
+      description: "Incremental EMA profile update after a session ends.",
+      inputSchema: {
+        session_id: external_exports.string().min(1).describe("Session identifier"),
+        domain: external_exports.string().optional().describe("Cognitive domain"),
+        tools_used: external_exports.array(external_exports.string()).optional().describe("Tools used in this session"),
+        duration: external_exports.number().optional().describe("Session duration in seconds"),
+        turn_count: external_exports.number().int().optional().describe("Number of conversation turns"),
+        keywords: external_exports.array(external_exports.string()).optional().describe("Session keywords"),
+        cwd: external_exports.string().optional().describe("Working directory"),
+        project: external_exports.string().optional().describe("Project identifier")
+      }
+    },
+    async (args) => {
+      try {
+        const profiles = loadProfiles2();
+        const domainId = args.domain ?? "unknown";
+        if (domainId && profiles.domains[domainId]) {
+          const dp = profiles.domains[domainId];
+          const alpha = EMA_ALPHA;
+          if (args.tools_used && dp.toolPreferences) {
+            for (const tool of args.tools_used) {
+              const prev = dp.toolPreferences[tool];
+              if (prev) {
+                prev["ratio"] = (1 - alpha) * (prev["ratio"] ?? 0) + alpha;
+              } else {
+                dp.toolPreferences[tool] = { ratio: alpha, avgPerSession: 1 };
+              }
             }
           }
+          dp.sessionCount = (dp.sessionCount ?? 0) + 1;
+          dp.lastUpdated = (/* @__PURE__ */ new Date()).toISOString();
+          saveProfiles(profiles);
         }
-        dp.sessionCount = (dp.sessionCount ?? 0) + 1;
-        dp.lastUpdated = (/* @__PURE__ */ new Date()).toISOString();
-        saveProfiles(profiles);
+        return { content: [{ type: "text", text: JSON.stringify({
+          updated: true,
+          domain: domainId,
+          session_id: args.session_id
+        }) }] };
+      } catch (err) {
+        return errorText4("record_session_end", err);
       }
-      return { content: [{ type: "text", text: JSON.stringify({
-        updated: true,
-        domain: domainId,
-        session_id: args.session_id
-      }) }] };
-    } catch (err) {
-      return errorText4("record_session_end", err);
     }
-  });
+  );
 }
 
-// packages/mcp-servers/memory/dist/tools/management.js
+// packages/mcp-servers/memory/src/tools/management.ts
 import { existsSync as existsSync6, readFileSync as readFileSync4 } from "node:fs";
-import { join as join5 } from "node:path";
-import { homedir as homedir4 } from "node:os";
+import { join as join6 } from "node:path";
+import { homedir as homedir5 } from "node:os";
 
 // packages/memory/dist/import/handler.js
 import { join as join3 } from "node:path";
@@ -42063,11 +42302,11 @@ async function processSingleFile(filePath, projectName, domainFilter, minImporta
   const records = readHeadTail(filePath);
   if (records.length === 0)
     return [0, 0, 0, false];
-  const summary = extractSessionSummary(records);
+  const summary2 = extractSessionSummary(records);
   const items = extractMemorableItems(records, minImportance);
   if (items.length === 0)
     return [0, 0, 0, true];
-  const sessionDomain = detectDomainFromPath(summary.cwd);
+  const sessionDomain = detectDomainFromPath(summary2.cwd);
   if (domainFilter && sessionDomain !== domainFilter) {
     return [0, 0, items.length, true];
   }
@@ -42589,7 +42828,7 @@ function buildStageCounts(discoveries) {
     cicd: discoveries.filter((d2) => d2.tags.includes("ci-cd")).length
   };
 }
-function storeDiscoveries(discoveries, root, domain, store) {
+async function storeDiscoveriesAsync(discoveries, root, domain, store) {
   let stored = 0;
   let skipped = 0;
   const memoryIds = [];
@@ -42605,9 +42844,18 @@ function storeDiscoveries(discoveries, root, domain, store) {
         source: "seed_project",
         importance: initialHeat
       };
-      const mid = store.insertMemory(insertData);
+      let mid;
+      if (store.insertMemoryAsync) {
+        mid = await store.insertMemoryAsync(insertData);
+      } else {
+        mid = store.insertMemory(insertData);
+      }
       if (mid > 0) {
-        store.bumpHeatRaw(mid, initialHeat);
+        if (store.bumpHeatRawAsync) {
+          await store.bumpHeatRawAsync(mid, initialHeat);
+        } else {
+          store.bumpHeatRaw(mid, initialHeat);
+        }
         stored++;
         memoryIds.push(mid);
       } else {
@@ -42638,7 +42886,7 @@ async function handler3(args, deps) {
   if (typeof storeExt.deleteMemoriesByTag === "function") {
     purgedStale = storeExt.deleteMemoriesByTag("seeded", domain);
   }
-  const { stored, skipped, memoryIds } = storeDiscoveries(allDiscoveries, root, domain, deps.store);
+  const { stored, skipped, memoryIds } = await storeDiscoveriesAsync(allDiscoveries, root, domain, deps.store);
   return {
     seeded: true,
     directory: root,
@@ -42656,16 +42904,84 @@ var schema = {
   description: "Bootstrap the memory store from an existing codebase via a five-stage structural sweep (config extraction, documentation harvesting, entry-point scan, CI/CD detection, structural summary). Each discovery is stored through the standard write gate. Distinct from codebase_analyze (tree-sitter AST per file, much deeper). Returns counts and stored memory IDs."
 };
 
-// packages/mcp-servers/memory/dist/tools/management.js
+// packages/memory/dist/shared/telemetry.js
+import { appendFileSync, mkdirSync as mkdirSync2 } from "node:fs";
+import { join as join5 } from "node:path";
+import { homedir as homedir4 } from "node:os";
+var METHODOLOGY_DIR = join5(homedir4(), ".claude", "methodology");
+var LOG_PATH = join5(METHODOLOGY_DIR, "telemetry.jsonl");
+var ROUND_3DP = 1e3;
+try {
+  mkdirSync2(METHODOLOGY_DIR, { recursive: true });
+} catch {
+}
+function _disabled() {
+  return process.env["CORTEX_TELEMETRY_DISABLED"] === "1";
+}
+var _counters = /* @__PURE__ */ new Map();
+function snapshot() {
+  const result = {};
+  for (const [op, c2] of _counters.entries()) {
+    result[op] = { ...c2 };
+  }
+  return result;
+}
+var _READ_OPS = /* @__PURE__ */ new Set([
+  "recall",
+  "recall_hierarchical",
+  "navigate_memory",
+  "get_causal_chain",
+  "drill_down"
+]);
+var _WRITE_OPS = /* @__PURE__ */ new Set([
+  "remember",
+  "forget",
+  "validate_memory",
+  "rate_memory"
+]);
+function ratioReadsWrites(snap) {
+  const s2 = snap ?? snapshot();
+  let reads = 0;
+  let writes = 0;
+  for (const [op, c2] of Object.entries(s2)) {
+    const count = c2["count"] ?? 0;
+    if (_READ_OPS.has(op))
+      reads += count;
+    if (_WRITE_OPS.has(op))
+      writes += count;
+  }
+  return reads / Math.max(writes, 1);
+}
+function summary() {
+  const snap = snapshot();
+  const derived = {};
+  for (const [op, c2] of Object.entries(snap)) {
+    const count = Math.max(c2["count"] ?? 0, 1);
+    derived[op] = {
+      // source: cortex@ed33435 mcp_server/core/telemetry.py:161-162 — round(sum/count, 3), round(max, 3)
+      avg_latency_ms: Math.round((c2["latency_ms_sum"] ?? 0) / count * ROUND_3DP) / ROUND_3DP,
+      max_latency_ms: Math.round((c2["latency_ms_max"] ?? 0) * ROUND_3DP) / ROUND_3DP
+    };
+  }
+  return {
+    counters: snap,
+    derived,
+    // source: cortex@ed33435 mcp_server/core/telemetry.py:167 — round(ratio_reads_writes, 3)
+    ratio_reads_writes: Math.round(ratioReadsWrites(snap) * ROUND_3DP) / ROUND_3DP,
+    log_path: LOG_PATH,
+    disabled: _disabled()
+  };
+}
+
+// packages/mcp-servers/memory/src/tools/management.ts
 var VALIDATE_STALENESS_DEFAULT = 0.5;
 var VALIDATE_ERROR_CAP = 10;
 var SEED_MAX_FILE_SIZE_KB = 64;
 var BACKFILL_MAX_FILES_DEFAULT = 20;
 var BACKFILL_MIN_IMPORTANCE = 0.35;
 function loadProfilesRaw() {
-  const profilePath = join5(homedir4(), ".claude", "methodology", "profiles.json");
-  if (!existsSync6(profilePath))
-    return { domains: {} };
+  const profilePath = join6(homedir5(), ".claude", "methodology", "profiles.json");
+  if (!existsSync6(profilePath)) return { domains: {} };
   try {
     return JSON.parse(readFileSync4(profilePath, "utf-8"));
   } catch {
@@ -42677,156 +42993,186 @@ function errorText5(tool, err) {
   return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
 }
 function registerManagementTools(server2, deps) {
-  server2.registerTool("validate_memory", {
-    description: "Validate memories against current filesystem state (mark stale if referenced files no longer exist).",
-    inputSchema: {
-      memory_id: external_exports.number().int().optional().describe("Specific memory ID or null for batch"),
-      domain: external_exports.string().optional().describe("Domain filter"),
-      directory: external_exports.string().optional().describe("Directory filter"),
-      base_dir: external_exports.string().default("").describe("Base directory for path resolution"),
-      staleness_threshold: external_exports.number().min(0).max(1).default(VALIDATE_STALENESS_DEFAULT).describe("Heat threshold for stale mark"),
-      dry_run: external_exports.boolean().default(false).describe("Preview without writing")
-    }
-  }, async (args) => {
-    try {
-      const allMems = deps.store.getAllMemoriesForDecay();
-      const candidates = args.memory_id !== void 0 ? allMems.filter((m2) => m2["id"] === args.memory_id) : allMems.filter((m2) => {
-        if (args.domain && m2["domain"] !== args.domain)
-          return false;
-        if (args.directory && !String(m2["directory"] ?? "").startsWith(args.directory))
-          return false;
-        return true;
-      });
-      let validated = 0;
-      let staleMarked = 0;
-      const errors = [];
-      for (const mem of candidates) {
-        try {
-          validated++;
-          const heat = mem["heat"] ?? 0;
-          if (heat >= args.staleness_threshold)
-            continue;
-          const tags = mem["tags"] ?? [];
-          const fileRef = tags.find((t2) => t2.startsWith("file:") || t2.startsWith("path:"));
-          if (!fileRef)
-            continue;
-          const filePath = fileRef.replace(/^(?:file:|path:)/, "");
-          const absPath = args.base_dir ? join5(args.base_dir, filePath) : filePath;
-          if (existsSync6(absPath))
-            continue;
-          if (!args.dry_run) {
-            deps.store.markMemoryStale(Number(mem["id"]), true);
-          }
-          staleMarked++;
-        } catch (e2) {
-          errors.push(String(e2));
-        }
+  server2.registerTool(
+    "validate_memory",
+    {
+      description: "Validate memories against current filesystem state (mark stale if referenced files no longer exist).",
+      inputSchema: {
+        memory_id: external_exports.number().int().optional().describe("Specific memory ID or null for batch"),
+        domain: external_exports.string().optional().describe("Domain filter"),
+        directory: external_exports.string().optional().describe("Directory filter"),
+        base_dir: external_exports.string().default("").describe("Base directory for path resolution"),
+        staleness_threshold: external_exports.number().min(0).max(1).default(VALIDATE_STALENESS_DEFAULT).describe("Heat threshold for stale mark"),
+        dry_run: external_exports.boolean().default(false).describe("Preview without writing")
       }
-      return { content: [{ type: "text", text: JSON.stringify({
-        validated,
-        stale_marked: staleMarked,
-        dry_run: args.dry_run,
-        errors: errors.slice(0, VALIDATE_ERROR_CAP)
-      }) }] };
-    } catch (err) {
-      return errorText5("validate_memory", err);
-    }
-  });
-  server2.registerTool("seed_project", {
-    description: "Bootstrap memory from an existing codebase by scanning files and creating structured memories.",
-    inputSchema: {
-      directory: external_exports.string().default("").describe("Project directory to seed from"),
-      domain: external_exports.string().default("").describe("Domain to assign"),
-      max_file_size_kb: external_exports.number().int().min(1).default(SEED_MAX_FILE_SIZE_KB).describe("Max file size in KB"),
-      dry_run: external_exports.boolean().default(false).describe("Preview without writing")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler3({
-        directory: args.directory,
-        domain: args.domain,
-        max_file_size_kb: args.max_file_size_kb,
-        dry_run: args.dry_run
-      }, { store: deps.store });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText5("seed_project", err);
-    }
-  });
-  server2.registerTool("backfill_memories", {
-    description: "Auto-import prior Claude Code conversation JSONL files, applying Ebbinghaus-decay initial heat.",
-    inputSchema: {
-      project: external_exports.string().default("").describe("Project identifier"),
-      max_files: external_exports.number().int().min(1).default(BACKFILL_MAX_FILES_DEFAULT).describe("Max JSONL files to process"),
-      // source: Ebbinghaus retention curve — min_importance threshold of 0.35
-      // per MCP_TOOLS.md §backfill_memories default
-      min_importance: external_exports.number().min(0).max(1).default(BACKFILL_MIN_IMPORTANCE).describe("Minimum importance score"),
-      dry_run: external_exports.boolean().default(false).describe("Preview without writing"),
-      force_reprocess: external_exports.boolean().default(false).describe("Reprocess already-imported files")
-    }
-  }, async (args) => {
-    try {
-      const rememberFn = async (rawArgs) => {
-        const result = await rememberAsync(rawArgs, deps.store);
-        return result.stored ? { stored: true } : null;
-      };
-      const response = await importHandler({
-        project: args.project,
-        domain: "",
-        min_importance: args.min_importance,
-        max_sessions: args.max_files,
-        dry_run: args.dry_run
-      }, rememberFn);
-      return { content: [{ type: "text", text: JSON.stringify({
-        backfilled: response.imported,
-        skipped: response.skipped,
-        files_processed: response.total_files,
-        dry_run: args.dry_run
-      }) }] };
-    } catch (err) {
-      return errorText5("backfill_memories", err);
-    }
-  });
-  server2.registerTool("get_methodology_graph", {
-    description: "Returns methodology map as graph data for 3D visualisation.",
-    inputSchema: {
-      domain: external_exports.string().optional().describe("Domain to visualise")
-    }
-  }, async (args) => {
-    try {
-      const profiles = loadProfilesRaw();
-      const domains = profiles["domains"] ?? {};
-      const nodes = [];
-      const edges = [];
-      let edgeId = 0;
-      for (const [id2, domain] of Object.entries(domains)) {
-        if (args.domain && id2 !== args.domain)
-          continue;
-        nodes.push({
-          id: id2,
-          label: domain["label"] ?? id2,
-          session_count: domain["sessionCount"] ?? 0,
-          confidence: domain["confidence"] ?? 0
+    },
+    async (args) => {
+      try {
+        const allMems = deps.store.getAllMemoriesForDecay();
+        const candidates = args.memory_id !== void 0 ? allMems.filter((m2) => m2["id"] === args.memory_id) : allMems.filter((m2) => {
+          if (args.domain && m2["domain"] !== args.domain) return false;
+          if (args.directory && !String(m2["directory"] ?? "").startsWith(args.directory)) return false;
+          return true;
         });
-        const bridges = domain["connectionBridges"] ?? [];
-        for (const bridge of bridges) {
-          const target = bridge["targetDomain"];
-          if (!target)
-            continue;
-          edges.push({
-            id: edgeId++,
-            source: id2,
-            target,
-            bridge_type: bridge["bridgeType"] ?? "unknown",
-            strength: bridge["strength"] ?? 0
-          });
+        let validated = 0;
+        let staleMarked = 0;
+        const errors = [];
+        for (const mem of candidates) {
+          try {
+            validated++;
+            const heat = mem["heat"] ?? 0;
+            if (heat >= args.staleness_threshold) continue;
+            const tags = mem["tags"] ?? [];
+            const fileRef = tags.find((t2) => t2.startsWith("file:") || t2.startsWith("path:"));
+            if (!fileRef) continue;
+            const filePath = fileRef.replace(/^(?:file:|path:)/, "");
+            const absPath = args.base_dir ? join6(args.base_dir, filePath) : filePath;
+            if (existsSync6(absPath)) continue;
+            if (!args.dry_run) {
+              deps.store.markMemoryStale(Number(mem["id"]), true);
+            }
+            staleMarked++;
+          } catch (e2) {
+            errors.push(String(e2));
+          }
         }
+        return { content: [{ type: "text", text: JSON.stringify({
+          validated,
+          stale_marked: staleMarked,
+          dry_run: args.dry_run,
+          errors: errors.slice(0, VALIDATE_ERROR_CAP)
+        }) }] };
+      } catch (err) {
+        return errorText5("validate_memory", err);
       }
-      return { content: [{ type: "text", text: JSON.stringify({ nodes, edges }) }] };
-    } catch (err) {
-      return errorText5("get_methodology_graph", err);
     }
-  });
+  );
+  server2.registerTool(
+    "seed_project",
+    {
+      description: "Bootstrap memory from an existing codebase by scanning files and creating structured memories.",
+      inputSchema: {
+        directory: external_exports.string().default("").describe("Project directory to seed from"),
+        domain: external_exports.string().default("").describe("Domain to assign"),
+        max_file_size_kb: external_exports.number().int().min(1).default(SEED_MAX_FILE_SIZE_KB).describe("Max file size in KB"),
+        dry_run: external_exports.boolean().default(false).describe("Preview without writing")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await handler3(
+          {
+            directory: args.directory,
+            domain: args.domain,
+            max_file_size_kb: args.max_file_size_kb,
+            dry_run: args.dry_run
+          },
+          { store: deps.store }
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText5("seed_project", err);
+      }
+    }
+  );
+  server2.registerTool(
+    "backfill_memories",
+    {
+      description: "Auto-import prior Claude Code conversation JSONL files, applying Ebbinghaus-decay initial heat.",
+      inputSchema: {
+        project: external_exports.string().default("").describe("Project identifier"),
+        max_files: external_exports.number().int().min(1).default(BACKFILL_MAX_FILES_DEFAULT).describe("Max JSONL files to process"),
+        // source: Ebbinghaus retention curve — min_importance threshold of 0.35
+        // per MCP_TOOLS.md §backfill_memories default
+        min_importance: external_exports.number().min(0).max(1).default(BACKFILL_MIN_IMPORTANCE).describe("Minimum importance score"),
+        dry_run: external_exports.boolean().default(false).describe("Preview without writing"),
+        force_reprocess: external_exports.boolean().default(false).describe("Reprocess already-imported files")
+      }
+    },
+    async (args) => {
+      try {
+        const rememberFn = async (rawArgs) => {
+          const result = await rememberAsync(rawArgs, deps.store);
+          return result.stored ? { stored: true } : null;
+        };
+        const response = await importHandler(
+          {
+            project: args.project,
+            domain: "",
+            min_importance: args.min_importance,
+            max_sessions: args.max_files,
+            dry_run: args.dry_run
+          },
+          rememberFn
+        );
+        return { content: [{ type: "text", text: JSON.stringify({
+          backfilled: response.imported,
+          skipped: response.skipped,
+          files_processed: response.total_files,
+          dry_run: args.dry_run
+        }) }] };
+      } catch (err) {
+        return errorText5("backfill_memories", err);
+      }
+    }
+  );
+  server2.registerTool(
+    "get_methodology_graph",
+    {
+      description: "Returns methodology map as graph data for 3D visualisation.",
+      inputSchema: {
+        domain: external_exports.string().optional().describe("Domain to visualise")
+      }
+    },
+    async (args) => {
+      try {
+        const profiles = loadProfilesRaw();
+        const domains = profiles["domains"] ?? {};
+        const nodes = [];
+        const edges = [];
+        let edgeId = 0;
+        for (const [id2, domain] of Object.entries(domains)) {
+          if (args.domain && id2 !== args.domain) continue;
+          nodes.push({
+            id: id2,
+            label: domain["label"] ?? id2,
+            session_count: domain["sessionCount"] ?? 0,
+            confidence: domain["confidence"] ?? 0
+          });
+          const bridges = domain["connectionBridges"] ?? [];
+          for (const bridge of bridges) {
+            const target = bridge["targetDomain"];
+            if (!target) continue;
+            edges.push({
+              id: edgeId++,
+              source: id2,
+              target,
+              bridge_type: bridge["bridgeType"] ?? "unknown",
+              strength: bridge["strength"] ?? 0
+            });
+          }
+        }
+        return { content: [{ type: "text", text: JSON.stringify({ nodes, edges }) }] };
+      } catch (err) {
+        return errorText5("get_methodology_graph", err);
+      }
+    }
+  );
+  server2.registerTool(
+    "get_telemetry",
+    {
+      description: "Return in-process telemetry snapshot: per-op call counts, latency, byte volume, success/failure split, and the computed read/write ratio. Use this to verify Cortex's empirical read/write workload distribution (Popper C6 \u2014 grounds the read-heavy workload claim in measurement, not assertion). Counters are per-process and reset on restart; the durable record is the JSONL at ~/.claude/methodology/telemetry.jsonl.",
+      inputSchema: {}
+    },
+    async (_args) => {
+      try {
+        const result = summary();
+        return { content: [{ type: "text", text: JSON.stringify(result) }] };
+      } catch (err) {
+        return errorText5("get_telemetry", err);
+      }
+    }
+  );
 }
 
 // packages/memory/dist/narrative/narrative-builder.js
@@ -43056,10 +43402,10 @@ function generateBriefSummary(memories, maxChars = BRIEF_SUMMARY_MAX_CHARS) {
     parts.push(`Decisions: ${decisions.slice(0, BRIEF_DISPLAY_LIMIT).join("; ")}`);
   if (events.length > 0)
     parts.push(`Events: ${events.slice(0, BRIEF_DISPLAY_LIMIT).join("; ")}`);
-  let summary = parts.join(". ");
-  if (summary.length <= maxChars)
-    return summary;
-  const truncated = summary.slice(0, maxChars - ELLIPSIS_RESERVE);
+  let summary2 = parts.join(". ");
+  if (summary2.length <= maxChars)
+    return summary2;
+  const truncated = summary2.slice(0, maxChars - ELLIPSIS_RESERVE);
   const lastEnd = Math.max(truncated.lastIndexOf(". "), truncated.lastIndexOf("! "), truncated.lastIndexOf("? "));
   if (lastEnd > Math.floor(maxChars / SENTENCE_BOUNDARY_DIVISOR)) {
     return truncated.slice(0, lastEnd + 1);
@@ -43192,9 +43538,9 @@ async function narrativeHandler(store, rawArgs, llmClient2 = null) {
     memories = store.getHotMemories(HOT_MEMORY_MIN_HEAT, MEMORY_FETCH_LIMIT);
   }
   if (brief) {
-    const summary = generateBriefSummary(memories);
+    const summary2 = generateBriefSummary(memories);
     return {
-      summary,
+      summary: summary2,
       decisions: [],
       events: [],
       entities: [],
@@ -43227,8 +43573,8 @@ function getProjectStoryHandler(store, args) {
   const hotMemories = memories.filter((m2) => m2.heat >= HOT_MEMORY_HEAT_THRESHOLD);
   const hotTopics = hotMemories.flatMap((m2) => Array.isArray(m2.tags) ? m2.tags : []);
   const uniqueTopics = [...new Set(hotTopics)].slice(0, GET_PROJECT_STORY_MAX_TOPICS);
-  const summary = memories.length === 0 ? `No memories found for domain "${domain}".` : `Found ${memories.length.toString()} memories for domain "${domain}". Hot topics: ${uniqueTopics.join(", ") || "none"}.`;
-  return { domain, memoriesFound: memories.length, summary, hotTopics: uniqueTopics, sessionCount: 0 };
+  const summary2 = memories.length === 0 ? `No memories found for domain "${domain}".` : `Found ${memories.length.toString()} memories for domain "${domain}". Hot topics: ${uniqueTopics.join(", ") || "none"}.`;
+  return { domain, memoriesFound: memories.length, summary: summary2, hotTopics: uniqueTopics, sessionCount: 0 };
 }
 
 // packages/memory/dist/narrative/handlers/unified-search.js
@@ -43327,7 +43673,7 @@ async function unifiedSearchHandler(deps, rawArgs) {
   };
 }
 
-// packages/mcp-servers/memory/dist/tools/narrative.js
+// packages/mcp-servers/memory/src/tools/narrative.ts
 var MAX_CHAPTERS_MAX = 20;
 var MAX_CHAPTERS_DEFAULT = 5;
 var MAX_RESULTS_MAX = 50;
@@ -43340,96 +43686,115 @@ function errorText6(tool, err) {
 function registerNarrativeTools(server2, deps = null) {
   const narrativeDeps = deps !== null && typeof deps === "object" && "store" in deps ? deps : null;
   const llmClient2 = narrativeDeps?.llmClient ?? (deps !== null && typeof deps === "object" && !("store" in deps) ? deps : null);
-  server2.registerTool("narrative", {
-    description: "Generate project narrative from stored memories (structured summary).",
-    inputSchema: {
-      directory: external_exports.string().optional().describe("Directory scope"),
-      domain: external_exports.string().optional().describe("Domain scope"),
-      brief: external_exports.boolean().default(false).describe("Brief mode (condensed output)")
-    }
-  }, async (args) => {
-    try {
-      if (!narrativeDeps) {
-        return { content: [{ type: "text", text: JSON.stringify({
-          narrative: "",
-          memory_count: 0,
-          note: "no MemoryStore configured \u2014 configure CORTEX_DB_PATH"
-        }) }] };
+  server2.registerTool(
+    "narrative",
+    {
+      description: "Generate project narrative from stored memories (structured summary).",
+      inputSchema: {
+        directory: external_exports.string().optional().describe("Directory scope"),
+        domain: external_exports.string().optional().describe("Domain scope"),
+        brief: external_exports.boolean().default(false).describe("Brief mode (condensed output)")
       }
-      const response = await narrativeHandler(narrativeDeps.store, {
-        directory: args.directory,
-        domain: args.domain,
-        brief: args.brief
-      }, llmClient2);
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText6("narrative", err);
-    }
-  });
-  server2.registerTool("get_project_story", {
-    description: "Generate a period-based autobiographical narrative (week/month/all).",
-    inputSchema: {
-      directory: external_exports.string().optional().describe("Directory scope"),
-      domain: external_exports.string().optional().describe("Domain scope"),
-      period: external_exports.enum(["day", "week", "month", "all"]).default("week").describe("Time period"),
-      max_chapters: external_exports.number().int().min(1).max(MAX_CHAPTERS_MAX).default(MAX_CHAPTERS_DEFAULT).describe("Max chapters")
-    }
-  }, async (args) => {
-    try {
-      if (!narrativeDeps) {
-        return { content: [{ type: "text", text: JSON.stringify({
-          chapters: [],
-          period: args.period,
-          note: "no MemoryStore configured"
-        }) }] };
-      }
-      const response = getProjectStoryHandler(narrativeDeps.store, {
-        directory: args.directory,
-        domain: args.domain,
-        period: args.period,
-        max_chapters: args.max_chapters
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText6("get_project_story", err);
-    }
-  });
-  server2.registerTool("unified_search", {
-    description: (
-      // source: docs/ADR/0046 — unified search design
-      "RRF-fuse Cortex memory recall with AP code search (ADR-0046 P3)."
-    ),
-    inputSchema: {
-      query: external_exports.string().min(1).describe("Search query"),
-      domain: external_exports.string().optional().describe("Domain filter"),
-      max_results: external_exports.number().int().min(1).max(MAX_RESULTS_MAX).default(MAX_RESULTS_DEFAULT2).describe("Max results"),
-      // source: Cormack & Clarke (2009) "Reciprocal Rank Fusion" — k=60 canonical value
-      k: external_exports.number().int().min(1).default(RRF_K_DEFAULT).describe("RRF k parameter")
-    }
-  }, async (args) => {
-    try {
-      if (!narrativeDeps) {
-        return { content: [{ type: "text", text: JSON.stringify({
-          results: [],
-          query: args.query,
-          note: "no MemoryStore configured"
-        }) }] };
-      }
-      const response = unifiedSearchHandler(
-        // source: packages/memory/src/narrative/handlers/unified-search.ts::UnifiedSearchDeps
-        { memoryPort: narrativeDeps.store },
-        {
-          query: args.query,
-          domain: args.domain,
-          max_results: args.max_results,
-          k: args.k
+    },
+    async (args) => {
+      try {
+        if (!narrativeDeps) {
+          return { content: [{ type: "text", text: JSON.stringify({
+            narrative: "",
+            memory_count: 0,
+            note: "no MemoryStore configured \u2014 configure CORTEX_DB_PATH"
+          }) }] };
         }
-      );
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText6("unified_search", err);
+        const response = await narrativeHandler(
+          narrativeDeps.store,
+          {
+            directory: args.directory,
+            domain: args.domain,
+            brief: args.brief
+          },
+          llmClient2
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText6("narrative", err);
+      }
     }
-  });
+  );
+  server2.registerTool(
+    "get_project_story",
+    {
+      description: "Generate a period-based autobiographical narrative (week/month/all).",
+      inputSchema: {
+        directory: external_exports.string().optional().describe("Directory scope"),
+        domain: external_exports.string().optional().describe("Domain scope"),
+        period: external_exports.enum(["day", "week", "month", "all"]).default("week").describe("Time period"),
+        max_chapters: external_exports.number().int().min(1).max(MAX_CHAPTERS_MAX).default(MAX_CHAPTERS_DEFAULT).describe("Max chapters")
+      }
+    },
+    async (args) => {
+      try {
+        if (!narrativeDeps) {
+          return { content: [{ type: "text", text: JSON.stringify({
+            chapters: [],
+            period: args.period,
+            note: "no MemoryStore configured"
+          }) }] };
+        }
+        const response = getProjectStoryHandler(
+          narrativeDeps.store,
+          {
+            directory: args.directory,
+            domain: args.domain,
+            period: args.period,
+            max_chapters: args.max_chapters
+          }
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText6("get_project_story", err);
+      }
+    }
+  );
+  server2.registerTool(
+    "unified_search",
+    {
+      description: (
+        // source: docs/ADR/0046 — unified search design
+        "RRF-fuse Cortex memory recall with AP code search (ADR-0046 P3)."
+      ),
+      inputSchema: {
+        query: external_exports.string().min(1).describe("Search query"),
+        domain: external_exports.string().optional().describe("Domain filter"),
+        max_results: external_exports.number().int().min(1).max(MAX_RESULTS_MAX).default(MAX_RESULTS_DEFAULT2).describe("Max results"),
+        // source: Cormack & Clarke (2009) "Reciprocal Rank Fusion" — k=60 canonical value
+        k: external_exports.number().int().min(1).default(RRF_K_DEFAULT).describe("RRF k parameter")
+      }
+    },
+    async (args) => {
+      try {
+        if (!narrativeDeps) {
+          return { content: [{ type: "text", text: JSON.stringify({
+            results: [],
+            query: args.query,
+            note: "no MemoryStore configured"
+          }) }] };
+        }
+        const response = unifiedSearchHandler(
+          // source: packages/memory/src/narrative/handlers/unified-search.ts::UnifiedSearchDeps
+          { memoryPort: narrativeDeps.store },
+          {
+            query: args.query,
+            domain: args.domain,
+            max_results: args.max_results,
+            k: args.k
+          }
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText6("unified_search", err);
+      }
+    }
+  );
 }
 
 // packages/memory/dist/automation/handlers/sync-to-claude-md.js
@@ -45829,7 +46194,7 @@ function queryWorkflowGraph(graph, args = {}) {
   });
 }
 
-// packages/mcp-servers/memory/dist/tools/advanced.js
+// packages/mcp-servers/memory/src/tools/advanced.ts
 var SYNC_MAX_INSIGHTS_DEFAULT = 10;
 var SYNC_MIN_HEAT_DEFAULT = 0.3;
 var ASSESS_STALE_DAYS_DEFAULT = 14;
@@ -45852,38 +46217,31 @@ function toMemoryReadStore(store) {
   };
 }
 function toProspectiveMemoryStore(store) {
-  const ext2 = store;
+  const pgStore = store;
   return {
     insertProspectiveMemory: async (record3) => {
-      const id2 = ext2["insertProspectiveMemory"]?.(record3) ?? "";
+      const id2 = pgStore.insertProspectiveMemoryAsync != null ? await pgStore.insertProspectiveMemoryAsync(record3) : store.insertProspectiveMemory(record3);
       return String(id2);
     },
     countActiveTriggers: async () => {
-      return ext2["countActiveTriggers"]?.() ?? 0;
+      return pgStore.countActiveTriggersAsync != null ? pgStore.countActiveTriggersAsync() : Promise.resolve(store.countActiveTriggers());
     }
   };
 }
 function toRuleStore(store) {
-  const ext2 = store;
+  const pgStore = store;
   return {
     insertRule: async (rule) => {
-      const id2 = ext2["insertRule"]?.(rule) ?? 0;
-      return Number(id2);
+      return pgStore.insertRuleAsync != null ? pgStore.insertRuleAsync(rule) : Promise.resolve(store.insertRule(rule));
     }
   };
 }
 function toRuleReadStore(store) {
-  const ext2 = store;
-  async function fetchRules(method) {
-    const result = ext2[method]?.();
-    if (result instanceof Promise)
-      return result;
-    return Promise.resolve(result ?? []);
-  }
+  const pgStore = store;
   return {
-    getAllActiveRules: () => fetchRules("getAllActiveRules"),
-    getRulesForScope: (scope) => ext2["getRulesForScope"]?.(scope) ?? Promise.resolve([]),
-    getAllRulesIncludingInactive: () => fetchRules("getAllRulesIncludingInactive")
+    getAllActiveRules: () => pgStore.getAllActiveRulesAsync != null ? pgStore.getAllActiveRulesAsync() : Promise.resolve(store.getAllActiveRules()),
+    getRulesForScope: (scope) => pgStore.getRulesForScopeAsync != null ? pgStore.getRulesForScopeAsync(scope) : Promise.resolve(store.getRulesForScope(scope)),
+    getAllRulesIncludingInactive: () => pgStore.getAllRulesIncludingInactiveAsync != null ? pgStore.getAllRulesIncludingInactiveAsync() : Promise.resolve(store.getAllRulesIncludingInactive())
   };
 }
 function errorText7(tool, err) {
@@ -45891,166 +46249,185 @@ function errorText7(tool, err) {
   return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
 }
 function registerAdvancedTools(server2, deps) {
-  server2.registerTool("sync_instructions", {
-    description: "Push top memory insights into CLAUDE.md (or similar instruction file).",
-    inputSchema: {
-      directory: external_exports.string().default("").describe("Directory containing CLAUDE.md"),
-      max_insights: external_exports.number().int().min(1).default(SYNC_MAX_INSIGHTS_DEFAULT).describe("Max insights to include"),
-      min_heat: external_exports.number().min(0).max(1).default(SYNC_MIN_HEAT_DEFAULT).describe("Min heat for insight inclusion"),
-      dry_run: external_exports.boolean().default(false).describe("Preview without writing")
+  server2.registerTool(
+    "sync_instructions",
+    {
+      description: "Push top memory insights into CLAUDE.md (or similar instruction file).",
+      inputSchema: {
+        directory: external_exports.string().default("").describe("Directory containing CLAUDE.md"),
+        max_insights: external_exports.number().int().min(1).default(SYNC_MAX_INSIGHTS_DEFAULT).describe("Max insights to include"),
+        min_heat: external_exports.number().min(0).max(1).default(SYNC_MIN_HEAT_DEFAULT).describe("Min heat for insight inclusion"),
+        dry_run: external_exports.boolean().default(false).describe("Preview without writing")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await syncInstructionsHandler(
+          {
+            directory: args.directory,
+            max_insights: args.max_insights,
+            min_heat: args.min_heat,
+            dry_run: args.dry_run
+          },
+          toMemoryReadStore(deps.store)
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText7("sync_instructions", err);
+      }
     }
-  }, async (args) => {
-    try {
-      const response = await syncInstructionsHandler({
-        directory: args.directory,
-        max_insights: args.max_insights,
-        min_heat: args.min_heat,
-        dry_run: args.dry_run
-      }, toMemoryReadStore(deps.store));
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText7("sync_instructions", err);
+  );
+  server2.registerTool(
+    "create_trigger",
+    {
+      description: "Create a prospective memory trigger (stored in prospective_memories table).",
+      inputSchema: {
+        content: external_exports.string().min(1).describe("Trigger content"),
+        trigger_condition: external_exports.string().min(1).describe("Condition that fires the trigger"),
+        trigger_type: external_exports.string().default("keyword").describe("Trigger type"),
+        target_directory: external_exports.string().optional().describe("Directory scope for trigger")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await createTriggerHandler(args, toProspectiveMemoryStore(deps.store));
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText7("create_trigger", err);
+      }
     }
-  });
-  server2.registerTool("create_trigger", {
-    description: "Create a prospective memory trigger (stored in prospective_memories table).",
-    inputSchema: {
-      content: external_exports.string().min(1).describe("Trigger content"),
-      trigger_condition: external_exports.string().min(1).describe("Condition that fires the trigger"),
-      trigger_type: external_exports.string().default("keyword").describe("Trigger type"),
-      target_directory: external_exports.string().optional().describe("Directory scope for trigger")
+  );
+  server2.registerTool(
+    "add_rule",
+    {
+      description: "Add a neuro-symbolic rule to the memory store.",
+      inputSchema: {
+        condition: external_exports.string().min(1).describe("Rule condition"),
+        action: external_exports.string().min(1).describe("Rule action"),
+        rule_type: external_exports.enum(["soft", "hard"]).default("soft").describe("Rule type"),
+        scope: external_exports.enum(["global", "domain", "directory"]).default("global").describe("Rule scope"),
+        scope_value: external_exports.string().optional().describe("Scope value (domain name or directory)"),
+        priority: external_exports.number().int().default(0).describe("Rule priority (higher = earlier)")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await addRuleHandler(args, toRuleStore(deps.store));
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText7("add_rule", err);
+      }
     }
-  }, async (args) => {
-    try {
-      const response = await createTriggerHandler(args, toProspectiveMemoryStore(deps.store));
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText7("create_trigger", err);
+  );
+  server2.registerTool(
+    "get_rules",
+    {
+      description: "List active neuro-symbolic rules.",
+      inputSchema: {
+        scope: external_exports.string().optional().describe("Filter by scope"),
+        rule_type: external_exports.string().optional().describe("Filter by type"),
+        include_inactive: external_exports.boolean().default(false).describe("Include inactive rules")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await getRulesHandler(args, toRuleReadStore(deps.store));
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText7("get_rules", err);
+      }
     }
-  });
-  server2.registerTool("add_rule", {
-    description: "Add a neuro-symbolic rule to the memory store.",
-    inputSchema: {
-      condition: external_exports.string().min(1).describe("Rule condition"),
-      action: external_exports.string().min(1).describe("Rule action"),
-      rule_type: external_exports.enum(["soft", "hard"]).default("soft").describe("Rule type"),
-      scope: external_exports.enum(["global", "domain", "directory"]).default("global").describe("Rule scope"),
-      scope_value: external_exports.string().optional().describe("Scope value (domain name or directory)"),
-      priority: external_exports.number().int().default(0).describe("Rule priority (higher = earlier)")
-    }
-  }, async (args) => {
-    try {
-      const response = await addRuleHandler(args, toRuleStore(deps.store));
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText7("add_rule", err);
-    }
-  });
-  server2.registerTool("get_rules", {
-    description: "List active neuro-symbolic rules.",
-    inputSchema: {
-      scope: external_exports.string().optional().describe("Filter by scope"),
-      rule_type: external_exports.string().optional().describe("Filter by type"),
-      include_inactive: external_exports.boolean().default(false).describe("Include inactive rules")
-    }
-  }, async (args) => {
-    try {
-      const response = await getRulesHandler(args, toRuleReadStore(deps.store));
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText7("get_rules", err);
-    }
-  });
-  server2.registerTool("assess_coverage", {
-    description: "Evaluate knowledge coverage completeness for the current domain/directory.",
-    inputSchema: {
-      directory: external_exports.string().default("").describe("Directory scope"),
-      domain: external_exports.string().default("").describe("Domain scope"),
-      stale_days: external_exports.number().int().min(1).default(ASSESS_STALE_DAYS_DEFAULT).describe("Days before a memory is stale")
-    }
-  }, async (args) => {
-    try {
-      const allMems = deps.store.getAllMemoriesForDecay();
-      const scoped = allMems.filter((m2) => {
-        if (args.domain && m2["domain"] !== args.domain)
-          return false;
-        if (args.directory && !String(m2["directory"] ?? "").startsWith(args.directory))
-          return false;
-        return true;
-      });
-      const now = Date.now();
-      const staleMs = args.stale_days * MS_PER_DAY;
-      const stale = scoped.filter((m2) => {
-        const heat = m2["heat"] ?? 0;
-        const createdAt = m2["created_at"];
-        if (heat < STALE_HEAT_THRESHOLD)
+  );
+  server2.registerTool(
+    "assess_coverage",
+    {
+      description: "Evaluate knowledge coverage completeness for the current domain/directory.",
+      inputSchema: {
+        directory: external_exports.string().default("").describe("Directory scope"),
+        domain: external_exports.string().default("").describe("Domain scope"),
+        stale_days: external_exports.number().int().min(1).default(ASSESS_STALE_DAYS_DEFAULT).describe("Days before a memory is stale")
+      }
+    },
+    async (args) => {
+      try {
+        const allMems = deps.store.getAllMemoriesForDecay();
+        const scoped = allMems.filter((m2) => {
+          if (args.domain && m2["domain"] !== args.domain) return false;
+          if (args.directory && !String(m2["directory"] ?? "").startsWith(args.directory)) return false;
           return true;
-        if (createdAt && now - new Date(createdAt).getTime() > staleMs)
-          return true;
-        return false;
-      }).length;
-      const total = scoped.length;
-      const coverageScore = total === 0 ? 0 : Math.round((total - stale) / total * ROUNDING_FACTOR_2DP) / ROUNDING_FACTOR_2DP;
-      const gaps = [];
-      if (stale > 0)
-        gaps.push(`${stale} stale memories (heat < 0.1 or older than ${args.stale_days} days)`);
-      if (total === 0)
-        gaps.push("no memories found for this scope");
-      const recommendations = [];
-      if (coverageScore < COVERAGE_LOW_THRESHOLD)
-        recommendations.push("Run consolidate to decay + refresh stale memories.");
-      if (total === 0)
-        recommendations.push("Run codebase_analyze or backfill_memories to seed coverage.");
-      return { content: [{ type: "text", text: JSON.stringify({
-        coverage_score: coverageScore,
-        total_memories: total,
-        stale_count: stale,
-        gaps,
-        recommendations,
-        directory: args.directory,
-        domain: args.domain
-      }) }] };
-    } catch (err) {
-      return errorText7("assess_coverage", err);
+        });
+        const now = Date.now();
+        const staleMs = args.stale_days * MS_PER_DAY;
+        const stale = scoped.filter((m2) => {
+          const heat = m2["heat"] ?? 0;
+          const createdAt = m2["created_at"];
+          if (heat < STALE_HEAT_THRESHOLD) return true;
+          if (createdAt && now - new Date(createdAt).getTime() > staleMs) return true;
+          return false;
+        }).length;
+        const total = scoped.length;
+        const coverageScore = total === 0 ? 0 : Math.round((total - stale) / total * ROUNDING_FACTOR_2DP) / ROUNDING_FACTOR_2DP;
+        const gaps = [];
+        if (stale > 0) gaps.push(`${stale} stale memories (heat < 0.1 or older than ${args.stale_days} days)`);
+        if (total === 0) gaps.push("no memories found for this scope");
+        const recommendations = [];
+        if (coverageScore < COVERAGE_LOW_THRESHOLD) recommendations.push("Run consolidate to decay + refresh stale memories.");
+        if (total === 0) recommendations.push("Run codebase_analyze or backfill_memories to seed coverage.");
+        return { content: [{ type: "text", text: JSON.stringify({
+          coverage_score: coverageScore,
+          total_memories: total,
+          stale_count: stale,
+          gaps,
+          recommendations,
+          directory: args.directory,
+          domain: args.domain
+        }) }] };
+      } catch (err) {
+        return errorText7("assess_coverage", err);
+      }
     }
-  });
-  server2.registerTool("query_workflow_graph", {
-    description: "Return a typed subgraph of the unified workflow graph.",
-    inputSchema: {
-      node_kind: external_exports.union([external_exports.string(), external_exports.array(external_exports.string())]).optional().describe("Node kind filter"),
-      edge_kind: external_exports.union([external_exports.string(), external_exports.array(external_exports.string())]).optional().describe("Edge kind filter"),
-      neighbour_of: external_exports.string().optional().describe("Node ID to find neighbours of"),
-      depth: external_exports.number().int().optional().describe("Traversal depth"),
-      domain: external_exports.string().optional().describe("Domain filter"),
-      limit_nodes: external_exports.number().int().optional().describe("Max nodes to return")
+  );
+  server2.registerTool(
+    "query_workflow_graph",
+    {
+      description: "Return a typed subgraph of the unified workflow graph.",
+      inputSchema: {
+        node_kind: external_exports.union([external_exports.string(), external_exports.array(external_exports.string())]).optional().describe("Node kind filter"),
+        edge_kind: external_exports.union([external_exports.string(), external_exports.array(external_exports.string())]).optional().describe("Edge kind filter"),
+        neighbour_of: external_exports.string().optional().describe("Node ID to find neighbours of"),
+        depth: external_exports.number().int().optional().describe("Traversal depth"),
+        domain: external_exports.string().optional().describe("Domain filter"),
+        limit_nodes: external_exports.number().int().optional().describe("Max nodes to return")
+      }
+    },
+    async (args) => {
+      try {
+        const emptyGraph = {
+          nodes: [],
+          edges: [],
+          links: [],
+          meta: { node_count: 0, edge_count: 0, built_at: (/* @__PURE__ */ new Date()).toISOString() }
+        };
+        const response = queryWorkflowGraph(emptyGraph, {
+          node_kind: args.node_kind,
+          edge_kind: args.edge_kind,
+          neighbour_of: args.neighbour_of,
+          depth: args.depth,
+          domain: args.domain,
+          limit_nodes: args.limit_nodes
+        });
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText7("query_workflow_graph", err);
+      }
     }
-  }, async (args) => {
-    try {
-      const emptyGraph = {
-        nodes: [],
-        edges: [],
-        links: [],
-        meta: { node_count: 0, edge_count: 0, built_at: (/* @__PURE__ */ new Date()).toISOString() }
-      };
-      const response = queryWorkflowGraph(emptyGraph, {
-        node_kind: args.node_kind,
-        edge_kind: args.edge_kind,
-        neighbour_of: args.neighbour_of,
-        depth: args.depth,
-        domain: args.domain,
-        limit_nodes: args.limit_nodes
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText7("query_workflow_graph", err);
-    }
-  });
+  );
 }
 
-// packages/mcp-servers/memory/dist/tools/wiki.js
-import { mkdirSync as mkdirSync3, writeFileSync as writeFileSync3, rmSync } from "node:fs";
-import { join as join8, resolve as resolve2, dirname as dirname2 } from "node:path";
-import { homedir as homedir5 } from "node:os";
+// packages/mcp-servers/memory/src/tools/wiki.ts
+import { mkdirSync as mkdirSync4, writeFileSync as writeFileSync3, rmSync } from "node:fs";
+import { join as join9, resolve as resolve2, dirname as dirname2 } from "node:path";
+import { homedir as homedir6 } from "node:os";
 
 // packages/memory/dist/wiki/types.js
 var WikiExists = class extends Error {
@@ -47154,8 +47531,8 @@ function nextAdrNumber(root) {
   return maxSeen + 1;
 }
 
-// packages/mcp-servers/memory/dist/tools/wiki.js
-var WIKI_ROOT = process.env["CORTEX_WIKI_ROOT"] ?? join8(homedir5(), ".claude", "methodology", "wiki");
+// packages/mcp-servers/memory/src/tools/wiki.ts
+var WIKI_ROOT = process.env["CORTEX_WIKI_ROOT"] ?? join9(homedir6(), ".claude", "methodology", "wiki");
 async function asyncReadPage(root, relPath) {
   return Promise.resolve(readPage(root, relPath));
 }
@@ -47170,19 +47547,18 @@ async function asyncNextAdrNumber(root) {
 }
 async function asyncWriteFile(absPath, content) {
   const dir = dirname2(resolve2(absPath));
-  mkdirSync3(dir, { recursive: true });
+  mkdirSync4(dir, { recursive: true });
   writeFileSync3(absPath, content, "utf-8");
 }
 async function asyncEnsureDir(absDir) {
-  mkdirSync3(absDir, { recursive: true });
+  mkdirSync4(absDir, { recursive: true });
 }
 async function asyncListAllMarkdownFiles(root, kindFilter) {
   const paths = await asyncListPages(root, kindFilter);
   const entries = [];
   for (const relPath of paths) {
     const content = await asyncReadPage(root, relPath);
-    if (content !== null)
-      entries.push({ relPath, content });
+    if (content !== null) entries.push({ relPath, content });
   }
   return entries;
 }
@@ -47198,152 +47574,208 @@ function errorText8(tool, err) {
   return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
 }
 function registerWikiTools(server2) {
-  server2.registerTool("wiki_write", {
-    description: "Author a wiki page (create/append/replace) with provided Markdown.",
-    inputSchema: {
-      path: external_exports.string().min(1).describe("Wiki page path (relative)"),
-      content: external_exports.string().min(1).describe("Markdown content"),
-      mode: external_exports.enum(["create", "append", "replace"]).default("create").describe("Write mode"),
-      tags: external_exports.array(external_exports.string()).default([]).describe("Page tags")
+  server2.registerTool(
+    "wiki_write",
+    {
+      description: "Author a wiki page (create/append/replace) with provided Markdown.",
+      inputSchema: {
+        path: external_exports.string().min(1).describe("Wiki page path (relative)"),
+        content: external_exports.string().min(1).describe("Markdown content"),
+        mode: external_exports.enum(["create", "append", "replace"]).default("create").describe("Write mode"),
+        tags: external_exports.array(external_exports.string()).default([]).describe("Page tags")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await handler4(
+          { path: args.path, content: args.content, mode: args.mode, tags: args.tags },
+          { wikiRoot: WIKI_ROOT, writePage: asyncWritePage }
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText8("wiki_write", err);
+      }
     }
-  }, async (args) => {
-    try {
-      const response = await handler4({ path: args.path, content: args.content, mode: args.mode, tags: args.tags }, { wikiRoot: WIKI_ROOT, writePage: asyncWritePage });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_write", err);
+  );
+  server2.registerTool(
+    "wiki_read",
+    {
+      description: "Read the raw Markdown of a wiki page by relative path.",
+      inputSchema: {
+        path: external_exports.string().min(1).describe("Wiki page path")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await handler5(
+          { path: args.path },
+          { wikiRoot: WIKI_ROOT, readPage: asyncReadPage }
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText8("wiki_read", err);
+      }
     }
-  });
-  server2.registerTool("wiki_read", {
-    description: "Read the raw Markdown of a wiki page by relative path.",
-    inputSchema: {
-      path: external_exports.string().min(1).describe("Wiki page path")
+  );
+  server2.registerTool(
+    "wiki_list",
+    {
+      description: "List authored wiki pages, optionally filtered by kind.",
+      inputSchema: {
+        kind: external_exports.string().optional().describe("Page kind filter")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await handler6(
+          { kind: args.kind },
+          { wikiRoot: WIKI_ROOT, listPages: asyncListPages }
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText8("wiki_list", err);
+      }
     }
-  }, async (args) => {
-    try {
-      const response = await handler5({ path: args.path }, { wikiRoot: WIKI_ROOT, readPage: asyncReadPage });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_read", err);
+  );
+  server2.registerTool(
+    "wiki_link",
+    {
+      description: "Add a bidirectional link between two wiki pages (creates Related section entry).",
+      inputSchema: {
+        from_path: external_exports.string().min(1).describe("Source page path"),
+        to_path: external_exports.string().min(1).describe("Target page path"),
+        relation: external_exports.string().min(1).describe("Relationship label")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await handler7(
+          { from_path: args.from_path, to_path: args.to_path, relation: args.relation },
+          { wikiRoot: WIKI_ROOT, readPage: asyncReadPage, writePage: asyncWritePage }
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText8("wiki_link", err);
+      }
     }
-  });
-  server2.registerTool("wiki_list", {
-    description: "List authored wiki pages, optionally filtered by kind.",
-    inputSchema: {
-      kind: external_exports.string().optional().describe("Page kind filter")
+  );
+  server2.registerTool(
+    "wiki_adr",
+    {
+      description: "Create a numbered ADR (Architecture Decision Record) with auto-incremented sequence.",
+      inputSchema: {
+        title: external_exports.string().min(1).describe("ADR title"),
+        context: external_exports.string().min(1).describe("Problem context"),
+        decision: external_exports.string().min(1).describe("Decision made"),
+        consequences: external_exports.string().min(1).describe("Consequences"),
+        status: external_exports.enum(["proposed", "accepted", "deprecated", "superseded"]).default("accepted").describe("ADR status"),
+        tags: external_exports.array(external_exports.string()).default([]).describe("Tags")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await handler8(
+          {
+            title: args.title,
+            context: args.context,
+            decision: args.decision,
+            consequences: args.consequences,
+            status: args.status,
+            tags: args.tags
+          },
+          {
+            wikiRoot: WIKI_ROOT,
+            nextAdrNumber: asyncNextAdrNumber,
+            writePage: asyncWritePage
+          }
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText8("wiki_adr", err);
+      }
     }
-  }, async (args) => {
-    try {
-      const response = await handler6({ kind: args.kind }, { wikiRoot: WIKI_ROOT, listPages: asyncListPages });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_list", err);
+  );
+  server2.registerTool(
+    "wiki_reindex",
+    {
+      description: "Regenerate the wiki table of contents at .generated/INDEX.md.",
+      inputSchema: {}
+    },
+    async (_args) => {
+      try {
+        const response = await handler9(
+          {},
+          {
+            wikiRoot: WIKI_ROOT,
+            listPages: asyncListPages,
+            writeFile: asyncWriteFile,
+            ensureDir: asyncEnsureDir,
+            joinPath: join9
+          }
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText8("wiki_reindex", err);
+      }
     }
-  });
-  server2.registerTool("wiki_link", {
-    description: "Add a bidirectional link between two wiki pages (creates Related section entry).",
-    inputSchema: {
-      from_path: external_exports.string().min(1).describe("Source page path"),
-      to_path: external_exports.string().min(1).describe("Target page path"),
-      relation: external_exports.string().min(1).describe("Relationship label")
+  );
+  server2.registerTool(
+    "wiki_purge",
+    {
+      description: "Re-evaluate and purge wiki pages that fail the current classifier.",
+      inputSchema: {
+        apply: external_exports.boolean().default(false).describe("Apply purge (false = preview only)"),
+        kind: external_exports.string().optional().describe("Page kind to target")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await handler10(
+          {
+            apply: args.apply,
+            kind: args.kind
+          },
+          {
+            wikiRoot: WIKI_ROOT,
+            wikiRoot_string: WIKI_ROOT,
+            listAllMarkdownFiles: asyncListAllMarkdownFiles,
+            deleteFile: asyncDeleteFile
+          }
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText8("wiki_purge", err);
+      }
     }
-  }, async (args) => {
-    try {
-      const response = await handler7({ from_path: args.from_path, to_path: args.to_path, relation: args.relation }, { wikiRoot: WIKI_ROOT, readPage: asyncReadPage, writePage: asyncWritePage });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_link", err);
+  );
+  server2.registerTool(
+    "wiki_verify",
+    {
+      description: "Verify wiki-page symbol citations against AP's code graph (ADR-0046 Phase 2).",
+      // source: docs/ADR/0046-change-impact-analysis.md §Phase 2
+      inputSchema: {
+        path: external_exports.string().optional().describe("Page path (null = all pages)")
+      }
+    },
+    async (args) => {
+      try {
+        const response = await handler11(
+          { path: args.path ?? null },
+          {
+            wikiRoot: WIKI_ROOT,
+            isApEnabled: () => AP_ENABLED,
+            readPage: asyncReadPage,
+            listPages: asyncListPages,
+            // source: docs/ADR/0046-change-impact-analysis.md §Phase 2 — stub until AP live
+            verifySymbols: async (_symbols) => ({})
+          }
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText8("wiki_verify", err);
+      }
     }
-  });
-  server2.registerTool("wiki_adr", {
-    description: "Create a numbered ADR (Architecture Decision Record) with auto-incremented sequence.",
-    inputSchema: {
-      title: external_exports.string().min(1).describe("ADR title"),
-      context: external_exports.string().min(1).describe("Problem context"),
-      decision: external_exports.string().min(1).describe("Decision made"),
-      consequences: external_exports.string().min(1).describe("Consequences"),
-      status: external_exports.enum(["proposed", "accepted", "deprecated", "superseded"]).default("accepted").describe("ADR status"),
-      tags: external_exports.array(external_exports.string()).default([]).describe("Tags")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler8({
-        title: args.title,
-        context: args.context,
-        decision: args.decision,
-        consequences: args.consequences,
-        status: args.status,
-        tags: args.tags
-      }, {
-        wikiRoot: WIKI_ROOT,
-        nextAdrNumber: asyncNextAdrNumber,
-        writePage: asyncWritePage
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_adr", err);
-    }
-  });
-  server2.registerTool("wiki_reindex", {
-    description: "Regenerate the wiki table of contents at .generated/INDEX.md.",
-    inputSchema: {}
-  }, async (_args) => {
-    try {
-      const response = await handler9({}, {
-        wikiRoot: WIKI_ROOT,
-        listPages: asyncListPages,
-        writeFile: asyncWriteFile,
-        ensureDir: asyncEnsureDir,
-        joinPath: join8
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_reindex", err);
-    }
-  });
-  server2.registerTool("wiki_purge", {
-    description: "Re-evaluate and purge wiki pages that fail the current classifier.",
-    inputSchema: {
-      apply: external_exports.boolean().default(false).describe("Apply purge (false = preview only)"),
-      kind: external_exports.string().optional().describe("Page kind to target")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler10({
-        apply: args.apply,
-        kind: args.kind
-      }, {
-        wikiRoot: WIKI_ROOT,
-        wikiRoot_string: WIKI_ROOT,
-        listAllMarkdownFiles: asyncListAllMarkdownFiles,
-        deleteFile: asyncDeleteFile
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_purge", err);
-    }
-  });
-  server2.registerTool("wiki_verify", {
-    description: "Verify wiki-page symbol citations against AP's code graph (ADR-0046 Phase 2).",
-    // source: docs/ADR/0046-change-impact-analysis.md §Phase 2
-    inputSchema: {
-      path: external_exports.string().optional().describe("Page path (null = all pages)")
-    }
-  }, async (args) => {
-    try {
-      const response = await handler11({ path: args.path ?? null }, {
-        wikiRoot: WIKI_ROOT,
-        isApEnabled: () => AP_ENABLED,
-        readPage: asyncReadPage,
-        listPages: asyncListPages,
-        // source: docs/ADR/0046-change-impact-analysis.md §Phase 2 — stub until AP live
-        verifySymbols: async (_symbols) => ({})
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText8("wiki_verify", err);
-    }
-  });
+  );
 }
 
 // packages/memory/dist/shared/types.js
@@ -47909,6 +48341,10 @@ var SIGNAL_PATTERNS = (() => {
 var CONTENT_MAX_BYTES = 1 * 1024 * 1024;
 var BIDI_OVERRIDES = "\u202A\u202B\u202C\u202D\u202E\u2066\u2067\u2068\u2069";
 var STRIP_RE = new RegExp(`[\0-\b\v\f-\x7F-\x9F\uFEFF${BIDI_OVERRIDES}]`, "g");
+
+// packages/memory/dist/recall/reranker.js
+import { tmpdir } from "os";
+var FLASHRANK_CACHE_DIR = process.env["FLASHRANK_CACHE_DIR"] ?? tmpdir();
 
 // packages/memory/dist/recall/retrieval-dispatch.js
 var _SIMPLE_INTENTS = /* @__PURE__ */ new Set([
@@ -49710,7 +50146,7 @@ function buildConversationRecord(meta, stats, filePath, projectName, fallbackId)
 
 // packages/memory/dist/codebase-analysis/scanner.js
 import { existsSync as existsSync9, openSync as openSync2, readdirSync as readdirSync5, readSync as readSync2, statSync as statSync5 } from "node:fs";
-import { join as join9 } from "node:path";
+import { join as join10 } from "node:path";
 var HEAD_BYTES2 = 32768;
 var TAIL_BYTES2 = 8192;
 function _parseJsonlLines(lines) {
@@ -49850,7 +50286,7 @@ function _parseYamlFrontmatter(content) {
   return { meta, body };
 }
 function discoverAllMemories(claudeDir) {
-  const projectsDir = join9(claudeDir, "projects");
+  const projectsDir = join10(claudeDir, "projects");
   const memories = [];
   let projectEntries;
   try {
@@ -49859,14 +50295,14 @@ function discoverAllMemories(claudeDir) {
     return [];
   }
   for (const pdirName of projectEntries) {
-    const pdirPath = join9(projectsDir, pdirName);
+    const pdirPath = join10(projectsDir, pdirName);
     try {
       if (!statSync5(pdirPath).isDirectory())
         continue;
     } catch {
       continue;
     }
-    const memoryDir = join9(pdirPath, "memory");
+    const memoryDir = join10(pdirPath, "memory");
     let files;
     try {
       files = readdirSync5(memoryDir);
@@ -49877,11 +50313,11 @@ function discoverAllMemories(claudeDir) {
       if (!fileName.endsWith(".md") || fileName === "MEMORY.md")
         continue;
       try {
-        const result = _parseMemoryFile(join9(memoryDir, fileName), pdirName, fileName);
+        const result = _parseMemoryFile(join10(memoryDir, fileName), pdirName, fileName);
         if (result)
           memories.push(result);
       } catch (e2) {
-        process.stderr.write(`[methodology-agent] Failed to read ${join9(memoryDir, fileName)}: ${e2}
+        process.stderr.write(`[methodology-agent] Failed to read ${join10(memoryDir, fileName)}: ${e2}
 `);
       }
     }
@@ -49899,7 +50335,7 @@ function _parseConversationFile(filePath, projectName, fallbackId) {
   return buildConversationRecord(meta, stats, filePath, projectName, fallbackId);
 }
 function discoverConversations(claudeDir) {
-  const projectsDir = join9(claudeDir, "projects");
+  const projectsDir = join10(claudeDir, "projects");
   const conversations = [];
   let projectEntries;
   try {
@@ -49908,7 +50344,7 @@ function discoverConversations(claudeDir) {
     return [];
   }
   for (const pdirName of projectEntries) {
-    const pdirPath = join9(projectsDir, pdirName);
+    const pdirPath = join10(projectsDir, pdirName);
     try {
       if (!statSync5(pdirPath).isDirectory())
         continue;
@@ -49926,7 +50362,7 @@ function discoverConversations(claudeDir) {
         continue;
       if (entryName.includes("subagent"))
         continue;
-      const filePath = join9(pdirPath, entryName);
+      const filePath = join10(pdirPath, entryName);
       if (filePath.includes("subagents"))
         continue;
       try {
@@ -50047,7 +50483,7 @@ import { extname as extname2 } from "node:path";
 
 // packages/memory/dist/codebase-analysis/handlers/codebase-analyze-helpers.js
 import { readdirSync as readdirSync6, statSync as statSync6 } from "node:fs";
-import { join as join10, relative as relative4 } from "node:path";
+import { join as join11, relative as relative4 } from "node:path";
 var CODEBASE_AGENT_CONTEXT = "codebase";
 var FILE_TAG_PREFIX = "file:";
 var HASH_TAG_PREFIX = "hash:";
@@ -50080,7 +50516,7 @@ function* _walkDir(root) {
   for (const entry of entries) {
     if (IGNORE_DIRS2.has(entry.name))
       continue;
-    const fullPath = join10(root, entry.name);
+    const fullPath = join11(root, entry.name);
     if (entry.isDirectory()) {
       yield* _walkDir(fullPath);
     } else if (entry.isFile()) {
@@ -50649,8 +51085,8 @@ function _markDeleted(existing, seenPaths, store, incremental) {
 }
 
 // packages/memory/dist/codebase-analysis/handlers/ingest-codebase.js
-import { homedir as homedir6 } from "node:os";
-import { join as join13 } from "node:path";
+import { homedir as homedir7 } from "node:os";
+import { join as join14 } from "node:path";
 
 // packages/memory/dist/codebase-analysis/handlers/ingest-codebase-cypher.js
 var _UPSTREAM_SERVER = "codebase";
@@ -50891,10 +51327,10 @@ async function fetchFiles(graphPath, limit) {
 
 // packages/memory/dist/codebase-analysis/handlers/ingest-codebase-graph.js
 import { existsSync as existsSync11, rmSync as rmSync2, statSync as statSync8 } from "node:fs";
-import { join as join11, resolve as resolve4 } from "node:path";
+import { join as join12, resolve as resolve4 } from "node:path";
 var _UPSTREAM_SERVER2 = "codebase";
 function silentCleanStaleGraphSlot(outputDir) {
-  const slot = join11(outputDir, "graph");
+  const slot = join12(outputDir, "graph");
   try {
     if (existsSync11(slot) && !statSync8(slot).isDirectory()) {
       rmSync2(slot);
@@ -50926,7 +51362,7 @@ async function ensureGraph(store, projectPath, outputDir, language2, forceReinde
   if (typeof result === "object" && result !== null && result["status"] === "error") {
     throw new McpConnectionError2(`upstream analyze_codebase failed: ${result["message"] ?? "<no message>"}`);
   }
-  const graphPath = result["graph_path"] ?? join11(resolve4(outputDir), "graph");
+  const graphPath = result["graph_path"] ?? join12(resolve4(outputDir), "graph");
   memoiseGraphPath(store, projectPath, graphPath);
   result["graph_path"] = graphPath;
   result["reused_cached"] = false;
@@ -50934,8 +51370,8 @@ async function ensureGraph(store, projectPath, outputDir, language2, forceReinde
 }
 
 // packages/memory/dist/codebase-analysis/handlers/ingest-codebase-pages.js
-import { mkdirSync as mkdirSync4, writeFileSync as writeFileSync4 } from "node:fs";
-import { dirname as dirname3, join as join12 } from "node:path";
+import { mkdirSync as mkdirSync5, writeFileSync as writeFileSync4 } from "node:fs";
+import { dirname as dirname3, join as join13 } from "node:path";
 function _slug(text) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
 }
@@ -50979,8 +51415,8 @@ function writeProcessPages(processes, wikiRoot) {
   for (const proc of processes) {
     try {
       const [relPath, markdown] = renderProcessPage(proc);
-      const fullPath = join12(wikiRoot, relPath);
-      mkdirSync4(dirname3(fullPath), { recursive: true });
+      const fullPath = join13(wikiRoot, relPath);
+      mkdirSync5(dirname3(fullPath), { recursive: true });
       writeFileSync4(fullPath, markdown, "utf8");
       written.push(relPath);
     } catch {
@@ -51054,10 +51490,10 @@ function writeSymbolMemories(store, symbols, projectPath, domain) {
     const qn = sym.qualified_name ?? sym.name;
     if (!qn)
       continue;
-    const summary = _shortSymbolSummary(sym);
+    const summary2 = _shortSymbolSummary(sym);
     let content = `Code symbol: ${qn}
 
-${summary}`;
+${summary2}`;
     if (sym.file)
       content += `
 File: ${sym.file}`;
@@ -51200,7 +51636,7 @@ var _UPSTREAM_SERVER3 = "codebase";
 var _DEFAULT_TOP_SYMBOLS = null;
 var _DEFAULT_TOP_PROCESSES = null;
 function _defaultOutputDir(projectPath) {
-  return join13(homedir6(), ".cache", "cortex", "code-graphs", projectKey(projectPath));
+  return join14(homedir7(), ".cache", "cortex", "code-graphs", projectKey(projectPath));
 }
 function _parseIntOrNull(raw) {
   if (raw === null || raw === void 0)
@@ -51337,8 +51773,8 @@ async function handler13(args, deps) {
 }
 
 // packages/memory/dist/codebase-analysis/handlers/ingest-prd.js
-import { mkdirSync as mkdirSync5, readFileSync as readFileSync8, writeFileSync as writeFileSync5 } from "node:fs";
-import { dirname as dirname4, join as join14, resolve as resolve5 } from "node:path";
+import { mkdirSync as mkdirSync6, readFileSync as readFileSync8, writeFileSync as writeFileSync5 } from "node:fs";
+import { dirname as dirname4, join as join15, resolve as resolve5 } from "node:path";
 var _UPSTREAM_SERVER4 = "prd-gen";
 var BULLET_MIN_LENGTH = 8;
 var SLUG_MAX_LENGTH = 80;
@@ -51487,8 +51923,8 @@ ${text.trim()}`;
   return [relPath, frontmatter.join("\n") + "\n" + body + "\n"];
 }
 function _writePage(wikiRoot, relPath, markdown) {
-  const fullPath = join14(wikiRoot, relPath);
-  mkdirSync5(dirname4(fullPath), { recursive: true });
+  const fullPath = join15(wikiRoot, relPath);
+  mkdirSync6(dirname4(fullPath), { recursive: true });
   writeFileSync5(fullPath, markdown, "utf8");
 }
 function _writeBulletMemories(store, bullets, tag, title, domain, directory) {
@@ -51926,9 +52362,9 @@ for (const t2 of Object.values(ToolKind)) {
 }
 
 // packages/memory/dist/workflow-graph/sources/source-jsonl.js
-import { join as join15 } from "node:path";
-import { homedir as homedir7 } from "node:os";
-var CLAUDE_DIR2 = join15(homedir7(), ".claude");
+import { join as join16 } from "node:path";
+import { homedir as homedir8 } from "node:os";
+var CLAUDE_DIR2 = join16(homedir8(), ".claude");
 
 // packages/memory/dist/workflow-graph/sources/source-pg.js
 var _MEMORY_PASSTHROUGH_KEYS = "heat_base arousal emotional_valence dominant_emotion importance surprise_score confidence access_count useful_count replay_count reconsolidation_count plasticity stability excitability hippocampal_dependency schema_match_score schema_id separation_index interference_score encoding_strength hours_in_stage stage_entered_at no_decay is_protected is_stale is_benchmark is_global store_type last_accessed created_at compression_level compressed tags".split(" ");
@@ -52009,8 +52445,8 @@ var HOOK_TIMEOUTS_MS = {
 
 // packages/memory/dist/hooks/session-start.js
 import { existsSync as existsSync12, readdirSync as readdirSync7, statSync as statSync9 } from "node:fs";
-import { homedir as homedir8 } from "node:os";
-import { join as join16, basename as basename6 } from "node:path";
+import { homedir as homedir9 } from "node:os";
+import { join as join17, basename as basename6 } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 
 // packages/memory/dist/hooks/db.js
@@ -52391,6 +52827,7 @@ function formatExternalSources(sources) {
 
 // packages/memory/dist/hooks/session-start.js
 var LOG_PREFIX = "[session-start-hook]";
+var PYTHON_BIN = process.env["CORTEX_PYTHON_BIN"] ?? (process.platform === "win32" ? "python" : "python3");
 function log(msg) {
   process.stderr.write(`${LOG_PREFIX} ${msg}
 `);
@@ -52408,7 +52845,7 @@ function autoBackfill() {
   const BACKFILL_MAX_FILES = 100;
   const BACKFILL_MIN_IMPORTANCE2 = "0.35";
   try {
-    const result = spawnSync("python3", [
+    const result = spawnSync(PYTHON_BIN, [
       "-c",
       `import asyncio, json
 from mcp_server.handlers.backfill_memories import handler as h
@@ -52440,21 +52877,20 @@ function autoWirePipeline() {
   const { pluginRoot } = loadHookConfig();
   if (!pluginRoot)
     return;
+  const PYTHON_AUTOWIRE_SCRIPT = [
+    "import json, sys",
+    "sys.path.insert(0, sys.argv[1])",
+    "from mcp_server.infrastructure.pipeline_discovery import ensure_pipeline_connection",
+    "r = ensure_pipeline_connection()",
+    "print(json.dumps(r))"
+  ].join("\n");
   try {
-    const result = spawnSync("python3", [
-      "-c",
-      `
-import json, sys
-sys.path.insert(0, r"${pluginRoot.replace(/\\/g, "/")}")
-from mcp_server.infrastructure.pipeline_discovery import ensure_pipeline_connection
-r = ensure_pipeline_connection()
-print(json.dumps(r))
-`
-    ], {
+    const result = spawnSync(PYTHON_BIN, ["-c", PYTHON_AUTOWIRE_SCRIPT, pluginRoot], {
       encoding: "utf-8",
       timeout: 5e3,
       // source: cortex@ed33435 mcp_server/hooks/session_start.py:482-503 — pipeline auto-wire is fast (config file write only)
-      env: { ...process.env, PYTHONPATH: pluginRoot }
+      env: { ...process.env, PYTHONPATH: pluginRoot },
+      shell: false
     });
     const stdout = result.stdout?.trim();
     if (!stdout)
@@ -52473,12 +52909,12 @@ function maybeBackgroundReanalyze() {
     const pluginRoot = config2.pluginRoot;
     if (!pluginRoot)
       return;
-    const launcherPath = join16(pluginRoot, "scripts", "launcher.py");
+    const launcherPath = join17(pluginRoot, "scripts", "launcher.py");
     if (!existsSync12(launcherPath))
       return;
-    const logDir = join16(homedir8(), ".claude", "methodology");
-    const logPath = join16(logDir, "pipeline_reanalyze.log");
-    const child = spawn("python3", [launcherPath, "mcp_server.hooks.ingest_codebase_background", config2.projectRoot], {
+    const logDir = join17(homedir9(), ".claude", "methodology");
+    const logPath = join17(logDir, "pipeline_reanalyze.log");
+    const child = spawn(PYTHON_BIN, [launcherPath, "mcp_server.hooks.ingest_codebase_background", config2.projectRoot], {
       detached: true,
       stdio: ["ignore", "ignore", "ignore"]
     });
@@ -52489,13 +52925,13 @@ function maybeBackgroundReanalyze() {
   }
 }
 function countSessionFiles() {
-  const projectsDir = join16(homedir8(), ".claude", "projects");
+  const projectsDir = join17(homedir9(), ".claude", "projects");
   if (!existsSync12(projectsDir))
     return 0;
   let count = 0;
   try {
     for (const entry of readdirSync7(projectsDir)) {
-      const fullPath = join16(projectsDir, entry);
+      const fullPath = join17(projectsDir, entry);
       if (statSync9(fullPath).isDirectory()) {
         for (const f2 of readdirSync7(fullPath)) {
           if (f2.endsWith(".jsonl"))
@@ -52509,11 +52945,11 @@ function countSessionFiles() {
 }
 function detectExternalSources() {
   const sources = [];
-  const claudeMemDb = join16(homedir8(), ".claude-mem", "claude-mem.db");
+  const claudeMemDb = join17(homedir9(), ".claude-mem", "claude-mem.db");
   if (existsSync12(claudeMemDb)) {
     sources.push({ name: "claude-mem", count: 0, path: claudeMemDb });
   }
-  const cursorDir = join16(homedir8(), ".cursor");
+  const cursorDir = join17(homedir9(), ".cursor");
   if (existsSync12(cursorDir)) {
     try {
       const files = readdirSync7(cursorDir, { recursive: true });
@@ -52524,7 +52960,7 @@ function detectExternalSources() {
     } catch {
     }
   }
-  const downloads = join16(homedir8(), "Downloads");
+  const downloads = join17(homedir9(), "Downloads");
   if (existsSync12(downloads)) {
     try {
       const conversationFiles = readdirSync7(downloads, { recursive: true });
@@ -52533,7 +52969,7 @@ function detectExternalSources() {
         sources.push({
           name: "ChatGPT",
           count: chatGptFiles.length,
-          path: join16(downloads, chatGptFiles[0] ?? "")
+          path: join17(downloads, chatGptFiles[0] ?? "")
         });
       }
     } catch {
@@ -52942,8 +53378,8 @@ if (process.argv[1]?.endsWith("post-tool-capture.js") === true) {
 
 // packages/memory/dist/hooks/agent-briefing.js
 import { existsSync as existsSync13, readdirSync as readdirSync8, readFileSync as readFileSync9 } from "node:fs";
-import { homedir as homedir9 } from "node:os";
-import { join as join17 } from "node:path";
+import { homedir as homedir10 } from "node:os";
+import { join as join18 } from "node:path";
 var LOG_PREFIX4 = "[cortex-agent-briefing]";
 var MAX_MEMORIES2 = 3;
 var MIN_HEAT3 = 0.2;
@@ -52974,18 +53410,18 @@ function parseFrontmatterName(filePath) {
   }
 }
 function loadSpecialistAgents() {
-  const agentsDir = join17(homedir9(), ".claude", "agents");
+  const agentsDir = join18(homedir10(), ".claude", "agents");
   if (!existsSync13(agentsDir))
     return FALLBACK_AGENTS;
   const names = /* @__PURE__ */ new Set();
   try {
-    for (const pattern of [agentsDir, join17(agentsDir, "genius")]) {
+    for (const pattern of [agentsDir, join18(agentsDir, "genius")]) {
       if (!existsSync13(pattern))
         continue;
       for (const entry of readdirSync8(pattern)) {
         if (entry === "INDEX.md" || !entry.endsWith(".md"))
           continue;
-        const name = parseFrontmatterName(join17(pattern, entry));
+        const name = parseFrontmatterName(join18(pattern, entry));
         if (name)
           names.add(name);
       }
@@ -53217,9 +53653,9 @@ if (process.argv[1]?.endsWith("compaction-checkpoint.js") === true) {
 }
 
 // packages/memory/dist/hooks/session-lifecycle.js
-import { readFileSync as readFileSync10, writeFileSync as writeFileSync6, existsSync as existsSync14, mkdirSync as mkdirSync6 } from "node:fs";
-import { homedir as homedir10 } from "node:os";
-import { join as join18 } from "node:path";
+import { readFileSync as readFileSync10, writeFileSync as writeFileSync6, existsSync as existsSync14, mkdirSync as mkdirSync7 } from "node:fs";
+import { homedir as homedir11 } from "node:os";
+import { join as join19 } from "node:path";
 var LOG_PREFIX6 = "[methodology-hook]";
 var MAX_SESSION_LOG_ENTRIES = 1e3;
 function log6(msg) {
@@ -53227,10 +53663,10 @@ function log6(msg) {
 `);
 }
 function methodologyDir3() {
-  return join18(homedir10(), ".claude", "methodology");
+  return join19(homedir11(), ".claude", "methodology");
 }
 function loadProfiles3() {
-  const profilePath = join18(methodologyDir3(), "profiles.json");
+  const profilePath = join19(methodologyDir3(), "profiles.json");
   if (!existsSync14(profilePath))
     return {};
   try {
@@ -53241,8 +53677,8 @@ function loadProfiles3() {
 }
 function saveProfile(domainId, profile) {
   const dir = methodologyDir3();
-  mkdirSync6(dir, { recursive: true });
-  const profilePath = join18(dir, "profiles.json");
+  mkdirSync7(dir, { recursive: true });
+  const profilePath = join19(dir, "profiles.json");
   const profiles = loadProfiles3();
   const domains = profiles["domains"] ?? {};
   domains[domainId] = profile;
@@ -53250,7 +53686,7 @@ function saveProfile(domainId, profile) {
   writeFileSync6(profilePath, JSON.stringify(profiles, null, 2), "utf-8");
 }
 function loadSessionLog() {
-  const logPath = join18(methodologyDir3(), "session_log.json");
+  const logPath = join19(methodologyDir3(), "session_log.json");
   if (!existsSync14(logPath))
     return { sessions: [] };
   try {
@@ -53261,8 +53697,8 @@ function loadSessionLog() {
 }
 function saveSessionLog(log9) {
   const dir = methodologyDir3();
-  mkdirSync6(dir, { recursive: true });
-  const logPath = join18(dir, "session_log.json");
+  mkdirSync7(dir, { recursive: true });
+  const logPath = join19(dir, "session_log.json");
   writeFileSync6(logPath, JSON.stringify(log9, null, 2), "utf-8");
 }
 var PROJECT_ID_PATH_DEPTH = 2;
@@ -53416,12 +53852,12 @@ if (process.argv[1]?.endsWith("session-lifecycle.js") === true) {
 
 // packages/memory/dist/hooks/preemptive-context.js
 import { existsSync as existsSync15, readFileSync as readFileSync11, writeFileSync as writeFileSync7 } from "node:fs";
-import { tmpdir } from "node:os";
-import { join as join19 } from "node:path";
+import { tmpdir as tmpdir2 } from "node:os";
+import { join as join20 } from "node:path";
 var LOG_PREFIX7 = "[cortex-preemptive]";
 var HEAT_BOOST = 0.1;
 var COOLDOWN_SECONDS = 60;
-var COOLDOWN_FILE = join19(tmpdir(), "cortex_preemptive_cooldown.json");
+var COOLDOWN_FILE = join20(tmpdir2(), "cortex_preemptive_cooldown.json");
 var FILE_TOOLS = /* @__PURE__ */ new Set(["Edit", "Write", "Read"]);
 function log7(msg) {
   process.stderr.write(`${LOG_PREFIX7} ${msg}
@@ -53499,11 +53935,11 @@ if (process.argv[1]?.endsWith("preemptive-context.js") === true) {
 
 // packages/memory/dist/hooks/pipeline-impact-bump.js
 import { existsSync as existsSync16, readFileSync as readFileSync12, writeFileSync as writeFileSync8 } from "node:fs";
-import { tmpdir as tmpdir2 } from "node:os";
-import { join as join20 } from "node:path";
+import { tmpdir as tmpdir3 } from "node:os";
+import { join as join21 } from "node:path";
 var LOG_PREFIX8 = "[pipeline-impact-bump]";
 var COOLDOWN_SECONDS2 = 30;
-var COOLDOWN_FILE2 = join20(tmpdir2(), "cortex_pipeline_impact_cooldown.json");
+var COOLDOWN_FILE2 = join21(tmpdir3(), "cortex_pipeline_impact_cooldown.json");
 var FILE_TOOLS2 = /* @__PURE__ */ new Set(["Edit", "Write", "MultiEdit"]);
 var IMPACT_BOOST2 = 0.15;
 var MAX_BUMPS = 20;
@@ -53737,7 +54173,7 @@ async function launchDashboard(opts = {}) {
   return url;
 }
 
-// packages/mcp-servers/memory/dist/tools/ingest.js
+// packages/mcp-servers/memory/src/tools/ingest.ts
 var MIN_IMPORTANCE_DEFAULT = 0.4;
 var TOP_SYMBOLS_DEFAULT = 50;
 var TOP_PROCESSES_DEFAULT = 10;
@@ -53756,174 +54192,204 @@ function errorText9(tool, err) {
   return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
 }
 function registerIngestTools(server2, deps) {
-  server2.registerTool("import_sessions", {
-    description: "Import Claude Code JSONL conversation history into the memory store (streams via head+tail, per ADR-0045 R2).",
-    // source: docs/ADR/0045-bounded-streaming-ingestion.md
-    inputSchema: {
-      project: external_exports.string().default("").describe("Project identifier"),
-      domain: external_exports.string().default("").describe("Domain to assign"),
-      // source: MCP_TOOLS.md §import_sessions default min_importance=0.4
-      min_importance: external_exports.number().min(0).max(1).default(MIN_IMPORTANCE_DEFAULT).describe("Min importance threshold"),
-      max_sessions: external_exports.number().int().min(0).default(0).describe("Max sessions (0 = all)"),
-      dry_run: external_exports.boolean().default(false).describe("Preview without storing")
-    }
-  }, async (args) => {
-    try {
-      if (!deps) {
-        throw new MissingStoreError("import_sessions", "IngestDeps.store \u2014 no store injected");
+  server2.registerTool(
+    "import_sessions",
+    {
+      description: "Import Claude Code JSONL conversation history into the memory store (streams via head+tail, per ADR-0045 R2).",
+      // source: docs/ADR/0045-bounded-streaming-ingestion.md
+      inputSchema: {
+        project: external_exports.string().default("").describe("Project identifier"),
+        domain: external_exports.string().default("").describe("Domain to assign"),
+        // source: MCP_TOOLS.md §import_sessions default min_importance=0.4
+        min_importance: external_exports.number().min(0).max(1).default(MIN_IMPORTANCE_DEFAULT).describe("Min importance threshold"),
+        max_sessions: external_exports.number().int().min(0).default(0).describe("Max sessions (0 = all)"),
+        dry_run: external_exports.boolean().default(false).describe("Preview without storing")
       }
-      const store = deps.store;
-      const rememberFn = async (rawArgs) => {
-        const result = await rememberAsync(rawArgs, store);
-        return result.stored ? { stored: true } : null;
-      };
-      const response = await importHandler({
-        project: args.project,
-        domain: args.domain,
-        min_importance: args.min_importance,
-        max_sessions: args.max_sessions,
-        dry_run: args.dry_run
-      }, rememberFn);
-      return { content: [{ type: "text", text: JSON.stringify({
-        imported: response.imported,
-        skipped: response.skipped,
-        sessions_processed: response.sessions_scanned,
-        dry_run: args.dry_run
-      }) }] };
-    } catch (err) {
-      return errorText9("import_sessions", err);
-    }
-  });
-  server2.registerTool("codebase_analyze", {
-    description: "Walk a codebase and store its structure as memories using AST parsing with regex fallback.",
-    inputSchema: {
-      directory: external_exports.string().optional().describe("Root directory to analyze"),
-      languages: external_exports.array(external_exports.string()).optional().describe("Restrict to specific languages"),
-      // source: cortex@ed33435 mcp_server/handlers/codebase_analyze.py — default max_files
-      max_files: external_exports.number().int().min(1).max(MAX_FILES_MAX).default(MAX_FILES_DEFAULT).describe("Max files to process"),
-      // source: cortex@ed33435 mcp_server/handlers/codebase_analyze.py — default max_file_size_kb
-      max_file_size_kb: external_exports.number().int().min(1).max(MAX_FILE_SIZE_KB_MAX).default(MAX_FILE_SIZE_KB_DEFAULT).describe("Skip files larger than this KB"),
-      incremental: external_exports.boolean().default(true).describe("Only reprocess changed files"),
-      dry_run: external_exports.boolean().default(false).describe("Report without writing"),
-      domain: external_exports.string().optional().describe("Cognitive domain tag")
-    }
-  }, async (args) => {
-    try {
-      if (!deps) {
-        throw new MissingStoreError("codebase_analyze", "IngestDeps.store \u2014 no store injected");
-      }
-      const analyzeDeps = { store: deps.store };
-      const result = await codebase_analysis_exports.codebaseAnalyzeHandler(args, analyzeDeps);
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
-    } catch (err) {
-      return errorText9("codebase_analyze", err);
-    }
-  });
-  server2.registerTool("ingest_codebase", {
-    description: "Ingest upstream codebase analysis from ai-automatised-pipeline into Cortex.",
-    inputSchema: {
-      project_path: external_exports.string().min(1).describe("Path to the codebase"),
-      output_dir: external_exports.string().optional().describe("Output directory for analysis artifacts"),
-      language: external_exports.string().default("auto").describe("Language hint (auto = detect)"),
-      force_reindex: external_exports.boolean().default(false).describe("Force reindex even if cached"),
-      // source: MCP_TOOLS.md §ingest_codebase default top_symbols=50
-      top_symbols: external_exports.number().int().min(1).default(TOP_SYMBOLS_DEFAULT).describe("Top symbols to extract"),
-      // source: MCP_TOOLS.md §ingest_codebase default top_processes=10
-      top_processes: external_exports.number().int().min(1).default(TOP_PROCESSES_DEFAULT).describe("Top processes to extract")
-    }
-  }, async (args) => {
-    try {
-      if (!deps) {
-        throw new MissingStoreError("ingest_codebase", "IngestDeps.store \u2014 no store injected");
-      }
-      const ingestDeps = {
-        store: deps.store,
-        wikiRoot: deps.wikiRoot,
-        mcpClientPool: deps.mcpClientPool
-      };
-      const result = await codebase_analysis_exports.ingestCodebaseHandler(args, ingestDeps);
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
-    } catch (err) {
-      return errorText9("ingest_codebase", err);
-    }
-  });
-  server2.registerTool("ingest_prd", {
-    description: "Ingest a PRD document into Cortex (from path or content string).",
-    inputSchema: {
-      path: external_exports.string().optional().describe("Path to PRD file"),
-      content: external_exports.string().optional().describe("PRD content string"),
-      pipeline_id: external_exports.string().optional().describe("Pipeline run ID"),
-      title: external_exports.string().optional().describe("PRD title"),
-      validate: external_exports.boolean().default(false).describe("Validate PRD structure"),
-      domain: external_exports.string().optional().describe("Domain to assign")
-    }
-  }, async (args) => {
-    try {
-      if (!deps) {
-        throw new MissingStoreError("ingest_prd", "IngestDeps.store \u2014 no store injected");
-      }
-      const prdDeps = {
-        store: deps.store,
-        wikiRoot: deps.wikiRoot,
-        mcpClientPool: deps.mcpClientPool
-      };
-      const result = await codebase_analysis_exports.ingestPrdHandler(args, prdDeps);
-      return { content: [{ type: "text", text: JSON.stringify(result) }] };
-    } catch (err) {
-      return errorText9("ingest_prd", err);
-    }
-  });
-  server2.registerTool("change_impact", {
-    description: "Report memories affected by a commit's code changes (ADR-0046 P4).",
-    // source: docs/ADR/0046-change-impact-analysis.md
-    inputSchema: {
-      base: external_exports.string().default("HEAD~1").describe("Base git ref"),
-      head: external_exports.string().default("HEAD").describe("Head git ref"),
-      expand_impact: external_exports.boolean().default(false).describe("Expand to transitive impacts"),
-      apply_heat_bump: external_exports.boolean().default(false).describe("Apply heat bump to affected memories")
-    }
-  }, async (args) => {
-    try {
-      const store = deps?.store;
-      const response = await changeImpactHandler({
-        base: args.base,
-        head: args.head,
-        expand_impact: args.expand_impact,
-        apply_heat_bump: args.apply_heat_bump
-      }, {
-        store,
-        mcpClientPool: deps?.mcpClientPool ?? null
-      });
-      return { content: [{ type: "text", text: JSON.stringify(response) }] };
-    } catch (err) {
-      return errorText9("change_impact", err);
-    }
-  });
-  server2.registerTool("open_visualization", {
-    description: "Launch the 3D methodology constellation map in the browser.",
-    inputSchema: {
-      domain: external_exports.string().optional().describe("Domain to visualise")
-    }
-  }, async (args) => {
-    try {
-      const url = await launchDashboard({ openBrowser: true });
-      const domain = args.domain;
-      const finalUrl = domain ? `${url}?domain=${encodeURIComponent(domain)}` : url;
-      return {
-        content: [
+    },
+    async (args) => {
+      try {
+        if (!deps) {
+          throw new MissingStoreError("import_sessions", "IngestDeps.store \u2014 no store injected");
+        }
+        const store = deps.store;
+        const rememberFn = async (rawArgs) => {
+          const result = await rememberAsync(rawArgs, store);
+          return result.stored ? { stored: true } : null;
+        };
+        const response = await importHandler(
           {
-            type: "text",
-            text: JSON.stringify({ url: finalUrl, message: `Dashboard launched at ${finalUrl}` })
-          }
-        ]
-      };
-    } catch (err) {
-      return errorText9("open_visualization", err);
+            project: args.project,
+            domain: args.domain,
+            min_importance: args.min_importance,
+            max_sessions: args.max_sessions,
+            dry_run: args.dry_run
+          },
+          rememberFn
+        );
+        return { content: [{ type: "text", text: JSON.stringify({
+          imported: response.imported,
+          skipped: response.skipped,
+          sessions_processed: response.sessions_scanned,
+          dry_run: args.dry_run
+        }) }] };
+      } catch (err) {
+        return errorText9("import_sessions", err);
+      }
     }
-  });
+  );
+  server2.registerTool(
+    "codebase_analyze",
+    {
+      description: "Walk a codebase and store its structure as memories using AST parsing with regex fallback.",
+      inputSchema: {
+        directory: external_exports.string().optional().describe("Root directory to analyze"),
+        languages: external_exports.array(external_exports.string()).optional().describe("Restrict to specific languages"),
+        // source: cortex@ed33435 mcp_server/handlers/codebase_analyze.py — default max_files
+        max_files: external_exports.number().int().min(1).max(MAX_FILES_MAX).default(MAX_FILES_DEFAULT).describe("Max files to process"),
+        // source: cortex@ed33435 mcp_server/handlers/codebase_analyze.py — default max_file_size_kb
+        max_file_size_kb: external_exports.number().int().min(1).max(MAX_FILE_SIZE_KB_MAX).default(MAX_FILE_SIZE_KB_DEFAULT).describe("Skip files larger than this KB"),
+        incremental: external_exports.boolean().default(true).describe("Only reprocess changed files"),
+        dry_run: external_exports.boolean().default(false).describe("Report without writing"),
+        domain: external_exports.string().optional().describe("Cognitive domain tag")
+      }
+    },
+    async (args) => {
+      try {
+        if (!deps) {
+          throw new MissingStoreError("codebase_analyze", "IngestDeps.store \u2014 no store injected");
+        }
+        const analyzeDeps = { store: deps.store };
+        const result = await codebase_analysis_exports.codebaseAnalyzeHandler(args, analyzeDeps);
+        return { content: [{ type: "text", text: JSON.stringify(result) }] };
+      } catch (err) {
+        return errorText9("codebase_analyze", err);
+      }
+    }
+  );
+  server2.registerTool(
+    "ingest_codebase",
+    {
+      description: "Ingest upstream codebase analysis from ai-automatised-pipeline into Cortex.",
+      inputSchema: {
+        project_path: external_exports.string().min(1).describe("Path to the codebase"),
+        output_dir: external_exports.string().optional().describe("Output directory for analysis artifacts"),
+        language: external_exports.string().default("auto").describe("Language hint (auto = detect)"),
+        force_reindex: external_exports.boolean().default(false).describe("Force reindex even if cached"),
+        // source: MCP_TOOLS.md §ingest_codebase default top_symbols=50
+        top_symbols: external_exports.number().int().min(1).default(TOP_SYMBOLS_DEFAULT).describe("Top symbols to extract"),
+        // source: MCP_TOOLS.md §ingest_codebase default top_processes=10
+        top_processes: external_exports.number().int().min(1).default(TOP_PROCESSES_DEFAULT).describe("Top processes to extract")
+      }
+    },
+    async (args) => {
+      try {
+        if (!deps) {
+          throw new MissingStoreError("ingest_codebase", "IngestDeps.store \u2014 no store injected");
+        }
+        const ingestDeps = {
+          store: deps.store,
+          wikiRoot: deps.wikiRoot,
+          mcpClientPool: deps.mcpClientPool
+        };
+        const result = await codebase_analysis_exports.ingestCodebaseHandler(args, ingestDeps);
+        return { content: [{ type: "text", text: JSON.stringify(result) }] };
+      } catch (err) {
+        return errorText9("ingest_codebase", err);
+      }
+    }
+  );
+  server2.registerTool(
+    "ingest_prd",
+    {
+      description: "Ingest a PRD document into Cortex (from path or content string).",
+      inputSchema: {
+        path: external_exports.string().optional().describe("Path to PRD file"),
+        content: external_exports.string().optional().describe("PRD content string"),
+        pipeline_id: external_exports.string().optional().describe("Pipeline run ID"),
+        title: external_exports.string().optional().describe("PRD title"),
+        validate: external_exports.boolean().default(false).describe("Validate PRD structure"),
+        domain: external_exports.string().optional().describe("Domain to assign")
+      }
+    },
+    async (args) => {
+      try {
+        if (!deps) {
+          throw new MissingStoreError("ingest_prd", "IngestDeps.store \u2014 no store injected");
+        }
+        const prdDeps = {
+          store: deps.store,
+          wikiRoot: deps.wikiRoot,
+          mcpClientPool: deps.mcpClientPool
+        };
+        const result = await codebase_analysis_exports.ingestPrdHandler(args, prdDeps);
+        return { content: [{ type: "text", text: JSON.stringify(result) }] };
+      } catch (err) {
+        return errorText9("ingest_prd", err);
+      }
+    }
+  );
+  server2.registerTool(
+    "change_impact",
+    {
+      description: "Report memories affected by a commit's code changes (ADR-0046 P4).",
+      // source: docs/ADR/0046-change-impact-analysis.md
+      inputSchema: {
+        base: external_exports.string().default("HEAD~1").describe("Base git ref"),
+        head: external_exports.string().default("HEAD").describe("Head git ref"),
+        expand_impact: external_exports.boolean().default(false).describe("Expand to transitive impacts"),
+        apply_heat_bump: external_exports.boolean().default(false).describe("Apply heat bump to affected memories")
+      }
+    },
+    async (args) => {
+      try {
+        const store = deps?.store;
+        const response = await changeImpactHandler(
+          {
+            base: args.base,
+            head: args.head,
+            expand_impact: args.expand_impact,
+            apply_heat_bump: args.apply_heat_bump
+          },
+          {
+            store,
+            mcpClientPool: deps?.mcpClientPool ?? null
+          }
+        );
+        return { content: [{ type: "text", text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText9("change_impact", err);
+      }
+    }
+  );
+  server2.registerTool(
+    "open_visualization",
+    {
+      description: "Launch the 3D methodology constellation map in the browser.",
+      inputSchema: {
+        domain: external_exports.string().optional().describe("Domain to visualise")
+      }
+    },
+    async (args) => {
+      try {
+        const url = await launchDashboard({ openBrowser: true });
+        const domain = args.domain;
+        const finalUrl = domain ? `${url}?domain=${encodeURIComponent(domain)}` : url;
+        return {
+          content: [
+            {
+              type: "text",
+              text: JSON.stringify({ url: finalUrl, message: `Dashboard launched at ${finalUrl}` })
+            }
+          ]
+        };
+      } catch (err) {
+        return errorText9("open_visualization", err);
+      }
+    }
+  );
 }
 
-// packages/mcp-servers/memory/dist/tools/navigation.js
+// packages/mcp-servers/memory/src/tools/navigation.ts
 var MAX_EDGES_DEFAULT = 200;
 var ROUNDING_FACTOR_4DP2 = 1e4;
 var HOT_HEAT_THRESHOLD = 0.3;
@@ -53942,24 +54408,17 @@ function bfsEntityGraph(store, startId, maxDepth, maxEdges, direction, relFilter
   const queue = [[startId, 0]];
   const edges = [];
   while (queue.length > 0) {
-    if (edges.length >= maxEdges)
-      break;
+    if (edges.length >= maxEdges) break;
     const front = queue.shift();
-    if (!front)
-      break;
+    if (!front) break;
     const [entityId, depth] = front;
-    if (depth >= maxDepth)
-      continue;
+    if (depth >= maxDepth) continue;
     const rels = store.getRelationshipsForEntity?.(entityId) ?? [];
     for (const rel of rels) {
-      if (edges.length >= maxEdges)
-        break;
-      if (relFilter && !relFilter.has(rel.relationship_type))
-        continue;
-      if (direction === "outgoing" && rel.source_entity_id !== entityId)
-        continue;
-      if (direction === "incoming" && rel.target_entity_id !== entityId)
-        continue;
+      if (edges.length >= maxEdges) break;
+      if (relFilter && !relFilter.has(rel.relationship_type)) continue;
+      if (direction === "outgoing" && rel.source_entity_id !== entityId) continue;
+      if (direction === "incoming" && rel.target_entity_id !== entityId) continue;
       edges.push({
         source_id: rel.source_entity_id,
         target_id: rel.target_entity_id,
@@ -53979,114 +54438,129 @@ function bfsEntityGraph(store, startId, maxDepth, maxEdges, direction, relFilter
   return edges;
 }
 function registerNavigationTools(server2, deps) {
-  server2.registerTool("get_causal_chain", {
-    description: "Trace entity relationships through the knowledge graph.",
-    inputSchema: {
-      entity_name: external_exports.string().optional().describe("Entity name to start from"),
-      memory_id: external_exports.number().int().optional().describe("Memory ID to start from"),
-      relationship_types: external_exports.array(external_exports.string()).optional().describe("Relationship types to traverse"),
-      max_depth: external_exports.number().int().min(1).max(GET_CAUSAL_CHAIN_MAX_DEPTH).default(GET_CAUSAL_CHAIN_DEFAULT_DEPTH).describe("Max traversal depth"),
-      direction: external_exports.enum(["incoming", "outgoing", "both"]).default("both").describe("Traversal direction")
-    }
-  }, async (args) => {
-    try {
-      if (!args.entity_name && args.memory_id === void 0) {
-        return { content: [{ type: "text", text: JSON.stringify({
-          chain: [],
-          total_edges: 0,
-          reason: "provide entity_name or memory_id"
-        }) }] };
+  server2.registerTool(
+    "get_causal_chain",
+    {
+      description: "Trace entity relationships through the knowledge graph.",
+      inputSchema: {
+        entity_name: external_exports.string().optional().describe("Entity name to start from"),
+        memory_id: external_exports.number().int().optional().describe("Memory ID to start from"),
+        relationship_types: external_exports.array(external_exports.string()).optional().describe("Relationship types to traverse"),
+        max_depth: external_exports.number().int().min(1).max(GET_CAUSAL_CHAIN_MAX_DEPTH).default(GET_CAUSAL_CHAIN_DEFAULT_DEPTH).describe("Max traversal depth"),
+        direction: external_exports.enum(["incoming", "outgoing", "both"]).default("both").describe("Traversal direction")
       }
-      const relFilter = (args.relationship_types?.length ?? 0) > 0 ? new Set(args.relationship_types ?? []) : null;
-      let startEntity = null;
-      if (args.entity_name) {
-        const found = deps.store.getEntityByName(args.entity_name);
-        if (found)
-          startEntity = { id: found.id, name: found.name };
-      } else if (args.memory_id !== void 0) {
-        const mem = deps.store.getMemory(args.memory_id);
-        if (mem) {
-          const tokens = mem.content.match(/\b[A-Z][a-z]{2,}\b/g) ?? [];
-          for (const token of tokens) {
-            const found = deps.store.getEntityByName(token);
-            if (found) {
-              startEntity = { id: found.id, name: found.name };
-              break;
+    },
+    async (args) => {
+      try {
+        if (!args.entity_name && args.memory_id === void 0) {
+          return { content: [{ type: "text", text: JSON.stringify({
+            chain: [],
+            total_edges: 0,
+            reason: "provide entity_name or memory_id"
+          }) }] };
+        }
+        const relFilter = (args.relationship_types?.length ?? 0) > 0 ? new Set(args.relationship_types ?? []) : null;
+        let startEntity = null;
+        if (args.entity_name) {
+          const found = deps.store.getEntityByName(args.entity_name);
+          if (found) startEntity = { id: found.id, name: found.name };
+        } else if (args.memory_id !== void 0) {
+          const mem = deps.store.getMemory(args.memory_id);
+          if (mem) {
+            const tokens = mem.content.match(/\b[A-Z][a-z]{2,}\b/g) ?? [];
+            for (const token of tokens) {
+              const found = deps.store.getEntityByName(token);
+              if (found) {
+                startEntity = { id: found.id, name: found.name };
+                break;
+              }
             }
           }
         }
-      }
-      if (!startEntity) {
+        if (!startEntity) {
+          return { content: [{ type: "text", text: JSON.stringify({
+            chain: [],
+            total_edges: 0,
+            reason: "entity not found"
+          }) }] };
+        }
+        const maxDepth = Math.min(args.max_depth, MAX_DEPTH_CAP);
+        const maxEdges = MAX_EDGES_DEFAULT;
+        const chain = bfsEntityGraph(
+          deps.store,
+          startEntity.id,
+          maxDepth,
+          maxEdges,
+          args.direction,
+          relFilter
+        );
         return { content: [{ type: "text", text: JSON.stringify({
-          chain: [],
-          total_edges: 0,
-          reason: "entity not found"
+          start_entity: startEntity,
+          chain,
+          total_edges: chain.length,
+          max_depth: maxDepth,
+          direction: args.direction
         }) }] };
+      } catch (err) {
+        return errorText10("get_causal_chain", err);
       }
-      const maxDepth = Math.min(args.max_depth, MAX_DEPTH_CAP);
-      const maxEdges = MAX_EDGES_DEFAULT;
-      const chain = bfsEntityGraph(deps.store, startEntity.id, maxDepth, maxEdges, args.direction, relFilter);
-      return { content: [{ type: "text", text: JSON.stringify({
-        start_entity: startEntity,
-        chain,
-        total_edges: chain.length,
-        max_depth: maxDepth,
-        direction: args.direction
-      }) }] };
-    } catch (err) {
-      return errorText10("get_causal_chain", err);
     }
-  });
-  server2.registerTool("detect_gaps", {
-    description: "Identify knowledge gaps in the memory store (entity gaps, domain gaps, temporal gaps).",
-    inputSchema: {
-      domain: external_exports.string().optional().describe("Domain scope"),
-      include_entity_gaps: external_exports.boolean().default(true).describe("Include entity coverage gaps"),
-      include_domain_gaps: external_exports.boolean().default(true).describe("Include domain coverage gaps"),
-      include_temporal_gaps: external_exports.boolean().default(true).describe("Include temporal coverage gaps"),
-      // source: MCP_TOOLS.md §detect_gaps default stale_threshold_days=30
-      stale_threshold_days: external_exports.number().int().min(1).default(DETECT_GAPS_DEFAULT_STALE_DAYS).describe("Days before considered stale")
-    }
-  }, async (args) => {
-    try {
-      const staleMs = args.stale_threshold_days * MS_PER_DAY2;
-      const now = Date.now();
-      const temporalGaps = [];
-      const recommendations = [];
-      if (args.include_temporal_gaps) {
-        const allMems = deps.store.getAllMemoriesForDecay();
-        for (const mem of allMems) {
-          const createdAt = mem["created_at"];
-          const heat = mem["heat"] ?? 0;
-          if (!createdAt)
-            continue;
-          const ageMs = now - new Date(createdAt).getTime();
-          if (ageMs > staleMs && heat > HOT_HEAT_THRESHOLD) {
-            temporalGaps.push({
-              memory_id: mem["id"],
-              age_days: Math.round(ageMs / MS_PER_DAY2),
-              heat: Math.round(heat * ROUNDING_FACTOR_2DP2) / ROUNDING_FACTOR_2DP2,
-              domain: mem["domain"] ?? ""
-            });
+  );
+  server2.registerTool(
+    "detect_gaps",
+    {
+      description: "Identify knowledge gaps in the memory store (entity gaps, domain gaps, temporal gaps).",
+      inputSchema: {
+        domain: external_exports.string().optional().describe("Domain scope"),
+        include_entity_gaps: external_exports.boolean().default(true).describe("Include entity coverage gaps"),
+        include_domain_gaps: external_exports.boolean().default(true).describe("Include domain coverage gaps"),
+        include_temporal_gaps: external_exports.boolean().default(true).describe("Include temporal coverage gaps"),
+        // source: MCP_TOOLS.md §detect_gaps default stale_threshold_days=30
+        stale_threshold_days: external_exports.number().int().min(1).default(DETECT_GAPS_DEFAULT_STALE_DAYS).describe("Days before considered stale")
+      }
+    },
+    async (args) => {
+      try {
+        const staleMs = args.stale_threshold_days * MS_PER_DAY2;
+        const now = Date.now();
+        const temporalGaps = [];
+        const recommendations = [];
+        if (args.include_temporal_gaps) {
+          const allMems = deps.store.getAllMemoriesForDecay();
+          for (const mem of allMems) {
+            const createdAt = mem["created_at"];
+            const heat = mem["heat"] ?? 0;
+            if (!createdAt) continue;
+            const ageMs = now - new Date(createdAt).getTime();
+            if (ageMs > staleMs && heat > HOT_HEAT_THRESHOLD) {
+              temporalGaps.push({
+                memory_id: mem["id"],
+                age_days: Math.round(ageMs / MS_PER_DAY2),
+                heat: Math.round(heat * ROUNDING_FACTOR_2DP2) / ROUNDING_FACTOR_2DP2,
+                domain: mem["domain"] ?? ""
+              });
+            }
+          }
+          if (temporalGaps.length > 0) {
+            recommendations.push(
+              `${temporalGaps.length} hot memories older than ${args.stale_threshold_days} days \u2014 consider refreshing.`
+            );
           }
         }
-        if (temporalGaps.length > 0) {
-          recommendations.push(`${temporalGaps.length} hot memories older than ${args.stale_threshold_days} days \u2014 consider refreshing.`);
-        }
+        return { content: [{ type: "text", text: JSON.stringify({
+          entity_gaps: args.include_entity_gaps ? [] : [],
+          domain_gaps: args.include_domain_gaps ? [] : [],
+          temporal_gaps: args.include_temporal_gaps ? temporalGaps : [],
+          recommendations
+        }) }] };
+      } catch (err) {
+        return errorText10("detect_gaps", err);
       }
-      return { content: [{ type: "text", text: JSON.stringify({
-        entity_gaps: args.include_entity_gaps ? [] : [],
-        domain_gaps: args.include_domain_gaps ? [] : [],
-        temporal_gaps: args.include_temporal_gaps ? temporalGaps : [],
-        recommendations
-      }) }] };
-    } catch (err) {
-      return errorText10("detect_gaps", err);
     }
-  });
+  );
 }
 
-// packages/mcp-servers/memory/dist/index.js
+// packages/mcp-servers/memory/src/index.ts
 var server = new McpServer({
   name: "@agentic/mcp-server-memory",
   version: "0.1.0"
@@ -54103,7 +54577,9 @@ if (rawDatabaseUrl) {
     const u2 = new URL(rawDatabaseUrl);
     const dbName = u2.pathname.replace(/^\//, "");
     if (dbName === "cortex") {
-      process.stderr.write("[mcp-server-memory] FATAL: DATABASE_URL points to a database named 'cortex' which is reserved for the standalone Python Cortex plugin. Set DATABASE_URL to a different database (e.g. postgresql://localhost/cortex_agentic).\n");
+      process.stderr.write(
+        "[mcp-server-memory] FATAL: DATABASE_URL points to a database named 'cortex' which is reserved for the standalone Python Cortex plugin. Set DATABASE_URL to a different database (e.g. postgresql://localhost/cortex_agentic).\n"
+      );
       process.exit(1);
     }
   } catch {
@@ -54118,7 +54594,7 @@ if (rawDatabaseUrl) {
   process.stderr.write(`[mcp-server-memory] PostgreSQL store active (DATABASE_URL set)
 `);
 } else {
-  const dbPath = process.env["CORTEX_DB_PATH"] ?? join21(homedir11(), ".cortex", "cortex.db");
+  const dbPath = process.env["CORTEX_DB_PATH"] ?? join22(homedir12(), ".cortex", "cortex.db");
   const sqliteStore = new SqliteMemoryStore(dbPath);
   memoryStore = sqliteStore;
   const narrativeDb = sqliteStore._db;
@@ -54211,8 +54687,7 @@ var graphPort = {
   },
   getMemory: async (memoryId) => {
     const mem = memoryStore.getMemory(memoryId);
-    if (!mem)
-      return void 0;
+    if (!mem) return void 0;
     return {
       id: mem.id,
       content: mem.content,
@@ -54238,7 +54713,7 @@ registerManagementTools(server, { store: memoryStore });
 registerNarrativeTools(server, { store: narrativeStore, llmClient });
 registerAdvancedTools(server, { store: memoryStore });
 registerWikiTools(server);
-registerIngestTools(server, { store: memoryStore, wikiRoot: process.env["CORTEX_WIKI_ROOT"] ?? join21(homedir11(), ".claude", "methodology", "wiki"), mcpClientPool: null });
+registerIngestTools(server, { store: memoryStore, wikiRoot: process.env["CORTEX_WIKI_ROOT"] ?? join22(homedir12(), ".claude", "methodology", "wiki"), mcpClientPool: null });
 registerNavigationTools(server, { store: memoryStore });
 async function main9() {
   const transport = new StdioServerTransport();

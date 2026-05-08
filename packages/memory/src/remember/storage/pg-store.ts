@@ -89,6 +89,14 @@ import {
   insertArchive as pgInsertArchive,
 } from "./pg-store-auxiliary.js";
 import { findCoAccessedPairs as pgFindCoAccessedPairs } from "./pg-store-queries.js";
+import {
+  insertRule as pgInsertRule,
+  getAllActiveRules as pgGetAllActiveRules,
+  getRulesForScope as pgGetRulesForScope,
+  getAllRulesIncludingInactive as pgGetAllRulesIncludingInactive,
+  countActiveTriggers as pgCountActiveTriggers,
+  insertProspectiveMemory as pgInsertProspectiveMemory,
+} from "./pg-store-rules.js";
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -1214,6 +1222,148 @@ export class PgMemoryStore implements MemoryStoreExt {
 
   async close(): Promise<void> {
     await this._pool.end();
+  }
+
+  // ── MemoryStoreExt: prospective memory write ──────────────────────────
+
+  /**
+   * Sync façade — fires-and-forgets the async insertProspectiveMemory.
+   * Returns 0 on PG because we cannot block for the result.
+   * Use insertProspectiveMemoryAsync for the real id.
+   *
+   * source: ADR-0042 — sync wrapper fire-and-forgets async op.
+   */
+  insertProspectiveMemory(data: Record<string, unknown>): number {
+    void this.runAsync((c) =>
+      pgInsertProspectiveMemory(c, {
+        content: data["content"] as string,
+        trigger_condition: data["trigger_condition"] as string,
+        trigger_type: (data["trigger_type"] as string) ?? "keyword",
+        target_directory: (data["target_directory"] as string | null) ?? null,
+        is_active: data["is_active"] !== false,
+        triggered_count: (data["triggered_count"] as number) ?? 0,
+      }),
+    );
+    return 0; // id unknown in fire-and-forget path; use *Async for real id
+  }
+
+  /**
+   * Async variant — returns the real row id.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:22-38
+   */
+  async insertProspectiveMemoryAsync(data: Record<string, unknown>): Promise<number> {
+    return this.runAsync((c) =>
+      pgInsertProspectiveMemory(c, {
+        content: data["content"] as string,
+        trigger_condition: data["trigger_condition"] as string,
+        trigger_type: (data["trigger_type"] as string) ?? "keyword",
+        target_directory: (data["target_directory"] as string | null) ?? null,
+        is_active: data["is_active"] !== false,
+        triggered_count: (data["triggered_count"] as number) ?? 0,
+      }),
+    );
+  }
+
+  /**
+   * Sync façade for countActiveTriggers. Returns 0 on PG (fire-and-forget).
+   * Use countActiveTriggersAsync for the real count.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
+   */
+  countActiveTriggers(): number {
+    // PG cannot block for the count in the sync path. Return 0 as a safe default.
+    // Callers must use countActiveTriggersAsync for the real count (ADR-0042).
+    return 0;
+  }
+
+  /**
+   * Async variant — returns the real trigger count.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:190
+   */
+  async countActiveTriggersAsync(): Promise<number> {
+    return this.runAsync((c) => pgCountActiveTriggers(c));
+  }
+
+  // ── MemoryStoreExt: rules ─────────────────────────────────────────────
+
+  /**
+   * Sync façade — fires-and-forgets the async insertRule. Returns 0 on PG.
+   * Use insertRuleAsync for the real id.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:14-31
+   */
+  insertRule(data: Record<string, unknown>): number {
+    void this.runAsync((c) =>
+      pgInsertRule(c, {
+        rule_type: (data["rule_type"] as string) ?? "soft",
+        scope: (data["scope"] as string) ?? "global",
+        scope_value: (data["scope_value"] as string | null) ?? null,
+        condition: data["condition"] as string,
+        action: data["action"] as string,
+        priority: (data["priority"] as number) ?? 0,
+        is_active: data["is_active"] !== false,
+      }),
+    );
+    return 0; // id unknown in fire-and-forget path; use *Async for real id
+  }
+
+  /**
+   * Async variant — returns the real rule id.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_rules.py
+   */
+  async insertRuleAsync(data: Record<string, unknown>): Promise<number> {
+    return this.runAsync((c) =>
+      pgInsertRule(c, {
+        rule_type: (data["rule_type"] as string) ?? "soft",
+        scope: (data["scope"] as string) ?? "global",
+        scope_value: (data["scope_value"] as string | null) ?? null,
+        condition: data["condition"] as string,
+        action: data["action"] as string,
+        priority: (data["priority"] as number) ?? 0,
+        is_active: data["is_active"] !== false,
+      }),
+    );
+  }
+
+  /**
+   * Sync façade — fires-and-forgets. Returns [] on PG.
+   * Use getAllActiveRulesAsync for real data.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:41-45
+   */
+  getAllActiveRules(): Record<string, unknown>[] {
+    // source: ADR-0042 — sync path unsupported on PG; callers use getAllActiveRulesAsync
+    return [];
+  }
+
+  async getAllActiveRulesAsync(): Promise<Record<string, unknown>[]> {
+    return this.runAsync((c) => pgGetAllActiveRules(c));
+  }
+
+  /**
+   * Sync façade — returns [] on PG.
+   * Use getRulesForScopeAsync for real data.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:33-39
+   */
+  getRulesForScope(scope: string): Record<string, unknown>[] {
+    void scope; // suppress unused warning
+    // source: ADR-0042 — sync path unsupported on PG; callers use getRulesForScopeAsync
+    return [];
+  }
+
+  async getRulesForScopeAsync(scope: string): Promise<Record<string, unknown>[]> {
+    return this.runAsync((c) => pgGetRulesForScope(c, scope));
+  }
+
+  /**
+   * Sync façade — returns [] on PG.
+   * Use getAllRulesIncludingInactiveAsync for real data.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py admin listing
+   */
+  getAllRulesIncludingInactive(): Record<string, unknown>[] {
+    // source: ADR-0042 — sync path unsupported on PG; callers use getAllRulesIncludingInactiveAsync
+    return [];
+  }
+
+  async getAllRulesIncludingInactiveAsync(): Promise<Record<string, unknown>[]> {
+    return this.runAsync((c) => pgGetAllRulesIncludingInactive(c));
   }
 
   // ── Entity row normalization ──────────────────────────────────────────

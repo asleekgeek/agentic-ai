@@ -280,7 +280,7 @@ registerRecallTools(server, { store: recallStore, embedder: null, graphPort }); 
 registerRememberTools(server, { store: memoryStore });                               // 4 tools
 registerMethodologyTools(server);                                                    // 5 tools
 registerConsolidationTools(server, { store: memoryStore });                         // 4 tools
-registerManagementTools(server, { store: memoryStore });                            // 5 tools
+registerManagementTools(server, { store: memoryStore });                            // 5 tools (validate_memory, seed_project, backfill_memories, get_methodology_graph, get_telemetry)
 registerNarrativeTools(server, { store: narrativeStore, llmClient });               // 3 tools
 registerAdvancedTools(server, { store: memoryStore });                              // 6 tools
 registerWikiTools(server);                                                           // 8 tools
