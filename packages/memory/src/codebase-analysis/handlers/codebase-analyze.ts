@@ -116,10 +116,7 @@ const CODEBASE_SOURCE = "codebase_analyze";
 const CODEBASE_TAG = "codebase";
 const LANG_TAG_PREFIX = "lang:";
 // source: cortex Python source mcp_server/handlers/codebase_analyze.py — default values
-// NOTE: Python Cortex uses 500 as default because callers pass max_files explicitly.
-// For our zero-config UX the default equals the safety cap so no silent truncation occurs.
-// source: 2026-05-08 UX decision — prefer generous default over Python parity.
-const DEFAULT_MAX_FILES = 50000; // source: zero-config UX default = safety cap; see note above
+const DEFAULT_MAX_FILES = 500; // source: cortex mcp_server/handlers/codebase_analyze.py — max_files default=500
 const DEFAULT_MAX_FILE_SIZE_KB = 100; // source: cortex mcp_server/handlers/codebase_analyze.py — max_file_size_kb default=100
 // source: cortex mcp_server/handlers/codebase_analyze.py — top N symbols stored as tags per file
 const MAX_SYMBOL_TAGS_PER_FILE = 10;
@@ -191,26 +188,29 @@ async function _storeFile(
    */
   const content = buildMemoryContent(analysis);
   const tags = _buildTags(relPath, analysis);
-  const insertData = {
-    content,
-    tags,
-    directory_context: root,
-    domain,
-    source: CODEBASE_SOURCE,
-    agent_context: CODEBASE_AGENT_CONTEXT,
-  };
 
-  // Use insertMemoryAsync when available (PgMemoryStore), else sync (SqliteMemoryStore).
-  // PgMemoryStore._runSync() throws at runtime; async is the only safe path on PG.
-  // source: ADR-0042 — async path required for PG backend.
   let memoryId: number | null = null;
   try {
+    // Use insertMemoryAsync when available (PG requires it; SQLite falls back to sync).
+    // source: ADR-0042 — async-only constraint for PG writes.
+    // source: liskov@24cb6e2 — *Async-when-available, sync-fallback pattern.
+    const memData = {
+      content,
+      tags,
+      directory_context: root,
+      domain,
+      source: CODEBASE_SOURCE,
+      agent_context: CODEBASE_AGENT_CONTEXT,
+    };
     if (store.insertMemoryAsync) {
-      memoryId = await store.insertMemoryAsync(insertData);
+      memoryId = await store.insertMemoryAsync(memData);
     } else {
-      memoryId = store.insertMemory(insertData);
+      memoryId = store.insertMemory(memData);
     }
-  } catch {
+  } catch (err) {
+    process.stderr.write(
+      `[codebase-analyze] insertMemory failed for ${relPath}: ${(err as Error).message}\n`,
+    );
     return [null, 0, 0];
   }
 

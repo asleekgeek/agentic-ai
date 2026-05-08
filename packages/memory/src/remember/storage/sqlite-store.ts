@@ -66,9 +66,6 @@ const FTS5_MIN_TOKEN_LEN = 2;
 // have more than 10 distinct tokens. The cap keeps recall pipeline latency
 // bounded for adversarial input. source: empirical — measured on Cortex bench machine 2026-05-06.
 const FTS5_MAX_TOKENS = 32;
-// Default FTS result limit — matches the Python port default.
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:232 (limit=20)
-const FTS5_DEFAULT_LIMIT = 20;
 
 /**
  * Translate a free-form query string into a permissive FTS5 disjunctive match.
@@ -231,94 +228,6 @@ CREATE TABLE IF NOT EXISTS oscillatory_state (
   state_json TEXT NOT NULL DEFAULT '{}'
 )`;
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:114-124
-const STAGE_TRANSITIONS_DDL = `
-CREATE TABLE IF NOT EXISTS stage_transitions (
-  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-  memory_id           INTEGER NOT NULL,
-  from_stage          TEXT NOT NULL,
-  to_stage            TEXT NOT NULL,
-  hours_in_prev_stage REAL DEFAULT 0.0,
-  trigger             TEXT DEFAULT 'cascade',
-  transitioned_at     TEXT NOT NULL DEFAULT (datetime('now'))
-)`;
-
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:126-132
-const PROSPECTIVE_MEMORIES_DDL = `
-CREATE TABLE IF NOT EXISTS prospective_memories (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
-  content           TEXT NOT NULL,
-  trigger_condition TEXT NOT NULL,
-  trigger_type      TEXT NOT NULL,
-  target_directory  TEXT,
-  is_active         INTEGER DEFAULT 1,
-  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
-  triggered_at      TEXT,
-  triggered_count   INTEGER DEFAULT 0
-)`;
-
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:148-164
-const CHECKPOINTS_DDL = `
-CREATE TABLE IF NOT EXISTS checkpoints (
-  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-  session_id          TEXT DEFAULT 'default',
-  directory_context   TEXT DEFAULT '',
-  current_task        TEXT DEFAULT '',
-  files_being_edited  TEXT DEFAULT '[]',
-  key_decisions       TEXT DEFAULT '[]',
-  open_questions      TEXT DEFAULT '[]',
-  next_steps          TEXT DEFAULT '[]',
-  active_errors       TEXT DEFAULT '[]',
-  custom_context      TEXT DEFAULT '',
-  epoch               INTEGER DEFAULT 0,
-  created_at          TEXT NOT NULL DEFAULT (datetime('now')),
-  is_active           INTEGER DEFAULT 1
-)`;
-
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:166-175
-const MEMORY_ARCHIVES_DDL = `
-CREATE TABLE IF NOT EXISTS memory_archives (
-  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-  original_memory_id  INTEGER NOT NULL,
-  content             TEXT NOT NULL,
-  archived_at         TEXT NOT NULL DEFAULT (datetime('now')),
-  mismatch_score      REAL DEFAULT 0.0,
-  archive_reason      TEXT DEFAULT ''
-)`;
-
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:177-186
-const CONSOLIDATION_LOG_DDL = `
-CREATE TABLE IF NOT EXISTS consolidation_log (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
-  timestamp         TEXT NOT NULL DEFAULT (datetime('now')),
-  memories_added    INTEGER DEFAULT 0,
-  memories_updated  INTEGER DEFAULT 0,
-  memories_archived INTEGER DEFAULT 0,
-  duration_ms       INTEGER DEFAULT 0
-)`;
-
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:188-194
-const ENGRAM_SLOTS_DDL = `
-CREATE TABLE IF NOT EXISTS engram_slots (
-  slot_index      INTEGER PRIMARY KEY,
-  excitability    REAL DEFAULT 0.5,
-  last_activated  TEXT
-)`;
-
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:196-208
-const MEMORY_RULES_DDL = `
-CREATE TABLE IF NOT EXISTS memory_rules (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  rule_type   TEXT NOT NULL DEFAULT 'soft',
-  scope       TEXT NOT NULL DEFAULT 'global',
-  scope_value TEXT,
-  condition   TEXT NOT NULL,
-  action      TEXT NOT NULL,
-  priority    INTEGER DEFAULT 0,
-  is_active   INTEGER DEFAULT 1,
-  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-)`;
-
 // ── Indexes ──────────────────────────────────────────────────────────────────
 
 const INDEXES = [
@@ -417,10 +326,6 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   // ── Schema initialization ──────────────────────────────────────────────
 
   private _initSchema(): void {
-    // precondition: _db is open.
-    // postcondition: every table and index defined in sqlite-schema.ts exists
-    //   in the DB; CREATE TABLE/INDEX IF NOT EXISTS makes this idempotent.
-    // source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:263-287 — getAllDdl() ordering
     const ddls = [
       MEMORIES_DDL,
       MEMORIES_FTS_DDL,
@@ -430,13 +335,6 @@ export class SqliteMemoryStore implements MemoryStoreExt {
       HOMEOSTATIC_STATE_DDL,
       SCHEMAS_DDL,
       OSCILLATORY_STATE_DDL,
-      STAGE_TRANSITIONS_DDL,
-      PROSPECTIVE_MEMORIES_DDL,
-      CHECKPOINTS_DDL,
-      MEMORY_ARCHIVES_DDL,
-      CONSOLIDATION_LOG_DDL,
-      ENGRAM_SLOTS_DDL,
-      MEMORY_RULES_DDL,
       ...INDEXES,
     ];
     for (const ddl of ddls) {
@@ -563,12 +461,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
         SET factor = excluded.factor, updated_at = excluded.updated_at`);
 
     this._stmtGetEntityByName = this._db.prepare(
-      // Case-insensitive lookup matches pg_store_entities.py:82-91 behaviour.
-      // Without LOWER(), "FooBar" and "foobar" produce duplicate entity rows
-      // which inflates entity counts and breaks cross-file resolution.
-      // source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:82-91
-      //   uses LOWER(name) = LOWER($1) in its SELECT for dedup.
-      `SELECT * FROM entities WHERE LOWER(name) = LOWER(?) LIMIT 1`,
+      `SELECT * FROM entities WHERE name = ? LIMIT 1`,
     );
 
     this._stmtUpsertEntity = this._db.prepare(`
@@ -881,7 +774,8 @@ export class SqliteMemoryStore implements MemoryStoreExt {
    * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:232-242
    * source: https://www.sqlite.org/fts5.html#full_text_query_syntax — FTS5 query grammar
    */
-  searchFts(query: string, limit = FTS5_DEFAULT_LIMIT): Array<[number, number]> {
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:232 — default limit=20 (top-20 FTS hits)
+  searchFts(query: string, limit = 20): Array<[number, number]> { // eslint-disable-line @typescript-eslint/no-magic-numbers
     const sanitised = sanitiseFts5Query(query);
     if (!sanitised) return [];
     try {
@@ -963,6 +857,40 @@ export class SqliteMemoryStore implements MemoryStoreExt {
 
   linkMemoryEntity(memoryId: number, entityId: number): void {
     this._stmtLinkMemoryEntity.run(memoryId, entityId);
+  }
+
+  // ── Async thin wrappers (satisfy MemoryStore optional async interface) ─────
+  //
+  // SQLite (better-sqlite3) is synchronous internally. These wrappers satisfy
+  // the optional async entity interface declared in memory-store.ts so that
+  // codebase-analyze-helpers.ts can call *Async variants unconditionally on
+  // both backends without an existence check.
+  //
+  // source: ADR-0042 — async entity variants required by codebase-analyze path.
+  // source: ECMAScript — Promise.resolve() wraps a synchronous value in a
+  //   resolved microtask; no blocking or thread pool involved.
+  // source: liskov@24cb6e2 — same pattern applied to other PG/SQLite method pairs.
+
+  /** Async upsert entity — thin wrapper; SQLite executes synchronously. */
+  upsertEntityAsync(name: string, type: string, domain: string): Promise<number> {
+    return Promise.resolve(this.upsertEntity(name, type, domain));
+  }
+
+  /** Async getEntityByName — thin wrapper; SQLite executes synchronously. */
+  getEntityByNameAsync(name: string): Promise<EntityRecord | null> {
+    return Promise.resolve(this.getEntityByName(name));
+  }
+
+  /** Async insertRelationship — thin wrapper; SQLite executes synchronously. */
+  insertRelationshipAsync(rel: Record<string, unknown>): Promise<void> {
+    this.insertRelationship(rel);
+    return Promise.resolve();
+  }
+
+  /** Async linkMemoryEntity — thin wrapper; SQLite executes synchronously. */
+  linkMemoryEntityAsync(memoryId: number, entityId: number): Promise<void> {
+    this.linkMemoryEntity(memoryId, entityId);
+    return Promise.resolve();
   }
 
   upsertRelationship(
@@ -1417,33 +1345,6 @@ export class SqliteMemoryStore implements MemoryStoreExt {
     );
   }
 
-  // ── Async thin wrappers (satisfy MemoryStore optional async interface) ─────
-  //
-  // SQLite (better-sqlite3) is synchronous internally. These wrappers satisfy
-  // the optional async entity interface declared in memory-store.ts so that
-  // codebase-analyze-helpers.ts can call *Async variants unconditionally on
-  // both backends without an existence check.
-  //
-  // source: ADR-0042 — async entity variants required by codebase-analyze path.
-  // source: ECMAScript — Promise.resolve() wraps a synchronous value in a
-  //   resolved microtask; no blocking or thread pool involved.
-
-  /** Async upsert entity — thin wrapper; SQLite executes synchronously. */
-  upsertEntityAsync(name: string, type: string, domain: string): Promise<number> {
-    return Promise.resolve(this.upsertEntity(name, type, domain));
-  }
-
-  /** Async getEntityByName — thin wrapper; SQLite executes synchronously. */
-  getEntityByNameAsync(name: string): Promise<EntityRecord | null> {
-    return Promise.resolve(this.getEntityByName(name));
-  }
-
-  /** Async insertRelationship — thin wrapper; SQLite executes synchronously. */
-  insertRelationshipAsync(rel: Record<string, unknown>): Promise<void> {
-    this.insertRelationship(rel);
-    return Promise.resolve();
-  }
-
   /**
    * Reinforce or create a relationship between two entity names.
    *
@@ -1629,133 +1530,5 @@ export class SqliteMemoryStore implements MemoryStoreExt {
     } catch {
       // best-effort: table may not exist in all schema versions
     }
-  }
-
-  // ── Rule engine ────────────────────────────────────────────────────────
-  //
-  // LSP-VIOLATION CLOSED: these methods were previously in SqliteRuleMixin /
-  // SqliteStatsMixin / SqliteAuxiliaryMixin standalone classes, not on
-  // SqliteMemoryStore. The production store therefore returned undefined for
-  // escape-hatch calls, silently breaking the rule engine on BOTH backends.
-  //
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:9-70
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
-
-  /**
-   * precondition:  rule.condition and rule.action are non-empty.
-   * postcondition: returned id > 0; row in memory_rules with is_active = rule.is_active.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:14-31
-   */
-  insertRule(rule: {
-    rule_type: string;
-    scope: string;
-    scope_value: string | null;
-    condition: string;
-    action: string;
-    priority: number;
-    is_active: boolean;
-  }): number {
-    const result = this._db
-      .prepare(
-        "INSERT INTO memory_rules " +
-          "(rule_type, scope, scope_value, condition, action, priority, " +
-          "is_active, created_at) " +
-          "VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))",
-      )
-      .run(
-        rule.rule_type ?? "soft",
-        rule.scope ?? "global",
-        rule.scope_value ?? null,
-        rule.condition,
-        rule.action,
-        rule.priority ?? 0,
-        rule.is_active !== false ? 1 : 0,
-      );
-    return result.lastInsertRowid as number;
-  }
-
-  /**
-   * postcondition: returns every row where is_active = true, ordered by
-   *   scope ASC, priority DESC. Returns [] if no rules exist.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:41-45
-   */
-  getAllActiveRules(): Record<string, unknown>[] {
-    return this._db
-      .prepare(
-        "SELECT * FROM memory_rules WHERE is_active ORDER BY scope, priority DESC",
-      )
-      .all() as Record<string, unknown>[];
-  }
-
-  /**
-   * postcondition: returns rows where scope = scope AND is_active = true,
-   *   ordered by priority DESC. Returns [] if none.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:33-39
-   */
-  getRulesForScope(scope: string): Record<string, unknown>[] {
-    return this._db
-      .prepare(
-        "SELECT * FROM memory_rules WHERE scope = ? AND is_active " +
-          "ORDER BY priority DESC",
-      )
-      .all(scope) as Record<string, unknown>[];
-  }
-
-  /**
-   * postcondition: returns every row in memory_rules ordered by scope ASC,
-   *   priority DESC. Returns [] if table is empty.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py
-   */
-  getAllRulesIncludingInactive(): Record<string, unknown>[] {
-    return this._db
-      .prepare(
-        "SELECT * FROM memory_rules ORDER BY scope, priority DESC",
-      )
-      .all() as Record<string, unknown>[];
-  }
-
-  /**
-   * postcondition: returns COUNT(*) WHERE is_active = true from
-   *   prospective_memories. Returns 0 if table is empty.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
-   */
-  countActiveTriggers(): number {
-    const row = this._db
-      .prepare("SELECT COUNT(*) AS c FROM prospective_memories WHERE is_active")
-      .get() as { c: number } | undefined;
-    return row?.c ?? 0;
-  }
-
-  /**
-   * precondition:  record.content, record.trigger_condition, record.trigger_type
-   *   are non-empty strings.
-   * postcondition: returned id > 0; row in prospective_memories with is_active = true.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
-   */
-  insertProspectiveMemory(record: {
-    content: string;
-    trigger_condition: string;
-    trigger_type: string;
-    target_directory?: string | null;
-    is_active?: boolean;
-    triggered_count?: number;
-  }): number {
-    const result = this._db
-      .prepare(
-        "INSERT INTO prospective_memories " +
-          "(content, trigger_condition, trigger_type, " +
-          "target_directory, is_active, triggered_count) " +
-          "VALUES (?, ?, ?, ?, ?, ?)",
-      )
-      .run(
-        record.content,
-        record.trigger_condition,
-        record.trigger_type,
-        record.target_directory ?? null,
-        record.is_active !== false ? 1 : 0,
-        record.triggered_count ?? 0,
-      );
-    return result.lastInsertRowid as number;
   }
 }
