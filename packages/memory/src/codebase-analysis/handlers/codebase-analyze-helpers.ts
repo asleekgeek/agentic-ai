@@ -218,151 +218,230 @@ const VALID_KINDS = new Set([
   "struct",
 ]);
 
-function _getOrCreateEntity(
+// ── Async entity helpers ──────────────────────────────────────────────────
+//
+// All entity persistence on PG MUST go through *Async methods: the sync
+// variants on PgMemoryStore call _runSync() which always throws.
+// Both SqliteMemoryStore and PgMemoryStore implement upsertEntityAsync,
+// getEntityByNameAsync, and insertRelationshipAsync.
+//
+// Root-cause: PgMemoryStore.upsertEntity() → _runSync() → throws
+//   "PgMemoryStore requires async execution." The exception propagated up
+//   through the try/catch in persistEntities and was silently swallowed,
+//   returning [0, 0] for every file. A 960-file run produced entities=0.
+//
+// Fix: make every entity persistence function async; call *Async siblings.
+// source: ADR-0042 — async path required for all PG entity writes.
+
+async function _getOrCreateEntity(
   store: MemoryStore,
   name: string,
   entityType: string,
   domain: string,
-): number {
+): Promise<number> {
+  // precondition:  store implements upsertEntityAsync (both SQLite and PG do).
+  // postcondition: returns entity id > 0 for the named entity.
   try {
-    const existing = store.getEntityByName(name) as Record<string, unknown> | null;
-    if (existing) return existing["id"] as number;
+    const existing = store.getEntityByNameAsync
+      ? await store.getEntityByNameAsync(name)
+      : (store.getEntityByName(name) as Record<string, unknown> | null);
+    if (existing) return (existing as Record<string, unknown>)["id"] as number;
   } catch {
-    // fall through to insert
+    // fall through to upsert
+  }
+  if (store.upsertEntityAsync) {
+    return store.upsertEntityAsync(name, entityType, domain);
   }
   return store.upsertEntity(name, entityType, domain);
 }
 
-function _persistSymbolEntities(
+async function _persistSymbolEntities(
   store: MemoryStore,
   analysis: FileAnalysis,
   fileEid: number,
   domain: string,
-): [number, number] {
+): Promise<[number, number]> {
   let entities = 0;
   let relationships = 0;
   for (const sym of analysis.definitions) {
     const kind = VALID_KINDS.has(sym.kind) ? sym.kind : "function";
-    const symEid = _getOrCreateEntity(store, sym.name, kind, domain);
+    const symEid = await _getOrCreateEntity(store, sym.name, kind, domain);
     entities++;
     try {
-      store.insertRelationship({
-        source_entity_id: fileEid,
-        target_entity_id: symEid,
-        relationship_type: "defines",
-        weight: 1.0,
-      });
+      if (store.insertRelationshipAsync) {
+        await store.insertRelationshipAsync({
+          source_entity_id: fileEid,
+          target_entity_id: symEid,
+          relationship_type: "defines",
+          weight: 1.0,
+        });
+      } else {
+        store.insertRelationship({
+          source_entity_id: fileEid,
+          target_entity_id: symEid,
+          relationship_type: "defines",
+          weight: 1.0,
+        });
+      }
       relationships++;
-    } catch {
-      // best-effort
+    } catch (err) {
+      // best-effort: log unexpected errors so failures aren't invisible
+      // source: constraint §4 — no silent swallowing of unexpected errors
+      process.stderr.write(
+        `[codebase-analyze] _persistSymbolEntities failed for ${sym.name}: ${(err as Error).message}\n`,
+      );
     }
   }
   return [entities, relationships];
 }
 
-function _persistImportEntities(
+async function _persistImportEntities(
   store: MemoryStore,
   analysis: FileAnalysis,
   fileEid: number,
   domain: string,
-): [number, number] {
+): Promise<[number, number]> {
   let entities = 0;
   let relationships = 0;
   for (const imp of analysis.imports) {
-    const depEid = _getOrCreateEntity(store, imp.module, "dependency", domain);
+    const depEid = await _getOrCreateEntity(store, imp.module, "dependency", domain);
     entities++;
     try {
-      store.insertRelationship({
-        source_entity_id: fileEid,
-        target_entity_id: depEid,
-        relationship_type: "imports",
-        weight: 1.0,
-      });
+      if (store.insertRelationshipAsync) {
+        await store.insertRelationshipAsync({
+          source_entity_id: fileEid,
+          target_entity_id: depEid,
+          relationship_type: "imports",
+          weight: 1.0,
+        });
+      } else {
+        store.insertRelationship({
+          source_entity_id: fileEid,
+          target_entity_id: depEid,
+          relationship_type: "imports",
+          weight: 1.0,
+        });
+      }
       relationships++;
-    } catch {
-      // best-effort
+    } catch (err) {
+      process.stderr.write(
+        `[codebase-analyze] _persistImportEntities failed for ${imp.module}: ${(err as Error).message}\n`,
+      );
     }
   }
   return [entities, relationships];
 }
 
-export function persistEntities(
+export async function persistEntities(
   store: MemoryStore,
   analysis: FileAnalysis,
   _memoryId: number,
   domain: string,
-): [number, number] {
+): Promise<[number, number]> {
+  // precondition:  store implements *Async entity methods (both backends).
+  // postcondition: returns [entity_count, relationship_count] persisted.
+  //   Returns [0, 0] only on unexpected error (logged to stderr).
   let entities = 0;
   let relationships = 0;
   try {
-    const fileEid = _getOrCreateEntity(store, analysis.path, "file", domain);
+    const fileEid = await _getOrCreateEntity(store, analysis.path, "file", domain);
     entities++;
-    const [se, sr] = _persistSymbolEntities(store, analysis, fileEid, domain);
+    const [se, sr] = await _persistSymbolEntities(store, analysis, fileEid, domain);
     entities += se;
     relationships += sr;
-    const [ie, ir] = _persistImportEntities(store, analysis, fileEid, domain);
+    const [ie, ir] = await _persistImportEntities(store, analysis, fileEid, domain);
     entities += ie;
     relationships += ir;
-  } catch {
-    // best-effort
+  } catch (err) {
+    // Unexpected error — log to stderr so failures aren't silent.
+    // source: constraint §4 — no silent swallowing of unexpected errors.
+    process.stderr.write(
+      `[codebase-analyze] persistEntities failed for ${analysis.path}: ${(err as Error).message}\n`,
+    );
   }
   return [entities, relationships];
 }
 
 // ── Graph edge persistence ────────────────────────────────────────────────
 
-export function persistFileEdge(
+export async function persistFileEdge(
   store: MemoryStore,
   edges: [string, string][],
   domain: string,
-): number {
+): Promise<number> {
+  // precondition:  store implements *Async entity methods (both backends).
+  // postcondition: returns count of edges successfully persisted.
   let count = 0;
   for (const [srcPath, tgtPath] of edges) {
     try {
-      const srcEid = _getOrCreateEntity(store, srcPath, "file", domain);
-      const tgtEid = _getOrCreateEntity(store, tgtPath, "file", domain);
-      store.insertRelationship({
-        source_entity_id: srcEid,
-        target_entity_id: tgtEid,
-        relationship_type: "imports",
-        weight: 1.0,
-      });
+      const srcEid = await _getOrCreateEntity(store, srcPath, "file", domain);
+      const tgtEid = await _getOrCreateEntity(store, tgtPath, "file", domain);
+      if (store.insertRelationshipAsync) {
+        await store.insertRelationshipAsync({
+          source_entity_id: srcEid,
+          target_entity_id: tgtEid,
+          relationship_type: "imports",
+          weight: 1.0,
+        });
+      } else {
+        store.insertRelationship({
+          source_entity_id: srcEid,
+          target_entity_id: tgtEid,
+          relationship_type: "imports",
+          weight: 1.0,
+        });
+      }
       count++;
-    } catch {
-      // best-effort
+    } catch (err) {
+      process.stderr.write(
+        `[codebase-analyze] persistFileEdge failed for ${srcPath}→${tgtPath}: ${(err as Error).message}\n`,
+      );
     }
   }
   return count;
 }
 
-export function persistInheritanceEdge(
+export async function persistInheritanceEdge(
   store: MemoryStore,
   edges: [string, string][],
   domain: string,
-): number {
+): Promise<number> {
+  // precondition:  store implements *Async entity methods (both backends).
+  // postcondition: returns count of inheritance edges persisted.
   let count = 0;
   for (const [child, parent] of edges) {
     try {
-      const childEid = _getOrCreateEntity(store, child, "class", domain);
-      const parentEid = _getOrCreateEntity(store, parent, "class", domain);
-      store.insertRelationship({
-        source_entity_id: childEid,
-        target_entity_id: parentEid,
-        relationship_type: "extends",
-        weight: 1.0,
-      });
+      const childEid = await _getOrCreateEntity(store, child, "class", domain);
+      const parentEid = await _getOrCreateEntity(store, parent, "class", domain);
+      if (store.insertRelationshipAsync) {
+        await store.insertRelationshipAsync({
+          source_entity_id: childEid,
+          target_entity_id: parentEid,
+          relationship_type: "extends",
+          weight: 1.0,
+        });
+      } else {
+        store.insertRelationship({
+          source_entity_id: childEid,
+          target_entity_id: parentEid,
+          relationship_type: "extends",
+          weight: 1.0,
+        });
+      }
       count++;
-    } catch {
-      // best-effort
+    } catch (err) {
+      process.stderr.write(
+        `[codebase-analyze] persistInheritanceEdge failed for ${child}→${parent}: ${(err as Error).message}\n`,
+      );
     }
   }
   return count;
 }
 
-export function persistCommunityTags(
+export async function persistCommunityTags(
   store: MemoryStore,
   communities: Map<string, number>,
-): void {
+): Promise<void> {
   if (communities.size === 0) return;
   // Get all codebase memories once and filter by filePath in JS.
   // This replaces the SQLite-only store.execute() pattern with

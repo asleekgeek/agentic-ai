@@ -243,6 +243,29 @@ export interface MemoryStore {
 
   /** Async searchVectors — present on PgMemoryStore, absent on SqliteMemoryStore. */
   searchVectorsAsync?(embedding: Buffer, topK: number, minHeat?: number): Promise<VecHit[]>;
+
+  // ── Entity async variants ─────────────────────────────────────────────────
+  //
+  // Required by codebase-analyze-helpers.ts which persists entities from an
+  // async context. PgMemoryStore._runSync() throws unconditionally, so sync
+  // entity methods cannot be called from async tool handlers on PG.
+  //
+  // SQLite provides thin Promise.resolve() wrappers (no semantic change).
+  // PG provides full async implementations using runAsync().
+  //
+  // source: ADR-0042 — async-only constraint for PG entity writes.
+  // source: root-cause analysis — PgMemoryStore.upsertEntity() → _runSync() →
+  //   throws "requires async execution"; persistEntities() catches silently
+  //   and returns [0, 0]; 960-file run produces entities=0, relationships=0.
+
+  /** Async upsert entity — safe on both backends. */
+  upsertEntityAsync?(name: string, type: string, domain: string): Promise<number>;
+
+  /** Async getEntityByName — safe on both backends. */
+  getEntityByNameAsync?(name: string): Promise<EntityRecord | null>;
+
+  /** Async insertRelationship — safe on both backends. */
+  insertRelationshipAsync?(rel: Record<string, unknown>): Promise<void>;
 }
 
 // ── MemoryStoreExt — behavioral-subtyping extension ──────────────────────────

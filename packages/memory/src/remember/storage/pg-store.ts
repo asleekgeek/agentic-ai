@@ -1004,6 +1004,25 @@ export class PgMemoryStore implements MemoryStoreExt {
     );
   }
 
+  /**
+   * Async insertRelationship — awaitable form used by codebase-analyze-helpers.
+   *
+   * postcondition: relationship row is committed before the returned Promise
+   *   resolves; callers that await this get back-pressure on the PG pool.
+   * source: ADR-0042 — async entity variants required by codebase-analyze path.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:52-69
+   */
+  async insertRelationshipAsync(rel: Record<string, unknown>): Promise<void> {
+    await this.runAsync((c) =>
+      pgInsertRelationship(c, {
+        source_entity_id: Number(rel["source_entity_id"]),
+        target_entity_id: Number(rel["target_entity_id"]),
+        relationship_type: String(rel["relationship_type"] ?? "generic"),
+        weight: typeof rel["weight"] === "number" ? rel["weight"] : 1.0,
+      }),
+    );
+  }
+
   reinforceOrCreateRelationship(entityA: string, entityB: string, learningRate: number): void {
     void this.runAsync((c) => pgReinforceOrCreateRelationship(c, entityA, entityB, learningRate));
   }

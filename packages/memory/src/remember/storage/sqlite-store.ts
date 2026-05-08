@@ -563,7 +563,12 @@ export class SqliteMemoryStore implements MemoryStoreExt {
         SET factor = excluded.factor, updated_at = excluded.updated_at`);
 
     this._stmtGetEntityByName = this._db.prepare(
-      `SELECT * FROM entities WHERE name = ? LIMIT 1`,
+      // Case-insensitive lookup matches pg_store_entities.py:82-91 behaviour.
+      // Without LOWER(), "FooBar" and "foobar" produce duplicate entity rows
+      // which inflates entity counts and breaks cross-file resolution.
+      // source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:82-91
+      //   uses LOWER(name) = LOWER($1) in its SELECT for dedup.
+      `SELECT * FROM entities WHERE LOWER(name) = LOWER(?) LIMIT 1`,
     );
 
     this._stmtUpsertEntity = this._db.prepare(`
@@ -1410,6 +1415,33 @@ export class SqliteMemoryStore implements MemoryStoreExt {
       now,
       now,
     );
+  }
+
+  // ── Async thin wrappers (satisfy MemoryStore optional async interface) ─────
+  //
+  // SQLite (better-sqlite3) is synchronous internally. These wrappers satisfy
+  // the optional async entity interface declared in memory-store.ts so that
+  // codebase-analyze-helpers.ts can call *Async variants unconditionally on
+  // both backends without an existence check.
+  //
+  // source: ADR-0042 — async entity variants required by codebase-analyze path.
+  // source: ECMAScript — Promise.resolve() wraps a synchronous value in a
+  //   resolved microtask; no blocking or thread pool involved.
+
+  /** Async upsert entity — thin wrapper; SQLite executes synchronously. */
+  upsertEntityAsync(name: string, type: string, domain: string): Promise<number> {
+    return Promise.resolve(this.upsertEntity(name, type, domain));
+  }
+
+  /** Async getEntityByName — thin wrapper; SQLite executes synchronously. */
+  getEntityByNameAsync(name: string): Promise<EntityRecord | null> {
+    return Promise.resolve(this.getEntityByName(name));
+  }
+
+  /** Async insertRelationship — thin wrapper; SQLite executes synchronously. */
+  insertRelationshipAsync(rel: Record<string, unknown>): Promise<void> {
+    this.insertRelationship(rel);
+    return Promise.resolve();
   }
 
   /**

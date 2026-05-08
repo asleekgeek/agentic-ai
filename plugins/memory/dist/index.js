@@ -3233,8 +3233,8 @@ var require_utils = __commonJS({
       }
       return ind;
     }
-    function removeDotSegments(path5) {
-      let input = path5;
+    function removeDotSegments(path6) {
+      let input = path6;
       const output = [];
       let nextSlash = -1;
       let len = 0;
@@ -3433,8 +3433,8 @@ var require_schemes = __commonJS({
         wsComponent.secure = void 0;
       }
       if (wsComponent.resourceName) {
-        const [path5, query] = wsComponent.resourceName.split("?");
-        wsComponent.path = path5 && path5 !== "/" ? path5 : void 0;
+        const [path6, query] = wsComponent.resourceName.split("?");
+        wsComponent.path = path6 && path6 !== "/" ? path6 : void 0;
         wsComponent.query = query;
         wsComponent.resourceName = void 0;
       }
@@ -7541,14 +7541,14 @@ var require_url_state_machine = __commonJS({
       return url.replace(/\u0009|\u000A|\u000D/g, "");
     }
     function shortenPath(url) {
-      const path5 = url.path;
-      if (path5.length === 0) {
+      const path6 = url.path;
+      if (path6.length === 0) {
         return;
       }
-      if (url.scheme === "file" && path5.length === 1 && isNormalizedWindowsDriveLetter(path5[0])) {
+      if (url.scheme === "file" && path6.length === 1 && isNormalizedWindowsDriveLetter(path6[0])) {
         return;
       }
-      path5.pop();
+      path6.pop();
     }
     function includesCredentials(url) {
       return url.username !== "" || url.password !== "";
@@ -13129,14 +13129,14 @@ __export(fileFromPath_exports, {
 });
 import { statSync, createReadStream, promises as fs } from "fs";
 import { basename } from "path";
-function createFileFromPath(path5, { mtimeMs, size }, filenameOrOptions, options = {}) {
+function createFileFromPath(path6, { mtimeMs, size }, filenameOrOptions, options = {}) {
   let filename;
   if (isPlainObject_default2(filenameOrOptions)) {
     [options, filename] = [filenameOrOptions, void 0];
   } else {
     filename = filenameOrOptions;
   }
-  const file = new FileFromPath({ path: path5, size, lastModified: mtimeMs });
+  const file = new FileFromPath({ path: path6, size, lastModified: mtimeMs });
   if (!filename) {
     filename = file.name;
   }
@@ -13145,13 +13145,13 @@ function createFileFromPath(path5, { mtimeMs, size }, filenameOrOptions, options
     lastModified: file.lastModified
   });
 }
-function fileFromPathSync(path5, filenameOrOptions, options = {}) {
-  const stats = statSync(path5);
-  return createFileFromPath(path5, stats, filenameOrOptions, options);
+function fileFromPathSync(path6, filenameOrOptions, options = {}) {
+  const stats = statSync(path6);
+  return createFileFromPath(path6, stats, filenameOrOptions, options);
 }
-async function fileFromPath2(path5, filenameOrOptions, options) {
-  const stats = await fs.stat(path5);
-  return createFileFromPath(path5, stats, filenameOrOptions, options);
+async function fileFromPath2(path6, filenameOrOptions, options) {
+  const stats = await fs.stat(path6);
+  return createFileFromPath(path6, stats, filenameOrOptions, options);
 }
 var import_node_domexception, __classPrivateFieldSet4, __classPrivateFieldGet5, _FileFromPath_path, _FileFromPath_start, MESSAGE, FileFromPath;
 var init_fileFromPath = __esm({
@@ -13213,7 +13213,7 @@ var init_fileFromPath = __esm({
 var require_node_gyp_build = __commonJS({
   "node_modules/.pnpm/node-gyp-build@4.8.4/node_modules/node-gyp-build/node-gyp-build.js"(exports2, module2) {
     var fs5 = __require("fs");
-    var path5 = __require("path");
+    var path6 = __require("path");
     var os = __require("os");
     var runtimeRequire = typeof __webpack_require__ === "function" ? __non_webpack_require__ : __require;
     var vars = process.config && process.config.variables || {};
@@ -13230,21 +13230,21 @@ var require_node_gyp_build = __commonJS({
       return runtimeRequire(load.resolve(dir));
     }
     load.resolve = load.path = function(dir) {
-      dir = path5.resolve(dir || ".");
+      dir = path6.resolve(dir || ".");
       try {
-        var name = runtimeRequire(path5.join(dir, "package.json")).name.toUpperCase().replace(/-/g, "_");
+        var name = runtimeRequire(path6.join(dir, "package.json")).name.toUpperCase().replace(/-/g, "_");
         if (process.env[name + "_PREBUILD"]) dir = process.env[name + "_PREBUILD"];
       } catch (err) {
       }
       if (!prebuildsOnly) {
-        var release = getFirst(path5.join(dir, "build/Release"), matchBuild);
+        var release = getFirst(path6.join(dir, "build/Release"), matchBuild);
         if (release) return release;
-        var debug2 = getFirst(path5.join(dir, "build/Debug"), matchBuild);
+        var debug2 = getFirst(path6.join(dir, "build/Debug"), matchBuild);
         if (debug2) return debug2;
       }
       var prebuild = resolve7(dir);
       if (prebuild) return prebuild;
-      var nearby = resolve7(path5.dirname(process.execPath));
+      var nearby = resolve7(path6.dirname(process.execPath));
       if (nearby) return nearby;
       var target = [
         "platform=" + platform,
@@ -13261,14 +13261,14 @@ var require_node_gyp_build = __commonJS({
       ].filter(Boolean).join(" ");
       throw new Error("No native build was found for " + target + "\n    loaded from: " + dir + "\n");
       function resolve7(dir2) {
-        var tuples = readdirSync9(path5.join(dir2, "prebuilds")).map(parseTuple);
+        var tuples = readdirSync9(path6.join(dir2, "prebuilds")).map(parseTuple);
         var tuple = tuples.filter(matchTuple(platform, arch)).sort(compareTuples)[0];
         if (!tuple) return;
-        var prebuilds = path5.join(dir2, "prebuilds", tuple.name);
+        var prebuilds = path6.join(dir2, "prebuilds", tuple.name);
         var parsed = readdirSync9(prebuilds).map(parseTags4);
         var candidates = parsed.filter(matchTags(runtime, abi));
         var winner = candidates.sort(compareTags(runtime))[0];
-        if (winner) return path5.join(prebuilds, winner.file);
+        if (winner) return path6.join(prebuilds, winner.file);
       }
     };
     function readdirSync9(dir) {
@@ -13280,7 +13280,7 @@ var require_node_gyp_build = __commonJS({
     }
     function getFirst(dir, filter2) {
       var files = readdirSync9(dir).filter(filter2);
-      return files[0] && path5.join(dir, files[0]);
+      return files[0] && path6.join(dir, files[0]);
     }
     function matchBuild(name) {
       return /\.node$/.test(name);
@@ -14117,7 +14117,7 @@ var require_tree_sitter = __commonJS({
   }
 });
 
-// packages/memory/dist/wiki/layout.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/layout.js
 function slugify(value, maxLen = _MAX_SLUG_LEN) {
   if (!value)
     return "unknown";
@@ -14141,7 +14141,7 @@ function indexPath() {
 }
 var PAGE_KINDS, _SAFE, _MAX_SLUG_LEN;
 var init_layout = __esm({
-  "packages/memory/dist/wiki/layout.js"() {
+  "../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/layout.js"() {
     "use strict";
     PAGE_KINDS = [
       "adr",
@@ -14159,7 +14159,7 @@ var init_layout = __esm({
   }
 });
 
-// packages/memory/dist/wiki/pages.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/pages.js
 function nowIso3() {
   return (/* @__PURE__ */ new Date()).toISOString().replace(/\.\d{3}Z$/, "Z");
 }
@@ -14269,7 +14269,7 @@ ${args.consequences}
 }
 var ADR_STATUSES;
 var init_pages = __esm({
-  "packages/memory/dist/wiki/pages.js"() {
+  "../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/pages.js"() {
     "use strict";
     init_layout();
     ADR_STATUSES = [
@@ -14282,7 +14282,7 @@ var init_pages = __esm({
   }
 });
 
-// packages/memory/dist/wiki/schema-loader.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/schema-loader.js
 var schema_loader_exports = {};
 __export(schema_loader_exports, {
   loadRegistry: () => loadRegistry
@@ -14453,7 +14453,7 @@ function loadRegistry(wikiRoot) {
 }
 var QUERY_BLOCK_RE;
 var init_schema_loader = __esm({
-  "packages/memory/dist/wiki/schema-loader.js"() {
+  "../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/schema-loader.js"() {
     "use strict";
     init_pages();
     QUERY_BLOCK_RE = /```cortex-query\n([\s\S]*?)\n```/;
@@ -14938,8 +14938,8 @@ function getErrorMap() {
 
 // node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/helpers/parseUtil.js
 var makeIssue = (params) => {
-  const { data, path: path5, errorMaps, issueData } = params;
-  const fullPath = [...path5, ...issueData.path || []];
+  const { data, path: path6, errorMaps, issueData } = params;
+  const fullPath = [...path6, ...issueData.path || []];
   const fullIssue = {
     ...issueData,
     path: fullPath
@@ -15055,11 +15055,11 @@ var errorUtil;
 
 // node_modules/.pnpm/zod@3.25.76/node_modules/zod/v3/types.js
 var ParseInputLazyPath = class {
-  constructor(parent, value, path5, key) {
+  constructor(parent, value, path6, key) {
     this._cachedPath = [];
     this.parent = parent;
     this.data = value;
-    this._path = path5;
+    this._path = path6;
     this._key = key;
   }
   get path() {
@@ -18696,10 +18696,10 @@ function assignProp(target, prop, value) {
     configurable: true
   });
 }
-function getElementAtPath(obj, path5) {
-  if (!path5)
+function getElementAtPath(obj, path6) {
+  if (!path6)
     return obj;
-  return path5.reduce((acc, key) => acc?.[key], obj);
+  return path6.reduce((acc, key) => acc?.[key], obj);
 }
 function promiseAllObject(promisesObj) {
   const keys = Object.keys(promisesObj);
@@ -19019,11 +19019,11 @@ function aborted(x2, startIndex = 0) {
   }
   return false;
 }
-function prefixIssues(path5, issues) {
+function prefixIssues(path6, issues) {
   return issues.map((iss) => {
     var _a3;
     (_a3 = iss).path ?? (_a3.path = []);
-    iss.path.unshift(path5);
+    iss.path.unshift(path6);
     return iss;
   });
 }
@@ -28672,7 +28672,7 @@ var StdioServerTransport = class {
   }
 };
 
-// packages/mcp-servers/memory/dist/index.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/index.js
 import { homedir as homedir11 } from "node:os";
 import { join as join21 } from "node:path";
 
@@ -29055,13 +29055,13 @@ var MultipartBody = class {
 // node_modules/.pnpm/@anthropic-ai+sdk@0.39.0/node_modules/@anthropic-ai/sdk/_shims/node-runtime.mjs
 import { ReadableStream as ReadableStream3 } from "node:stream/web";
 var fileFromPathWarned = false;
-async function fileFromPath3(path5, ...args) {
+async function fileFromPath3(path6, ...args) {
   const { fileFromPath: _fileFromPath } = await Promise.resolve().then(() => (init_fileFromPath(), fileFromPath_exports));
   if (!fileFromPathWarned) {
-    console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path5)}) instead`);
+    console.warn(`fileFromPath is deprecated; use fs.createReadStream(${JSON.stringify(path6)}) instead`);
     fileFromPathWarned = true;
   }
-  return await _fileFromPath(path5, ...args);
+  return await _fileFromPath(path6, ...args);
 }
 var defaultHttpAgent = new import_agentkeepalive.default({ keepAlive: true, timeout: 5 * 60 * 1e3 });
 var defaultHttpsAgent = new import_agentkeepalive.default.HttpsAgent({ keepAlive: true, timeout: 5 * 60 * 1e3 });
@@ -29785,29 +29785,29 @@ var APIClient = class {
   defaultIdempotencyKey() {
     return `stainless-node-retry-${uuid4()}`;
   }
-  get(path5, opts) {
-    return this.methodRequest("get", path5, opts);
+  get(path6, opts) {
+    return this.methodRequest("get", path6, opts);
   }
-  post(path5, opts) {
-    return this.methodRequest("post", path5, opts);
+  post(path6, opts) {
+    return this.methodRequest("post", path6, opts);
   }
-  patch(path5, opts) {
-    return this.methodRequest("patch", path5, opts);
+  patch(path6, opts) {
+    return this.methodRequest("patch", path6, opts);
   }
-  put(path5, opts) {
-    return this.methodRequest("put", path5, opts);
+  put(path6, opts) {
+    return this.methodRequest("put", path6, opts);
   }
-  delete(path5, opts) {
-    return this.methodRequest("delete", path5, opts);
+  delete(path6, opts) {
+    return this.methodRequest("delete", path6, opts);
   }
-  methodRequest(method, path5, opts) {
+  methodRequest(method, path6, opts) {
     return this.request(Promise.resolve(opts).then(async (opts2) => {
       const body = opts2 && isBlobLike(opts2?.body) ? new DataView(await opts2.body.arrayBuffer()) : opts2?.body instanceof DataView ? opts2.body : opts2?.body instanceof ArrayBuffer ? new DataView(opts2.body) : opts2 && ArrayBuffer.isView(opts2?.body) ? new DataView(opts2.body.buffer) : opts2?.body;
-      return { method, path: path5, ...opts2, body };
+      return { method, path: path6, ...opts2, body };
     }));
   }
-  getAPIList(path5, Page2, opts) {
-    return this.requestAPIList(Page2, { method: "get", path: path5, ...opts });
+  getAPIList(path6, Page2, opts) {
+    return this.requestAPIList(Page2, { method: "get", path: path6, ...opts });
   }
   calculateContentLength(body) {
     if (typeof body === "string") {
@@ -29826,10 +29826,10 @@ var APIClient = class {
   }
   buildRequest(options, { retryCount = 0 } = {}) {
     options = { ...options };
-    const { method, path: path5, query, headers = {} } = options;
+    const { method, path: path6, query, headers = {} } = options;
     const body = ArrayBuffer.isView(options.body) || options.__binaryRequest && typeof options.body === "string" ? options.body : isMultipartBody(options.body) ? options.body.body : options.body ? JSON.stringify(options.body, null, 2) : null;
     const contentLength = this.calculateContentLength(body);
-    const url = this.buildURL(path5, query);
+    const url = this.buildURL(path6, query);
     if ("timeout" in options)
       validatePositiveInteger("timeout", options.timeout);
     options.timeout = options.timeout ?? this.timeout;
@@ -29953,8 +29953,8 @@ var APIClient = class {
     const request = this.makeRequest(options, null);
     return new PagePromise(this, request, Page2);
   }
-  buildURL(path5, query) {
-    const url = isAbsoluteURL(path5) ? new URL(path5) : new URL(this.baseURL + (this.baseURL.endsWith("/") && path5.startsWith("/") ? path5.slice(1) : path5));
+  buildURL(path6, query) {
+    const url = isAbsoluteURL(path6) ? new URL(path6) : new URL(this.baseURL + (this.baseURL.endsWith("/") && path6.startsWith("/") ? path6.slice(1) : path6));
     const defaultQuery = this.defaultQuery();
     if (!isEmptyObj(defaultQuery)) {
       query = { ...defaultQuery, ...query };
@@ -32276,7 +32276,7 @@ Anthropic.Beta = Beta;
 var { HUMAN_PROMPT, AI_PROMPT } = Anthropic;
 var sdk_default = Anthropic;
 
-// packages/memory/dist/infrastructure/anthropic-llm-client.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/infrastructure/anthropic-llm-client.js
 var DEFAULT_MAX_TOKENS = 1024;
 var DEFAULT_TEMPERATURE = 1;
 var DEFAULT_MODEL = "claude-3-5-haiku-20241022";
@@ -32324,7 +32324,7 @@ var AnthropicLlmClient = class {
   }
 };
 
-// packages/memory/dist/narrative/handlers/sqlite-narrative-adapter.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/narrative/handlers/sqlite-narrative-adapter.js
 function rowToRecord(row) {
   let tags;
   try {
@@ -32398,7 +32398,7 @@ var SqliteNarrativeAdapter = class {
   }
 };
 
-// packages/memory/dist/narrative/handlers/pg-narrative-adapter.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/narrative/handlers/pg-narrative-adapter.js
 function rowToRecord2(row) {
   let tags;
   const rawTags = row.tags;
@@ -32471,7 +32471,7 @@ var PgNarrativeAdapter = class {
   }
 };
 
-// packages/memory/dist/remember/storage/sqlite-store.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/sqlite-store.js
 import { createRequire } from "node:module";
 import Database from "better-sqlite3";
 var _require = createRequire(import.meta.url);
@@ -32867,7 +32867,14 @@ var SqliteMemoryStore = class {
         VALUES (?, ?, ?)
       ON CONFLICT(domain) DO UPDATE
         SET factor = excluded.factor, updated_at = excluded.updated_at`);
-    this._stmtGetEntityByName = this._db.prepare(`SELECT * FROM entities WHERE name = ? LIMIT 1`);
+    this._stmtGetEntityByName = this._db.prepare(
+      // Case-insensitive lookup matches pg_store_entities.py:82-91 behaviour.
+      // Without LOWER(), "FooBar" and "foobar" produce duplicate entity rows
+      // which inflates entity counts and breaks cross-file resolution.
+      // source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:82-91
+      //   uses LOWER(name) = LOWER($1) in its SELECT for dedup.
+      `SELECT * FROM entities WHERE LOWER(name) = LOWER(?) LIMIT 1`
+    );
     this._stmtUpsertEntity = this._db.prepare(`
       INSERT INTO entities (name, type, domain, created_at, last_accessed)
         VALUES (?, ?, ?, ?, ?)
@@ -33487,6 +33494,29 @@ var SqliteMemoryStore = class {
     const now = nowIso();
     this._stmtUpsertRelationship.run(Number(rel["source_entity_id"]), Number(rel["target_entity_id"]), String(rel["relationship_type"] ?? "generic"), typeof rel["weight"] === "number" ? rel["weight"] : 1, now, now);
   }
+  // ── Async thin wrappers (satisfy MemoryStore optional async interface) ─────
+  //
+  // SQLite (better-sqlite3) is synchronous internally. These wrappers satisfy
+  // the optional async entity interface declared in memory-store.ts so that
+  // codebase-analyze-helpers.ts can call *Async variants unconditionally on
+  // both backends without an existence check.
+  //
+  // source: ADR-0042 — async entity variants required by codebase-analyze path.
+  // source: ECMAScript — Promise.resolve() wraps a synchronous value in a
+  //   resolved microtask; no blocking or thread pool involved.
+  /** Async upsert entity — thin wrapper; SQLite executes synchronously. */
+  upsertEntityAsync(name, type, domain) {
+    return Promise.resolve(this.upsertEntity(name, type, domain));
+  }
+  /** Async getEntityByName — thin wrapper; SQLite executes synchronously. */
+  getEntityByNameAsync(name) {
+    return Promise.resolve(this.getEntityByName(name));
+  }
+  /** Async insertRelationship — thin wrapper; SQLite executes synchronously. */
+  insertRelationshipAsync(rel) {
+    this.insertRelationship(rel);
+    return Promise.resolve();
+  }
   /**
    * Reinforce or create a relationship between two entity names.
    *
@@ -33657,10 +33687,10 @@ var SqliteMemoryStore = class {
   }
 };
 
-// packages/memory/dist/remember/storage/pg-store.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/pg-store.js
 import { Pool } from "pg";
 
-// packages/memory/dist/remember/storage/pg-store-queries.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/pg-store-queries.js
 async function getMemoriesForDomain(client, domain, minHeat = 0.05, limit = 50) {
   return (await client.query(`SELECT * FROM memories WHERE (domain = $1 OR is_global = TRUE) AND heat_base >= $2 ORDER BY heat_base DESC LIMIT $3`, [domain, minHeat, limit])).rows;
 }
@@ -33743,7 +33773,7 @@ async function callRecallMemories(client, params) {
   return result.rows;
 }
 
-// packages/memory/dist/remember/storage/pg-store-stats.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/pg-store-stats.js
 async function getRecentlyAccessedMemories(client, limit = 20, minAccessCount = 1) {
   return (await client.query("SELECT * FROM memories WHERE access_count >= $1 AND NOT is_stale ORDER BY last_accessed DESC LIMIT $2", [minAccessCount, limit])).rows;
 }
@@ -33806,7 +33836,7 @@ async function logConsolidation(client, data) {
   return row.id;
 }
 
-// packages/memory/dist/remember/storage/pg-store-entities.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/pg-store-entities.js
 function canonicalize(name) {
   return name.trim();
 }
@@ -33844,7 +33874,7 @@ async function getAllEntities(client, minHeat = 0.05, includeArchived = false) {
   return (await client.query(q2, [minHeat])).rows;
 }
 
-// packages/memory/dist/remember/storage/pg-store-relationships.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/pg-store-relationships.js
 async function updateRelationshipsWeightBatch(client, updates) {
   if (updates.length === 0)
     return 0;
@@ -33910,7 +33940,7 @@ async function reinforceOrCreateRelationship(client, sourceName, targetName, del
   }
 }
 
-// packages/memory/dist/remember/storage/pg-store-auxiliary.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/pg-store-auxiliary.js
 async function getActiveProspectiveMemories(client) {
   const result = await client.query("SELECT * FROM prospective_memories WHERE is_active");
   return result.rows;
@@ -33928,7 +33958,7 @@ async function getSchemasForDomain(client, domain) {
   return (await client.query("SELECT * FROM schemas WHERE domain = $1 ORDER BY formation_count DESC", [domain])).rows;
 }
 
-// packages/memory/dist/remember/storage/pg-store-rules.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/pg-store-rules.js
 async function insertRule(client, data) {
   const result = await client.query(`INSERT INTO memory_rules
        (rule_type, scope, scope_value, condition, action, priority, is_active, created_at)
@@ -33981,7 +34011,7 @@ async function insertProspectiveMemory(client, data) {
   return row.id;
 }
 
-// packages/memory/dist/remember/storage/pg-store.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/storage/pg-store.js
 var FLOAT32_BYTES_PER_ELEMENT = Float32Array.BYTES_PER_ELEMENT;
 function nowIso2() {
   return (/* @__PURE__ */ new Date()).toISOString();
@@ -34602,6 +34632,22 @@ var PgMemoryStore = class {
       weight: typeof rel["weight"] === "number" ? rel["weight"] : 1
     }));
   }
+  /**
+   * Async insertRelationship — awaitable form used by codebase-analyze-helpers.
+   *
+   * postcondition: relationship row is committed before the returned Promise
+   *   resolves; callers that await this get back-pressure on the PG pool.
+   * source: ADR-0042 — async entity variants required by codebase-analyze path.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:52-69
+   */
+  async insertRelationshipAsync(rel) {
+    await this.runAsync((c2) => insertRelationship(c2, {
+      source_entity_id: Number(rel["source_entity_id"]),
+      target_entity_id: Number(rel["target_entity_id"]),
+      relationship_type: String(rel["relationship_type"] ?? "generic"),
+      weight: typeof rel["weight"] === "number" ? rel["weight"] : 1
+    }));
+  }
   reinforceOrCreateRelationship(entityA, entityB, learningRate) {
     void this.runAsync((c2) => reinforceOrCreateRelationship(c2, entityA, entityB, learningRate));
   }
@@ -34897,7 +34943,7 @@ var PgMemoryStore = class {
   }
 };
 
-// packages/memory/dist/recall/co-activation.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/co-activation.js
 var ENTITY_EXTRACTION_CAP = 10;
 var CO_ACTIVATION_TOP_K = 5;
 var ENTITY_PAIR_CAP = 5;
@@ -34935,7 +34981,7 @@ async function applyCoActivation(results, store, settings) {
   }
 }
 
-// packages/memory/dist/recall/hopfield.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/hopfield.js
 var DEFAULT_BETA = 8;
 var DEFAULT_TOP_K = 10;
 function softmax(logits) {
@@ -35008,7 +35054,7 @@ function retrieve(queryEmbedding, matrix, beta = DEFAULT_BETA, topK = DEFAULT_TO
   return pairs.slice(0, topK);
 }
 
-// packages/memory/dist/recall/hdc-encoder.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/hdc-encoder.js
 import * as crypto from "node:crypto";
 var HDC_DIM = 1024;
 var _SEED = 3735928559;
@@ -35154,7 +35200,7 @@ function computeHdcScores(queryText, memoryContents, dim = HDC_DIM, threshold = 
   return results;
 }
 
-// packages/memory/dist/recall/spreading-activation.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/spreading-activation.js
 var DEFAULT_DECAY = 0.65;
 var DEFAULT_THRESHOLD = 0.1;
 var DEFAULT_MAX_DEPTH = 3;
@@ -35276,7 +35322,7 @@ function buildEntityGraph(entities, relationships, minHeat = 0) {
   return { graph, nameIndex };
 }
 
-// packages/memory/dist/recall/knowledge-graph.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/knowledge-graph.js
 var MIN_NL_TOKEN_LEN = 4;
 var NL_STOP_WORDS = /* @__PURE__ */ new Set([
   "the",
@@ -35344,7 +35390,7 @@ function extractKeywords(text) {
   return [...new Set(tokens)];
 }
 
-// packages/memory/dist/recall/dendritic-clusters.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/dendritic-clusters.js
 var BRANCH_ADMISSION_THRESHOLD = 0.3;
 var ENTITY_WEIGHT = 0.7;
 var TAG_WEIGHT = 0.3;
@@ -35385,7 +35431,7 @@ function findBestBranch(memoryEntities, memoryTags, branches, options) {
   return { branch: best, score: bestScore };
 }
 
-// packages/memory/dist/recall/bm25.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/bm25.js
 var STOPWORDS = /* @__PURE__ */ new Set([
   "the",
   "a",
@@ -35509,7 +35555,7 @@ function computeNgramScore(query, document) {
   return 0.4 * tri + 0.35 * bi + 0.25 * cw;
 }
 
-// packages/memory/dist/recall/heat.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/heat.js
 function computeSessionCoherence(heat, createdAt, bonus = 0.1, windowHours = 4) {
   if (!createdAt)
     return heat;
@@ -35534,7 +35580,7 @@ function computeRecencyBoost(createdAt, boostMax = 0.3, halflifeDays = 7, cutoff
   return boostMax * Math.exp(-elapsedDays * Math.LN2 / halflifeDays);
 }
 
-// packages/memory/dist/recall/rrf.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/rrf.js
 var DEFAULT_RRF_K = 60;
 function rrfFuseIds(rankedLists, k2 = DEFAULT_RRF_K) {
   const scores = /* @__PURE__ */ new Map();
@@ -35599,7 +35645,7 @@ function wrrfFuseSignals(signals, weights, k2 = DEFAULT_RRF_K) {
   return entries;
 }
 
-// packages/memory/dist/recall/types.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/types.js
 var QueryIntent = {
   TEMPORAL: "temporal",
   CAUSAL: "causal",
@@ -35728,7 +35774,7 @@ var HierarchicalRecallResponseSchema = external_exports.object({
   }).optional()
 });
 
-// packages/memory/dist/recall/multi-signal-fusion.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/multi-signal-fusion.js
 function computeTextSignals(query, hotMems) {
   if (hotMems.length === 0)
     return { bm25: [], ngram: [] };
@@ -35805,7 +35851,7 @@ function applyStrategicOrdering(results, topFraction = 0.3, bottomFraction = 0.2
   ];
 }
 
-// packages/memory/dist/recall/query-intent.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/query-intent.js
 var TEMPORAL_RE = /\b(when|happened|history|last time|recently|before|after|yesterday|today|earlier|previous|chronolog|timeline|sequence)\b/i;
 var CAUSAL_RE = /\b(why|because|caused|cause|root cause|reason|led to|resulted in|consequence|due to|fault|blame|origin|source of)\b/i;
 var SEMANTIC_RE = /\b(related|similar|like|about|associated|connected|relevant|pertaining|regarding|concerning|involves)\b/i;
@@ -35996,7 +36042,7 @@ function computeRetrievalWeights(primaryIntent, _scores) {
   return Object.fromEntries(Object.entries(weights).map(([k2, v2]) => [k2, Math.round(v2 * 1e3) / 1e3]));
 }
 
-// packages/memory/dist/recall/rules.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/rules.js
 var DEFAULT_BOOST = 0.1;
 var DEFAULT_PENALTY = 0.1;
 function applyRules(results, rules, scoreField = "score") {
@@ -36030,7 +36076,7 @@ function applyRules(results, rules, scoreField = "score") {
   }).filter((result) => (result[scoreField] ?? 0) > 0);
 }
 
-// packages/memory/dist/recall/recall-handler.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/recall-handler.js
 var ABLATE_HOPFIELD = process.env["CORTEX_ABLATE_HOPFIELD"] === "1";
 var ABLATE_HDC = process.env["CORTEX_ABLATE_HDC"] === "1";
 var ABLATE_SPREADING_ACTIVATION = process.env["CORTEX_ABLATE_SPREADING_ACTIVATION"] === "1";
@@ -36291,7 +36337,7 @@ async function recallHandler(args, store, embeddings = null, settings = DEFAULT_
   };
 }
 
-// packages/memory/dist/recall/vector-similarity.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/vector-similarity.js
 function norm(v2) {
   if (v2.length === 0)
     return 0;
@@ -36319,7 +36365,7 @@ function cosineSimilarity(a2, b2) {
   return dot(a2, b2) / (na * nb);
 }
 
-// packages/memory/dist/recall/recall-hierarchical-handler.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/recall-hierarchical-handler.js
 var LW_SHORT_L0 = 0.2;
 var LW_SHORT_L1 = 0.3;
 var LW_SHORT_L2 = 0.5;
@@ -36512,7 +36558,7 @@ async function recallHierarchicalHandler(args, store, embeddings = null, setting
   };
 }
 
-// packages/memory/dist/graph/types.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/graph/types.js
 var CognitiveGraphNodeSchema = external_exports.object({
   id: external_exports.number().int().positive(),
   content: external_exports.string(),
@@ -36581,7 +36627,7 @@ var HeatPropagationConfigSchema = external_exports.object({
   initialActivation: external_exports.number().min(0).default(1)
 });
 
-// packages/memory/dist/graph/node-traversal.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/graph/node-traversal.js
 var DEFAULT_MAX_DEPTH2 = 3;
 var DEFAULT_MIN_WEIGHT = 0.05;
 function enqueueNeighbors(current, srGraph, visited, queue, minWeight) {
@@ -36725,7 +36771,7 @@ function springRelax(positions, srGraph, idxMap, iterations) {
   }
 }
 
-// packages/memory/dist/graph/navigation.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/graph/navigation.js
 function ensureStartIncluded(startId, startMem, allMems) {
   if (allMems.some((m2) => m2.id === startId))
     return allMems;
@@ -36789,7 +36835,7 @@ function navigate(startMem, allMems, options = {}) {
   return response;
 }
 
-// packages/memory/dist/graph/handlers/navigate-memory.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/graph/handlers/navigate-memory.js
 async function handler(args, port) {
   if (!args || args["memory_id"] === void 0) {
     return { startMemoryId: 0, neighbors: [], total: 0, srGraphSize: 0 };
@@ -36834,7 +36880,7 @@ async function handler(args, port) {
   return response;
 }
 
-// packages/memory/dist/recall/fractal-drill-down.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/fractal-drill-down.js
 var DOMAIN_CANDIDATE_CAP2 = 500;
 var AVG_HEAT_FALLBACK = 0.5;
 var DEFAULT_CLUSTER_THRESHOLD2 = 0.6;
@@ -37015,7 +37061,7 @@ async function drillDownHandler(args, deps) {
   return { cluster_id: clusterId, children: clusterChildren, child_count: clusterChildren.length };
 }
 
-// packages/mcp-servers/memory/dist/tools/recall.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/recall.js
 var RECALL_MAX_RESULTS_CAP = 100;
 var RECALL_DEFAULT_RESULTS = 10;
 var RECALL_MIN_HEAT_DEFAULT = 0.05;
@@ -37121,7 +37167,7 @@ function registerRecallTools(server2, deps) {
   });
 }
 
-// packages/memory/dist/remember/predictive-coding.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/predictive-coding.js
 var CODE_BLOCK_RE = /```[\s\S]*?```|`[^`\n]+`/g;
 var FILE_PATH_RE = /(?:\.{0,2}\/)?(?:[\w@.-]+\/)+[\w@.-]+\.\w+/g;
 var URL_RE = /https?:\/\/\S+/g;
@@ -37205,7 +37251,7 @@ function gateDecision(noveltyScore, threshold, bypass) {
   ];
 }
 
-// packages/memory/dist/remember/write-gate.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/write-gate.js
 var SUCCESS_KW = /\b(fixed|resolved|succeeded|passed|completed|done)\b/i;
 var IMPORTANCE_BASELINE = 0.5;
 var IMPORTANCE_DELTA_ERROR = 0.2;
@@ -37296,7 +37342,7 @@ function buildRejectionResponse(score, importance) {
   };
 }
 
-// packages/memory/dist/remember/write-gate-calibration.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/write-gate-calibration.js
 var TARGET_ACCEPTANCE_RATE = 0.5;
 var EMA_DECAY = 0.95;
 var ADJUSTMENT_STEP = 0.02;
@@ -37372,7 +37418,7 @@ function effectiveThreshold(domain, defaultThreshold = 0.4) {
   return state?.threshold ?? defaultThreshold;
 }
 
-// packages/memory/dist/remember/types.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/types.js
 var DEFAULT_IMPORTANCE3 = 0.5;
 var DEFAULT_CALIBRATION_THRESHOLD = 0.4;
 var DEFAULT_ACCEPTANCE_EMA = 0.5;
@@ -37531,7 +37577,7 @@ var CalibrationStateSchema = external_exports.object({
   lastAdjustmentAt: external_exports.number().int().default(0)
 });
 
-// packages/memory/dist/remember/handlers/remember.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/handlers/remember.js
 var SURPRISE_BOOST_FACTOR = 0.3;
 var RECENT_CONTENTS_LIMIT = 10;
 var VECTOR_SEARCH_TOP_K = 5;
@@ -37775,7 +37821,7 @@ function extractEntityNamesFromContent(content) {
   return [...names].slice(0, ENTITY_EXTRACTION_CAP2);
 }
 
-// packages/memory/dist/remember/handlers/forget.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/handlers/forget.js
 var FORGET_CONTENT_PREVIEW_CHARS = 80;
 async function forgetAsync(args, store) {
   const memoryId = args.memory_id;
@@ -37818,7 +37864,7 @@ async function forgetAsync(args, store) {
   };
 }
 
-// packages/memory/dist/remember/handlers/anchor.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/handlers/anchor.js
 var ANCHOR_REASON_TAG_MAX_CHARS = 40;
 var ANCHOR_CONTENT_PREVIEW_CHARS = 120;
 function buildAnchorTags(existingTags, reason) {
@@ -37869,7 +37915,7 @@ async function anchorAsync(args, store) {
   };
 }
 
-// packages/memory/dist/remember/handlers/rate-memory.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/remember/handlers/rate-memory.js
 var CONFIDENCE_MIN_SAMPLES = 3;
 var CONFIDENCE_ROUNDING_FACTOR = 1e4;
 var RATE_CONTENT_PREVIEW_CHARS = 80;
@@ -37912,7 +37958,7 @@ async function rateMemoryAsync(args, store) {
   };
 }
 
-// packages/mcp-servers/memory/dist/tools/remember.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/remember.js
 function errorText2(tool, err) {
   const message = err instanceof Error ? err.message : String(err);
   return { content: [{ type: "text", text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
@@ -37982,12 +38028,12 @@ function registerRememberTools(server2, deps) {
   });
 }
 
-// packages/mcp-servers/memory/dist/tools/methodology.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/methodology.js
 import { existsSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 
-// packages/memory/dist/methodology/domain-detector.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/domain-detector.js
 var W_PROJECT = 0.5;
 var W_CONTENT = 0.3;
 var W_CATEGORY = 0.2;
@@ -38129,7 +38175,7 @@ function detectDomain(context, profiles) {
   return buildDetectionResult(domainScores);
 }
 
-// packages/memory/dist/methodology/methodology-engine.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/methodology-engine.js
 var ALL_CATEGORIES = [
   "bug-fix",
   "feature",
@@ -38444,7 +38490,7 @@ function generateContext(domainId, profile) {
   return lines.join("\n");
 }
 
-// packages/memory/dist/methodology/handlers/query-methodology.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/handlers/query-methodology.js
 function emptyResponse(opts) {
   return {
     domain: opts.domain ?? null,
@@ -38502,12 +38548,12 @@ function queryMethodology(args, profiles) {
   };
 }
 
-// packages/memory/dist/methodology/handlers/detect-domain.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/handlers/detect-domain.js
 function detectDomainHandler(args, profiles) {
   return detectDomain({ cwd: args.cwd, project: args.project, firstMessage: args.firstMessage }, profiles);
 }
 
-// packages/memory/dist/methodology/types.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/types.js
 var PERSONA_NUMERIC_DIMENSIONS = [
   "activeReflective",
   "sensingIntuitive",
@@ -38529,7 +38575,7 @@ var PERSONA_DIMENSIONS = [
   ...PERSONA_CATEGORICAL_DIMENSIONS
 ];
 
-// packages/memory/dist/methodology/linear-algebra.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/linear-algebra.js
 function norm2(v2) {
   if (v2.length === 0)
     return 0;
@@ -38563,7 +38609,7 @@ function zeros(dim) {
   return new Array(dim).fill(0);
 }
 
-// packages/memory/dist/methodology/cognitive-profile.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/cognitive-profile.js
 function clamp(v2) {
   return Math.max(-1, Math.min(1, v2));
 }
@@ -38650,7 +38696,7 @@ function composePersonas(vectors, weights) {
   return pv;
 }
 
-// packages/memory/dist/methodology/handlers/rebuild-profiles.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/handlers/rebuild-profiles.js
 function buildProjectDomainMap(existingProfiles, byProject) {
   const map = {};
   for (const [domainId, domain] of Object.entries(existingProfiles.domains)) {
@@ -38806,7 +38852,7 @@ function checkSkip(profiles, force = false) {
   return { skip: false };
 }
 
-// packages/memory/dist/methodology/attribution-pipeline.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/attribution-pipeline.js
 var SIGNAL_NAMES = [
   // 0-6: tool-use signals
   "tool:Read",
@@ -39000,7 +39046,7 @@ function traceAttribution(conversations, dictionary, profile) {
   return { nodes, edges };
 }
 
-// packages/memory/dist/methodology/handlers/explore-features.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/handlers/explore-features.js
 function buildSeedDictionary() {
   return {
     K: 8,
@@ -39109,7 +39155,7 @@ function exploreFeatures(args, profiles) {
   }
 }
 
-// packages/mcp-servers/memory/dist/tools/methodology.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/methodology.js
 function methodologyDir() {
   return join(homedir(), ".claude", "methodology");
 }
@@ -39232,12 +39278,12 @@ function registerMethodologyTools(server2) {
   });
 }
 
-// packages/mcp-servers/memory/dist/tools/consolidation.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/consolidation.js
 import { existsSync as existsSync2, readFileSync as readFileSync2, mkdirSync, writeFileSync } from "node:fs";
 import { join as join2 } from "node:path";
 import { homedir as homedir2 } from "node:os";
 
-// packages/memory/dist/consolidation/decay-cycle.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/decay-cycle.js
 function parseDatetime(value) {
   if (value == null)
     return null;
@@ -39272,7 +39318,7 @@ function computeEntityDecay(entities, now = null, opts = {}) {
   return updates;
 }
 
-// packages/memory/dist/consolidation/stages/decay.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/decay.js
 function groupByDomain(memories) {
   const groups = /* @__PURE__ */ new Map();
   for (const mem of memories) {
@@ -39305,7 +39351,7 @@ async function runDecayCycle(store, settings, memories = null) {
   };
 }
 
-// packages/memory/dist/consolidation/causal-graph.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/causal-graph.js
 var PMI_ZERO_SENTINEL = -10;
 var PMI_DECIMAL_PLACES = 4;
 var DEFAULT_INDEPENDENCE_THRESHOLD = 0.5;
@@ -39443,7 +39489,7 @@ function discoverCausalEdges(entityNames, coOccurrences, entityCounts, totalMemo
   return orientEdges(skeleton, coOccurrences, entityFirstSeen);
 }
 
-// packages/memory/dist/consolidation/stages/cls.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/cls.js
 var EPISODIC_SAMPLE_CAP = 2e3;
 var SEMANTICS_SAMPLE_CAP = 2e3;
 var MIN_PATTERN_SIZE = 3;
@@ -39685,7 +39731,7 @@ async function runClsCycle(store, _settings, embeddings) {
   return stats;
 }
 
-// packages/memory/dist/consolidation/stages/compression.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/compression.js
 var CODE_BLOCK_RE2 = /```[\s\S]*?```/g;
 var FILE_PATH_RE2 = /(?:\.{0,2}\/)?(?:[\w@.-]+\/)+[\w@.-]+\.\w+/g;
 var ERROR_RE = /\b\w*(?:Error|Exception|Traceback)\b/;
@@ -39936,7 +39982,7 @@ async function runCompressionCycle(store, settings, embeddings, memories = null)
   return stats;
 }
 
-// packages/memory/dist/consolidation/homeostatic-health.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/homeostatic-health.js
 var EMPTY_HEALTH = {
   mean: 0,
   std: 0,
@@ -40072,7 +40118,7 @@ function computeDistributionHealthStreaming(valueChunks, targetMean) {
   return [healthFromMoments(m1, std, skew, kurtosis, targetMean), n3];
 }
 
-// packages/memory/dist/consolidation/homeostatic-plasticity.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/homeostatic-plasticity.js
 var DEFAULT_COHORT_SIGMA = 0.5;
 var DEFAULT_COHORT_STRENGTH = 0.3;
 function detectHotCohort(heats, mean, std, cohortThresholdSigma = DEFAULT_COHORT_SIGMA) {
@@ -40095,7 +40141,7 @@ function applyCohortCorrection(heats, cohortIndices, targetMean, correctionStren
   });
 }
 
-// packages/memory/dist/consolidation/stages/homeostatic.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/homeostatic.js
 var BIMODALITY_TRIGGER = 0.7;
 var TARGET_HEAT = 0.4;
 var FOLD_LOG_THRESHOLD = Math.log(2);
@@ -40355,7 +40401,7 @@ async function runHomeostaticCycle(store, memories = null) {
   }
 }
 
-// packages/memory/dist/consolidation/ablation.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/ablation.js
 var Mechanism = {
   OSCILLATORY_CLOCK: "oscillatory_clock",
   CASCADE: "consolidation_cascade",
@@ -40389,7 +40435,7 @@ function isMechanismDisabled(mechanism) {
   return (typeof process !== "undefined" ? process.env[`CORTEX_ABLATE_${name}`] : void 0) === "1";
 }
 
-// packages/memory/dist/consolidation/cascade-advancement.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/cascade-advancement.js
 var ConsolidationStage = {
   LABILE: "labile",
   EARLY_LTP: "early_ltp",
@@ -40513,7 +40559,7 @@ function computeAdvancementReadiness(currentStage, hoursInStage, dopamineLevelOr
   return [ready, nextStage, readinessScore];
 }
 
-// packages/memory/dist/consolidation/stages/cascade.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/cascade.js
 var ADVANCEABLE_STAGES = ["labile", "early_ltp", "late_ltp", "reconsolidating"];
 var HEARTBEAT_SKIP_HOURS = 1;
 var TRANSITION_PREVIEW_CAP = 50;
@@ -40620,7 +40666,7 @@ async function runCascadeAdvancement(store) {
   }
 }
 
-// packages/memory/dist/consolidation/microglial-pruning.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/microglial-pruning.js
 var ALPHA_THRESHOLD = 0.05;
 var TEMPORAL_HALF_LIFE_HOURS = 168;
 var MIN_ENTITY_HEAT = 0.02;
@@ -40719,7 +40765,7 @@ function identifyOrphanedEntities(entities, edgeEntityIds, memoryEntityIds, minH
   return entities.filter((ent) => isOrphanCandidate(ent, edgeEntityIds, memoryEntityIds, minHeat, minAccessCount)).map((ent) => ({ ...ent, archive_reason: ["orphaned", "cold", "low_access"] }));
 }
 
-// packages/memory/dist/consolidation/stages/pruning.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/pruning.js
 function formatEdges(relationships) {
   return relationships.map((r2) => ({
     source_entity_id: r2["source_entity_id"],
@@ -40791,7 +40837,7 @@ async function runPruningCycle(store) {
   }
 }
 
-// packages/memory/dist/consolidation/synaptic-plasticity-hebbian.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/synaptic-plasticity-hebbian.js
 var MAX_WEIGHT = 5;
 var MIN_WEIGHT = 0.01;
 var LTP_RATE = 0.05;
@@ -40867,7 +40913,7 @@ function applyHebbianUpdate(edges, coAccessedPairs, entityActivities, entityThre
   return edges.map((edge) => hebbianSingle(edge, coAccessedPairs, entityActivities, entityThresholds, hoursSinceLastUpdate, ltpRate, ltdRate));
 }
 
-// packages/memory/dist/consolidation/stages/plasticity.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/plasticity.js
 var CO_ACCESS_SAMPLE_CAP = 2e3;
 async function selectCoAccessSample(store, memories) {
   if (memories === null) {
@@ -40955,7 +41001,7 @@ async function runPlasticityCycle(store, memories = null) {
   }
 }
 
-// packages/memory/dist/consolidation/stages/memify.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/memify.js
 var PRUNE_HEAT_THRESHOLD = 0.01;
 var PRUNE_CONFIDENCE_THRESHOLD = 0.3;
 var STRENGTHEN_MIN_ACCESS = 5;
@@ -41100,7 +41146,7 @@ async function runMemifyCycle(store, memories = null) {
   return stats;
 }
 
-// packages/memory/dist/wiki/concept-vocabulary.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/concept-vocabulary.js
 var CONCEPT_MAP = {
   // ── Programming & DevOps ──────────────────────────────────────────
   memory: ["cache", "storage", "store", "recall", "retrieve", "persist"],
@@ -41185,7 +41231,7 @@ function buildReverseMap(conceptMap) {
 }
 var REVERSE_MAP = buildReverseMap(CONCEPT_MAP);
 
-// packages/memory/dist/wiki/enrichment.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/enrichment.js
 var QUESTION_TEMPLATES = [
   "What is {noun}?",
   "How does {noun} work?",
@@ -41246,7 +41292,7 @@ function buildEnrichedContent(content) {
   return content + "\n\n<!-- doc2query -->\n" + queries.join("\n");
 }
 
-// packages/memory/dist/consolidation/sleep-compute.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/sleep-compute.js
 function dreamReplay(memories, maxMemories = 50) {
   const hot = [...memories].sort((a2, b2) => (b2["heat"] ?? 0) - (a2["heat"] ?? 0)).slice(0, maxMemories);
   const updates = [];
@@ -41395,7 +41441,7 @@ function runSleepCompute(memories, clusters = null, directory = "", periodLabel 
   };
 }
 
-// packages/memory/dist/consolidation/stages/sleep.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/sleep.js
 async function applyDreamReplay(store, embeddings, replayUpdates) {
   let count = 0;
   for (const upd of replayUpdates) {
@@ -41472,7 +41518,7 @@ async function runDeepSleep(store, embeddings, memories = null) {
   };
 }
 
-// packages/memory/dist/consolidation/two-stage-model.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/two-stage-model.js
 var HIPPOCAMPAL_RELEASE_THRESHOLD = 0.05;
 var REPLAY_TRANSFER_RATE = 0.02;
 var SCHEMA_ACCELERATION = 2.5;
@@ -41501,7 +41547,7 @@ function updateHippocampalDependency(currentDependency, replayCount, schemaMatch
   return Math.max(0, Math.round((currentDependency - delta) * 1e4) / 1e4);
 }
 
-// packages/memory/dist/consolidation/stages/transfer.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/stages/transfer.js
 async function runTwoStageTransfer(store) {
   const candidates = await store.getTransferCandidates(200);
   let transferred = 0;
@@ -41525,7 +41571,7 @@ async function runTwoStageTransfer(store) {
   return { transferred, released, scanned: candidates.length };
 }
 
-// packages/memory/dist/consolidation/handler.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/consolidation/handler.js
 async function timed(fn) {
   const t0 = performance.now();
   try {
@@ -41633,7 +41679,7 @@ async function handler2(store, settings, embeddings, args = {}) {
   };
 }
 
-// packages/mcp-servers/memory/dist/tools/consolidation.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/consolidation.js
 var ROUNDING_FACTOR_4DP = 1e4;
 var EMA_ALPHA = 0.1;
 function methodologyDir2() {
@@ -41923,16 +41969,16 @@ function registerConsolidationTools(server2, deps) {
   });
 }
 
-// packages/mcp-servers/memory/dist/tools/management.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/management.js
 import { existsSync as existsSync16, readFileSync as readFileSync12 } from "node:fs";
 import { join as join19 } from "node:path";
 import { homedir as homedir9 } from "node:os";
 
-// packages/memory/dist/import/handler.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/import/handler.js
 import { join as join3 } from "node:path";
 import { homedir as homedir3 } from "node:os";
 
-// packages/memory/dist/import/heat.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/import/heat.js
 var DEFAULT_HALF_LIFE_DAYS = 30;
 var DEFAULT_HEAT_FLOOR = 0.3;
 var LN2 = Math.LN2;
@@ -41953,7 +41999,7 @@ function computeAgeDays(timestamp, nowMs) {
   return Math.max(0, deltaMs / 864e5);
 }
 
-// packages/memory/dist/import/scanner.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/import/scanner.js
 import { existsSync as existsSync3, openSync, readSync, fstatSync, closeSync, readdirSync, statSync as statSync2 } from "node:fs";
 var HEAD_BYTES = 32768;
 var TAIL_BYTES = 8192;
@@ -42058,7 +42104,7 @@ function discoverJsonlFiles(projectsDir, projectFilter) {
   return results;
 }
 
-// packages/memory/dist/import/session-extractor.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/import/session-extractor.js
 var DECISION_RE3 = /\b(decided|chose|switched|migrated|selected|picked|opted|going with|let'?s use|we should|must use|prefer|instead of|rather than|moved to|changed to)\b/i;
 var ERROR_RE2 = /\b(error|exception|traceback|failed|failure|bug|crash|broken|timeout|denied|rejected|not working|doesn'?t work|fix|fixed|resolved|debug|issue)\b/i;
 var ARCHITECTURE_RE = /\b(architecture|design|pattern|refactor|restructur|modular|decouple|abstract|layer|interface|protocol|clean architecture|solid|dependency injection|factory|observer|singleton)\b/i;
@@ -42204,7 +42250,7 @@ function extractSessionSummary(records) {
   };
 }
 
-// packages/memory/dist/import/domain-detector.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/import/domain-detector.js
 var CONTAINER_NAMES = /* @__PURE__ */ new Set([
   "developments",
   "projects",
@@ -42228,7 +42274,7 @@ function detectDomainFromPath(cwd) {
   return last !== void 0 ? last.toLowerCase() : "unknown";
 }
 
-// packages/memory/dist/import/types.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/import/types.js
 var ImportRequestSchema = external_exports.object({
   project: external_exports.string().optional().default(""),
   domain: external_exports.string().optional().default(""),
@@ -42256,7 +42302,7 @@ var ImportResponseSchema = external_exports.object({
   error: external_exports.string().optional()
 });
 
-// packages/memory/dist/import/handler.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/import/handler.js
 var CLAUDE_DIR = join3(homedir3(), ".claude");
 var PROJECTS_DIR = join3(CLAUDE_DIR, "projects");
 var MAX_PREVIEW_ITEMS = 50;
@@ -42380,7 +42426,7 @@ async function importHandler(args, rememberHandler, projectsDirOverride) {
   return buildResult(totalImported, totalGated, totalSkipped, sessionsScanned, jsonlFiles.length, dry_run, previewItems, errors);
 }
 
-// packages/memory/dist/shared/types.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/shared/types.js
 var ConversationMetaSchema = external_exports.object({
   sessionId: external_exports.string(),
   slug: external_exports.string().nullable().optional(),
@@ -42489,7 +42535,7 @@ var FeatureDictionarySchema = external_exports.object({
   learnedFromSessions: external_exports.number().int().default(0)
 });
 
-// packages/memory/dist/shared/types-profiles.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/shared/types-profiles.js
 var EntryPointSchema = external_exports.object({
   pattern: external_exports.string(),
   frequency: external_exports.number().int().default(0),
@@ -42601,7 +42647,7 @@ var SessionLogSchema = external_exports.object({
   sessions: external_exports.array(SessionLogEntrySchema).default([])
 });
 
-// packages/memory/dist/shared/memory-types.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/shared/memory-types.js
 var MemorySchema = external_exports.object({
   id: external_exports.number().int().nullable().optional(),
   content: external_exports.string(),
@@ -42777,7 +42823,7 @@ var RecallResultSchema2 = external_exports.object({
   signals: external_exports.record(external_exports.number()).default({})
 });
 
-// packages/memory/dist/shared/wiki-ir.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/shared/wiki-ir.js
 var ClaimTypeSchema = external_exports.enum([
   "assertion",
   "decision",
@@ -42908,7 +42954,7 @@ var CurationMemoSchema = external_exports.object({
   createdAt: external_exports.string().datetime().nullable().optional()
 });
 
-// packages/memory/dist/shared/categorizer.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/shared/categorizer.js
 var CATEGORY_RULES = {
   "bug-fix": ["fix", "bug", "broken", "crash", "error", "issue", "regression", "failing"],
   feature: ["add", "implement", "new", "build", "create", "introduce", "support"],
@@ -42939,16 +42985,16 @@ var SIGNAL_PATTERNS = (() => {
   return map;
 })();
 
-// packages/memory/dist/shared/content-hardening.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/shared/content-hardening.js
 var CONTENT_MAX_BYTES = 1 * 1024 * 1024;
 var BIDI_OVERRIDES = "\u202A\u202B\u202C\u202D\u202E\u2066\u2067\u2068\u2069";
 var STRIP_RE = new RegExp(`[\0-\b\v\f-\x7F-\x9F\uFEFF${BIDI_OVERRIDES}]`, "g");
 
-// packages/memory/dist/recall/reranker.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/reranker.js
 import { tmpdir } from "os";
 var FLASHRANK_CACHE_DIR = process.env["FLASHRANK_CACHE_DIR"] ?? tmpdir();
 
-// packages/memory/dist/recall/retrieval-dispatch.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/retrieval-dispatch.js
 var _SIMPLE_INTENTS = /* @__PURE__ */ new Set([
   QueryIntent.GENERAL,
   QueryIntent.SEMANTIC,
@@ -42962,7 +43008,7 @@ var DEEP_INTENTS = /* @__PURE__ */ new Set([
   QueryIntent.INSTRUCTION
 ]);
 
-// packages/memory/dist/recall/recall-pipeline-stages.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/recall-pipeline-stages.js
 function envFloat(name, defaultVal) {
   if (typeof process === "undefined")
     return defaultVal;
@@ -42977,7 +43023,7 @@ var _HDC_BETA = envFloat("CORTEX_HDC_BETA", 0.2);
 var _SA_BETA = envFloat("CORTEX_SA_BETA", 0.25);
 var _DENDRITIC_DELTA = envFloat("CORTEX_DENDRITIC_DELTA", 0.1);
 
-// packages/memory/dist/recall/recall-pipeline.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/recall-pipeline.js
 function envFloat2(name, defaultVal) {
   if (typeof process === "undefined")
     return defaultVal;
@@ -42990,7 +43036,7 @@ function envFloat2(name, defaultVal) {
 var _EMOTIONAL_RETRIEVAL_BETA = envFloat2("CORTEX_EMOTIONAL_RETRIEVAL_BETA", 0.2);
 var _MOOD_CONGRUENT_BETA = envFloat2("CORTEX_MOOD_CONGRUENT_BETA", 0.15);
 
-// packages/memory/dist/recall/pg-recall-weights.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/pg-recall-weights.js
 var _PG_INTENT_OVERRIDES = {
   [QueryIntent.TEMPORAL]: {
     heat: 0.6,
@@ -43015,13 +43061,13 @@ var _PG_INTENT_OVERRIDES = {
   }
 };
 
-// packages/memory/dist/recall/pg-recall.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/recall/pg-recall.js
 var _TYPE_INTENTS = {
   [QueryIntent.INSTRUCTION]: "instruction",
   [QueryIntent.PREFERENCE]: "preference"
 };
 
-// packages/memory/dist/codebase-analysis/index.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/index.js
 var codebase_analysis_exports = {};
 __export(codebase_analysis_exports, {
   CODE_GRAPH_TAG_PREFIX: () => CODE_GRAPH_TAG_PREFIX,
@@ -43122,7 +43168,7 @@ __export(codebase_analysis_exports, {
   walkType: () => walkType
 });
 
-// packages/memory/dist/codebase-analysis/types.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/types.js
 function makeImportInfo(module2, names = [], isRelative = false) {
   return { module: module2, names, isRelative };
 }
@@ -43130,10 +43176,10 @@ function makeSymbolDef(name, kind2, signature = "", docstring = "") {
   return { name, kind: kind2, signature, docstring };
 }
 
-// packages/memory/dist/codebase-analysis/codebase-parser.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/codebase-parser.js
 import { createHash as createHash2 } from "node:crypto";
 
-// packages/memory/dist/codebase-analysis/codebase-extractors.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/codebase-extractors.js
 var codebase_extractors_exports = {};
 __export(codebase_extractors_exports, {
   IMPORT_EXTRACTORS: () => IMPORT_EXTRACTORS,
@@ -43340,7 +43386,7 @@ var SYMBOL_EXTRACTORS = {
   swift: extractSymbolsSwift
 };
 
-// packages/memory/dist/codebase-analysis/codebase-parser.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/codebase-parser.js
 var EXT_TO_LANG = {
   ".py": "python",
   ".js": "javascript",
@@ -43359,16 +43405,16 @@ var EXT_TO_LANG = {
   ".h": "c",
   ".m": "objc"
 };
-function detectLanguage(path5) {
+function detectLanguage(path6) {
   for (const [ext2, lang] of Object.entries(EXT_TO_LANG)) {
-    if (path5.endsWith(ext2))
+    if (path6.endsWith(ext2))
       return lang;
   }
   return "unknown";
 }
-function parseFile(path5, content) {
+function parseFile(path6, content) {
   const { IMPORT_EXTRACTORS: IMPORT_EXTRACTORS2, SYMBOL_EXTRACTORS: SYMBOL_EXTRACTORS2, extractDocstring: extractDocstring2 } = codebase_extractors_exports;
-  const language2 = detectLanguage(path5);
+  const language2 = detectLanguage(path6);
   const contentHash = createHash2("sha256").update(content, "utf8").digest("hex").slice(0, 16);
   const importExtractor = IMPORT_EXTRACTORS2[language2] ?? ((_2) => []);
   const symbolExtractor = SYMBOL_EXTRACTORS2[language2] ?? ((_2) => []);
@@ -43376,7 +43422,7 @@ function parseFile(path5, content) {
   const definitions = symbolExtractor(content);
   const docstring = extractDocstring2(content, language2);
   return {
-    path: path5,
+    path: path6,
     language: language2,
     contentHash,
     imports,
@@ -43413,7 +43459,7 @@ ${analysis.lineCount} lines`);
   return parts.join("\n");
 }
 
-// packages/memory/dist/codebase-analysis/codebase-graph.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/codebase-graph.js
 import { posix } from "node:path";
 function resolveImportToFile(module2, importingFile, knownFiles, isRelative = false) {
   const candidates = _buildCandidates(module2, importingFile, isRelative);
@@ -43649,7 +43695,7 @@ function _bfs(start, adj, maxDepth) {
   return visited;
 }
 
-// packages/memory/dist/codebase-analysis/codebase-type-resolver.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/codebase-type-resolver.js
 var _NOISE_TYPES = /* @__PURE__ */ new Set([
   "Self",
   "self",
@@ -43748,7 +43794,7 @@ function escapeRegex2(s2) {
   return s2.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
-// packages/memory/dist/codebase-analysis/schema-extraction.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/schema-extraction.js
 var _MIN_FORMATION_COUNT = 5;
 var _ENTITY_FREQUENCY_THRESHOLD = 0.4;
 var _HIGH_MATCH_THRESHOLD = 0.7;
@@ -43938,7 +43984,7 @@ function schemaFromDict(data) {
   });
 }
 
-// packages/memory/dist/codebase-analysis/schema-engine.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/schema-engine.js
 var _HIGH_MATCH_THRESHOLD2 = 0.7;
 var _MEDIUM_MATCH_THRESHOLD = 0.3;
 var _MAX_VIOLATIONS_BEFORE_REVISION = 10;
@@ -44056,7 +44102,7 @@ function computeSchemaFreeEnergy(predictionErrors) {
   return Object.values(predictionErrors).reduce((sum, e2) => sum + e2 * e2, 0);
 }
 
-// packages/memory/dist/codebase-analysis/ast-extractors.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/ast-extractors.js
 function nodeText(node, source) {
   return source.slice(node.startIndex, node.endIndex).toString("utf8");
 }
@@ -44291,7 +44337,7 @@ function extractCallsPerFunction(root, source) {
   return out;
 }
 
-// packages/memory/dist/codebase-analysis/ast-extractors-extra.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/ast-extractors-extra.js
 function extractGoImports(root, source) {
   const imports = [];
   for (const node of walkType(root, "import_spec")) {
@@ -44434,7 +44480,7 @@ function _extractRustImpl(node, source, defs) {
   }
 }
 
-// packages/memory/dist/codebase-analysis/ast-parser.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/ast-parser.js
 import { createHash as createHash3 } from "node:crypto";
 var AST_SUPPORTED = /* @__PURE__ */ new Set(["python", "typescript", "javascript", "go", "rust", "swift"]);
 var CONTENT_HASH_HEX_CHARS = 16;
@@ -44453,13 +44499,13 @@ function isAvailable() {
   }
   return _treeSitterAvailable;
 }
-function parseFileAst(path5, content) {
-  const language2 = detectLanguage(path5);
+function parseFileAst(path6, content) {
+  const language2 = detectLanguage(path6);
   const contentHash = createHash3("sha256").update(content).digest("hex").slice(0, CONTENT_HASH_HEX_CHARS);
   const text = content.toString("utf8");
   const extractorAndTree = _getExtractorAndTree(language2, content);
   if (!extractorAndTree) {
-    return parseFile(path5, text);
+    return parseFile(path6, text);
   }
   const { extractor, tree } = extractorAndTree;
   const root = tree.rootNode;
@@ -44467,7 +44513,7 @@ function parseFileAst(path5, content) {
   const docstring = _extractModuleDoc(root, language2, content);
   const callsPerFunction = extractCallsPerFunction(root, content);
   return {
-    path: path5,
+    path: path6,
     language: language2,
     contentHash,
     imports,
@@ -44586,7 +44632,7 @@ var _EXTRACTORS = {
   rust: _extractRust
 };
 
-// packages/memory/dist/codebase-analysis/scanner-parse.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/scanner-parse.js
 import { statSync as statSync3 } from "node:fs";
 function extractUserText(content) {
   if (typeof content === "string")
@@ -44717,7 +44763,7 @@ function buildConversationRecord(meta, stats, filePath, projectName, fallbackId)
   };
 }
 
-// packages/memory/dist/codebase-analysis/scanner.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/scanner.js
 import { existsSync as existsSync4, openSync as openSync2, readdirSync as readdirSync2, readSync as readSync2, statSync as statSync4 } from "node:fs";
 import { join as join4 } from "node:path";
 var HEAD_BYTES2 = 32768;
@@ -44961,7 +45007,7 @@ function groupByProject(conversations) {
   return groups;
 }
 
-// packages/memory/dist/codebase-analysis/handlers/ingest-helpers.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-helpers.js
 import { createHash as createHash4 } from "node:crypto";
 import { resolve, basename as basename2 } from "node:path";
 var CODE_GRAPH_TAG_PREFIX = "_code_graph:";
@@ -45050,11 +45096,11 @@ var McpConnectionError2 = class extends Error {
   }
 };
 
-// packages/memory/dist/codebase-analysis/handlers/codebase-analyze.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/codebase-analyze.js
 import { existsSync as existsSync5, readFileSync as readFileSync3, statSync as statSync6 } from "node:fs";
 import { extname } from "node:path";
 
-// packages/memory/dist/codebase-analysis/handlers/codebase-analyze-helpers.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/codebase-analyze-helpers.js
 import { readdirSync as readdirSync3, statSync as statSync5 } from "node:fs";
 import { join as join5, relative } from "node:path";
 var CODEBASE_AGENT_CONTEXT = "codebase";
@@ -45191,107 +45237,156 @@ var VALID_KINDS = /* @__PURE__ */ new Set([
   "constant",
   "struct"
 ]);
-function _getOrCreateEntity(store, name, entityType, domain) {
+async function _getOrCreateEntity(store, name, entityType, domain) {
   try {
-    const existing = store.getEntityByName(name);
+    const existing = store.getEntityByNameAsync ? await store.getEntityByNameAsync(name) : store.getEntityByName(name);
     if (existing)
       return existing["id"];
   } catch {
   }
+  if (store.upsertEntityAsync) {
+    return store.upsertEntityAsync(name, entityType, domain);
+  }
   return store.upsertEntity(name, entityType, domain);
 }
-function _persistSymbolEntities(store, analysis, fileEid, domain) {
+async function _persistSymbolEntities(store, analysis, fileEid, domain) {
   let entities = 0;
   let relationships = 0;
   for (const sym of analysis.definitions) {
     const kind2 = VALID_KINDS.has(sym.kind) ? sym.kind : "function";
-    const symEid = _getOrCreateEntity(store, sym.name, kind2, domain);
+    const symEid = await _getOrCreateEntity(store, sym.name, kind2, domain);
     entities++;
     try {
-      store.insertRelationship({
-        source_entity_id: fileEid,
-        target_entity_id: symEid,
-        relationship_type: "defines",
-        weight: 1
-      });
+      if (store.insertRelationshipAsync) {
+        await store.insertRelationshipAsync({
+          source_entity_id: fileEid,
+          target_entity_id: symEid,
+          relationship_type: "defines",
+          weight: 1
+        });
+      } else {
+        store.insertRelationship({
+          source_entity_id: fileEid,
+          target_entity_id: symEid,
+          relationship_type: "defines",
+          weight: 1
+        });
+      }
       relationships++;
-    } catch {
+    } catch (err) {
+      process.stderr.write(`[codebase-analyze] _persistSymbolEntities failed for ${sym.name}: ${err.message}
+`);
     }
   }
   return [entities, relationships];
 }
-function _persistImportEntities(store, analysis, fileEid, domain) {
+async function _persistImportEntities(store, analysis, fileEid, domain) {
   let entities = 0;
   let relationships = 0;
   for (const imp of analysis.imports) {
-    const depEid = _getOrCreateEntity(store, imp.module, "dependency", domain);
+    const depEid = await _getOrCreateEntity(store, imp.module, "dependency", domain);
     entities++;
     try {
-      store.insertRelationship({
-        source_entity_id: fileEid,
-        target_entity_id: depEid,
-        relationship_type: "imports",
-        weight: 1
-      });
+      if (store.insertRelationshipAsync) {
+        await store.insertRelationshipAsync({
+          source_entity_id: fileEid,
+          target_entity_id: depEid,
+          relationship_type: "imports",
+          weight: 1
+        });
+      } else {
+        store.insertRelationship({
+          source_entity_id: fileEid,
+          target_entity_id: depEid,
+          relationship_type: "imports",
+          weight: 1
+        });
+      }
       relationships++;
-    } catch {
+    } catch (err) {
+      process.stderr.write(`[codebase-analyze] _persistImportEntities failed for ${imp.module}: ${err.message}
+`);
     }
   }
   return [entities, relationships];
 }
-function persistEntities(store, analysis, _memoryId, domain) {
+async function persistEntities(store, analysis, _memoryId, domain) {
   let entities = 0;
   let relationships = 0;
   try {
-    const fileEid = _getOrCreateEntity(store, analysis.path, "file", domain);
+    const fileEid = await _getOrCreateEntity(store, analysis.path, "file", domain);
     entities++;
-    const [se2, sr2] = _persistSymbolEntities(store, analysis, fileEid, domain);
+    const [se2, sr2] = await _persistSymbolEntities(store, analysis, fileEid, domain);
     entities += se2;
     relationships += sr2;
-    const [ie2, ir2] = _persistImportEntities(store, analysis, fileEid, domain);
+    const [ie2, ir2] = await _persistImportEntities(store, analysis, fileEid, domain);
     entities += ie2;
     relationships += ir2;
-  } catch {
+  } catch (err) {
+    process.stderr.write(`[codebase-analyze] persistEntities failed for ${analysis.path}: ${err.message}
+`);
   }
   return [entities, relationships];
 }
-function persistFileEdge(store, edges, domain) {
+async function persistFileEdge(store, edges, domain) {
   let count = 0;
   for (const [srcPath, tgtPath] of edges) {
     try {
-      const srcEid = _getOrCreateEntity(store, srcPath, "file", domain);
-      const tgtEid = _getOrCreateEntity(store, tgtPath, "file", domain);
-      store.insertRelationship({
-        source_entity_id: srcEid,
-        target_entity_id: tgtEid,
-        relationship_type: "imports",
-        weight: 1
-      });
+      const srcEid = await _getOrCreateEntity(store, srcPath, "file", domain);
+      const tgtEid = await _getOrCreateEntity(store, tgtPath, "file", domain);
+      if (store.insertRelationshipAsync) {
+        await store.insertRelationshipAsync({
+          source_entity_id: srcEid,
+          target_entity_id: tgtEid,
+          relationship_type: "imports",
+          weight: 1
+        });
+      } else {
+        store.insertRelationship({
+          source_entity_id: srcEid,
+          target_entity_id: tgtEid,
+          relationship_type: "imports",
+          weight: 1
+        });
+      }
       count++;
-    } catch {
+    } catch (err) {
+      process.stderr.write(`[codebase-analyze] persistFileEdge failed for ${srcPath}\u2192${tgtPath}: ${err.message}
+`);
     }
   }
   return count;
 }
-function persistInheritanceEdge(store, edges, domain) {
+async function persistInheritanceEdge(store, edges, domain) {
   let count = 0;
   for (const [child, parent] of edges) {
     try {
-      const childEid = _getOrCreateEntity(store, child, "class", domain);
-      const parentEid = _getOrCreateEntity(store, parent, "class", domain);
-      store.insertRelationship({
-        source_entity_id: childEid,
-        target_entity_id: parentEid,
-        relationship_type: "extends",
-        weight: 1
-      });
+      const childEid = await _getOrCreateEntity(store, child, "class", domain);
+      const parentEid = await _getOrCreateEntity(store, parent, "class", domain);
+      if (store.insertRelationshipAsync) {
+        await store.insertRelationshipAsync({
+          source_entity_id: childEid,
+          target_entity_id: parentEid,
+          relationship_type: "extends",
+          weight: 1
+        });
+      } else {
+        store.insertRelationship({
+          source_entity_id: childEid,
+          target_entity_id: parentEid,
+          relationship_type: "extends",
+          weight: 1
+        });
+      }
       count++;
-    } catch {
+    } catch (err) {
+      process.stderr.write(`[codebase-analyze] persistInheritanceEdge failed for ${child}\u2192${parent}: ${err.message}
+`);
     }
   }
   return count;
 }
-function persistCommunityTags(store, communities) {
+async function persistCommunityTags(store, communities) {
   if (communities.size === 0)
     return;
   const allCodebaseMemories = (() => {
@@ -45326,7 +45421,7 @@ function resolveRelativePath(sourcePath, root) {
   }
 }
 
-// packages/memory/dist/codebase-analysis/handlers/codebase-analyze.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/codebase-analyze.js
 var schema2 = {
   title: "Codebase analyze",
   description: "Walk a codebase and store its structure as memories using tree-sitter AST parsing (with regex fallback for unsupported languages). One memory per file, with symbols as entities and imports as relationships; then cross-file symbol resolution, call-graph extraction, and community detection over the call graph. Incremental \u2014 only re-processes files whose content hash changed since last run (tracked via HASH_TAG_PREFIX tags). Use this on first onboarding to a serious codebase, or after a major refactor that invalidates symbol assumptions. Distinct from `seed_project` (5-stage shallow structural sweep, no AST), `backfill_memories` (Claude Code conversations, not source files), `wiki_seed_codebase` (seeds wiki pages from .md docs), and `ingest_codebase` (downstream PRD-generator consumer). Mutates memories + entities + relationships tables.",
@@ -45411,11 +45506,11 @@ function _buildTags(relPath, analysis) {
   }
   return tags;
 }
-function _parseOneFile(path5, content) {
+function _parseOneFile(path6, content) {
   if (isAvailable()) {
-    return parseFileAst(path5, Buffer.from(content, "utf8"));
+    return parseFileAst(path6, Buffer.from(content, "utf8"));
   }
-  return parseFile(path5, content);
+  return parseFile(path6, content);
 }
 async function _storeFile(root, relPath, analysis, domain, store) {
   const content = buildMemoryContent(analysis);
@@ -45440,7 +45535,7 @@ async function _storeFile(root, relPath, analysis, domain, store) {
   }
   if (memoryId === null)
     return [null, 0, 0];
-  const [ents, rels] = persistEntities(store, analysis, memoryId, domain || "code");
+  const [ents, rels] = await persistEntities(store, analysis, memoryId, domain || "code");
   return [memoryId, ents, rels];
 }
 async function _processFiles(sourceFiles, root, existing, incremental, domain, store) {
@@ -45489,7 +45584,7 @@ async function _processFiles(sourceFiles, root, existing, incremental, domain, s
     fileContents
   };
 }
-function _runGraphAnalysis(analyses, fileContents, store, domain) {
+async function _runGraphAnalysis(analyses, fileContents, store, domain) {
   const importEdges = resolveAllImports(analyses);
   const typeRefEdges = resolveTypeReferences(analyses, fileContents);
   const allFileEdgesMap = /* @__PURE__ */ new Map();
@@ -45499,9 +45594,9 @@ function _runGraphAnalysis(analyses, fileContents, store, domain) {
   const allFileEdges = [...allFileEdgesMap.values()];
   const inheritEdges = extractInheritance(analyses);
   const communities = detectCommunities(allFileEdges, []);
-  const fileRels = persistFileEdge(store, allFileEdges, domain);
-  const inheritRels = persistInheritanceEdge(store, inheritEdges, domain);
-  persistCommunityTags(store, communities);
+  const fileRels = await persistFileEdge(store, allFileEdges, domain);
+  const inheritRels = await persistInheritanceEdge(store, inheritEdges, domain);
+  await persistCommunityTags(store, communities);
   return {
     import_edges: importEdges.length,
     type_ref_edges: typeRefEdges.length,
@@ -45542,7 +45637,7 @@ async function handler3(args, deps) {
   }
   const { newCount, updatedCount, unchangedCount, totalEntities, totalRelationships, seenPaths, allAnalyses, fileContents } = await _processFiles(sourceFiles, root, existing, incremental, domain, store);
   const stale = _markDeleted(existing, seenPaths, store, incremental);
-  const graphStats = _runGraphAnalysis(allAnalyses, fileContents, store, domain || "code");
+  const graphStats = await _runGraphAnalysis(allAnalyses, fileContents, store, domain || "code");
   process.stderr.write(`[codebase-analyze] done: ${newCount} new, ${updatedCount} updated, ${unchangedCount} unchanged, ${stale} stale
 `);
   return {
@@ -45565,18 +45660,18 @@ function _markDeleted(existing, seenPaths, store, incremental) {
   if (!incremental)
     return 0;
   const deletedIds = [];
-  for (const [path5, [mid]] of existing) {
-    if (!seenPaths.has(path5))
+  for (const [path6, [mid]] of existing) {
+    if (!seenPaths.has(path6))
       deletedIds.push(mid);
   }
   return markStale(store, deletedIds);
 }
 
-// packages/memory/dist/codebase-analysis/handlers/ingest-codebase.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-codebase.js
 import { homedir as homedir4 } from "node:os";
 import { join as join8 } from "node:path";
 
-// packages/memory/dist/codebase-analysis/handlers/ingest-codebase-cypher.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-codebase-cypher.js
 var _UPSTREAM_SERVER = "codebase";
 var _SYMBOL_LABELS = [
   ["Function", "Function"],
@@ -45813,7 +45908,7 @@ async function fetchFiles(graphPath, limit) {
   return [rows, []];
 }
 
-// packages/memory/dist/codebase-analysis/handlers/ingest-codebase-graph.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-codebase-graph.js
 import { existsSync as existsSync6, rmSync, statSync as statSync7 } from "node:fs";
 import { join as join6, resolve as resolve2 } from "node:path";
 var _UPSTREAM_SERVER2 = "codebase";
@@ -45857,7 +45952,7 @@ async function ensureGraph(store, projectPath, outputDir, language2, forceReinde
   return [graphPath, result];
 }
 
-// packages/memory/dist/codebase-analysis/handlers/ingest-codebase-pages.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-codebase-pages.js
 import { mkdirSync as mkdirSync2, writeFileSync as writeFileSync2 } from "node:fs";
 import { dirname, join as join7 } from "node:path";
 function _slug(text) {
@@ -45913,7 +46008,7 @@ function writeProcessPages(processes, wikiRoot) {
   return written;
 }
 
-// packages/memory/dist/codebase-analysis/handlers/ingest-codebase-schema.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-codebase-schema.js
 var schema3 = {
   description: "Ingest a codebase analysis from the upstream ai-automatised-pipeline MCP server into Cortex's store. Triggers `analyze_codebase` upstream (or reuses a cached graph_path memo), pulls every Function/Method/Struct + every call edge + every File\u2192symbol containment edge via Cypher, then materialises them as memories + KG entities + edges, plus a wiki reference page per detected process entry point. Use this to seed the Wiki / Board / Knowledge / Graph views from a freshly-indexed or re-indexed codebase. Distinct from `codebase_analyze` (Cortex's OWN tree-sitter analyzer, no upstream MCP), `seed_project` (5-stage shallow sweep, no AST), and `wiki_seed_codebase` (consumes existing .md docs, not analysis). Mutates wiki/, memories, entities, relationships. Latency varies (10s-5min depending on cache hit). Cortex only consumes upstream analysis \u2014 it does not drive the pipeline. Returns counts and the wiki paths written.",
   inputSchema: {
@@ -45959,7 +46054,7 @@ var schema3 = {
   }
 };
 
-// packages/memory/dist/codebase-analysis/handlers/ingest-codebase-writers.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-codebase-writers.js
 function _shortSymbolSummary(sym) {
   const qn = sym.qualified_name ?? sym.name ?? "<anon>";
   const kind2 = sym.kind ?? "symbol";
@@ -46119,7 +46214,7 @@ function writeFileRelationships(store, edges, fileToId, symbolToId) {
   return written;
 }
 
-// packages/memory/dist/codebase-analysis/handlers/ingest-codebase.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-codebase.js
 var _UPSTREAM_SERVER3 = "codebase";
 var _DEFAULT_TOP_SYMBOLS = null;
 var _DEFAULT_TOP_PROCESSES = null;
@@ -46260,7 +46355,7 @@ async function handler4(args, deps) {
   return response;
 }
 
-// packages/memory/dist/codebase-analysis/handlers/ingest-prd.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/ingest-prd.js
 import { mkdirSync as mkdirSync3, readFileSync as readFileSync4, writeFileSync as writeFileSync3 } from "node:fs";
 import { dirname as dirname2, join as join9, resolve as resolve3 } from "node:path";
 var _UPSTREAM_SERVER4 = "prd-gen";
@@ -46311,15 +46406,15 @@ var schema4 = {
   }
 };
 async function _fetchPrd(args, pool) {
-  const path5 = (args["path"] ?? "").trim();
+  const path6 = (args["path"] ?? "").trim();
   const content = args["content"] ?? "";
   const pipelineId = (args["pipeline_id"] ?? "").trim();
-  const provided = [Boolean(path5), Boolean(content), Boolean(pipelineId)];
+  const provided = [Boolean(path6), Boolean(content), Boolean(pipelineId)];
   if (provided.filter(Boolean).length !== 1) {
     throw new Error("exactly one of path / content / pipeline_id must be supplied");
   }
-  if (path5)
-    return [readFileSync4(resolve3(path5), "utf8"), "path"];
+  if (path6)
+    return [readFileSync4(resolve3(path6), "utf8"), "path"];
   if (content)
     return [content, "content"];
   const payload = await callUpstream(_UPSTREAM_SERVER4, "get_pipeline_state", {
@@ -46520,11 +46615,11 @@ async function handler5(args, deps) {
   };
 }
 
-// packages/memory/dist/codebase-analysis/handlers/seed-project.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/seed-project.js
 import { existsSync as existsSync8 } from "node:fs";
 import { basename as basename4, resolve as resolvePath } from "node:path";
 
-// packages/memory/dist/codebase-analysis/file-scanner.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/file-scanner.js
 import { existsSync as existsSync7, readFileSync as readFileSync5, readdirSync as readdirSync4, statSync as statSync8 } from "node:fs";
 import { basename as basename3, extname as extname2, join as join10, relative as relative2 } from "node:path";
 var HEAT_BY_TYPE = {
@@ -46953,7 +47048,7 @@ function heatForTags(tags) {
   return HEAT_FALLBACK;
 }
 
-// packages/memory/dist/codebase-analysis/handlers/seed-project.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/seed-project.js
 var DEFAULT_MAX_FILE_SIZE_KB2 = 64;
 var BYTES_PER_KB2 = 1024;
 function parseArgs(args) {
@@ -47050,7 +47145,7 @@ var schema5 = {
   description: "Bootstrap the memory store from an existing codebase via a five-stage structural sweep (config extraction, documentation harvesting, entry-point scan, CI/CD detection, structural summary). Each discovery is stored through the standard write gate. Distinct from codebase_analyze (tree-sitter AST per file, much deeper). Returns counts and stored memory IDs."
 };
 
-// packages/memory/dist/codebase-analysis/handlers/change-impact.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/codebase-analysis/handlers/change-impact.js
 var IMPACT_BOOST = 0.15;
 var MAX_HEAT_BUMPS = 20;
 var MAX_MEMORIES_SCANNED = 1e3;
@@ -47234,25 +47329,25 @@ var schema6 = {
   )
 };
 
-// packages/memory/dist/wiki/types.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/types.js
 var WikiExists = class extends Error {
-  constructor(path5) {
-    super(`wiki page already exists: ${path5}`);
+  constructor(path6) {
+    super(`wiki page already exists: ${path6}`);
     this.name = "WikiExists";
   }
 };
 var WikiMissing = class extends Error {
-  constructor(path5) {
-    super(`wiki page not found: ${path5}`);
+  constructor(path6) {
+    super(`wiki page not found: ${path6}`);
     this.name = "WikiMissing";
   }
 };
 
-// packages/memory/dist/wiki/index.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/index.js
 init_layout();
 init_pages();
 
-// packages/memory/dist/wiki/templates.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/templates.js
 var ADR_CONVENTION = {
   pattern: String.raw`^\d{4}-[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`,
   description: "ADR: <4-digit>-<kebab-slug>.md (e.g., 0042-prefer-plan-over-list.md)"
@@ -47266,7 +47361,7 @@ var DEFAULT_CONVENTION = {
   description: "Page: <kebab-slug>.md \u2014 lowercase alphanum + hyphens, no underscores, no leading/trailing hyphens."
 };
 
-// packages/memory/dist/wiki/rule-engine.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/rule-engine.js
 var REJECT_TARGETS = /* @__PURE__ */ new Set(["reject", "-", "", null, "none", void 0]);
 function matches(rule, content, tags) {
   const pattern = rule.pattern ?? "";
@@ -47322,10 +47417,10 @@ function applyRules2(content, tags, rules) {
   };
 }
 
-// packages/memory/dist/wiki/index.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/index.js
 init_schema_loader();
 
-// packages/memory/dist/wiki/page-classifier.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/page-classifier.js
 var REJECT_PREFIXES = [
   "# Tool:",
   "Tool:",
@@ -47613,7 +47708,7 @@ function slugify2(text) {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
 }
 
-// packages/memory/dist/wiki/links.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/links.js
 var RELATIONS = {
   supersedes: "superseded_by",
   superseded_by: "supersedes",
@@ -47712,7 +47807,7 @@ function applyLink(body, entry) {
 ${rendered}`;
 }
 
-// packages/memory/dist/wiki/symbol-extract.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/symbol-extract.js
 var IDENT = String.raw`[A-Za-z_][A-Za-z_0-9]{1,}`;
 var BACKTICK_CALL = /`([A-Za-z_][\w.]*(?:\(\)|\([^`]{0,60}\)))`/g;
 var DOTTED_RE = new RegExp(String.raw`\b(${IDENT}(?:\.${IDENT}){1,})\b`, "g");
@@ -47813,7 +47908,7 @@ function harvestPageSymbols(page, claimEvidenceSymbols) {
   return refs;
 }
 
-// packages/memory/dist/wiki/symbol-verify.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/symbol-verify.js
 var MIN_SYMBOL_REFS = 3;
 var SYMBOL_STALE_THRESHOLD = 0.5;
 function evaluateSymbolStaleness(args) {
@@ -47843,17 +47938,17 @@ function evaluateSymbolStaleness(args) {
   };
 }
 
-// packages/memory/dist/wiki/groomer.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/groomer.js
 init_layout();
 
-// packages/memory/dist/wiki/sync.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/sync.js
 init_layout();
 init_pages();
 
-// packages/memory/dist/wiki/readme.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/readme.js
 init_layout();
 
-// packages/memory/dist/wiki/handlers/wiki-write.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-write.js
 async function handler7(args, deps) {
   const relPath = (args.path ?? "").trim();
   if (!relPath)
@@ -47887,7 +47982,7 @@ async function handler7(args, deps) {
   }
 }
 
-// packages/memory/dist/wiki/handlers/wiki-read.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-read.js
 async function handler8(args, deps) {
   const relPath = (args.path ?? "").trim();
   if (!relPath)
@@ -47902,7 +47997,7 @@ async function handler8(args, deps) {
   }
 }
 
-// packages/memory/dist/wiki/handlers/wiki-list.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-list.js
 init_layout();
 async function handler9(args, deps) {
   const kind2 = args.kind ?? null;
@@ -47932,7 +48027,7 @@ var schema7 = {
   }
 };
 
-// packages/memory/dist/wiki/handlers/wiki-adr.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-adr.js
 init_layout();
 init_pages();
 async function handler10(args, deps) {
@@ -47994,7 +48089,7 @@ var schema8 = {
   }
 };
 
-// packages/memory/dist/wiki/handlers/wiki-link.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-link.js
 async function updatePage(relPath, entry, deps) {
   const current = await deps.readPage(deps.wikiRoot, relPath);
   if (current === null)
@@ -48036,7 +48131,7 @@ var schema9 = {
   }
 };
 
-// packages/memory/dist/wiki/handlers/wiki-reindex.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-reindex.js
 init_layout();
 var BANNER = "<!-- Generated by Cortex wiki-reindex \u2014 the authored pages are the source of truth. -->";
 function renderIndex(grouped) {
@@ -48087,7 +48182,7 @@ async function handler12(_args, deps) {
   };
 }
 
-// packages/memory/dist/wiki/handlers/wiki-purge.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-purge.js
 init_pages();
 var PAGE_DIRS = /* @__PURE__ */ new Set(["adr", "conventions", "guides", "journal", "lessons", "notes", "reference", "specs"]);
 function parseTags2(raw) {
@@ -48167,7 +48262,7 @@ var schema10 = {
   }
 };
 
-// packages/memory/dist/wiki/handlers/wiki-verify.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-verify.js
 function parseLeadAndSections(md) {
   const lines = md.split("\n");
   const leadLines = [];
@@ -48194,22 +48289,22 @@ function parseLeadAndSections(md) {
   }
   return { lead: leadLines.join("\n").trim(), sections };
 }
-async function verifyOne(path5, deps) {
-  const content = await deps.readPage(deps.wikiRoot, path5);
+async function verifyOne(path6, deps) {
+  const content = await deps.readPage(deps.wikiRoot, path6);
   if (content === null) {
-    return { page: path5, symbol_refs: [], missing_refs: [], is_symbol_stale: false, rationale: "page not found", error: "page not found" };
+    return { page: path6, symbol_refs: [], missing_refs: [], is_symbol_stale: false, rationale: "page not found", error: "page not found" };
   }
   const pageStruct = parseLeadAndSections(content);
   const symbolRefs = harvestPageSymbols(pageStruct).slice(0, 200);
   const existence = symbolRefs.length > 0 ? await deps.verifySymbols(symbolRefs) : {};
   const verdict = evaluateSymbolStaleness({
-    page_id: path5,
+    page_id: path6,
     is_symbol_stale_was: false,
     symbol_refs: symbolRefs,
     existence
   });
   return {
-    page: path5,
+    page: path6,
     symbol_refs: verdict.symbol_refs,
     missing_refs: verdict.missing_refs,
     is_symbol_stale: verdict.is_symbol_stale_now,
@@ -48249,21 +48344,21 @@ async function handler14(args, deps) {
   };
 }
 
-// packages/memory/dist/wiki/handlers/wiki-handlers.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-handlers.js
 init_schema_loader();
 
-// packages/memory/dist/wiki/handlers/wiki-curate-handler.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-curate-handler.js
 init_schema_loader();
 
-// packages/memory/dist/wiki/handlers/wiki-compile-handler.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-compile-handler.js
 init_layout();
 
-// packages/memory/dist/wiki/handlers/wiki-export-handler.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-export-handler.js
 import * as childProcess from "node:child_process";
 import { promisify } from "node:util";
 var execFile2 = promisify(childProcess.execFile);
 
-// packages/memory/dist/wiki/storage/wiki-store.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/storage/wiki-store.js
 init_layout();
 import * as fs3 from "node:fs";
 import * as path2 from "node:path";
@@ -48381,13 +48476,13 @@ function nextAdrNumber(root) {
   return maxSeen + 1;
 }
 
-// packages/memory/dist/wiki/handlers/wiki-migrate-handler.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-migrate-handler.js
 init_pages();
 
-// packages/memory/dist/wiki/handlers/wiki-api-handler.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/wiki/handlers/wiki-api-handler.js
 init_pages();
 
-// packages/memory/dist/methodology/metacognition-analysis.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/methodology/metacognition-analysis.js
 var RECENCY_THRESHOLDS_MS = [
   [1 * 24 * 3600 * 1e3, 1],
   // 1 day
@@ -48397,7 +48492,7 @@ var RECENCY_THRESHOLDS_MS = [
   // 30 days
 ];
 
-// packages/memory/dist/narrative/types.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/narrative/types.js
 var MemoryRecordSchema = external_exports.object({
   content: external_exports.string(),
   tags: external_exports.union([external_exports.array(external_exports.string()), external_exports.string()]).default([]),
@@ -48495,7 +48590,7 @@ var SessionEventSchema = external_exports.object({
   timestamp: external_exports.string().default("")
 });
 
-// packages/memory/dist/narrative/narrative-builder.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/narrative/narrative-builder.js
 var CONTENT_TRUNCATION_CHARS = 150;
 var TOPIC_CONTENT_CHARS = 100;
 var BRIEF_SUMMARY_MAX_CHARS = 300;
@@ -48737,7 +48832,7 @@ function generateBriefSummary(memories, maxChars = BRIEF_SUMMARY_MAX_CHARS) {
   return truncated + "...";
 }
 
-// packages/memory/dist/narrative/handlers/narrative.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/narrative/handlers/narrative.js
 var MEMORY_FETCH_LIMIT = 200;
 var HOT_MEMORY_MIN_HEAT = 0.1;
 var NARRATIVE_POLISH_MAX_TOKENS = 1024;
@@ -48784,7 +48879,7 @@ async function narrativeHandler(store, rawArgs, llmClient2 = null) {
   return result;
 }
 
-// packages/memory/dist/narrative/handlers/get-project-story.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/narrative/handlers/get-project-story.js
 var GET_PROJECT_STORY_DEFAULT_LIMIT = 50;
 var HOT_MEMORY_HEAT_THRESHOLD = 0.5;
 var GET_PROJECT_STORY_MAX_TOPICS = 10;
@@ -48799,7 +48894,7 @@ function getProjectStoryHandler(store, args) {
   return { domain, memoriesFound: memories.length, summary, hotTopics: uniqueTopics, sessionCount: 0 };
 }
 
-// packages/memory/dist/narrative/handlers/unified-search.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/narrative/handlers/unified-search.js
 var MEMORY_FETCH_LIMIT2 = 200;
 var HOT_MEMORY_MIN_HEAT2 = 0.1;
 var AP_SEARCH_LIMIT = 20;
@@ -48895,7 +48990,7 @@ async function unifiedSearchHandler(deps, rawArgs) {
   };
 }
 
-// packages/memory/dist/workflow-graph/schema-enums.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/workflow-graph/schema-enums.js
 var NodeKind = {
   DOMAIN: "domain",
   SKILL: "skill",
@@ -48925,7 +49020,7 @@ var ToolKind = {
   TASK: "Task"
 };
 
-// packages/memory/dist/workflow-graph/schema.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/workflow-graph/schema.js
 var WorkflowNodeSchema = external_exports.object({
   id: external_exports.string(),
   kind: external_exports.string(),
@@ -48970,7 +49065,7 @@ var _MULTI_DOMAIN_KINDS = /* @__PURE__ */ new Set([
   NodeKind.SKILL
 ]);
 
-// packages/memory/dist/workflow-graph/builder.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/workflow-graph/builder.js
 var _MEMORY_SCIENTIFIC_KEYS = "heat_base arousal emotional_valence dominant_emotion importance surprise_score confidence access_count useful_count replay_count reconsolidation_count plasticity stability excitability hippocampal_dependency schema_match_score schema_id separation_index interference_score encoding_strength hours_in_stage stage_entered_at last_accessed no_decay is_protected is_stale is_benchmark is_global store_type compression_level compressed".split(" ");
 var _TOOL_NAME_TO_ENUM = {};
 var _TOOL_NAME_LOWER = {};
@@ -48979,15 +49074,15 @@ for (const t2 of Object.values(ToolKind)) {
   _TOOL_NAME_LOWER[t2.toLowerCase()] = t2;
 }
 
-// packages/memory/dist/workflow-graph/sources/source-jsonl.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/workflow-graph/sources/source-jsonl.js
 import { join as join13 } from "node:path";
 import { homedir as homedir5 } from "node:os";
 var CLAUDE_DIR2 = join13(homedir5(), ".claude");
 
-// packages/memory/dist/workflow-graph/sources/source-pg.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/workflow-graph/sources/source-pg.js
 var _MEMORY_PASSTHROUGH_KEYS = "heat_base arousal emotional_valence dominant_emotion importance surprise_score confidence access_count useful_count replay_count reconsolidation_count plasticity stability excitability hippocampal_dependency schema_match_score schema_id separation_index interference_score encoding_strength hours_in_stage stage_entered_at no_decay is_protected is_stale is_benchmark is_global store_type last_accessed created_at compression_level compressed tags".split(" ");
 
-// packages/memory/dist/workflow-graph/handlers/query-workflow-graph.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/workflow-graph/handlers/query-workflow-graph.js
 var _DEFAULT_LIMIT = 500;
 var _MAX_LIMIT = 5e3;
 function asSet(value) {
@@ -49116,7 +49211,7 @@ function queryWorkflowGraph(graph, args = {}) {
   });
 }
 
-// packages/memory/dist/automation/types.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/automation/types.js
 var TriggerTypeSchema = external_exports.enum([
   "keyword",
   "time",
@@ -51065,7 +51160,7 @@ minimatch.Minimatch = Minimatch;
 minimatch.escape = escape2;
 minimatch.unescape = unescape2;
 
-// packages/memory/dist/automation/rule-engine.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/automation/rule-engine.js
 function parseCondition(condition) {
   const notContainsSplit = condition.split(" not_contains ", 2);
   if (notContainsSplit.length === 2) {
@@ -51140,7 +51235,7 @@ function validateRule(ruleType, condition, action) {
   return errors;
 }
 
-// packages/memory/dist/automation/handlers/add-rule.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/automation/handlers/add-rule.js
 function validateArgs(args) {
   const { condition, action, rule_type, scope, scope_value } = args;
   const ruleErrors = validateRule(rule_type, condition, action);
@@ -51186,7 +51281,7 @@ async function addRuleHandler(rawArgs, store) {
   };
 }
 
-// packages/memory/dist/automation/handlers/create-trigger.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/automation/handlers/create-trigger.js
 async function createTriggerHandler(rawArgs, store) {
   const parseResult = CreateTriggerRequestSchema.safeParse(rawArgs);
   if (!parseResult.success) {
@@ -51223,7 +51318,7 @@ async function createTriggerHandler(rawArgs, store) {
   };
 }
 
-// packages/memory/dist/automation/handlers/get-rules.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/automation/handlers/get-rules.js
 var getRulesInputSchema = external_exports.object({
   scope: RuleScopeSchema.optional(),
   rule_type: RuleTypeSchema.optional(),
@@ -51254,7 +51349,7 @@ async function getRulesHandler(rawArgs, store) {
   return { total: rules.length, rules, by_scope: byScope };
 }
 
-// packages/memory/dist/automation/handlers/sync-to-claude-md.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/automation/handlers/sync-to-claude-md.js
 import { promises as fs4 } from "node:fs";
 import path4 from "node:path";
 var SECTION_START = "<!-- cortex:memory-insights:start -->";
@@ -51382,7 +51477,7 @@ async function syncInstructionsHandler(rawArgs, store) {
   };
 }
 
-// packages/memory/dist/hooks/types.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/types.js
 var BaseEventSchema = external_exports.object({
   session_id: external_exports.string().optional(),
   cwd: external_exports.string().optional()
@@ -51456,13 +51551,13 @@ var HOOK_TIMEOUTS_MS = {
   // Detached — no budget
 };
 
-// packages/memory/dist/hooks/session-start.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/session-start.js
 import { existsSync as existsSync11, readdirSync as readdirSync7, statSync as statSync9 } from "node:fs";
 import { homedir as homedir6 } from "node:os";
 import { join as join14, basename as basename6 } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 
-// packages/memory/dist/hooks/db.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/db.js
 async function openConnection(databaseUrl) {
   try {
     const { default: pg } = await import("pg");
@@ -51712,7 +51807,7 @@ async function bumpHeatBySymbols(databaseUrl, symbolNames, boost, maxBumps) {
   }
 }
 
-// packages/memory/dist/hooks/session-start-context.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/session-start-context.js
 var MAX_CONTENT_LENGTH = 120;
 function shorten(text, maxLen = MAX_CONTENT_LENGTH) {
   const flat = text.trim().replace(/\n/g, " ");
@@ -51838,7 +51933,7 @@ function formatExternalSources(sources) {
   return lines.join("\n");
 }
 
-// packages/memory/dist/hooks/session-start.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/session-start.js
 var LOG_PREFIX = "[session-start-hook]";
 var PYTHON_BIN = process.env["CORTEX_PYTHON_BIN"] ?? (process.platform === "win32" ? "python" : "python3");
 function log(msg) {
@@ -52045,7 +52140,7 @@ if (process.argv[1]?.endsWith("session-start.js") === true) {
   });
 }
 
-// packages/memory/dist/hooks/auto-recall.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/auto-recall.js
 var LOG_PREFIX2 = "[cortex-auto-recall]";
 var MAX_MEMORIES = 3;
 var MIN_HEAT2 = 0.15;
@@ -52155,7 +52250,7 @@ if (process.argv[1]?.endsWith("auto-recall.js") === true) {
   main2().catch(() => process.exit(1));
 }
 
-// packages/memory/dist/hooks/post-tool-capture.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/post-tool-capture.js
 var LOG_PREFIX3 = "[cortex-post-tool-capture]";
 var HIGH_VALUE_TOOLS = /* @__PURE__ */ new Set([
   "Edit",
@@ -52389,7 +52484,7 @@ if (process.argv[1]?.endsWith("post-tool-capture.js") === true) {
   main3().catch(() => process.exit(0));
 }
 
-// packages/memory/dist/hooks/agent-briefing.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/agent-briefing.js
 import { existsSync as existsSync12, readdirSync as readdirSync8, readFileSync as readFileSync8 } from "node:fs";
 import { homedir as homedir7 } from "node:os";
 import { join as join15 } from "node:path";
@@ -52591,7 +52686,7 @@ if (process.argv[1]?.endsWith("agent-briefing.js") === true) {
   main4().catch(() => process.exit(0));
 }
 
-// packages/memory/dist/hooks/compaction-checkpoint.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/compaction-checkpoint.js
 var LOG_PREFIX5 = "[methodology-compaction-hook]";
 function log5(msg) {
   process.stderr.write(`${LOG_PREFIX5} ${msg}
@@ -52665,7 +52760,7 @@ if (process.argv[1]?.endsWith("compaction-checkpoint.js") === true) {
   main5().catch(() => process.exit(0));
 }
 
-// packages/memory/dist/hooks/session-lifecycle.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/session-lifecycle.js
 import { readFileSync as readFileSync9, writeFileSync as writeFileSync5, existsSync as existsSync13, mkdirSync as mkdirSync5 } from "node:fs";
 import { homedir as homedir8 } from "node:os";
 import { join as join16 } from "node:path";
@@ -52863,7 +52958,7 @@ if (process.argv[1]?.endsWith("session-lifecycle.js") === true) {
   main6().catch(() => process.exit(1));
 }
 
-// packages/memory/dist/hooks/preemptive-context.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/preemptive-context.js
 import { existsSync as existsSync14, readFileSync as readFileSync10, writeFileSync as writeFileSync6 } from "node:fs";
 import { tmpdir as tmpdir2 } from "node:os";
 import { join as join17 } from "node:path";
@@ -52946,7 +53041,7 @@ if (process.argv[1]?.endsWith("preemptive-context.js") === true) {
   main7().catch(() => process.exit(0));
 }
 
-// packages/memory/dist/hooks/pipeline-impact-bump.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/memory/dist/hooks/pipeline-impact-bump.js
 import { existsSync as existsSync15, readFileSync as readFileSync11, writeFileSync as writeFileSync7 } from "node:fs";
 import { tmpdir as tmpdir3 } from "node:os";
 import { join as join18 } from "node:path";
@@ -53085,7 +53180,7 @@ if (process.argv[1]?.endsWith("pipeline-impact-bump.js") === true) {
   main8().catch(() => process.exit(0));
 }
 
-// packages/mcp-servers/memory/dist/tools/management.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/management.js
 var VALIDATE_STALENESS_DEFAULT = 0.5;
 var VALIDATE_ERROR_CAP = 10;
 var SEED_MAX_FILE_SIZE_KB = 64;
@@ -53280,7 +53375,7 @@ function registerManagementTools(server2, deps) {
   });
 }
 
-// packages/mcp-servers/memory/dist/tools/narrative.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/narrative.js
 var MAX_CHAPTERS_MAX = 20;
 var MAX_CHAPTERS_DEFAULT = 5;
 var MAX_RESULTS_MAX = 50;
@@ -53385,7 +53480,7 @@ function registerNarrativeTools(server2, deps = null) {
   });
 }
 
-// packages/mcp-servers/memory/dist/tools/advanced.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/advanced.js
 var SYNC_MAX_INSIGHTS_DEFAULT = 10;
 var SYNC_MIN_HEAT_DEFAULT = 0.3;
 var ASSESS_STALE_DAYS_DEFAULT = 14;
@@ -53596,7 +53691,7 @@ function registerAdvancedTools(server2, deps) {
   });
 }
 
-// packages/mcp-servers/memory/dist/tools/wiki.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/wiki.js
 import { mkdirSync as mkdirSync6, writeFileSync as writeFileSync8, rmSync as rmSync2 } from "node:fs";
 import { join as join20, resolve as resolve6, dirname as dirname4 } from "node:path";
 import { homedir as homedir10 } from "node:os";
@@ -53791,8 +53886,108 @@ function registerWikiTools(server2) {
   });
 }
 
-// packages/mcp-servers/memory/dist/tools/ingest.js
-import { launchDashboard } from "@agentic/memory-dashboard/launcher";
+// packages/memory-dashboard/dist/launcher.js
+import { spawn as spawn2, exec } from "node:child_process";
+import { createServer } from "node:net";
+import { fileURLToPath } from "node:url";
+import path5 from "node:path";
+var DEFAULT_PORT = 3458;
+var SPAWN_TIMEOUT_MS = 5e3;
+var __dirname2 = path5.dirname(fileURLToPath(import.meta.url));
+async function probePort(port) {
+  return new Promise((resolve7) => {
+    const sock = createServer();
+    sock.once("error", (err) => {
+      if (err.code === "EADDRINUSE") {
+        resolve7(`http://127.0.0.1:${port}`);
+      } else {
+        resolve7(null);
+      }
+    });
+    sock.once("listening", () => {
+      sock.close(() => resolve7(null));
+    });
+    sock.listen(port, "127.0.0.1");
+  });
+}
+function killPort(port) {
+  return new Promise((resolve7) => {
+    exec(`lsof -t -i :${port}`, (_err, stdout) => {
+      const pids = stdout.trim().split("\n").filter(Boolean);
+      for (const pid of pids) {
+        try {
+          process.kill(parseInt(pid, 10), "SIGTERM");
+        } catch {
+        }
+      }
+      resolve7();
+    });
+  });
+}
+async function spawnServer(port) {
+  const serverScript = path5.resolve(__dirname2, "server.js");
+  const env = { ...process.env, DASHBOARD_PORT: String(port) };
+  const child = spawn2(process.execPath, [serverScript], {
+    detached: true,
+    stdio: ["ignore", "pipe", "ignore"],
+    env
+  });
+  return new Promise((resolve7, reject) => {
+    const timer = setTimeout(() => {
+      child.unref();
+      reject(new Error(`memory-dashboard did not start within 5 s on port ${port}`));
+    }, SPAWN_TIMEOUT_MS);
+    let buf = "";
+    child.stdout?.on("data", (chunk) => {
+      buf += chunk.toString();
+      const nl = buf.indexOf("\n");
+      if (nl !== -1) {
+        clearTimeout(timer);
+        child.stdout?.destroy();
+        child.unref();
+        try {
+          const info = JSON.parse(buf.slice(0, nl));
+          resolve7(info.url);
+        } catch {
+          resolve7(`http://127.0.0.1:${port}`);
+        }
+      }
+    });
+    child.once("error", (err) => {
+      clearTimeout(timer);
+      reject(err);
+    });
+    child.once("exit", (code) => {
+      if (code !== null && code !== 0) {
+        clearTimeout(timer);
+        reject(new Error(`memory-dashboard process exited with code ${code}`));
+      }
+    });
+  });
+}
+function openInBrowser(url) {
+  if (!/^https?:\/\/127\.0\.0\.1:\d{1,5}(\/.*)?$/.test(url))
+    return;
+  const cmd = process.platform === "darwin" ? "open" : "xdg-open";
+  spawn2(cmd, [url], { stdio: "ignore", detached: true }).unref();
+}
+async function launchDashboard(opts = {}) {
+  const port = opts.port ?? DEFAULT_PORT;
+  const openBrowser = opts.openBrowser ?? true;
+  const existing = await probePort(port);
+  if (existing) {
+    if (openBrowser)
+      openInBrowser(existing);
+    return existing;
+  }
+  await killPort(port);
+  const url = await spawnServer(port);
+  if (openBrowser)
+    openInBrowser(url);
+  return url;
+}
+
+// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/ingest.js
 var MIN_IMPORTANCE_DEFAULT = 0.4;
 var TOP_SYMBOLS_DEFAULT = 50;
 var TOP_PROCESSES_DEFAULT = 10;
@@ -53978,7 +54173,7 @@ function registerIngestTools(server2, deps) {
   });
 }
 
-// packages/mcp-servers/memory/dist/tools/navigation.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/tools/navigation.js
 var MAX_EDGES_DEFAULT = 200;
 var ROUNDING_FACTOR_4DP2 = 1e4;
 var HOT_HEAT_THRESHOLD = 0.3;
@@ -54141,7 +54336,7 @@ function registerNavigationTools(server2, deps) {
   });
 }
 
-// packages/mcp-servers/memory/dist/index.js
+// ../../../../private/tmp/agentic-codebase-fix/packages/mcp-servers/memory/dist/index.js
 var server = new McpServer({
   name: "@agentic/mcp-server-memory",
   version: "0.1.0"

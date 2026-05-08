@@ -213,7 +213,7 @@ async function _storeFile(
 
   if (memoryId === null) return [null, 0, 0];
 
-  const [ents, rels] = persistEntities(store, analysis, memoryId, domain || "code");
+  const [ents, rels] = await persistEntities(store, analysis, memoryId, domain || "code");
   return [memoryId, ents, rels];
 }
 
@@ -289,12 +289,12 @@ async function _processFiles(
 
 // ── Graph analysis ────────────────────────────────────────────────────────
 
-function _runGraphAnalysis(
+async function _runGraphAnalysis(
   analyses: FileAnalysis[],
   fileContents: Map<string, string>,
   store: MemoryStore,
   domain: string,
-): Record<string, number> {
+): Promise<Record<string, number>> {
   const importEdges = resolveAllImports(analyses);
   const typeRefEdges = resolveTypeReferences(analyses, fileContents);
   // Deduplicate edges by string key
@@ -306,9 +306,9 @@ function _runGraphAnalysis(
   const inheritEdges = extractInheritance(analyses);
   const communities = detectCommunities(allFileEdges, []);
 
-  const fileRels = persistFileEdge(store, allFileEdges, domain);
-  const inheritRels = persistInheritanceEdge(store, inheritEdges, domain);
-  persistCommunityTags(store, communities);
+  const fileRels = await persistFileEdge(store, allFileEdges, domain);
+  const inheritRels = await persistInheritanceEdge(store, inheritEdges, domain);
+  await persistCommunityTags(store, communities);
 
   return {
     import_edges: importEdges.length,
@@ -392,7 +392,7 @@ export async function handler(
   const stale = _markDeleted(existing, seenPaths, store, incremental);
 
   // Phase 2: cross-file resolution, type references, communities
-  const graphStats = _runGraphAnalysis(
+  const graphStats = await _runGraphAnalysis(
     allAnalyses,
     fileContents,
     store,
