@@ -14,8 +14,8 @@
     {
       "name": "memory",
       "source": "./plugins/memory/",
-      "description": "Persistent memory for Claude Code — TS port of Cortex. Thermodynamic heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence integration. SQLite by default; PostgreSQL + pgvector when DATABASE_URL is set. 41 published papers as sources. 0.1.4: close 117x import gap — backfill_memories now uses force:true bypass, full-file reads (4 MB cap vs 40 KB head+tail), user+assistant message extraction, PG-compatible backfill_log DDL.",
-      "version": "0.1.4",
+      "description": "Persistent memory for Claude Code — TS port of Cortex. Thermodynamic heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence integration. SQLite by default; PostgreSQL + pgvector when DATABASE_URL is set. 41 published papers as sources. 0.1.5: fix backfill source enum — change source from rejected backfill:* to valid 'import'; project slug preserved in tags.",
+      "version": "0.1.5",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"

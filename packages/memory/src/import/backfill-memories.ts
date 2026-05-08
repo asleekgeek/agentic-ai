@@ -156,7 +156,7 @@ async function importSingleItem(
     tags,
     directory: cwd,
     domain,
-    source: `backfill:${projectSlug.slice(0, 40)}`,
+    source: "import",   // source: RememberRequestSchema enum — backfill:* rejected; project slug in tags
     force: true,
   };
 
