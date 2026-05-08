@@ -28,6 +28,10 @@ import { effectiveThreshold, record as calibrationRecord } from "../write-gate-c
 import type { MemoryStore } from "../storage/memory-store.js";
 import type { RememberRequest, RememberResponse } from "../types.js";
 import { RememberRequestSchema } from "../types.js";
+// source: Hutto CJ & Gilbert E (2014) "VADER: A Parsimonious Rule-based Model for
+//   Sentiment Analysis of Social Media Text." ICWSM.
+// Port of: mcp_server/core/emotional_tagging.py:tag_memory_emotions
+import { computeEmotionalValence, detectEmotions } from "../emotional-tagging.js";
 
 // ── Surprisal heat boost ─────────────────────────────────────────────────────
 
@@ -154,6 +158,14 @@ export function remember(
   const heat = applySurpriseBoost(baselineHeat, score.combinedNovelty);
   const importance = estimateImportance(content, tags);
 
+  // Compute emotional valence via full VADER pipeline before insert.
+  // source: Hutto CJ & Gilbert E (2014) ICWSM.
+  // source: mcp_server/core/emotional_tagging.py:tag_memory_emotions — same pipeline
+  const emotionalValence = computeEmotionalValence(detectEmotions(content));
+  if (emotionalValence === 0.0 && content.length > 100) {
+    process.stderr.write(`[vader] emotionalValence=0 for ${content.length}-char memory (id pending)\n`);
+  }
+
   const memoryId = store.insertMemory({
     content,
     tags,
@@ -161,6 +173,7 @@ export function remember(
     domain,
     heat,
     importance,
+    emotional_valence: emotionalValence,
     surprise_score: score.combinedNovelty,
     store_type: "episodic",
     agent_context: agentTopic,
@@ -308,6 +321,14 @@ export async function rememberAsync(
   const heat = applySurpriseBoost(baselineHeat, score.combinedNovelty);
   const importance = estimateImportance(content, tags);
 
+  // Compute emotional valence via full VADER pipeline before insert.
+  // source: Hutto CJ & Gilbert E (2014) ICWSM.
+  // source: mcp_server/core/emotional_tagging.py:tag_memory_emotions — same pipeline
+  const emotionalValenceAsync = computeEmotionalValence(detectEmotions(content));
+  if (emotionalValenceAsync === 0.0 && content.length > 100) {
+    process.stderr.write(`[vader] emotionalValence=0 for ${content.length}-char memory (id pending)\n`);
+  }
+
   const insertData = {
     content,
     tags,
@@ -315,6 +336,7 @@ export async function rememberAsync(
     domain,
     heat,
     importance,
+    emotional_valence: emotionalValenceAsync,
     surprise_score: score.combinedNovelty,
     store_type: "episodic" as const,
     agent_context: agentTopic,
