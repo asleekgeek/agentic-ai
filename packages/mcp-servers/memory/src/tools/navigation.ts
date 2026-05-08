@@ -225,8 +225,14 @@ export function registerNavigationTools(server: McpServer, deps: NavigationDeps)
         const recommendations: string[] = [];
 
         if (args.include_temporal_gaps) {
-          // LSP-VIOLATION CLOSED (#1): getAllMemoriesForDecay is now on MemoryStoreExt.
-          const allMems = deps.store.getAllMemoriesForDecay();
+          // Use *Async variant when available (PgMemoryStore) to avoid _runSync() throw.
+          // Fall back to sync variant for SqliteMemoryStore.
+          // source: ADR-0042 — async-when-available pattern for PG/SQLite parity.
+          const storeAny = deps.store as unknown as { getAllMemoriesForDecayAsync?: () => Promise<Record<string, unknown>[]> };
+          const allMems =
+            typeof storeAny.getAllMemoriesForDecayAsync === "function"
+              ? await storeAny.getAllMemoriesForDecayAsync()
+              : deps.store.getAllMemoriesForDecay();
           for (const mem of allMems) {
             const createdAt = mem["created_at"] as string | undefined;
             const heat = (mem["heat"] as number | undefined) ?? 0;

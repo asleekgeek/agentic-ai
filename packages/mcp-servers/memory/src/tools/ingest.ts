@@ -186,6 +186,42 @@ export function registerIngestTools(server: McpServer, deps?: IngestDeps): void 
         if (!deps) {
           throw new MissingStoreError("ingest_codebase", "IngestDeps.store — no store injected");
         }
+
+        // When mcpClientPool is null (the codebase MCP plugin is not running),
+        // fall back to the local codebase_analyze path which does not require
+        // an upstream MCP connection. This provides a usable result instead of
+        // the previous "upstream_mcp_unreachable" error.
+        //
+        // source: cortex@ed33435 mcp_server/handlers/ingest_codebase.py — the
+        //   upstream call is optional; a local AST scan is equivalent for most
+        //   use cases. The Kuzu graph is only needed for cross-file call edges.
+        // source: ADR-0042 — graceful-degradation principle for optional deps.
+        if (deps.mcpClientPool === null) {
+          process.stderr.write(
+            "[ingest_codebase] mcpClientPool is null — falling back to local codebase_analyze.\n" +
+            "  To enable full cross-file call-graph ingestion, start the codebase MCP plugin\n" +
+            "  and wire McpClientPool at the composition root.\n",
+          );
+          const analyzeDeps: codebaseAnalysis.CodebaseAnalyzeDeps = { store: deps.store };
+          const analyzeResult = await codebaseAnalysis.codebaseAnalyzeHandler(
+            {
+              directory:        args.project_path,
+              max_files:        MAX_FILES_DEFAULT,
+              max_file_size_kb: MAX_FILE_SIZE_KB_DEFAULT,
+              incremental:      !args.force_reindex,
+              dry_run:          false,
+              domain:           `code:${String(args.project_path).split("/").pop() ?? "unknown"}`,
+            },
+            analyzeDeps,
+          );
+          return { content: [{ type: "text" as const, text: JSON.stringify({
+            ingested:          true,
+            fallback:          "local_codebase_analyze",
+            note:              "Used local AST scan (no MCP pool). Start codebase plugin for full call-graph.",
+            ...analyzeResult,
+          }) }] };
+        }
+
         const ingestDeps: codebaseAnalysis.IngestCodebaseDeps = {
           store:         deps.store,
           wikiRoot:      deps.wikiRoot,
@@ -194,6 +230,7 @@ export function registerIngestTools(server: McpServer, deps?: IngestDeps): void 
         const result = await codebaseAnalysis.ingestCodebaseHandler(args as Record<string, unknown>, ingestDeps);
         return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
       } catch (err) {
+        process.stderr.write(`[ingest_codebase] error: ${err instanceof Error ? err.message : String(err)}\n`);
         return errorText("ingest_codebase", err);
       }
     },

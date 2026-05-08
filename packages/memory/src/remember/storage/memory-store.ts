@@ -577,4 +577,43 @@ export interface MemoryStoreExt extends MemoryStore {
 
   /** Async variant of getAllRulesIncludingInactive (PG only). */
   getAllRulesIncludingInactiveAsync?(): Promise<Record<string, unknown>[]>;
+
+  // ── PG-only async variants for stats/decay queries ─────────────────────
+  //
+  // These are optional because SqliteMemoryStore uses synchronous
+  // better-sqlite3. PgMemoryStore provides them to avoid _runSync() throw.
+  // source: ADR-0042 — async-when-available pattern.
+
+  /** Async getAllMemoriesForDecay — safe on PG; absent on SQLite. */
+  getAllMemoriesForDecayAsync?(): Promise<Record<string, unknown>[]>;
+
+  /** Async getAllMemoriesForValidation — safe on PG; absent on SQLite. */
+  getAllMemoriesForValidationAsync?(limit?: number): Promise<Record<string, unknown>[]>;
+
+  /** Async getAllEntities — safe on PG; absent on SQLite. */
+  getAllEntitiesAsync?(opts?: { minHeat?: number; includeArchived?: boolean }): Promise<Record<string, unknown>[]>;
+
+  /** Async getAllRelationships — safe on PG; absent on SQLite. */
+  getAllRelationshipsAsync?(): Promise<Record<string, unknown>[]>;
+
+  /** Async getHotMemories — safe on PG; absent on SQLite. */
+  getHotMemoriesAsync?(minHeat?: number, limit?: number, includeBenchmarks?: boolean): Promise<Record<string, unknown>[]>;
+
+  /** Async getMemoriesByStage — safe on PG; absent on SQLite. */
+  getMemoriesByStageAsync?(stage: string, limit?: number): Promise<Record<string, unknown>[]>;
+
+  /** Async getEpisodicMemories — safe on PG; absent on SQLite. */
+  getEpisodicMemoriesAsync?(domain?: string, directory?: string, limit?: number): Promise<Record<string, unknown>[]>;
+
+  /** Async getSemanticMemories — safe on PG; absent on SQLite. */
+  getSemanticMemoriesAsync?(domain?: string, limit?: number): Promise<Record<string, unknown>[]>;
+
+  /** Async getTransferCandidates — safe on PG; absent on SQLite. */
+  getTransferCandidatesAsync?(limit?: number): Promise<Record<string, unknown>[]>;
+
+  /** Async findCoAccessedPairs — safe on PG; absent on SQLite. */
+  findCoAccessedPairsAsync?(memoryIds: number[]): Promise<Array<[number, number]>>;
+
+  /** Async searchFts — safe on PG; absent on SQLite. */
+  searchFtsAsync?(query: string, limit?: number): Promise<Array<[number, number]>>;
 }

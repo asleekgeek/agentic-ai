@@ -64,15 +64,22 @@ export interface AdvancedDeps {
 //   adapts concrete implementations to the ports callers declare.
 
 function toMemoryReadStore(store: MemoryStoreExt): MemoryReadStore {
+  // source: ADR-0042 — async-when-available pattern for PG/SQLite parity.
+  const pg = store as unknown as {
+    getMemoriesForDirectoryAsync?(dir: string, minHeat?: number): Promise<Record<string, unknown>[]>;
+    getHotMemoriesAsync?(minHeat?: number, limit?: number, includeBenchmarks?: boolean): Promise<Record<string, unknown>[]>;
+  };
   return {
-    // getMemoriesForDirectory is on MemoryStoreExt — no escape-hatch needed.
     getMemoriesForDirectory: async (dir: string, opts: { min_heat: number }) => {
-      const raw = store.getMemoriesForDirectory(dir, opts.min_heat);
+      const raw = typeof pg.getMemoriesForDirectoryAsync === "function"
+        ? await pg.getMemoriesForDirectoryAsync(dir, opts.min_heat)
+        : store.getMemoriesForDirectory(dir, opts.min_heat);
       return raw.map((m) => m as unknown as MemoryRecord);
     },
-    // getHotMemories is on MemoryStoreExt — no escape-hatch needed.
     getHotMemories: async (opts: { min_heat: number; limit: number }) => {
-      const raw = store.getHotMemories(opts.min_heat, opts.limit);
+      const raw = typeof pg.getHotMemoriesAsync === "function"
+        ? await pg.getHotMemoriesAsync(opts.min_heat, opts.limit)
+        : store.getHotMemories(opts.min_heat, opts.limit);
       return raw.map((m) => m as unknown as MemoryRecord);
     },
   };
@@ -282,8 +289,14 @@ export function registerAdvancedTools(server: McpServer, deps: AdvancedDeps): vo
     async (args) => {
       try {
         // source: cortex@ed33435 mcp_server/handlers/assess_coverage.py::_handler_impl
-        // LSP-VIOLATION CLOSED (#1): getAllMemoriesForDecay is now on MemoryStoreExt.
-        const allMems = deps.store.getAllMemoriesForDecay() as Array<Record<string, unknown>>;
+        // Use *Async variant when available (PgMemoryStore) to avoid _runSync() throw.
+        // source: ADR-0042 — async-when-available pattern for PG/SQLite parity.
+        const storeAny = deps.store as unknown as { getAllMemoriesForDecayAsync?: () => Promise<Record<string, unknown>[]> };
+        const allMems = (
+          typeof storeAny.getAllMemoriesForDecayAsync === "function"
+            ? await storeAny.getAllMemoriesForDecayAsync()
+            : deps.store.getAllMemoriesForDecay()
+        ) as Array<Record<string, unknown>>;
 
         // source: cortex@ed33435 assess_coverage.py:35 — filter by domain/directory
         const scoped = allMems.filter((m) => {

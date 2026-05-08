@@ -167,6 +167,10 @@
       "import": "./dist/import/handler.js",
       "types": "./dist/import/handler.d.ts"
     },
+    "./import/scanner.js": {
+      "import": "./dist/import/scanner.js",
+      "types": "./dist/import/scanner.d.ts"
+    },
     "./import/types.js": {
       "import": "./dist/import/types.js",
       "types": "./dist/import/types.d.ts"

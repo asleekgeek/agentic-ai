@@ -103,8 +103,13 @@ export function registerManagementTools(server: McpServer, deps: ManagementDeps)
     async (args) => {
       try {
         // source: cortex@ed33435 mcp_server/handlers/validate_memory.py::_handler_impl
-        // LSP-VIOLATION CLOSED (#1): getAllMemoriesForDecay is now on MemoryStoreExt.
-        const allMems = deps.store.getAllMemoriesForDecay();
+        // Use *Async variant when available (PgMemoryStore) to avoid _runSync() throw.
+        // source: ADR-0042 — async-when-available pattern for PG/SQLite parity.
+        const storeAny = deps.store as unknown as { getAllMemoriesForDecayAsync?: () => Promise<Record<string, unknown>[]> };
+        const allMems =
+          typeof storeAny.getAllMemoriesForDecayAsync === "function"
+            ? await storeAny.getAllMemoriesForDecayAsync()
+            : deps.store.getAllMemoriesForDecay();
 
         const candidates = args.memory_id !== undefined
           ? allMems.filter((m) => m["id"] === args.memory_id)
