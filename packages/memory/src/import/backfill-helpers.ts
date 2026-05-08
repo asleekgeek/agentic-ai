@@ -314,23 +314,55 @@ export function findConcepts(content: string): string[] {
  * Post: for each concept, upserts a 'cortex:<concept>' entity and inserts a
  *       mentions_concept relationship. Returns count of successfully linked concepts.
  *
+ * Uses *Async store methods when available (PgMemoryStore) and falls back to
+ * sync methods (SqliteMemoryStore). This matches the *Async-when-available
+ * pattern from engineer@41e5778 — PG sync methods throw via _runSync().
+ *
  * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:link_concepts
+ * source: engineer@41e5778 — *Async-when-available pattern for PG/SQLite parity.
  */
-export function linkConcepts(
+export async function linkConcepts(
   store: MemoryStore,
   memoryId: number,
   concepts: string[],
-): number {
+): Promise<number> {
+  // Internal cast to access optional *Async methods without changing MemoryStore type.
+  const storeAny = store as unknown as {
+    getEntityByNameAsync?: (name: string) => Promise<{ id: number } | null>;
+    upsertEntityAsync?: (name: string, type: string, domain: string) => Promise<number>;
+    linkMemoryEntityAsync?: (memoryId: number, entityId: number) => Promise<void>;
+  };
+
   let linked = 0;
   for (const concept of concepts) {
     try {
       const entityName = `cortex:${concept}`;
-      let entityId = store.getEntityByName(entityName)?.id;
-      if (entityId === undefined) {
-        entityId = store.upsertEntity(entityName, "concept", "cortex");
+
+      // Lookup — prefer async path (required for PG).
+      let existing: { id: number } | null | undefined;
+      if (storeAny.getEntityByNameAsync) {
+        existing = await storeAny.getEntityByNameAsync(entityName);
+      } else {
+        existing = store.getEntityByName(entityName);
       }
-      if (entityId > 0) {
-        store.linkMemoryEntity(memoryId, entityId);
+
+      let entityId = existing?.id;
+      if (entityId === undefined) {
+        // Upsert — prefer async path (required for PG).
+        if (storeAny.upsertEntityAsync) {
+          entityId = await storeAny.upsertEntityAsync(entityName, "concept", "cortex");
+        } else {
+          entityId = store.upsertEntity(entityName, "concept", "cortex");
+        }
+      }
+
+      if (entityId !== undefined && entityId > 0) {
+        // Link — prefer async path (required for PG).
+        if (storeAny.linkMemoryEntityAsync) {
+          await storeAny.linkMemoryEntityAsync(memoryId, entityId);
+        } else {
+          store.linkMemoryEntity(memoryId, entityId);
+        }
         linked += 1;
       }
     } catch {

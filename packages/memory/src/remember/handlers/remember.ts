@@ -224,11 +224,16 @@ export async function rememberAsync(
 
   // Vector search: use async variant when available (PG), sync otherwise (SQLite).
   // Empty buffer → no real embedding; PG correctly returns [] for an empty vector.
+  // searchVectorsAsync is not on the typed MemoryStore interface; accessed via cast.
   // source: PgMemoryStore.searchVectorsAsync — async pgvector KNN search.
+  // source: engineer fix — *Async-when-available, sync-fallback pattern.
+  const storeAnyVec = store as unknown as {
+    searchVectorsAsync?: (buf: Buffer, k: number, threshold: number) => Promise<Array<[number, number]>>;
+  };
   let vecHits: Array<[number, number]> = [];
   try {
-    if (store.searchVectorsAsync) {
-      vecHits = await store.searchVectorsAsync(Buffer.alloc(0), VECTOR_SEARCH_TOP_K, 0.0);
+    if (storeAnyVec.searchVectorsAsync) {
+      vecHits = await storeAnyVec.searchVectorsAsync(Buffer.alloc(0), VECTOR_SEARCH_TOP_K, 0.0);
     } else {
       vecHits = store.searchVectors(Buffer.alloc(0), VECTOR_SEARCH_TOP_K, 0.0);
     }
@@ -246,10 +251,16 @@ export async function rememberAsync(
     }
     const bestId = vecHits[0]?.[0];
     if (bestId !== undefined) {
+      // getMemoryAsync is not on the typed interface (PG does not yet expose it);
+      // access via cast to avoid TS2551. Falls back to sync getMemory on SQLite.
+      // source: engineer fix — *Async-when-available, sync-fallback pattern.
+      const storeAny = store as unknown as {
+        getMemoryAsync?: (id: number) => Promise<ReturnType<MemoryStore["getMemory"]>>;
+      };
       let bestMem: ReturnType<MemoryStore["getMemory"]> = null;
       try {
-        bestMem = store.getMemoryAsync
-          ? await store.getMemoryAsync(bestId)
+        bestMem = storeAny.getMemoryAsync
+          ? await storeAny.getMemoryAsync(bestId)
           : store.getMemory(bestId);
       } catch {
         bestMem = null;

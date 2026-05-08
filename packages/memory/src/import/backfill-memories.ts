@@ -210,7 +210,9 @@ async function importFile(
       imported += 1;
       const concepts = findConcepts(item.content ?? "");
       if (concepts.length > 0) {
-        linkConcepts(store, mid, concepts);
+        // linkConcepts is async — must await so PG entity writes complete before
+        // we mark the file as processed. source: engineer fix — linkConcepts uses *Async.
+        await linkConcepts(store, mid, concepts);
       }
     }
   }

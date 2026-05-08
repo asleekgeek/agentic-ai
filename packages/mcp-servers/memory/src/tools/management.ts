@@ -28,7 +28,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-store.js";
 import { importHandler } from "@agentic/memory/import/handler.js";
-import { remember } from "@agentic/memory/remember/handlers/remember.js";
+import { rememberAsync } from "@agentic/memory/remember/handlers/remember.js";
 import { handler as seedProjectHandlerFn } from "@agentic/memory/codebase-analysis/handlers/seed-project.js";
 
 // ── Named constants ───────────────────────────────────────────────────────────
@@ -199,9 +199,12 @@ export function registerManagementTools(server: McpServer, deps: ManagementDeps)
     async (args) => {
       try {
         // source: packages/memory/src/import/handler.ts::importHandler
-        const rememberFn = (rawArgs: unknown): Promise<{ stored: true } | null> => {
-          const result = remember(rawArgs, deps.store);
-          return Promise.resolve(result.stored ? { stored: true as const } : null);
+        // Fix: use rememberAsync so PgMemoryStore.insertMemoryAsync is called instead
+        // of the sync insertMemory() which throws on PG. Root-cause: ADR-0042.
+        // source: engineer@41e5778 — *Async-when-available pattern for PG/SQLite parity.
+        const rememberFn = async (rawArgs: unknown): Promise<{ stored: true } | null> => {
+          const result = await rememberAsync(rawArgs, deps.store);
+          return result.stored ? { stored: true as const } : null;
         };
 
         const response = await importHandler(

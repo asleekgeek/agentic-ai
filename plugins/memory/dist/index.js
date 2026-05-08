@@ -32478,7 +32478,6 @@ var _require = createRequire(import.meta.url);
 var FTS5_TOKEN_RE = /[A-Za-z0-9][A-Za-z0-9_'-]*/g;
 var FTS5_MIN_TOKEN_LEN = 2;
 var FTS5_MAX_TOKENS = 32;
-var FTS5_DEFAULT_LIMIT = 20;
 function sanitiseFts5Query(query) {
   if (!query)
     return "";
@@ -32607,80 +32606,6 @@ CREATE TABLE IF NOT EXISTS oscillatory_state (
   id INTEGER PRIMARY KEY CHECK (id = 1),
   state_json TEXT NOT NULL DEFAULT '{}'
 )`;
-var STAGE_TRANSITIONS_DDL = `
-CREATE TABLE IF NOT EXISTS stage_transitions (
-  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-  memory_id           INTEGER NOT NULL,
-  from_stage          TEXT NOT NULL,
-  to_stage            TEXT NOT NULL,
-  hours_in_prev_stage REAL DEFAULT 0.0,
-  trigger             TEXT DEFAULT 'cascade',
-  transitioned_at     TEXT NOT NULL DEFAULT (datetime('now'))
-)`;
-var PROSPECTIVE_MEMORIES_DDL = `
-CREATE TABLE IF NOT EXISTS prospective_memories (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
-  content           TEXT NOT NULL,
-  trigger_condition TEXT NOT NULL,
-  trigger_type      TEXT NOT NULL,
-  target_directory  TEXT,
-  is_active         INTEGER DEFAULT 1,
-  created_at        TEXT NOT NULL DEFAULT (datetime('now')),
-  triggered_at      TEXT,
-  triggered_count   INTEGER DEFAULT 0
-)`;
-var CHECKPOINTS_DDL = `
-CREATE TABLE IF NOT EXISTS checkpoints (
-  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-  session_id          TEXT DEFAULT 'default',
-  directory_context   TEXT DEFAULT '',
-  current_task        TEXT DEFAULT '',
-  files_being_edited  TEXT DEFAULT '[]',
-  key_decisions       TEXT DEFAULT '[]',
-  open_questions      TEXT DEFAULT '[]',
-  next_steps          TEXT DEFAULT '[]',
-  active_errors       TEXT DEFAULT '[]',
-  custom_context      TEXT DEFAULT '',
-  epoch               INTEGER DEFAULT 0,
-  created_at          TEXT NOT NULL DEFAULT (datetime('now')),
-  is_active           INTEGER DEFAULT 1
-)`;
-var MEMORY_ARCHIVES_DDL = `
-CREATE TABLE IF NOT EXISTS memory_archives (
-  id                  INTEGER PRIMARY KEY AUTOINCREMENT,
-  original_memory_id  INTEGER NOT NULL,
-  content             TEXT NOT NULL,
-  archived_at         TEXT NOT NULL DEFAULT (datetime('now')),
-  mismatch_score      REAL DEFAULT 0.0,
-  archive_reason      TEXT DEFAULT ''
-)`;
-var CONSOLIDATION_LOG_DDL = `
-CREATE TABLE IF NOT EXISTS consolidation_log (
-  id                INTEGER PRIMARY KEY AUTOINCREMENT,
-  timestamp         TEXT NOT NULL DEFAULT (datetime('now')),
-  memories_added    INTEGER DEFAULT 0,
-  memories_updated  INTEGER DEFAULT 0,
-  memories_archived INTEGER DEFAULT 0,
-  duration_ms       INTEGER DEFAULT 0
-)`;
-var ENGRAM_SLOTS_DDL = `
-CREATE TABLE IF NOT EXISTS engram_slots (
-  slot_index      INTEGER PRIMARY KEY,
-  excitability    REAL DEFAULT 0.5,
-  last_activated  TEXT
-)`;
-var MEMORY_RULES_DDL = `
-CREATE TABLE IF NOT EXISTS memory_rules (
-  id          INTEGER PRIMARY KEY AUTOINCREMENT,
-  rule_type   TEXT NOT NULL DEFAULT 'soft',
-  scope       TEXT NOT NULL DEFAULT 'global',
-  scope_value TEXT,
-  condition   TEXT NOT NULL,
-  action      TEXT NOT NULL,
-  priority    INTEGER DEFAULT 0,
-  is_active   INTEGER DEFAULT 1,
-  created_at  TEXT NOT NULL DEFAULT (datetime('now'))
-)`;
 var INDEXES = [
   `CREATE INDEX IF NOT EXISTS idx_memories_heat_base ON memories(heat_base)`,
   `CREATE INDEX IF NOT EXISTS idx_memories_domain ON memories(domain)`,
@@ -32771,13 +32696,6 @@ var SqliteMemoryStore = class {
       HOMEOSTATIC_STATE_DDL,
       SCHEMAS_DDL,
       OSCILLATORY_STATE_DDL,
-      STAGE_TRANSITIONS_DDL,
-      PROSPECTIVE_MEMORIES_DDL,
-      CHECKPOINTS_DDL,
-      MEMORY_ARCHIVES_DDL,
-      CONSOLIDATION_LOG_DDL,
-      ENGRAM_SLOTS_DDL,
-      MEMORY_RULES_DDL,
       ...INDEXES
     ];
     for (const ddl of ddls) {
@@ -32867,14 +32785,7 @@ var SqliteMemoryStore = class {
         VALUES (?, ?, ?)
       ON CONFLICT(domain) DO UPDATE
         SET factor = excluded.factor, updated_at = excluded.updated_at`);
-    this._stmtGetEntityByName = this._db.prepare(
-      // Case-insensitive lookup matches pg_store_entities.py:82-91 behaviour.
-      // Without LOWER(), "FooBar" and "foobar" produce duplicate entity rows
-      // which inflates entity counts and breaks cross-file resolution.
-      // source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:82-91
-      //   uses LOWER(name) = LOWER($1) in its SELECT for dedup.
-      `SELECT * FROM entities WHERE LOWER(name) = LOWER(?) LIMIT 1`
-    );
+    this._stmtGetEntityByName = this._db.prepare(`SELECT * FROM entities WHERE name = ? LIMIT 1`);
     this._stmtUpsertEntity = this._db.prepare(`
       INSERT INTO entities (name, type, domain, created_at, last_accessed)
         VALUES (?, ?, ?, ?, ?)
@@ -33116,7 +33027,8 @@ var SqliteMemoryStore = class {
    * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:232-242
    * source: https://www.sqlite.org/fts5.html#full_text_query_syntax — FTS5 query grammar
    */
-  searchFts(query, limit = FTS5_DEFAULT_LIMIT) {
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:232 — default limit=20 (top-20 FTS hits)
+  searchFts(query, limit = 20) {
     const sanitised = sanitiseFts5Query(query);
     if (!sanitised)
       return [];
@@ -33173,6 +33085,35 @@ var SqliteMemoryStore = class {
   }
   linkMemoryEntity(memoryId, entityId) {
     this._stmtLinkMemoryEntity.run(memoryId, entityId);
+  }
+  // ── Async thin wrappers (satisfy MemoryStore optional async interface) ─────
+  //
+  // SQLite (better-sqlite3) is synchronous internally. These wrappers satisfy
+  // the optional async entity interface declared in memory-store.ts so that
+  // codebase-analyze-helpers.ts can call *Async variants unconditionally on
+  // both backends without an existence check.
+  //
+  // source: ADR-0042 — async entity variants required by codebase-analyze path.
+  // source: ECMAScript — Promise.resolve() wraps a synchronous value in a
+  //   resolved microtask; no blocking or thread pool involved.
+  // source: liskov@24cb6e2 — same pattern applied to other PG/SQLite method pairs.
+  /** Async upsert entity — thin wrapper; SQLite executes synchronously. */
+  upsertEntityAsync(name, type, domain) {
+    return Promise.resolve(this.upsertEntity(name, type, domain));
+  }
+  /** Async getEntityByName — thin wrapper; SQLite executes synchronously. */
+  getEntityByNameAsync(name) {
+    return Promise.resolve(this.getEntityByName(name));
+  }
+  /** Async insertRelationship — thin wrapper; SQLite executes synchronously. */
+  insertRelationshipAsync(rel) {
+    this.insertRelationship(rel);
+    return Promise.resolve();
+  }
+  /** Async linkMemoryEntity — thin wrapper; SQLite executes synchronously. */
+  linkMemoryEntityAsync(memoryId, entityId) {
+    this.linkMemoryEntity(memoryId, entityId);
+    return Promise.resolve();
   }
   upsertRelationship(sourceEntityId, targetEntityId, relationshipType, weight = 1) {
     const now = nowIso();
@@ -33494,29 +33435,6 @@ var SqliteMemoryStore = class {
     const now = nowIso();
     this._stmtUpsertRelationship.run(Number(rel["source_entity_id"]), Number(rel["target_entity_id"]), String(rel["relationship_type"] ?? "generic"), typeof rel["weight"] === "number" ? rel["weight"] : 1, now, now);
   }
-  // ── Async thin wrappers (satisfy MemoryStore optional async interface) ─────
-  //
-  // SQLite (better-sqlite3) is synchronous internally. These wrappers satisfy
-  // the optional async entity interface declared in memory-store.ts so that
-  // codebase-analyze-helpers.ts can call *Async variants unconditionally on
-  // both backends without an existence check.
-  //
-  // source: ADR-0042 — async entity variants required by codebase-analyze path.
-  // source: ECMAScript — Promise.resolve() wraps a synchronous value in a
-  //   resolved microtask; no blocking or thread pool involved.
-  /** Async upsert entity — thin wrapper; SQLite executes synchronously. */
-  upsertEntityAsync(name, type, domain) {
-    return Promise.resolve(this.upsertEntity(name, type, domain));
-  }
-  /** Async getEntityByName — thin wrapper; SQLite executes synchronously. */
-  getEntityByNameAsync(name) {
-    return Promise.resolve(this.getEntityByName(name));
-  }
-  /** Async insertRelationship — thin wrapper; SQLite executes synchronously. */
-  insertRelationshipAsync(rel) {
-    this.insertRelationship(rel);
-    return Promise.resolve();
-  }
   /**
    * Reinforce or create a relationship between two entity names.
    *
@@ -33622,68 +33540,6 @@ var SqliteMemoryStore = class {
       this._db.prepare("INSERT INTO consolidation_log (memories_added, memories_updated, memories_archived, duration_ms) VALUES (?, ?, ?, ?)").run(data["memories_added"] ?? 0, data["memories_updated"] ?? 0, data["memories_archived"] ?? 0, data["duration_ms"] ?? 0);
     } catch {
     }
-  }
-  // ── Rule engine ────────────────────────────────────────────────────────
-  //
-  // LSP-VIOLATION CLOSED: these methods were previously in SqliteRuleMixin /
-  // SqliteStatsMixin / SqliteAuxiliaryMixin standalone classes, not on
-  // SqliteMemoryStore. The production store therefore returned undefined for
-  // escape-hatch calls, silently breaking the rule engine on BOTH backends.
-  //
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:9-70
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
-  /**
-   * precondition:  rule.condition and rule.action are non-empty.
-   * postcondition: returned id > 0; row in memory_rules with is_active = rule.is_active.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:14-31
-   */
-  insertRule(rule) {
-    const result = this._db.prepare("INSERT INTO memory_rules (rule_type, scope, scope_value, condition, action, priority, is_active, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, datetime('now'))").run(rule.rule_type ?? "soft", rule.scope ?? "global", rule.scope_value ?? null, rule.condition, rule.action, rule.priority ?? 0, rule.is_active !== false ? 1 : 0);
-    return result.lastInsertRowid;
-  }
-  /**
-   * postcondition: returns every row where is_active = true, ordered by
-   *   scope ASC, priority DESC. Returns [] if no rules exist.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:41-45
-   */
-  getAllActiveRules() {
-    return this._db.prepare("SELECT * FROM memory_rules WHERE is_active ORDER BY scope, priority DESC").all();
-  }
-  /**
-   * postcondition: returns rows where scope = scope AND is_active = true,
-   *   ordered by priority DESC. Returns [] if none.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:33-39
-   */
-  getRulesForScope(scope) {
-    return this._db.prepare("SELECT * FROM memory_rules WHERE scope = ? AND is_active ORDER BY priority DESC").all(scope);
-  }
-  /**
-   * postcondition: returns every row in memory_rules ordered by scope ASC,
-   *   priority DESC. Returns [] if table is empty.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py
-   */
-  getAllRulesIncludingInactive() {
-    return this._db.prepare("SELECT * FROM memory_rules ORDER BY scope, priority DESC").all();
-  }
-  /**
-   * postcondition: returns COUNT(*) WHERE is_active = true from
-   *   prospective_memories. Returns 0 if table is empty.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
-   */
-  countActiveTriggers() {
-    const row = this._db.prepare("SELECT COUNT(*) AS c FROM prospective_memories WHERE is_active").get();
-    return row?.c ?? 0;
-  }
-  /**
-   * precondition:  record.content, record.trigger_condition, record.trigger_type
-   *   are non-empty strings.
-   * postcondition: returned id > 0; row in prospective_memories with is_active = true.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
-   */
-  insertProspectiveMemory(record3) {
-    const result = this._db.prepare("INSERT INTO prospective_memories (content, trigger_condition, trigger_type, target_directory, is_active, triggered_count) VALUES (?, ?, ?, ?, ?, ?)").run(record3.content, record3.trigger_condition, record3.trigger_type, record3.target_directory ?? null, record3.is_active !== false ? 1 : 0, record3.triggered_count ?? 0);
-    return result.lastInsertRowid;
   }
 };
 
@@ -33956,59 +33812,6 @@ async function insertArchive(client, data, bytesToVector) {
 }
 async function getSchemasForDomain(client, domain) {
   return (await client.query("SELECT * FROM schemas WHERE domain = $1 ORDER BY formation_count DESC", [domain])).rows;
-}
-
-// packages/memory/dist/remember/storage/pg-store-rules.js
-async function insertRule(client, data) {
-  const result = await client.query(`INSERT INTO memory_rules
-       (rule_type, scope, scope_value, condition, action, priority, is_active, created_at)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, NOW())
-     RETURNING id`, [
-    data.rule_type ?? "soft",
-    data.scope ?? "global",
-    data.scope_value ?? null,
-    data.condition,
-    data.action,
-    data.priority ?? 0,
-    data.is_active !== false
-  ]);
-  const row = result.rows[0];
-  if (row == null)
-    throw new Error("insertRule: no id returned from PG");
-  return row.id;
-}
-async function getAllActiveRules(client) {
-  const result = await client.query("SELECT * FROM memory_rules WHERE is_active ORDER BY scope, priority DESC");
-  return result.rows;
-}
-async function getRulesForScope(client, scope) {
-  const result = await client.query("SELECT * FROM memory_rules WHERE scope = $1 AND is_active ORDER BY priority DESC", [scope]);
-  return result.rows;
-}
-async function getAllRulesIncludingInactive(client) {
-  const result = await client.query("SELECT * FROM memory_rules ORDER BY scope, priority DESC");
-  return result.rows;
-}
-async function countActiveTriggers(client) {
-  const result = await client.query("SELECT COUNT(*) AS c FROM prospective_memories WHERE is_active");
-  return result.rows[0]?.c ?? 0;
-}
-async function insertProspectiveMemory(client, data) {
-  const result = await client.query(`INSERT INTO prospective_memories
-       (content, trigger_condition, trigger_type, target_directory, is_active, triggered_count)
-     VALUES ($1, $2, $3, $4, $5, $6)
-     RETURNING id`, [
-    data.content,
-    data.trigger_condition,
-    data.trigger_type,
-    data.target_directory ?? null,
-    data.is_active !== false,
-    data.triggered_count ?? 0
-  ]);
-  const row = result.rows[0];
-  if (row == null)
-    throw new Error("insertProspectiveMemory: no id returned from PG");
-  return row.id;
 }
 
 // packages/memory/dist/remember/storage/pg-store.js
@@ -34633,12 +34436,12 @@ var PgMemoryStore = class {
     }));
   }
   /**
-   * Async insertRelationship — awaitable form used by codebase-analyze-helpers.
+   * Awaitable insertRelationship — commits before returning, giving
+   * back-pressure on the pool. Required by codebase-analyze-helpers.ts.
    *
-   * postcondition: relationship row is committed before the returned Promise
-   *   resolves; callers that await this get back-pressure on the PG pool.
-   * source: ADR-0042 — async entity variants required by codebase-analyze path.
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:52-69
+   * postcondition: relationship row persisted in PG before Promise resolves.
+   * source: ADR-0042 — async entity writes required for PG codebase-analyze path.
+   * source: liskov@24cb6e2 — *Async-when-available pattern for PG/SQLite parity.
    */
   async insertRelationshipAsync(rel) {
     await this.runAsync((c2) => insertRelationship(c2, {
@@ -34789,87 +34592,6 @@ var PgMemoryStore = class {
       memories_archived: typeof data["memories_archived"] === "number" ? data["memories_archived"] : 0,
       duration_ms: typeof data["duration_ms"] === "number" ? data["duration_ms"] : 0
     }));
-  }
-  // ── MemoryStoreExt: rule engine ────────────────────────────────────────
-  //
-  // LSP-VIOLATION CLOSED: insertRule, getAllActiveRules, getRulesForScope,
-  // getAllRulesIncludingInactive, countActiveTriggers, insertProspectiveMemory
-  // were previously called via escape-hatch casts in advanced.ts; on PG all
-  // returned defaults (0 / []) because the methods did not exist on this class.
-  // That is a history-constraint LSP violation (Liskov & Wing 1994, §4).
-  //
-  // Each sync-signature method calls _runSync() (throws at runtime — same
-  // convention as all other PG CRUD methods). MCP tool handlers must use
-  // the *Async siblings, which are the production code paths.
-  //
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:9-70
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
-  /**
-   * precondition:  rule.condition and rule.action are non-empty strings.
-   * postcondition: returned id > 0; row exists in memory_rules.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:14-31
-   */
-  insertRule(rule) {
-    return this._runSync(async (c2) => insertRule(c2, rule));
-  }
-  async insertRuleAsync(rule) {
-    return this.runAsync((c2) => insertRule(c2, rule));
-  }
-  /**
-   * postcondition: returns every row where is_active = true, ordered by
-   *   scope ASC, priority DESC. Returns [] if no rules exist.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:41-45
-   */
-  getAllActiveRules() {
-    return this._runSync((c2) => getAllActiveRules(c2));
-  }
-  async getAllActiveRulesAsync() {
-    return this.runAsync((c2) => getAllActiveRules(c2));
-  }
-  /**
-   * postcondition: returns rows where scope = scope AND is_active = true,
-   *   ordered by priority DESC. Returns [] if none exist.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:33-39
-   */
-  getRulesForScope(scope) {
-    return this._runSync((c2) => getRulesForScope(c2, scope));
-  }
-  async getRulesForScopeAsync(scope) {
-    return this.runAsync((c2) => getRulesForScope(c2, scope));
-  }
-  /**
-   * postcondition: returns every row in memory_rules ordered by scope ASC,
-   *   priority DESC. Returns [] if table is empty.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py
-   */
-  getAllRulesIncludingInactive() {
-    return this._runSync((c2) => getAllRulesIncludingInactive(c2));
-  }
-  async getAllRulesIncludingInactiveAsync() {
-    return this.runAsync((c2) => getAllRulesIncludingInactive(c2));
-  }
-  /**
-   * postcondition: returns COUNT(*) WHERE is_active = true. Returns 0 if empty.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
-   */
-  countActiveTriggers() {
-    return this._runSync((c2) => countActiveTriggers(c2));
-  }
-  async countActiveTriggersAsync() {
-    return this.runAsync((c2) => countActiveTriggers(c2));
-  }
-  /**
-   * precondition:  record.content, record.trigger_condition, record.trigger_type
-   *   are non-empty strings.
-   * postcondition: returned id > 0; row exists in prospective_memories.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
-   */
-  insertProspectiveMemory(record3) {
-    return this._runSync((c2) => insertProspectiveMemory(c2, record3));
-  }
-  async insertProspectiveMemoryAsync(record3) {
-    return this.runAsync((c2) => insertProspectiveMemory(c2, record3));
   }
   async close() {
     await this._pool.end();
@@ -37695,10 +37417,11 @@ async function rememberAsync(rawArgs, store) {
   const agentTopic = args.agent_topic;
   const isGlobal = args.is_global;
   const baselineHeat = args.initial_heat !== void 0 ? args.initial_heat : 1;
+  const storeAnyVec = store;
   let vecHits = [];
   try {
-    if (store.searchVectorsAsync) {
-      vecHits = await store.searchVectorsAsync(Buffer.alloc(0), VECTOR_SEARCH_TOP_K, 0);
+    if (storeAnyVec.searchVectorsAsync) {
+      vecHits = await storeAnyVec.searchVectorsAsync(Buffer.alloc(0), VECTOR_SEARCH_TOP_K, 0);
     } else {
       vecHits = store.searchVectors(Buffer.alloc(0), VECTOR_SEARCH_TOP_K, 0);
     }
@@ -37713,9 +37436,10 @@ async function rememberAsync(rawArgs, store) {
     }
     const bestId = vecHits[0]?.[0];
     if (bestId !== void 0) {
+      const storeAny = store;
       let bestMem = null;
       try {
-        bestMem = store.getMemoryAsync ? await store.getMemoryAsync(bestId) : store.getMemory(bestId);
+        bestMem = storeAny.getMemoryAsync ? await storeAny.getMemoryAsync(bestId) : store.getMemory(bestId);
       } catch {
         bestMem = null;
       }
@@ -37822,15 +37546,14 @@ function extractEntityNamesFromContent(content) {
 }
 
 // packages/memory/dist/remember/handlers/forget.js
-var FORGET_CONTENT_PREVIEW_CHARS = 80;
-async function forgetAsync(args, store) {
+function forget(args, store) {
   const memoryId = args.memory_id;
   const soft = args.soft ?? false;
   const force = args.force ?? false;
   if (!memoryId || memoryId < 1) {
     return { deleted: false, reason: "no_memory_id" };
   }
-  const mem = store.getMemoryAsync ? await store.getMemoryAsync(memoryId) : store.getMemory(memoryId);
+  const mem = store.getMemory(memoryId);
   if (mem === null) {
     return { deleted: false, reason: "not_found", memory_id: memoryId };
   }
@@ -37843,24 +37566,20 @@ async function forgetAsync(args, store) {
   }
   if (soft) {
     store.markMemoryStale(memoryId, true);
-    if (store.bumpHeatRawAsync) {
-      await store.bumpHeatRawAsync(memoryId, 0);
-    } else {
-      store.bumpHeatRaw(memoryId, 0);
-    }
+    store.bumpHeatRaw(memoryId, 0);
     return {
       deleted: true,
       method: "soft",
       memory_id: memoryId,
-      content_preview: mem.content.slice(0, FORGET_CONTENT_PREVIEW_CHARS)
+      content_preview: mem.content.slice(0, 80)
     };
   }
-  const deleted = store.deleteMemoryAsync ? await store.deleteMemoryAsync(memoryId) : store.deleteMemory(memoryId);
+  const deleted = store.deleteMemory(memoryId);
   return {
     deleted,
     method: "hard",
     memory_id: memoryId,
-    content_preview: mem.content.slice(0, FORGET_CONTENT_PREVIEW_CHARS)
+    content_preview: mem.content.slice(0, 80)
   };
 }
 
@@ -37884,24 +37603,20 @@ function buildAnchorContent(content, reason) {
   }
   return content;
 }
-async function anchorAsync(args, store) {
+function anchor(args, store) {
   const memoryId = args.memory_id;
   const reason = (args.reason ?? "").trim();
   const isGlobal = args.is_global ?? false;
   if (!memoryId || memoryId < 1) {
     return { anchored: false, error: "memory_id is required and must be >= 1" };
   }
-  const mem = store.getMemoryAsync ? await store.getMemoryAsync(memoryId) : store.getMemory(memoryId);
+  const mem = store.getMemory(memoryId);
   if (mem === null) {
     return { anchored: false, error: `memory not found: ${memoryId}` };
   }
   const tags = buildAnchorTags(mem.tags, reason);
   const content = buildAnchorContent(mem.content, reason);
-  if (store.bumpHeatRawAsync) {
-    await store.bumpHeatRawAsync(memoryId, 1);
-  } else {
-    store.bumpHeatRaw(memoryId, 1);
-  }
+  store.bumpHeatRaw(memoryId, 1);
   store.setMemoryProtected(memoryId, true);
   store.updateMemoryImportance(memoryId, 1);
   store.updateMemoryContent(memoryId, content, tags);
@@ -37916,29 +37631,23 @@ async function anchorAsync(args, store) {
 }
 
 // packages/memory/dist/remember/handlers/rate-memory.js
-var CONFIDENCE_MIN_SAMPLES = 3;
-var CONFIDENCE_ROUNDING_FACTOR = 1e4;
-var RATE_CONTENT_PREVIEW_CHARS = 80;
-var WILSON_Z = 1;
-var WILSON_DENOMINATOR_HALVING = 2;
-var WILSON_VARIANCE_CORRECTION = 4;
 function computeMetamemoryConfidence(accessCount, usefulCount) {
-  if (accessCount < CONFIDENCE_MIN_SAMPLES)
+  if (accessCount < 3)
     return null;
-  const z2 = WILSON_Z;
+  const z2 = 1;
   const p2 = usefulCount / accessCount;
   const n3 = accessCount;
-  const numerator = p2 + z2 ** 2 / (WILSON_DENOMINATOR_HALVING * n3) - z2 * Math.sqrt((p2 * (1 - p2) + z2 ** 2 / (WILSON_VARIANCE_CORRECTION * n3)) / n3);
+  const numerator = p2 + z2 ** 2 / (2 * n3) - z2 * Math.sqrt((p2 * (1 - p2) + z2 ** 2 / (4 * n3)) / n3);
   const denominator = 1 + z2 ** 2 / n3;
   return Math.max(0, Math.min(1, numerator / denominator));
 }
-async function rateMemoryAsync(args, store) {
+function rateMemory(args, store) {
   const memoryId = args.memory_id;
   const useful = args.useful;
   if (!memoryId || memoryId < 1) {
     return { rated: false, reason: "no_memory_id" };
   }
-  const mem = store.getMemoryAsync ? await store.getMemoryAsync(memoryId) : store.getMemory(memoryId);
+  const mem = store.getMemory(memoryId);
   if (mem === null) {
     return { rated: false, reason: "not_found", memory_id: memoryId };
   }
@@ -37953,8 +37662,8 @@ async function rateMemoryAsync(args, store) {
     useful,
     access_count: accessCount,
     useful_count: usefulCount,
-    confidence: Math.round(confidence * CONFIDENCE_ROUNDING_FACTOR) / CONFIDENCE_ROUNDING_FACTOR,
-    content_preview: mem.content.slice(0, RATE_CONTENT_PREVIEW_CHARS)
+    confidence: Math.round(confidence * 1e4) / 1e4,
+    content_preview: mem.content.slice(0, 80)
   };
 }
 
@@ -37977,7 +37686,7 @@ function registerRememberTools(server2, deps) {
     }
   }, async (args) => {
     try {
-      const response = await rememberAsync(args, deps.store);
+      const response = remember(args, deps.store);
       return { content: [{ type: "text", text: JSON.stringify(response) }] };
     } catch (err) {
       return errorText2("remember", err);
@@ -37992,7 +37701,7 @@ function registerRememberTools(server2, deps) {
     }
   }, async (args) => {
     try {
-      const response = await forgetAsync(args, deps.store);
+      const response = forget(args, deps.store);
       return { content: [{ type: "text", text: JSON.stringify(response) }] };
     } catch (err) {
       return errorText2("forget", err);
@@ -38006,7 +37715,7 @@ function registerRememberTools(server2, deps) {
     }
   }, async (args) => {
     try {
-      const response = await anchorAsync(args, deps.store);
+      const response = anchor(args, deps.store);
       return { content: [{ type: "text", text: JSON.stringify(response) }] };
     } catch (err) {
       return errorText2("anchor", err);
@@ -38020,7 +37729,7 @@ function registerRememberTools(server2, deps) {
     }
   }, async (args) => {
     try {
-      const response = await rateMemoryAsync(args, deps.store);
+      const response = rateMemory(args, deps.store);
       return { content: [{ type: "text", text: JSON.stringify(response) }] };
     } catch (err) {
       return errorText2("rate_memory", err);
@@ -42880,7 +42589,7 @@ function buildStageCounts(discoveries) {
     cicd: discoveries.filter((d2) => d2.tags.includes("ci-cd")).length
   };
 }
-async function storeDiscoveriesAsync(discoveries, root, domain, store) {
+function storeDiscoveries(discoveries, root, domain, store) {
   let stored = 0;
   let skipped = 0;
   const memoryIds = [];
@@ -42896,18 +42605,9 @@ async function storeDiscoveriesAsync(discoveries, root, domain, store) {
         source: "seed_project",
         importance: initialHeat
       };
-      let mid;
-      if (store.insertMemoryAsync) {
-        mid = await store.insertMemoryAsync(insertData);
-      } else {
-        mid = store.insertMemory(insertData);
-      }
+      const mid = store.insertMemory(insertData);
       if (mid > 0) {
-        if (store.bumpHeatRawAsync) {
-          await store.bumpHeatRawAsync(mid, initialHeat);
-        } else {
-          store.bumpHeatRaw(mid, initialHeat);
-        }
+        store.bumpHeatRaw(mid, initialHeat);
         stored++;
         memoryIds.push(mid);
       } else {
@@ -42938,7 +42638,7 @@ async function handler3(args, deps) {
   if (typeof storeExt.deleteMemoriesByTag === "function") {
     purgedStale = storeExt.deleteMemoriesByTag("seeded", domain);
   }
-  const { stored, skipped, memoryIds } = await storeDiscoveriesAsync(allDiscoveries, root, domain, deps.store);
+  const { stored, skipped, memoryIds } = storeDiscoveries(allDiscoveries, root, domain, deps.store);
   return {
     seeded: true,
     directory: root,
@@ -43066,9 +42766,9 @@ function registerManagementTools(server2, deps) {
     }
   }, async (args) => {
     try {
-      const rememberFn = (rawArgs) => {
-        const result = remember(rawArgs, deps.store);
-        return Promise.resolve(result.stored ? { stored: true } : null);
+      const rememberFn = async (rawArgs) => {
+        const result = await rememberAsync(rawArgs, deps.store);
+        return result.stored ? { stored: true } : null;
       };
       const response = await importHandler({
         project: args.project,
@@ -46152,31 +45852,38 @@ function toMemoryReadStore(store) {
   };
 }
 function toProspectiveMemoryStore(store) {
-  const pgStore = store;
+  const ext2 = store;
   return {
     insertProspectiveMemory: async (record3) => {
-      const id2 = pgStore.insertProspectiveMemoryAsync != null ? await pgStore.insertProspectiveMemoryAsync(record3) : store.insertProspectiveMemory(record3);
+      const id2 = ext2["insertProspectiveMemory"]?.(record3) ?? "";
       return String(id2);
     },
     countActiveTriggers: async () => {
-      return pgStore.countActiveTriggersAsync != null ? pgStore.countActiveTriggersAsync() : Promise.resolve(store.countActiveTriggers());
+      return ext2["countActiveTriggers"]?.() ?? 0;
     }
   };
 }
 function toRuleStore(store) {
-  const pgStore = store;
+  const ext2 = store;
   return {
     insertRule: async (rule) => {
-      return pgStore.insertRuleAsync != null ? pgStore.insertRuleAsync(rule) : Promise.resolve(store.insertRule(rule));
+      const id2 = ext2["insertRule"]?.(rule) ?? 0;
+      return Number(id2);
     }
   };
 }
 function toRuleReadStore(store) {
-  const pgStore = store;
+  const ext2 = store;
+  async function fetchRules(method) {
+    const result = ext2[method]?.();
+    if (result instanceof Promise)
+      return result;
+    return Promise.resolve(result ?? []);
+  }
   return {
-    getAllActiveRules: () => pgStore.getAllActiveRulesAsync != null ? pgStore.getAllActiveRulesAsync() : Promise.resolve(store.getAllActiveRules()),
-    getRulesForScope: (scope) => pgStore.getRulesForScopeAsync != null ? pgStore.getRulesForScopeAsync(scope) : Promise.resolve(store.getRulesForScope(scope)),
-    getAllRulesIncludingInactive: () => pgStore.getAllRulesIncludingInactiveAsync != null ? pgStore.getAllRulesIncludingInactiveAsync() : Promise.resolve(store.getAllRulesIncludingInactive())
+    getAllActiveRules: () => fetchRules("getAllActiveRules"),
+    getRulesForScope: (scope) => ext2["getRulesForScope"]?.(scope) ?? Promise.resolve([]),
+    getAllRulesIncludingInactive: () => fetchRules("getAllRulesIncludingInactive")
   };
 }
 function errorText7(tool, err) {
@@ -48203,10 +47910,6 @@ var CONTENT_MAX_BYTES = 1 * 1024 * 1024;
 var BIDI_OVERRIDES = "\u202A\u202B\u202C\u202D\u202E\u2066\u2067\u2068\u2069";
 var STRIP_RE = new RegExp(`[\0-\b\v\f-\x7F-\x9F\uFEFF${BIDI_OVERRIDES}]`, "g");
 
-// packages/memory/dist/recall/reranker.js
-import { tmpdir } from "os";
-var FLASHRANK_CACHE_DIR = process.env["FLASHRANK_CACHE_DIR"] ?? tmpdir();
-
 // packages/memory/dist/recall/retrieval-dispatch.js
 var _SIMPLE_INTENTS = /* @__PURE__ */ new Set([
   QueryIntent.GENERAL,
@@ -49316,6 +49019,8 @@ function computeSchemaFreeEnergy(predictionErrors) {
 }
 
 // packages/memory/dist/codebase-analysis/ast-extractors.js
+var SIG_MAX_CHARS = 120;
+var CALL_NAME_MAX_CHARS = 100;
 function nodeText(node, source) {
   return source.slice(node.startIndex, node.endIndex).toString("utf8");
 }
@@ -49365,7 +49070,7 @@ function _extractPythonFunc(node, source, defs, parent) {
   const nameNode = node.childForFieldName("name");
   const paramsNode = node.childForFieldName("parameters");
   const name = nameNode ? nodeText(nameNode, source) : "";
-  const sig = paramsNode ? nodeText(paramsNode, source).slice(0, 120) : "";
+  const sig = paramsNode ? nodeText(paramsNode, source).slice(0, SIG_MAX_CHARS) : "";
   const kind2 = parent ? "method" : "function";
   const fullName = parent ? `${parent}.${name}` : name;
   defs.push(makeSymbolDef(fullName, kind2, sig));
@@ -49382,7 +49087,7 @@ function _extractPythonClass(node, source, defs) {
   const nameNode = node.childForFieldName("name");
   const superclassNode = node.childForFieldName("superclasses");
   const clsName = nameNode ? nodeText(nameNode, source) : "";
-  const sig = superclassNode ? nodeText(superclassNode, source).slice(0, 120) : "";
+  const sig = superclassNode ? nodeText(superclassNode, source).slice(0, SIG_MAX_CHARS) : "";
   defs.push(makeSymbolDef(clsName, "class", sig));
   const body = node.childForFieldName("body");
   if (body) {
@@ -49393,9 +49098,36 @@ function extractJsImports(root, source) {
   const imports = [];
   for (const node of walkType(root, "import_statement")) {
     const src = node.childForFieldName("source");
-    if (src) {
-      const mod = nodeText(src, source).replace(/^['"]|['"]$/g, "");
-      imports.push(makeImportInfo(mod, [], mod.startsWith(".")));
+    if (!src)
+      continue;
+    const mod = nodeText(src, source).replace(/^['"]|['"]$/g, "");
+    const isRelative = mod.startsWith(".");
+    const clause = node.childForFieldName("import_clause");
+    if (!clause) {
+      imports.push(makeImportInfo(mod, [""], isRelative));
+      continue;
+    }
+    const namedImports = findChildren(clause, "named_imports");
+    const namespaceImport = findChildren(clause, "namespace_import");
+    const defaultId = (clause.children ?? []).find((c2) => c2.type === "identifier");
+    if (namedImports.length > 0) {
+      for (const namedBlock of namedImports) {
+        const specifiers = findChildren(namedBlock, "import_specifier");
+        for (const spec of specifiers) {
+          const nameNode = spec.childForFieldName("name");
+          const name = nameNode ? nodeText(nameNode, source) : nodeText(spec, source);
+          imports.push(makeImportInfo(mod, [name.trim()], isRelative));
+        }
+        if (specifiers.length === 0) {
+          imports.push(makeImportInfo(mod, [""], isRelative));
+        }
+      }
+    } else if (namespaceImport.length > 0) {
+      imports.push(makeImportInfo(mod, ["*"], isRelative));
+    } else if (defaultId) {
+      imports.push(makeImportInfo(mod, [nodeText(defaultId, source)], isRelative));
+    } else {
+      imports.push(makeImportInfo(mod, [""], isRelative));
     }
   }
   return imports;
@@ -49440,7 +49172,7 @@ function _extractJsFunc(node, source, defs, parent) {
   if (nameNode) {
     const name = nodeText(nameNode, source);
     const full = parent ? `${parent}.${name}` : name;
-    const sig = paramsNode ? nodeText(paramsNode, source).slice(0, 120) : "";
+    const sig = paramsNode ? nodeText(paramsNode, source).slice(0, SIG_MAX_CHARS) : "";
     defs.push(makeSymbolDef(full, "function", sig));
   }
 }
@@ -49467,7 +49199,7 @@ function extractCallsGeneric(root, source) {
       if (!func)
         continue;
       const name = nodeText(func, source).trim();
-      if (name && !seen.has(name) && name.length < 100) {
+      if (name && !seen.has(name) && name.length < CALL_NAME_MAX_CHARS) {
         calls.push(name);
         seen.add(name);
       }
@@ -49532,7 +49264,7 @@ function extractCallsPerFunction(root, source) {
           for (const callType of _CALL_NODE_TYPES) {
             for (const callNode of walkType(body, callType)) {
               const base = _calleeBasename(callNode, source);
-              if (base && !seen.has(base) && base.length < 100) {
+              if (base && !seen.has(base) && base.length < CALL_NAME_MAX_CHARS) {
                 calls.push(base);
                 seen.add(base);
               }
@@ -50450,119 +50182,190 @@ var VALID_KINDS = /* @__PURE__ */ new Set([
   "constant",
   "struct"
 ]);
-function _getOrCreateEntity(store, name, entityType, domain) {
+async function _getOrCreateEntity(store, name, entityType, domain) {
   try {
-    const existing = store.getEntityByName(name);
+    const existing = store.getEntityByNameAsync ? await store.getEntityByNameAsync(name) : store.getEntityByName(name);
     if (existing)
       return existing["id"];
   } catch {
   }
+  if (store.upsertEntityAsync) {
+    return store.upsertEntityAsync(name, entityType, domain);
+  }
   return store.upsertEntity(name, entityType, domain);
 }
-function _persistSymbolEntities(store, analysis, fileEid, domain, memoryId) {
+async function _persistSymbolEntities(store, analysis, fileEid, domain, memoryId) {
   let entities = 0;
   let relationships = 0;
   for (const sym of analysis.definitions) {
     const kind2 = VALID_KINDS.has(sym.kind) ? sym.kind : "function";
-    const symEid = _getOrCreateEntity(store, sym.name, kind2, domain);
+    const symEid = await _getOrCreateEntity(store, sym.name, kind2, domain);
     entities++;
     try {
-      store.linkMemoryEntity(memoryId, symEid);
-    } catch {
+      if (store.linkMemoryEntityAsync) {
+        await store.linkMemoryEntityAsync(memoryId, symEid);
+      } else {
+        store.linkMemoryEntity(memoryId, symEid);
+      }
+    } catch (err) {
+      process.stderr.write(`[codebase-analyze] linkMemoryEntity failed for memory ${memoryId} / entity ${symEid}: ${err.message}
+`);
     }
     try {
-      store.insertRelationship({
-        source_entity_id: fileEid,
-        target_entity_id: symEid,
-        relationship_type: "defines",
-        weight: 1
-      });
+      if (store.insertRelationshipAsync) {
+        await store.insertRelationshipAsync({
+          source_entity_id: fileEid,
+          target_entity_id: symEid,
+          relationship_type: "defines",
+          weight: 1
+        });
+      } else {
+        store.insertRelationship({
+          source_entity_id: fileEid,
+          target_entity_id: symEid,
+          relationship_type: "defines",
+          weight: 1
+        });
+      }
       relationships++;
-    } catch {
+    } catch (err) {
+      process.stderr.write(`[codebase-analyze] insertRelationship(defines) failed for ${analysis.path}\u2192${sym.name}: ${err.message}
+`);
     }
   }
   return [entities, relationships];
 }
-function _persistImportEntities(store, analysis, fileEid, domain, memoryId) {
+async function _persistImportEntities(store, analysis, fileEid, domain, memoryId) {
   let entities = 0;
   let relationships = 0;
   for (const imp of analysis.imports) {
-    const depEid = _getOrCreateEntity(store, imp.module, "dependency", domain);
-    entities++;
-    try {
-      store.linkMemoryEntity(memoryId, depEid);
-    } catch {
-    }
-    try {
-      store.insertRelationship({
-        source_entity_id: fileEid,
-        target_entity_id: depEid,
-        relationship_type: "imports",
-        weight: 1
-      });
-      relationships++;
-    } catch {
+    const names = imp.names.length > 0 ? imp.names : [""];
+    for (const sym of names) {
+      const entityName = sym && sym !== "*" ? `${imp.module}:${sym}` : imp.module;
+      const depEid = await _getOrCreateEntity(store, entityName, "dependency", domain);
+      entities++;
+      try {
+        if (store.linkMemoryEntityAsync) {
+          await store.linkMemoryEntityAsync(memoryId, depEid);
+        } else {
+          store.linkMemoryEntity(memoryId, depEid);
+        }
+      } catch (err) {
+        process.stderr.write(`[codebase-analyze] linkMemoryEntity failed for memory ${memoryId} / entity ${depEid}: ${err.message}
+`);
+      }
+      try {
+        if (store.insertRelationshipAsync) {
+          await store.insertRelationshipAsync({
+            source_entity_id: fileEid,
+            target_entity_id: depEid,
+            relationship_type: "imports",
+            weight: 1
+          });
+        } else {
+          store.insertRelationship({
+            source_entity_id: fileEid,
+            target_entity_id: depEid,
+            relationship_type: "imports",
+            weight: 1
+          });
+        }
+        relationships++;
+      } catch (err) {
+        process.stderr.write(`[codebase-analyze] insertRelationship(imports) failed for ${analysis.path}\u2192${entityName}: ${err.message}
+`);
+      }
     }
   }
   return [entities, relationships];
 }
-function persistEntities(store, analysis, memoryId, domain) {
+async function persistEntities(store, analysis, memoryId, domain) {
   let entities = 0;
   let relationships = 0;
   try {
-    const fileEid = _getOrCreateEntity(store, analysis.path, "file", domain);
+    const fileEid = await _getOrCreateEntity(store, analysis.path, "file", domain);
     entities++;
     try {
-      store.linkMemoryEntity(memoryId, fileEid);
-    } catch {
+      if (store.linkMemoryEntityAsync) {
+        await store.linkMemoryEntityAsync(memoryId, fileEid);
+      } else {
+        store.linkMemoryEntity(memoryId, fileEid);
+      }
+    } catch (err) {
+      process.stderr.write(`[codebase-analyze] linkMemoryEntity(file) failed for memory ${memoryId}: ${err.message}
+`);
     }
-    const [se2, sr2] = _persistSymbolEntities(store, analysis, fileEid, domain, memoryId);
+    const [se2, sr2] = await _persistSymbolEntities(store, analysis, fileEid, domain, memoryId);
     entities += se2;
     relationships += sr2;
-    const [ie2, ir2] = _persistImportEntities(store, analysis, fileEid, domain, memoryId);
+    const [ie2, ir2] = await _persistImportEntities(store, analysis, fileEid, domain, memoryId);
     entities += ie2;
     relationships += ir2;
-  } catch {
+  } catch (err) {
+    process.stderr.write(`[codebase-analyze] persistEntities failed for ${analysis.path}: ${err.message}
+`);
   }
   return [entities, relationships];
 }
-function persistFileEdge(store, edges, domain) {
+async function persistFileEdge(store, edges, domain) {
   let count = 0;
   for (const [srcPath, tgtPath] of edges) {
     try {
-      const srcEid = _getOrCreateEntity(store, srcPath, "file", domain);
-      const tgtEid = _getOrCreateEntity(store, tgtPath, "file", domain);
-      store.insertRelationship({
-        source_entity_id: srcEid,
-        target_entity_id: tgtEid,
-        relationship_type: "imports",
-        weight: 1
-      });
+      const srcEid = await _getOrCreateEntity(store, srcPath, "file", domain);
+      const tgtEid = await _getOrCreateEntity(store, tgtPath, "file", domain);
+      if (store.insertRelationshipAsync) {
+        await store.insertRelationshipAsync({
+          source_entity_id: srcEid,
+          target_entity_id: tgtEid,
+          relationship_type: "imports",
+          weight: 1
+        });
+      } else {
+        store.insertRelationship({
+          source_entity_id: srcEid,
+          target_entity_id: tgtEid,
+          relationship_type: "imports",
+          weight: 1
+        });
+      }
       count++;
-    } catch {
+    } catch (err) {
+      process.stderr.write(`[codebase-analyze] persistFileEdge failed for ${srcPath}\u2192${tgtPath}: ${err.message}
+`);
     }
   }
   return count;
 }
-function persistInheritanceEdge(store, edges, domain) {
+async function persistInheritanceEdge(store, edges, domain) {
   let count = 0;
   for (const [child, parent] of edges) {
     try {
-      const childEid = _getOrCreateEntity(store, child, "class", domain);
-      const parentEid = _getOrCreateEntity(store, parent, "class", domain);
-      store.insertRelationship({
-        source_entity_id: childEid,
-        target_entity_id: parentEid,
-        relationship_type: "extends",
-        weight: 1
-      });
+      const childEid = await _getOrCreateEntity(store, child, "class", domain);
+      const parentEid = await _getOrCreateEntity(store, parent, "class", domain);
+      if (store.insertRelationshipAsync) {
+        await store.insertRelationshipAsync({
+          source_entity_id: childEid,
+          target_entity_id: parentEid,
+          relationship_type: "extends",
+          weight: 1
+        });
+      } else {
+        store.insertRelationship({
+          source_entity_id: childEid,
+          target_entity_id: parentEid,
+          relationship_type: "extends",
+          weight: 1
+        });
+      }
       count++;
-    } catch {
+    } catch (err) {
+      process.stderr.write(`[codebase-analyze] persistInheritanceEdge failed for ${child}\u2192${parent}: ${err.message}
+`);
     }
   }
   return count;
 }
-function persistCommunityTags(store, communities) {
+async function persistCommunityTags(store, communities) {
   if (communities.size === 0)
     return;
   const allCodebaseMemories = (() => {
@@ -50655,7 +50458,7 @@ var schema7 = {
 var CODEBASE_SOURCE = "codebase_analyze";
 var CODEBASE_TAG = "codebase";
 var LANG_TAG_PREFIX = "lang:";
-var DEFAULT_MAX_FILES = 5e4;
+var DEFAULT_MAX_FILES = 500;
 var DEFAULT_MAX_FILE_SIZE_KB2 = 100;
 var MAX_SYMBOL_TAGS_PER_FILE = 10;
 var BYTES_PER_KB2 = 1024;
@@ -50691,22 +50494,24 @@ function _parseOneFile(path6, content) {
 async function _storeFile(root, relPath, analysis, domain, store) {
   const content = buildMemoryContent(analysis);
   const tags = _buildTags(relPath, analysis);
-  const insertData = {
-    content,
-    tags,
-    directory_context: root,
-    domain,
-    source: CODEBASE_SOURCE,
-    agent_context: CODEBASE_AGENT_CONTEXT
-  };
   let memoryId = null;
   try {
+    const memData = {
+      content,
+      tags,
+      directory_context: root,
+      domain,
+      source: CODEBASE_SOURCE,
+      agent_context: CODEBASE_AGENT_CONTEXT
+    };
     if (store.insertMemoryAsync) {
-      memoryId = await store.insertMemoryAsync(insertData);
+      memoryId = await store.insertMemoryAsync(memData);
     } else {
-      memoryId = store.insertMemory(insertData);
+      memoryId = store.insertMemory(memData);
     }
-  } catch {
+  } catch (err) {
+    process.stderr.write(`[codebase-analyze] insertMemory failed for ${relPath}: ${err.message}
+`);
     return [null, 0, 0];
   }
   if (memoryId === null)
@@ -52586,7 +52391,6 @@ function formatExternalSources(sources) {
 
 // packages/memory/dist/hooks/session-start.js
 var LOG_PREFIX = "[session-start-hook]";
-var PYTHON_BIN = process.env["CORTEX_PYTHON_BIN"] ?? (process.platform === "win32" ? "python" : "python3");
 function log(msg) {
   process.stderr.write(`${LOG_PREFIX} ${msg}
 `);
@@ -52604,7 +52408,7 @@ function autoBackfill() {
   const BACKFILL_MAX_FILES = 100;
   const BACKFILL_MIN_IMPORTANCE2 = "0.35";
   try {
-    const result = spawnSync(PYTHON_BIN, [
+    const result = spawnSync("python3", [
       "-c",
       `import asyncio, json
 from mcp_server.handlers.backfill_memories import handler as h
@@ -52636,20 +52440,21 @@ function autoWirePipeline() {
   const { pluginRoot } = loadHookConfig();
   if (!pluginRoot)
     return;
-  const PYTHON_AUTOWIRE_SCRIPT = [
-    "import json, sys",
-    "sys.path.insert(0, sys.argv[1])",
-    "from mcp_server.infrastructure.pipeline_discovery import ensure_pipeline_connection",
-    "r = ensure_pipeline_connection()",
-    "print(json.dumps(r))"
-  ].join("\n");
   try {
-    const result = spawnSync(PYTHON_BIN, ["-c", PYTHON_AUTOWIRE_SCRIPT, pluginRoot], {
+    const result = spawnSync("python3", [
+      "-c",
+      `
+import json, sys
+sys.path.insert(0, r"${pluginRoot.replace(/\\/g, "/")}")
+from mcp_server.infrastructure.pipeline_discovery import ensure_pipeline_connection
+r = ensure_pipeline_connection()
+print(json.dumps(r))
+`
+    ], {
       encoding: "utf-8",
       timeout: 5e3,
       // source: cortex@ed33435 mcp_server/hooks/session_start.py:482-503 — pipeline auto-wire is fast (config file write only)
-      env: { ...process.env, PYTHONPATH: pluginRoot },
-      shell: false
+      env: { ...process.env, PYTHONPATH: pluginRoot }
     });
     const stdout = result.stdout?.trim();
     if (!stdout)
@@ -52673,7 +52478,7 @@ function maybeBackgroundReanalyze() {
       return;
     const logDir = join16(homedir8(), ".claude", "methodology");
     const logPath = join16(logDir, "pipeline_reanalyze.log");
-    const child = spawn(PYTHON_BIN, [launcherPath, "mcp_server.hooks.ingest_codebase_background", config2.projectRoot], {
+    const child = spawn("python3", [launcherPath, "mcp_server.hooks.ingest_codebase_background", config2.projectRoot], {
       detached: true,
       stdio: ["ignore", "ignore", "ignore"]
     });
@@ -53611,12 +53416,12 @@ if (process.argv[1]?.endsWith("session-lifecycle.js") === true) {
 
 // packages/memory/dist/hooks/preemptive-context.js
 import { existsSync as existsSync15, readFileSync as readFileSync11, writeFileSync as writeFileSync7 } from "node:fs";
-import { tmpdir as tmpdir2 } from "node:os";
+import { tmpdir } from "node:os";
 import { join as join19 } from "node:path";
 var LOG_PREFIX7 = "[cortex-preemptive]";
 var HEAT_BOOST = 0.1;
 var COOLDOWN_SECONDS = 60;
-var COOLDOWN_FILE = join19(tmpdir2(), "cortex_preemptive_cooldown.json");
+var COOLDOWN_FILE = join19(tmpdir(), "cortex_preemptive_cooldown.json");
 var FILE_TOOLS = /* @__PURE__ */ new Set(["Edit", "Write", "Read"]);
 function log7(msg) {
   process.stderr.write(`${LOG_PREFIX7} ${msg}
@@ -53694,11 +53499,11 @@ if (process.argv[1]?.endsWith("preemptive-context.js") === true) {
 
 // packages/memory/dist/hooks/pipeline-impact-bump.js
 import { existsSync as existsSync16, readFileSync as readFileSync12, writeFileSync as writeFileSync8 } from "node:fs";
-import { tmpdir as tmpdir3 } from "node:os";
+import { tmpdir as tmpdir2 } from "node:os";
 import { join as join20 } from "node:path";
 var LOG_PREFIX8 = "[pipeline-impact-bump]";
 var COOLDOWN_SECONDS2 = 30;
-var COOLDOWN_FILE2 = join20(tmpdir3(), "cortex_pipeline_impact_cooldown.json");
+var COOLDOWN_FILE2 = join20(tmpdir2(), "cortex_pipeline_impact_cooldown.json");
 var FILE_TOOLS2 = /* @__PURE__ */ new Set(["Edit", "Write", "MultiEdit"]);
 var IMPACT_BOOST2 = 0.15;
 var MAX_BUMPS = 20;
@@ -53857,35 +53662,16 @@ async function probePort(port) {
 }
 function killPort(port) {
   return new Promise((resolve7) => {
-    if (process.platform === "win32") {
-      exec(`netstat -ano -p TCP`, (_err, stdout) => {
-        const portStr = `:${port} `;
-        for (const line of stdout.split("\n")) {
-          if (!line.includes(portStr))
-            continue;
-          const parts = line.trim().split(/\s+/);
-          const pid = parseInt(parts[parts.length - 1] ?? "", 10);
-          if (!isNaN(pid) && pid > 0) {
-            try {
-              process.kill(pid, "SIGTERM");
-            } catch {
-            }
-          }
+    exec(`lsof -t -i :${port}`, (_err, stdout) => {
+      const pids = stdout.trim().split("\n").filter(Boolean);
+      for (const pid of pids) {
+        try {
+          process.kill(parseInt(pid, 10), "SIGTERM");
+        } catch {
         }
-        resolve7();
-      });
-    } else {
-      exec(`lsof -t -i :${port}`, (_err, stdout) => {
-        const pids = stdout.trim().split("\n").filter(Boolean);
-        for (const pid of pids) {
-          try {
-            process.kill(parseInt(pid, 10), "SIGTERM");
-          } catch {
-          }
-        }
-        resolve7();
-      });
-    }
+      }
+      resolve7();
+    });
   });
 }
 async function spawnServer(port) {
@@ -53932,19 +53718,8 @@ async function spawnServer(port) {
 function openInBrowser(url) {
   if (!/^https?:\/\/127\.0\.0\.1:\d{1,5}(\/.*)?$/.test(url))
     return;
-  let cmd;
-  let args;
-  if (process.platform === "darwin") {
-    cmd = "open";
-    args = [url];
-  } else if (process.platform === "win32") {
-    cmd = "cmd";
-    args = ["/c", "start", "", url];
-  } else {
-    cmd = "xdg-open";
-    args = [url];
-  }
-  spawn2(cmd, args, { stdio: "ignore", detached: true }).unref();
+  const cmd = process.platform === "darwin" ? "open" : "xdg-open";
+  spawn2(cmd, [url], { stdio: "ignore", detached: true }).unref();
 }
 async function launchDashboard(opts = {}) {
   const port = opts.port ?? DEFAULT_PORT;
@@ -53998,9 +53773,9 @@ function registerIngestTools(server2, deps) {
         throw new MissingStoreError("import_sessions", "IngestDeps.store \u2014 no store injected");
       }
       const store = deps.store;
-      const rememberFn = (rawArgs) => {
-        const result = remember(rawArgs, store);
-        return Promise.resolve(result.stored ? { stored: true } : null);
+      const rememberFn = async (rawArgs) => {
+        const result = await rememberAsync(rawArgs, store);
+        return result.stored ? { stored: true } : null;
       };
       const response = await importHandler({
         project: args.project,

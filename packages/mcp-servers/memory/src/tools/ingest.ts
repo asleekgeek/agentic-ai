@@ -24,7 +24,7 @@ import { z } from "zod";
 import { codebaseAnalysis } from "@agentic/memory";
 import { changeImpactHandler } from "@agentic/memory/codebase-analysis/handlers/change-impact.js";
 import { importHandler } from "@agentic/memory/import/handler.js";
-import { remember } from "@agentic/memory/remember/handlers/remember.js";
+import { rememberAsync } from "@agentic/memory/remember/handlers/remember.js";
 import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-store.js";
 import { launchDashboard } from "@agentic/memory-dashboard/launcher";
 
@@ -104,10 +104,13 @@ export function registerIngestTools(server: McpServer, deps?: IngestDeps): void 
           throw new MissingStoreError("import_sessions", "IngestDeps.store — no store injected");
         }
         // source: packages/memory/src/import/handler.ts::importHandler
+        // Fix: use rememberAsync so PgMemoryStore.insertMemoryAsync is called instead
+        // of the sync insertMemory() which throws on PG. Root-cause: ADR-0042.
+        // source: engineer@41e5778 — *Async-when-available pattern for PG/SQLite parity.
         const store = deps.store as unknown as MemoryStoreExt;
-        const rememberFn = (rawArgs: unknown): Promise<{ stored: true } | null> => {
-          const result = remember(rawArgs, store);
-          return Promise.resolve(result.stored ? { stored: true as const } : null);
+        const rememberFn = async (rawArgs: unknown): Promise<{ stored: true } | null> => {
+          const result = await rememberAsync(rawArgs, store);
+          return result.stored ? { stored: true as const } : null;
         };
         const response = await importHandler(
           {
