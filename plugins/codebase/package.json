@@ -1,7 +1,8 @@
 {
   "name": "@agentic/plugin-codebase",
-  "version": "0.0.6",
+  "version": "0.1.0",
   "private": true,
-  "description": "Codebase intelligence plugin. Wraps the automatised-pipeline Rust binary; scripts/launch.sh resolves a binary from $PATH, plugin-shipped pre-built artifact, or cargo build from src-rust/.",
+  "type": "module",
+  "description": "Codebase intelligence plugin. Full TypeScript port of automatised-pipeline 0.0.9. PostgreSQL backend, Louvain+C2 community detection, hybrid PG-FTS+TF-IDF+RRF search. 23 MCP tools. No Rust binary required.",
   "license": "MIT"
 }
