@@ -241,11 +241,16 @@ describe("ingestMemory with EmbeddingEngine", () => {
   });
 
   it("decomposes conversation content into multiple chunks", async () => {
+    // SPEAKER_LINE_RE in memory-decomposer.ts matches `[SpeakerName]:` format (bracket form).
+    // source: packages/memory/src/remember/memory-decomposer.ts:SPEAKER_LINE_RE
+    //   /^\[([^\]]+)\]:\s*/m — bracket-prefixed speaker lines
+    // Content must exceed minChunkChars=100 per chunk (default in decomposeMemory).
+    // Each chunk gets 2 turns; each turn here is >= 60 chars, so pairs exceed 100.
     const content = [
-      "Human: What is the best practice?",
-      "Assistant: Always test your code.",
-      "Human: Thanks!",
-      "Assistant: You're welcome.",
+      "[Human]: What is the best engineering practice for large-scale software systems?",
+      "[Assistant]: Always write tests, monitor production metrics, and document architectural decisions.",
+      "[Human]: That is very helpful — thank you for the comprehensive and detailed explanation!",
+      "[Assistant]: You are welcome! Feel free to ask if you need any further clarification or detail.",
     ].join("\n");
     const ids = await ingestMemory({ content }, store, engine, { turnsPerChunk: 2 });
     expect(ids.length).toBeGreaterThan(1);

@@ -190,12 +190,19 @@ async function buildGraph(db: DashboardDb): Promise<void> {
       is_global: number;
     }
 
-    // Fetch heat_base plus decay fields so computeEffectiveHeat() can produce the
-    // same value as the PL/pgSQL effective_heat() function on PG.
-    // ORDER BY heat_base DESC — SQLite has no UDF for effective_heat; heat_base
-    // preserves rank ordering within the same stage and recency (documented limitation).
-    // source: 2026-05-07 schema reconciliation — heat column renamed to heat_base.
-    // source: 2026-05-08 effective heat — decay fields added for computeEffectiveHeat().
+    // Fetch heat_base plus decay fields and ORDER BY effective (decayed) heat.
+    // PG: ORDER BY effective_heat(memories, NOW()) — native PL/pgSQL row-type function;
+    //     query planner sorts without JS round-trip.
+    // SQLite: ORDER BY effective_heat(col1...) — UDF registered by SqliteAdapter;
+    //     same formula, same ordering semantics.
+    // Both backends now satisfy the substitutability contract: ORDER BY computed heat.
+    // source: packages/memory-dashboard/src/db-adapter.ts:SqliteAdapter#registerEffectiveHeatUdf
+    // source: packages/memory/src/remember/storage/pg-schema-functions.ts:EFFECTIVE_HEAT_FN
+    const isPg = db.dialect === "pg";
+    const EH_EXPR = isPg
+      ? "effective_heat(memories, NOW())"
+      : "effective_heat(heat_base, heat_base_set_at, last_accessed, created_at, stage_entered_at, consolidation_stage, emotional_valence, is_protected, no_decay)";
+
     const tNow = new Date();
     const memRows = await db.prepare(
       `SELECT id, content, heat_base, heat_base_set_at, last_accessed,
@@ -203,7 +210,7 @@ async function buildGraph(db: DashboardDb): Promise<void> {
               store_type, domain, tags, created_at, consolidation_stage,
               is_protected, is_global
        FROM memories WHERE NOT is_benchmark AND NOT is_stale
-       ORDER BY heat_base DESC` // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:161 — get_hot_memories(limit=0) equivalent
+       ORDER BY ${EH_EXPR} DESC` // source: cortex@ed33435 mcp_server/server/http_standalone_graph.py:161 — get_hot_memories(limit=0) equivalent
     ).all<MemoryRow>();
 
     for (const m of memRows) {

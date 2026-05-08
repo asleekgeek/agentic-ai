@@ -251,13 +251,33 @@ export async function registerMemoriesRoutes(
       } = req.query;
 
       // source: cortex@ed33435 mcp_server/handlers/memories_page.py — valid sort keys
+      //
+      // Heat sort: on PG we ORDER BY the native effective_heat(memories, NOW()) function
+      // so the query planner sees a SQL-native expression and can filter/sort without
+      // a round-trip to JS. On SQLite we ORDER BY the effective_heat() UDF registered
+      // in SqliteAdapter#registerEffectiveHeatUdf, which uses the same formula.
+      // Both backends now produce ORDER BY effective_heat(...) directly in SQL — the
+      // original heat_base-only ORDER BY was wrong when stage/age diverged.
+      // source: packages/memory-dashboard/src/db-adapter.ts:SqliteAdapter#registerEffectiveHeatUdf
+      // source: packages/memory/src/remember/storage/pg-schema-functions.ts:EFFECTIVE_HEAT_FN
+      const isPg = deps.db.dialect === "pg";
+
+      // PG form: effective_heat(memories, NOW()) — takes a row type.
+      // SQLite form: effective_heat(col1, col2, ...) — takes scalar columns.
+      // source: better-sqlite3 UDFs cannot accept composite row types.
+      const EH_EXPR = isPg
+        ? "effective_heat(memories, NOW())"
+        : "effective_heat(heat_base, heat_base_set_at, last_accessed, created_at, stage_entered_at, consolidation_stage, emotional_valence, is_protected, no_decay)";
+
       const SORT_ORDER: Record<string, string> = {
-        heat: "heat_base DESC, id DESC",
+        heat: `${EH_EXPR} DESC, id DESC`,
         recent: "created_at DESC, id DESC",
         oldest: "created_at ASC, id ASC",
       };
+      // Cursor keyset column: for heat sort we use the computed heat expression
+      // so cursor comparisons are on the same value as the ORDER BY.
       const SORT_KEY_COL: Record<string, string> = {
-        heat: "heat_base",
+        heat: EH_EXPR,
         recent: "created_at",
         oldest: "created_at",
       };
@@ -310,7 +330,11 @@ export async function registerMemoriesRoutes(
       if (stage) { conditions.push("consolidation_stage = ?"); params.push(stage); }
 
       if (minHeat !== null && !isNaN(minHeat)) {
-        conditions.push("heat_base >= ?");
+        // Filter on effective (decayed) heat, not raw heat_base, so that a memory
+        // with heat_base=1.0 that has decayed below minHeat is correctly excluded.
+        // source: substitutability contract — WHERE effective_heat(...) >= threshold
+        //   must work on both backends without JS round-trip.
+        conditions.push(`${EH_EXPR} >= ?`);
         params.push(minHeat);
       }
 
@@ -336,18 +360,20 @@ export async function registerMemoriesRoutes(
       const fetchLimit = limit + 1;
       params.push(fetchLimit);
 
-      // Fetch heat_base plus all fields needed by computeEffectiveHeat().
-      // ORDER BY heat_base DESC (SQLite cannot ORDER BY a computed effective_heat
-      // without a UDF; heat_base preserves rank ordering within same stage/recency).
-      // source: 2026-05-07 schema reconciliation — heat column renamed to heat_base.
-      // source: 2026-05-08 effective heat — decay fields added for computeEffectiveHeat().
+      // Select effective_heat as a named alias so the cursor can use the same
+      // computed value for keyset comparison on both backends.
+      // PG: effective_heat(memories, NOW()) — native PL/pgSQL row-type function.
+      // SQLite: effective_heat(col1...) — UDF registered in SqliteAdapter.
+      // source: packages/memory-dashboard/src/db-adapter.ts:SqliteAdapter#registerEffectiveHeatUdf
+      // source: packages/memory/src/remember/storage/pg-schema-functions.ts:EFFECTIVE_HEAT_FN
       const rows = await deps.db.prepare(
         `SELECT id, content, heat_base, heat_base_set_at, last_accessed,
                 stage_entered_at, no_decay, importance, store_type, domain,
                 tags, created_at, consolidation_stage, emotional_valence,
-                is_protected, is_global, access_count, useful_count
+                is_protected, is_global, access_count, useful_count,
+                ${EH_EXPR} AS computed_heat
          FROM memories ${where} ORDER BY ${orderBy} LIMIT ?`
-      ).all<MemoryRow>(...params);
+      ).all<MemoryRow & { computed_heat?: number | null }>(...params);
 
       const hasMore = rows.length > limit;
       const items = rows.slice(0, limit);
@@ -358,10 +384,11 @@ export async function registerMemoriesRoutes(
       if (hasMore && items.length > 0) {
         const last = items[items.length - 1];
         if (last) {
-          // heat sort uses heat_base (the raw stored value) for cursor keyset
-          // since ORDER BY is on heat_base; effective heat is display-only.
+          // Heat sort: cursor uses computed_heat (the effective/decayed value that
+          // ORDER BY is also using) so the keyset comparison is on the same value.
+          // source: cursor must compare against the same expression as ORDER BY — RFC-style keyset pagination.
           const sortValue = sort === "heat"
-            ? (last.heat_base ?? 0)
+            ? ((last as MemoryRow & { computed_heat?: number | null }).computed_heat ?? last.heat_base ?? 0)
             : (last.created_at ?? "");
           nextCursor = encodeCursor({ k: sortValue, id: last.id });
         }

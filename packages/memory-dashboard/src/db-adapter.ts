@@ -15,6 +15,7 @@
 
 import type Database from "better-sqlite3";
 import type { Database as BetterSqliteDatabase } from "better-sqlite3";
+import { computeEffectiveHeat } from "./util/heat.js";
 
 // ── Port (interface declared by this module, implemented below) ───────────────
 
@@ -52,8 +53,15 @@ export interface DashboardDb {
  * better-sqlite3 is synchronous; we wrap calls in Promise.resolve() so the
  * interface is uniform with PgAdapter.
  *
+ * Design: the Database is held long-lived (option A — simpler than re-registering
+ * UDFs on every prepare() call). The connection is opened once at construction
+ * and closed via close().
+ * source: better-sqlite3 docs — Database.function() is per-connection, not per-stmt.
+ * source: https://github.com/WiseLibs/better-sqlite3/blob/master/docs/api.md#functionname-options-function---this
+ *
  * precondition:  db is an open better-sqlite3 Database instance.
  * postcondition: prepare() wraps synchronous prepare + all/get in a Promise.
+ *                effective_heat() UDF is registered so SQL can ORDER BY computed heat.
  */
 export class SqliteAdapter implements DashboardDb {
   readonly dialect = "sqlite" as const;
@@ -61,6 +69,56 @@ export class SqliteAdapter implements DashboardDb {
 
   constructor(db: Database.Database) {
     this.#db = db;
+    this.#registerEffectiveHeatUdf();
+  }
+
+  /**
+   * Register the effective_heat() UDF so SQLite queries can ORDER BY computed
+   * heat directly, matching the PL/pgSQL effective_heat(memories, NOW()) contract.
+   *
+   * Signature mirrors computeEffectiveHeat() parameter order.
+   * The UDF is NOT deterministic because it depends on wall-clock time (NOW).
+   *
+   * source: better-sqlite3 docs — db.function(name, opts, fn)
+   * source: packages/memory-dashboard/src/util/heat.ts:computeEffectiveHeat
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:586-683
+   *
+   * precondition:  this.#db is open.
+   * postcondition: effective_heat(heat_base, heat_base_set_at, last_accessed,
+   *   created_at, stage_entered_at, consolidation_stage, emotional_valence,
+   *   is_protected, no_decay) is callable in all SQL issued via this adapter.
+   */
+  #registerEffectiveHeatUdf(): void {
+    this.#db.function(
+      "effective_heat",
+      { deterministic: false },
+      (
+        heat_base: unknown,
+        heat_base_set_at: unknown,
+        last_accessed: unknown,
+        created_at: unknown,
+        stage_entered_at: unknown,
+        consolidation_stage: unknown,
+        emotional_valence: unknown,
+        is_protected: unknown,
+        no_decay: unknown,
+      ): number => {
+        return computeEffectiveHeat(
+          {
+            heat_base:         typeof heat_base         === "number" ? heat_base         : null,
+            heat_base_set_at:  typeof heat_base_set_at  === "string" ? heat_base_set_at  : null,
+            last_accessed:     typeof last_accessed     === "string" ? last_accessed     : null,
+            created_at:        typeof created_at        === "string" ? created_at        : null,
+            stage_entered_at:  typeof stage_entered_at  === "string" ? stage_entered_at  : null,
+            consolidation_stage: typeof consolidation_stage === "string" ? consolidation_stage : null,
+            emotional_valence: typeof emotional_valence === "number" ? emotional_valence : null,
+            is_protected:      is_protected ? 1 : 0,
+            no_decay:          no_decay     ? 1 : 0,
+          },
+          new Date(),
+        );
+      },
+    );
   }
 
   prepare(sql: string): PreparedQuery {
