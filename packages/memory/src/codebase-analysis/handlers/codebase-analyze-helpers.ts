@@ -272,24 +272,49 @@ function _persistImportEntities(
   domain: string,
   memoryId: number,
 ): [number, number] {
+  /**
+   * Persist one dependency entity per named import symbol.
+   *
+   * Parity: cortex@ed33435 mcp_server/codebase/codebase_parser.py:extractPythonImports
+   *   Python emits one entity per named symbol (`from foo import A, B, C` → 3 entities).
+   *   Each entity name is `module:symbol` (e.g. `foo:A`).
+   *   Side-effect / namespace / empty imports fall back to the module name.
+   *
+   * Precondition:  imp.names is populated by extractJsImports (one name per ImportInfo).
+   * Postcondition: each named symbol from each ImportInfo becomes a distinct dependency
+   *   entity linked to fileEid via an "imports" relationship.
+   *
+   * source: cortex@ed33435 mcp_server/handlers/codebase_analyze_helpers.py:persist_entities
+   */
   let entities = 0;
   let relationships = 0;
   for (const imp of analysis.imports) {
-    const depEid = _getOrCreateEntity(store, imp.module, "dependency", domain);
-    entities++;
-    // source: cortex@ed33435 mcp_server/handlers/codebase_analyze_helpers.py:persist_entities
-    // Same link: import-module entities tied to the file memory that declares them.
-    try { store.linkMemoryEntity(memoryId, depEid); } catch { /* best-effort */ }
-    try {
-      store.insertRelationship({
-        source_entity_id: fileEid,
-        target_entity_id: depEid,
-        relationship_type: "imports",
-        weight: 1.0,
-      });
-      relationships++;
-    } catch {
-      // best-effort
+    // Determine which names to create entities for.
+    // extractJsImports emits exactly one name per ImportInfo after the fix.
+    // Python path (extractPythonImports) may emit multiple names per ImportInfo —
+    // handle both conventions by iterating imp.names.
+    const names = imp.names.length > 0 ? imp.names : [""];
+
+    for (const sym of names) {
+      // Entity name: `module:symbol` for named symbols; bare module for empty/wildcard.
+      // source: cortex@ed33435 mcp_server/codebase/codebase_parser.py — entity name is the symbol
+      const entityName = sym && sym !== "*" ? `${imp.module}:${sym}` : imp.module;
+      const depEid = _getOrCreateEntity(store, entityName, "dependency", domain);
+      entities++;
+      // source: cortex@ed33435 mcp_server/handlers/codebase_analyze_helpers.py:persist_entities
+      // Same link: import-module entities tied to the file memory that declares them.
+      try { store.linkMemoryEntity(memoryId, depEid); } catch { /* best-effort */ }
+      try {
+        store.insertRelationship({
+          source_entity_id: fileEid,
+          target_entity_id: depEid,
+          relationship_type: "imports",
+          weight: 1.0,
+        });
+        relationships++;
+      } catch {
+        // best-effort
+      }
     }
   }
   return [entities, relationships];

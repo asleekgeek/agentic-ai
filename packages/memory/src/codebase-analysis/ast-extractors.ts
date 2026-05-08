@@ -15,6 +15,14 @@ import { makeImportInfo, makeSymbolDef } from "./types.js";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type TsNode = any;
 
+// ── Constants ─────────────────────────────────────────────────────────────
+
+// source: cortex@ed33435 mcp_server/core/ast_extractors.py:_extract_python_func — sig[:120]
+const SIG_MAX_CHARS = 120;
+
+// source: cortex@ed33435 mcp_server/core/ast_extractors.py:extract_calls_generic — name length cap
+const CALL_NAME_MAX_CHARS = 100;
+
 // ── Shared helpers ────────────────────────────────────────────────────────
 
 export function nodeText(node: TsNode, source: Buffer): string {
@@ -83,7 +91,7 @@ function _extractPythonFunc(
   const nameNode = node.childForFieldName("name") as TsNode | null;
   const paramsNode = node.childForFieldName("parameters") as TsNode | null;
   const name = nameNode ? nodeText(nameNode, source) : "";
-  const sig = paramsNode ? nodeText(paramsNode, source).slice(0, 120) : "";
+  const sig = paramsNode ? nodeText(paramsNode, source).slice(0, SIG_MAX_CHARS) : "";
   const kind = parent ? "method" : "function";
   const fullName = parent ? `${parent}.${name}` : name;
   defs.push(makeSymbolDef(fullName, kind, sig));
@@ -112,7 +120,7 @@ function _extractPythonClass(
   const nameNode = node.childForFieldName("name") as TsNode | null;
   const superclassNode = node.childForFieldName("superclasses") as TsNode | null;
   const clsName = nameNode ? nodeText(nameNode, source) : "";
-  const sig = superclassNode ? nodeText(superclassNode, source).slice(0, 120) : "";
+  const sig = superclassNode ? nodeText(superclassNode, source).slice(0, SIG_MAX_CHARS) : "";
   defs.push(makeSymbolDef(clsName, "class", sig));
   const body = node.childForFieldName("body") as TsNode | null;
   if (body) {
@@ -122,13 +130,76 @@ function _extractPythonClass(
 
 // ── JavaScript / TypeScript ───────────────────────────────────────────────
 
+/**
+ * Extract JS/TS import declarations as one ImportInfo per named symbol.
+ *
+ * Parity target: cortex@ed33435 mcp_server/codebase/codebase_parser.py —
+ *   Python emits one entity per named symbol in `from foo import A, B, C`
+ *   (three entities, each linked to module `foo`).
+ *
+ * Precondition:  root is the tree-sitter parse root of a JS/TS file.
+ * Postcondition:
+ *   - Named imports (`import { A, B, C } from 'mod'`) → one ImportInfo per
+ *     symbol with names: [symbol].
+ *   - Default imports (`import Foo from 'mod'`)        → names: ["Foo"].
+ *   - Namespace imports (`import * as Foo from 'mod'`) → names: ["*"].
+ *   - Side-effect imports (`import 'mod'`)             → names: [""].
+ *
+ * source: cortex@ed33435 mcp_server/codebase/codebase_parser.py:extractPythonImports
+ *   (one-entity-per-named-symbol convention)
+ */
 export function extractJsImports(root: TsNode, source: Buffer): ImportInfo[] {
   const imports: ImportInfo[] = [];
   for (const node of walkType(root, "import_statement")) {
     const src = node.childForFieldName("source") as TsNode | null;
-    if (src) {
-      const mod = nodeText(src, source).replace(/^['"]|['"]$/g, "");
-      imports.push(makeImportInfo(mod, [], mod.startsWith(".")));
+    if (!src) continue;
+    const mod = nodeText(src, source).replace(/^['"]|['"]$/g, "");
+    const isRelative = mod.startsWith(".");
+
+    // Collect the import clause (the part before `from`).
+    // Possible children: import_clause → named_imports | identifier | namespace_import
+    const clause = node.childForFieldName("import_clause") as TsNode | null;
+
+    if (!clause) {
+      // Side-effect import: `import 'mod'`
+      imports.push(makeImportInfo(mod, [""], isRelative));
+      continue;
+    }
+
+    const namedImports = findChildren(clause, "named_imports");
+    const namespaceImport = findChildren(clause, "namespace_import");
+    // Default identifier is a direct child of import_clause with type "identifier"
+    const defaultId = (clause.children as TsNode[] ?? []).find(
+      (c: TsNode) => (c.type as string) === "identifier",
+    );
+
+    if (namedImports.length > 0) {
+      // `import { A, B as C } from 'mod'` — one ImportInfo per specifier.
+      // Each import_specifier node: name field holds the imported symbol.
+      for (const namedBlock of namedImports) {
+        const specifiers = findChildren(namedBlock, "import_specifier");
+        for (const spec of specifiers) {
+          // The specifier's "name" field is the original exported name.
+          // If there is an "alias" field it overrides; we use the original name
+          // for entity identity (matches Python parity: `from foo import A as B` → entity A).
+          const nameNode = spec.childForFieldName("name") as TsNode | null;
+          const name = nameNode ? nodeText(nameNode, source) : nodeText(spec, source);
+          imports.push(makeImportInfo(mod, [name.trim()], isRelative));
+        }
+        if (specifiers.length === 0) {
+          // Empty braces `import {} from 'mod'` — emit one with empty name.
+          imports.push(makeImportInfo(mod, [""], isRelative));
+        }
+      }
+    } else if (namespaceImport.length > 0) {
+      // `import * as Foo from 'mod'`
+      imports.push(makeImportInfo(mod, ["*"], isRelative));
+    } else if (defaultId) {
+      // `import Foo from 'mod'`
+      imports.push(makeImportInfo(mod, [nodeText(defaultId, source)], isRelative));
+    } else {
+      // Fallback: clause present but unrecognised structure.
+      imports.push(makeImportInfo(mod, [""], isRelative));
     }
   }
   return imports;
@@ -184,7 +255,7 @@ function _extractJsFunc(
   if (nameNode) {
     const name = nodeText(nameNode, source);
     const full = parent ? `${parent}.${name}` : name;
-    const sig = paramsNode ? nodeText(paramsNode, source).slice(0, 120) : "";
+    const sig = paramsNode ? nodeText(paramsNode, source).slice(0, SIG_MAX_CHARS) : "";
     defs.push(makeSymbolDef(full, "function", sig));
   }
 }
@@ -214,7 +285,7 @@ export function extractCallsGeneric(root: TsNode, source: Buffer): string[] {
       const func = node.childForFieldName("function") as TsNode | null;
       if (!func) continue;
       const name = nodeText(func, source).trim();
-      if (name && !seen.has(name) && name.length < 100) {
+      if (name && !seen.has(name) && name.length < CALL_NAME_MAX_CHARS) {
         calls.push(name);
         seen.add(name);
       }
@@ -303,7 +374,7 @@ export function extractCallsPerFunction(
           for (const callType of _CALL_NODE_TYPES) {
             for (const callNode of walkType(body, callType)) {
               const base = _calleeBasename(callNode, source);
-              if (base && !seen.has(base) && base.length < 100) {
+              if (base && !seen.has(base) && base.length < CALL_NAME_MAX_CHARS) {
                 calls.push(base);
                 seen.add(base);
               }
