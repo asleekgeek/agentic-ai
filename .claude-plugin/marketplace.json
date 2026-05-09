@@ -14,8 +14,8 @@
     {
       "name": "memory",
       "source": "./plugins/memory/",
-      "description": "Persistent memory for Claude Code — TS port of Cortex. Thermodynamic heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence integration. SQLite by default; PostgreSQL + pgvector when DATABASE_URL is set. 41 published papers as sources. 0.1.7: fix broken MCP bundle — esbuild externalized @agentic/memory-dashboard workspace dep causing ERR_MODULE_NOT_FOUND; all workspace deps now inlined; only native bindings (better-sqlite3, pg, onnxruntime-node, @xenova/transformers) remain external.",
-      "version": "0.1.7",
+      "description": "Persistent memory for Claude Code — TS port of Cortex. Thermodynamic heat/decay, intent-aware retrieval, biological plasticity, codebase intelligence integration. SQLite by default; PostgreSQL + pgvector when DATABASE_URL is set. 41 published papers as sources. 0.1.8: full graph entity emission from JSONL sessions — Tool, MCP, Skill, Command, discussion entities + session_used_tool, session_called_mcp, session_invoked_skill, session_ran_command, discussion_touched_file, tool_operated_on_file, co_occurrence relationships. Method/function/struct entity parity with Cortex prod (42k+ entities). Now produces 3.8M+ co_occurrence edges from 80 sessions.",
+      "version": "0.1.8",
       "author": {
         "name": "Clement Deust",
         "email": "admin@ai-architect.tools"

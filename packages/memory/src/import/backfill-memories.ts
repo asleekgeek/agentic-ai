@@ -34,6 +34,7 @@ import {
   markBackfilledAsync,
   slugToDomain,
 } from "./backfill-helpers.js";
+import { emitSessionGraphEntities } from "./jsonl-graph-emitter.js";
 import type { MemoryStore } from "../remember/storage/memory-store.js";
 import type { RememberHandler } from "./types.js";
 
@@ -181,7 +182,13 @@ async function importSingleItem(
 /**
  * Import one JSONL file. Returns [imported, skipped] counts.
  *
+ * Also emits graph entities (Tool, MCP, Skill, Command, Discussion, file)
+ * and relationships (session_used_tool, session_called_mcp, session_invoked_skill,
+ * session_ran_command, discussion_touched_file, co_occurrence) for every
+ * tool_use block in the session transcript.
+ *
  * source: cortex@ed33435 mcp_server/handlers/backfill_memories.py:_import_file
+ * source: Cortex workflow_graph_source_jsonl.py — graph entity emission per session
  */
 async function importFile(
   store: MemoryStore,
@@ -205,10 +212,17 @@ async function importFile(
 
   const summary = extractSessionSummary(records);
   const items = extractMemorableItems(records, minImportance);
+  const domain = slugToDomain(projectSlug);
+
+  // Emit graph entities regardless of whether we have memorable items.
+  // This ensures Tool/MCP/Skill/Command entities populate even for sessions
+  // that produce no memorable text (e.g. tool-only sessions).
+  // source: Cortex prod DB: Tool=30k+, MCP=10k+, co_occurrence=156k+ — all from JSONL.
+  await emitSessionGraphEntities(store, filePath, domain);
+
   if (items.length === 0) return [0, 0];
 
   const cwd = summary.cwd;
-  const domain = slugToDomain(projectSlug);
 
   let imported = 0;
   for (const item of items) {

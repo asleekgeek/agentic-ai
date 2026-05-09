@@ -221,8 +221,13 @@ export function markStale(store: MemoryStore, memoryIds: number[]): number {
 // source: ADR-0042 — async path required for all PG entity writes.
 // source: liskov@24cb6e2 — *Async-when-available, sync-fallback pattern.
 
+// source: Cortex prod entity types — Method=30,822; Function=11,498; Struct=8,482; class+interface+enum lower counts.
+// "method" is produced by ast-extractors.ts when parent class is present
+// (extractPythonDefinitions, extractJsDefinitions, etc.). Without "method" in
+// VALID_KINDS it silently collapsed to "function", producing half the entity count.
 const VALID_KINDS = new Set([
   "function",
+  "method",   // source: ast-extractors.ts — kind = parent ? "method" : "function"
   "class",
   "interface",
   "type",
