@@ -193,7 +193,7 @@ export function remember(
   try {
     for (const entityName of newEntityNames) {
       if (!knownEntityNames.has(entityName)) {
-        const entityId = store.upsertEntity(entityName, "concept", domain);
+        const entityId = store.upsertEntity(entityName, entityTypeFor(entityName), domain);
         if (entityId > 0) {
           store.linkMemoryEntity(memoryId, entityId);
         }
@@ -370,9 +370,10 @@ export async function rememberAsync(
   for (const entityName of newEntityNames) {
     if (knownEntityNames.has(entityName)) continue;
     try {
+      const entityType = entityTypeFor(entityName);
       const entityId = _storeEntityAsync.upsertEntityAsync
-        ? await _storeEntityAsync.upsertEntityAsync(entityName, "concept", domain)
-        : store.upsertEntity(entityName, "concept", domain);
+        ? await _storeEntityAsync.upsertEntityAsync(entityName, entityType, domain)
+        : store.upsertEntity(entityName, entityType, domain);
       if (entityId > 0) {
         if (_storeEntityAsync.linkMemoryEntityAsync) {
           await _storeEntityAsync.linkMemoryEntityAsync(memoryId, entityId);
@@ -453,4 +454,12 @@ function extractEntityNamesFromContent(content: string): string[] {
     if (!STOPWORDS.has(t)) names.add(t);
   }
   return [...names].slice(0, ENTITY_EXTRACTION_CAP);
+}
+
+// CamelCase identifiers → "technology" type (multi-hump pattern).
+// source: cortex@ed33435 mcp_server/core/knowledge_graph.py:74,129-132 — _CAMELCASE_RE matches multi-hump CamelCase, type=technology
+const _CAMELCASE_RE = /\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b/;
+
+function entityTypeFor(name: string): "technology" | "concept" {
+  return _CAMELCASE_RE.test(name) ? "technology" : "concept";
 }
