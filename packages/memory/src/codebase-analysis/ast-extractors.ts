@@ -241,6 +241,55 @@ function _extractJsNode(
       const full = parent ? `${parent}.${text}` : text;
       defs.push(makeSymbolDef(full, "method"));
     }
+  } else if (type === "lexical_declaration" || type === "variable_declaration") {
+    // Arrow function assignments: `const foo = () => {}`, `export const bar = async () => {}`
+    // source: automatised-pipeline Rust grammar — variable_declarator containing
+    //   arrow_function or function emits a function entity.
+    // This is the primary gap for TS codebases where most functions are arrow functions
+    // or const-assigned function expressions.
+    _extractJsArrowAssignments(node, source, defs, parent);
+  }
+}
+
+/**
+ * Extract arrow function / function expression assignments from variable declarations.
+ *
+ * Handles:
+ *   const foo = () => { ... }
+ *   const bar = async (x: T) => { ... }
+ *   const baz = function(x) { ... }
+ *
+ * precondition:  node is a lexical_declaration or variable_declaration.
+ * postcondition: emits one SymbolDef per declarator whose value is an arrow_function
+ *   or function node. Kind = "function" (top-level) or "method" (inside a class).
+ *
+ * source: automatised-pipeline Rust codebase_parser — variable_declarator containing
+ *   arrow_function → function entity.
+ * source: tree-sitter-typescript grammar — lexical_declaration > variable_declarator
+ *   > (arrow_function | function)
+ */
+function _extractJsArrowAssignments(
+  node: TsNode,
+  source: Buffer,
+  defs: SymbolDef[],
+  parent: string,
+): void {
+  const declarators = ((node.children ?? []) as TsNode[]).filter(
+    (c: TsNode) => (c.type as string) === "variable_declarator",
+  );
+  for (const decl of declarators) {
+    const nameNode = decl.childForFieldName("name") as TsNode | null;
+    const valueNode = decl.childForFieldName("value") as TsNode | null;
+    if (!nameNode || !valueNode) continue;
+    const valueType = valueNode.type as string;
+    if (valueType === "arrow_function" || valueType === "function") {
+      const name = nodeText(nameNode, source);
+      const full = parent ? `${parent}.${name}` : name;
+      const kind = parent ? "method" : "function";
+      const paramsNode = valueNode.childForFieldName("parameters") as TsNode | null;
+      const sig = paramsNode ? nodeText(paramsNode, source).slice(0, SIG_MAX_CHARS) : "";
+      defs.push(makeSymbolDef(full, kind, sig));
+    }
   }
 }
 
@@ -309,6 +358,8 @@ const _FUNCTION_NODE_TYPES = new Set([
   "method_definition",     // JS, TS (class bodies)
   "method_declaration",    // TS interfaces, Go method receivers
   "function_signature",    // TS interfaces, Swift protocols
+  "arrow_function",        // JS, TS: `const foo = () => {}` — source: tree-sitter-typescript grammar
+  "function_item",         // Rust top-level functions — source: tree-sitter-rust grammar
 ]);
 
 // Class/impl-block containers whose children should carry a prefix.
@@ -362,6 +413,36 @@ export function extractCallsPerFunction(
         const body = (child.childForFieldName("body") ?? child) as TsNode;
         walk(body, cls || classScope);
       } else if (ntype === "decorated_definition") {
+        walk(child, classScope);
+      } else if (ntype === "variable_declarator") {
+        // Arrow function assignment: `const foo = () => {}` or `const bar = function() {}`
+        // The name is on the declarator; the arrow_function is the value.
+        // source: tree-sitter-typescript grammar — variable_declarator has name + value fields.
+        const nameNode = child.childForFieldName("name") as TsNode | null;
+        const valueNode = child.childForFieldName("value") as TsNode | null;
+        if (nameNode && valueNode) {
+          const vtype = valueNode.type as string;
+          if (vtype === "arrow_function" || vtype === "function") {
+            const fnName = nodeText(nameNode, source).trim();
+            if (fnName) {
+              const qname = classScope ? `${classScope}.${fnName}` : fnName;
+              const body = (valueNode.childForFieldName("body") ?? valueNode) as TsNode;
+              const calls: string[] = [];
+              const seen = new Set<string>();
+              for (const callType of _CALL_NODE_TYPES) {
+                for (const callNode of walkType(body, callType)) {
+                  const base = _calleeBasename(callNode, source);
+                  if (base && !seen.has(base) && base.length < CALL_NAME_MAX_CHARS) {
+                    calls.push(base);
+                    seen.add(base);
+                  }
+                }
+              }
+              out[qname] = calls;
+              walk(body, classScope);
+            }
+          }
+        }
         walk(child, classScope);
       } else if (_FUNCTION_NODE_TYPES.has(ntype)) {
         const nameNode = child.childForFieldName("name") as TsNode | null;

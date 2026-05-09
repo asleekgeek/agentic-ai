@@ -103,6 +103,15 @@ export type {
 // EmbeddingEngine is now the canonical port from @agentic/core.
 export type { EmbeddingEngine } from "@agentic/core";
 
+// ── LLM entity extraction (MCP sampling) ─────────────────────────────────
+// source: packages/memory/src/remember/llm-entity-extractor.ts
+export {
+  injectSamplingClient,
+  resetSamplingClient,
+  extractEntitiesViaLlm,
+} from "./llm-entity-extractor.js";
+export type { LlmExtractedEntity, CreateMessageFn } from "./llm-entity-extractor.js";
+
 // ── Post-store ────────────────────────────────────────────────────────────
 export { postStore } from "./post-store.js";
 export type { PostStoreOptions, PostStoreResult } from "./post-store.js";

@@ -13,6 +13,9 @@ import { findChildren, nodeText, walkType } from "./ast-extractors.js";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type TsNode = any;
 
+// source: cortex@ed33435 mcp_server/core/ast_extractors.py:_extract_python_func — sig[:120]
+const SIG_MAX_CHARS = 120; // source: cortex@ed33435 mcp_server/core/ast_extractors.py — signature truncation cap
+
 // ── Go ────────────────────────────────────────────────────────────────────
 
 export function extractGoImports(root: TsNode, source: Buffer): ImportInfo[] {
@@ -34,7 +37,7 @@ export function extractGoDefinitions(root: TsNode, source: Buffer): SymbolDef[] 
       const name = node.childForFieldName("name") as TsNode | null;
       const params = node.childForFieldName("parameters") as TsNode | null;
       if (name) {
-        const sig = params ? nodeText(params, source).slice(0, 120) : "";
+        const sig = params ? nodeText(params, source).slice(0, SIG_MAX_CHARS) : "";
         defs.push(makeSymbolDef(nodeText(name, source), "function", sig));
       }
     } else if (node.type === "method_declaration") {
@@ -109,7 +112,7 @@ function _extractSwiftNode(
     const name = node.childForFieldName("name") as TsNode | null;
     if (name) {
       const n = nodeText(name, source);
-      defs.push(makeSymbolDef(n, _SWIFT_KIND_MAP[type]!));
+      defs.push(makeSymbolDef(n, _SWIFT_KIND_MAP[type] ?? "class"));
       const body = node.childForFieldName("body") as TsNode | null;
       if (body) {
         for (const child of (body.children ?? []) as TsNode[]) {
@@ -151,8 +154,11 @@ function _extractRustNode(node: TsNode, source: Buffer, defs: SymbolDef[]): void
     const name = node.childForFieldName("name") as TsNode | null;
     if (name) defs.push(makeSymbolDef(nodeText(name, source), "function"));
   } else if (type === "struct_item") {
+    // source: automatised-pipeline Rust AST parser — struct_item emits kind="struct".
+    //   The previous mapping to "class" caused Struct entities to be counted as
+    //   class entities, masking the Struct count gap vs Cortex's 8,482 structs.
     const name = node.childForFieldName("name") as TsNode | null;
-    if (name) defs.push(makeSymbolDef(nodeText(name, source), "class"));
+    if (name) defs.push(makeSymbolDef(nodeText(name, source), "struct"));
   } else if (type === "enum_item") {
     const name = node.childForFieldName("name") as TsNode | null;
     if (name) defs.push(makeSymbolDef(nodeText(name, source), "enum"));

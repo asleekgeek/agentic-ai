@@ -71,6 +71,10 @@
       "import": "./dist/remember/memory-ingest.js",
       "types": "./dist/remember/memory-ingest.d.ts"
     },
+    "./remember/llm-entity-extractor.js": {
+      "import": "./dist/remember/llm-entity-extractor.js",
+      "types": "./dist/remember/llm-entity-extractor.d.ts"
+    },
     "./remember/storage/pg-store.js": {
       "import": "./dist/remember/storage/pg-store.js",
       "types": "./dist/remember/storage/pg-store.d.ts"

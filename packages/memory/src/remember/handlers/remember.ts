@@ -32,6 +32,10 @@ import { RememberRequestSchema } from "../types.js";
 //   Sentiment Analysis of Social Media Text." ICWSM.
 // Port of: mcp_server/core/emotional_tagging.py:tag_memory_emotions
 import { computeEmotionalValence, detectEmotions } from "../emotional-tagging.js";
+// source: packages/memory/src/remember/llm-entity-extractor.ts
+// LLM-based entity extraction via MCP sampling/createMessage — closes the
+// 106k vs 10k memory_entities gap. Fires after insertMemory, best-effort.
+import { extractEntitiesViaLlm } from "../llm-entity-extractor.js";
 
 // ── Surprisal heat boost ─────────────────────────────────────────────────────
 
@@ -39,6 +43,10 @@ import { computeEmotionalValence, detectEmotions } from "../emotional-tagging.js
 const SURPRISE_BOOST_FACTOR = 0.3; // source: thermodynamics.py:apply_surprise_boost
 const RECENT_CONTENTS_LIMIT = 10; // source: cortex@ed33435 mcp_server/handlers/remember.py — structural comparison window
 const VECTOR_SEARCH_TOP_K = 5; // source: cortex@ed33435 mcp_server/handlers/remember.py — top-5 similar memories
+// source: cortex@ed33435 mcp_server/handlers/remember.py — VADER emotional valence
+//   check threshold: memories under 100 chars rarely have enough signal for VADER.
+//   Engineering heuristic; same threshold used in llm-entity-extractor MIN_CONTENT_CHARS.
+const VADER_MIN_CONTENT_CHARS = 100; // source: engineering heuristic, cortex@ed33435 remember.py
 const ENTITY_EXTRACTION_CAP = 20; // source: cortex@ed33435 mcp_server/core/knowledge_graph.py — entity cap per memory
 
 function applySurpriseBoost(
@@ -162,7 +170,7 @@ export function remember(
   // source: Hutto CJ & Gilbert E (2014) ICWSM.
   // source: mcp_server/core/emotional_tagging.py:tag_memory_emotions — same pipeline
   const emotionalValence = computeEmotionalValence(detectEmotions(content));
-  if (emotionalValence === 0.0 && content.length > 100) {
+  if (emotionalValence === 0.0 && content.length > VADER_MIN_CONTENT_CHARS) {
     process.stderr.write(`[vader] emotionalValence=0 for ${content.length}-char memory (id pending)\n`);
   }
 
@@ -325,7 +333,7 @@ export async function rememberAsync(
   // source: Hutto CJ & Gilbert E (2014) ICWSM.
   // source: mcp_server/core/emotional_tagging.py:tag_memory_emotions — same pipeline
   const emotionalValenceAsync = computeEmotionalValence(detectEmotions(content));
-  if (emotionalValenceAsync === 0.0 && content.length > 100) {
+  if (emotionalValenceAsync === 0.0 && content.length > VADER_MIN_CONTENT_CHARS) {
     process.stderr.write(`[vader] emotionalValence=0 for ${content.length}-char memory (id pending)\n`);
   }
 
@@ -351,19 +359,72 @@ export async function rememberAsync(
     memoryId = store.insertMemory(insertData);
   }
 
-  // Best-effort entity upsert and linking (PG entities are deferred — no-ops).
-  try {
-    for (const entityName of newEntityNames) {
-      if (!knownEntityNames.has(entityName)) {
-        const entityId = store.upsertEntity(entityName, "concept", domain);
-        if (entityId > 0) {
+  // ── Regex entity upsert (fast path) ────────────────────────────────────────
+  // Best-effort entity upsert and linking. Uses *Async when available (PG path).
+  // source: ADR-0042 — async path required for PG entity writes.
+  // source: liskov@24cb6e2 — *Async-when-available, sync-fallback pattern.
+  const _storeEntityAsync = store as unknown as {
+    upsertEntityAsync?: (name: string, type: string, domain: string) => Promise<number>;
+    linkMemoryEntityAsync?: (memId: number, entId: number) => Promise<void>;
+  };
+  for (const entityName of newEntityNames) {
+    if (knownEntityNames.has(entityName)) continue;
+    try {
+      const entityId = _storeEntityAsync.upsertEntityAsync
+        ? await _storeEntityAsync.upsertEntityAsync(entityName, "concept", domain)
+        : store.upsertEntity(entityName, "concept", domain);
+      if (entityId > 0) {
+        if (_storeEntityAsync.linkMemoryEntityAsync) {
+          await _storeEntityAsync.linkMemoryEntityAsync(memoryId, entityId);
+        } else {
           store.linkMemoryEntity(memoryId, entityId);
         }
       }
+    } catch {
+      // Entity extraction failures do not abort the write (invariant I3).
     }
-  } catch {
-    // Entity extraction failures do not abort the write (invariant I3).
   }
+
+  // ── LLM entity extraction via MCP sampling (semantic enrichment) ─────────
+  // Fire-and-forget: the write is already committed; failures must not abort.
+  // source: packages/memory/src/remember/llm-entity-extractor.ts
+  // source: MCP sampling spec — https://modelcontextprotocol.io/docs/concepts/sampling
+  // source: Cortex Python mcp_server/core/write_post_store.py:persist_entities —
+  //   the Python knowledge_graph.extract_entities is regex only; the LLM path
+  //   here extends coverage to persons, projects, and tools.
+  //   Called only for content > 100 chars (MIN_CONTENT_CHARS in extractor).
+  void (async () => {
+    try {
+      const llmEntities = await extractEntitiesViaLlm(content);
+      for (const ent of llmEntities) {
+        // Upsert entity with the LLM-detected type (not forced to "concept").
+        const storeAnyAsync = store as unknown as {
+          upsertEntityAsync?: (name: string, type: string, domain: string) => Promise<number>;
+          linkMemoryEntityAsync?: (memId: number, entId: number) => Promise<void>;
+        };
+        const entityId = storeAnyAsync.upsertEntityAsync
+          ? await storeAnyAsync.upsertEntityAsync(ent.name, ent.type, domain)
+          : store.upsertEntity(ent.name, ent.type, domain);
+        if (entityId > 0) {
+          if (storeAnyAsync.linkMemoryEntityAsync) {
+            await storeAnyAsync.linkMemoryEntityAsync(memoryId, entityId);
+          } else {
+            store.linkMemoryEntity(memoryId, entityId);
+          }
+        }
+      }
+      if (llmEntities.length > 0) {
+        process.stderr.write(
+          `[llm-entity-extractor] memory ${memoryId}: extracted ${llmEntities.length} entities via sampling\n`,
+        );
+      }
+    } catch (err) {
+      // invariant I3: LLM entity extraction failures must not abort the write.
+      process.stderr.write(
+        `[llm-entity-extractor] post-write extraction failed for memory ${memoryId}: ${(err as Error).message}\n`,
+      );
+    }
+  })();
 
   return {
     stored: true,

@@ -221,13 +221,16 @@ export function markStale(store: MemoryStore, memoryIds: number[]): number {
 // source: ADR-0042 — async path required for all PG entity writes.
 // source: liskov@24cb6e2 — *Async-when-available, sync-fallback pattern.
 
-// source: Cortex prod entity types — Method=30,822; Function=11,498; Struct=8,482; class+interface+enum lower counts.
-// "method" is produced by ast-extractors.ts when parent class is present
-// (extractPythonDefinitions, extractJsDefinitions, etc.). Without "method" in
-// VALID_KINDS it silently collapsed to "function", producing half the entity count.
+// source: automatised-pipeline Rust source — symbol kinds emitted by the AST walker.
+//   function_item→"function", impl methods→"method", struct_item→"struct",
+//   enum_item→"enum", trait_item→"trait", class_declaration→"class",
+//   interface_declaration→"interface", type_alias_declaration→"type", const→"constant".
+// source: Cortex prod entity types — Method=30,822; Function=11,498; Struct=8,482.
+// "method" added: Rust impl methods and JS class methods previously fell through
+//   to "function" fallback, masking Method entity count.
 const VALID_KINDS = new Set([
   "function",
-  "method",   // source: ast-extractors.ts — kind = parent ? "method" : "function"
+  "method",
   "class",
   "interface",
   "type",
@@ -390,6 +393,81 @@ async function _persistImportEntities(
   return [entities, relationships];
 }
 
+/**
+ * Persist caller→callee "calls" relationships from the callsPerFunction map.
+ *
+ * callsPerFunction is populated by extractCallsPerFunction (ast-extractors.ts)
+ * for every file parsed via tree-sitter. Each key is a caller qualified name
+ * (e.g. "MyClass.doSomething") and each value is a list of callee basenames.
+ *
+ * precondition:  analysis.callsPerFunction may be empty ({}) for regex-parsed files.
+ * postcondition: returns [0, relationship_count]. entity_count is always 0 because
+ *   caller and callee entities are already upserted by _persistSymbolEntities; this
+ *   function only adds edges between existing entities.
+ *
+ * source: automatised-pipeline Rust codebase_parser — emits CALLS edges linking
+ *   function/method entities. TS parity closes the method_calls_method gap.
+ * source: packages/memory/src/codebase-analysis/ast-extractors.ts::extractCallsPerFunction
+ */
+async function _persistCallEdges(
+  store: MemoryStore,
+  analysis: FileAnalysis,
+  _domain: string,
+): Promise<[number, number]> {
+  const callsPerFunction = analysis.callsPerFunction ?? {};
+  const callerNames = Object.keys(callsPerFunction);
+  if (callerNames.length === 0) return [0, 0];
+
+  let relationships = 0;
+  for (const callerName of callerNames) {
+    const callees = callsPerFunction[callerName] ?? [];
+    if (callees.length === 0) continue;
+
+    // Resolve caller entity — only create edge if caller entity already exists.
+    // Best-effort: skip if caller is not in the entity graph.
+    let callerEid: number;
+    try {
+      const existing = store.getEntityByNameAsync
+        ? await store.getEntityByNameAsync(callerName)
+        : (store.getEntityByName(callerName) as Record<string, unknown> | null);
+      if (!existing) continue;
+      callerEid = (existing as Record<string, unknown>)["id"] as number;
+    } catch {
+      continue;
+    }
+
+    for (const calleeName of callees) {
+      try {
+        const calleeExisting = store.getEntityByNameAsync
+          ? await store.getEntityByNameAsync(calleeName)
+          : (store.getEntityByName(calleeName) as Record<string, unknown> | null);
+        if (!calleeExisting) continue;
+        const calleeEid = (calleeExisting as Record<string, unknown>)["id"] as number;
+
+        if (store.insertRelationshipAsync) {
+          await store.insertRelationshipAsync({
+            source_entity_id: callerEid,
+            target_entity_id: calleeEid,
+            relationship_type: "calls",
+            weight: 1.0,
+          });
+        } else {
+          store.insertRelationship({
+            source_entity_id: callerEid,
+            target_entity_id: calleeEid,
+            relationship_type: "calls",
+            weight: 1.0,
+          });
+        }
+        relationships++;
+      } catch {
+        // best-effort: skip individual edge failures
+      }
+    }
+  }
+  return [0, relationships];
+}
+
 export async function persistEntities(
   store: MemoryStore,
   analysis: FileAnalysis,
@@ -423,6 +501,12 @@ export async function persistEntities(
     const [ie, ir] = await _persistImportEntities(store, analysis, fileEid, domain, memoryId);
     entities += ie;
     relationships += ir;
+    // Persist method→method call edges from callsPerFunction map.
+    // source: automatised-pipeline Rust codebase_parser — emits CALLS edges between
+    //   function/method entities. These are the "method_calls_method" relationships
+    //   that close the workflow graph CALLS edge gap.
+    const [, cr] = await _persistCallEdges(store, analysis, domain);
+    relationships += cr;
   } catch (err) {
     // Unexpected error — log to stderr so failures aren't silent.
     process.stderr.write(

@@ -38,6 +38,7 @@ import type { MemoryItem } from "@agentic/memory/recall/types.js";
 
 import { registerRecallTools } from "./tools/recall.js";
 import { registerRememberTools } from "./tools/remember.js";
+import { injectSamplingClient } from "@agentic/memory/remember/llm-entity-extractor.js";
 import { registerMethodologyTools } from "./tools/methodology.js";
 import { registerConsolidationTools } from "./tools/consolidation.js";
 import { registerManagementTools } from "./tools/management.js";
@@ -51,7 +52,7 @@ import { registerNavigationTools } from "./tools/navigation.js";
 
 const server = new McpServer({
   name: "@agentic/mcp-server-memory",
-  version: "0.1.0",
+  version: "0.2.0",
 });
 
 // ── LLM client ────────────────────────────────────────────────────────────────
@@ -286,6 +287,31 @@ registerAdvancedTools(server, { store: memoryStore });                          
 registerWikiTools(server);                                                           // 8 tools
 registerIngestTools(server, { store: memoryStore, wikiRoot: process.env["CORTEX_WIKI_ROOT"] ?? join(homedir(), ".claude", "methodology", "wiki"), mcpClientPool: null }); // 6 tools
 registerNavigationTools(server, { store: memoryStore });                            // 2 tools
+
+// ── MCP Sampling client injection ─────────────────────────────────────────────
+//
+// Inject the MCP sampling client into the LLM entity extractor so that
+// every remember() call after insertMemory can fire extractEntitiesViaLlm().
+//
+// The McpServer.server field is the low-level Server instance from
+// @modelcontextprotocol/sdk which exposes createMessage() for sampling.
+//
+// The sampling request routes to the MCP host (Claude Code) which handles
+// auth and billing. No ANTHROPIC_API_KEY needed in this process.
+//
+// source: @modelcontextprotocol/sdk v1.29.0 McpServer.server (server/mcp.d.ts:18)
+// source: Server.createMessage overload (server/index.d.ts:140)
+// source: MCP sampling spec — https://modelcontextprotocol.io/docs/concepts/sampling
+//   "The host (client) handles model selection, auth, and billing."
+//
+// The binding is done here (composition root) to satisfy DIP:
+//   core module (llm-entity-extractor) declares the port (CreateMessageFn);
+//   infrastructure (MCP server SDK) provides the implementation;
+//   composition root (this file) wires them.
+// source: Martin, R. C. (2017). Clean Architecture, Ch. 11 — DIP at the
+//   composition root.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+injectSamplingClient((server.server as any).createMessage.bind(server.server));
 
 // ── Transport ─────────────────────────────────────────────────────────────────
 

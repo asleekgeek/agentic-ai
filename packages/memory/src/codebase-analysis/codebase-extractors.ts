@@ -8,9 +8,15 @@
  *
  * Pure functions — no I/O, no state.
  */
+/* eslint-disable @typescript-eslint/no-non-null-assertion */
+/* eslint-disable @typescript-eslint/no-magic-numbers */
 
 import type { ImportInfo, SymbolDef } from "./types.js";
 import { makeImportInfo, makeSymbolDef } from "./types.js";
+
+// Signature truncation cap: 120 chars preserves the parameter list while bounding
+//   entity name + signature storage. Same value as ast-extractors.ts:SIG_MAX_CHARS.
+const SIG_MAX_CHARS = 120; // source: cortex@ed33435 mcp_server/core/ast_extractors.py:_extract_python_func — sig[:120]
 
 // ── Import patterns ───────────────────────────────────────────────────────
 
@@ -27,21 +33,50 @@ const SWIFT_IMPORT = /^import\s+(\w+)/gm;
 
 // ── Symbol patterns ───────────────────────────────────────────────────────
 
-const PY_DEF = /^\s*(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)/gm;
+// Top-level Python functions: not indented (no leading whitespace)
+const PY_DEF = /^(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)/gm;
+// Python methods: indented def (at least 1 whitespace before def)
+// source: automatised-pipeline Rust codebase_parser — indented def → "method" kind
+const PY_METHOD = /^[ \t]+(?:async\s+)?def\s+(\w+)\s*\(([^)]*)\)/gm;
 const PY_CLASS = /^\s*class\s+(\w+)(?:\(([^)]*)\))?/gm;
 
 const JS_FUNC =
   /^(?:export\s+)?(?:async\s+)?function\s+(\w+)\s*\(([^)]*)\)/gm;
+// Arrow function and function-expression assignments:
+//   export const foo = async (x: T): ReturnType => { ... }
+//   const bar = function(y) { ... }
+// source: automatised-pipeline Rust codebase_parser — variable_declarator containing
+//   arrow_function emits a function entity. Regex approximation for the fallback path.
+// Match: const/let/var name = [async] ([...]) [: ReturnType] =>
+// The return type annotation (after ')') may contain generics/brackets — we use
+// a lazy match: capture up to '=>' on the same line.
+const JS_ARROW_FUNC =
+  /^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?(?:\([^)]*\)|[\w]+)[^=\n]*=>/gm;
+const JS_FUNC_EXPR =
+  /^(?:export\s+)?(?:const|let|var)\s+(\w+)\s*=\s*(?:async\s+)?function\s*\(/gm;
+// Method definitions inside class bodies (indented):
+//   methodName(args) { ... }  or  async methodName(args) { ... }
+// Requires at least 2 spaces / 1 tab of indentation to avoid matching top-level.
+const JS_METHOD =
+  /^[ \t]{2,}(?:(?:public|private|protected|static|async|override|get|set)\s+)*(\w+)\s*\(([^)]*)\)\s*[{:]/gm;
 const JS_CLASS =
-  /^(?:export\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?/gm;
+  /^(?:export\s+)?(?:abstract\s+)?class\s+(\w+)(?:\s+extends\s+(\w+))?/gm;
 const JS_INTERFACE = /^(?:export\s+)?interface\s+(\w+)/gm;
 const JS_TYPE = /^(?:export\s+)?type\s+(\w+)\s*=/gm;
 
-const GO_FUNC = /^func\s+(?:\([^)]*\)\s+)?(\w+)\s*\(([^)]*)\)/gm;
+// Go top-level functions (no receiver)
+const GO_FUNC = /^func\s+(\w+)\s*\(([^)]*)\)/gm;
+// Go receiver methods: func (r *Type) MethodName(...)
+// source: automatised-pipeline Rust codebase_parser — method_declaration → "method" kind
+const GO_METHOD = /^func\s+\([^)]+\)\s+(\w+)\s*\(([^)]*)\)/gm;
 const GO_TYPE = /^type\s+(\w+)\s+(struct|interface)\b/gm;
 
 const RUST_FN =
   /^(?:pub\s+)?(?:async\s+)?fn\s+(\w+)\s*(?:<[^>]*)?\s*\(([^)]*)\)/gm;
+// Rust impl block methods (indented fn inside impl blocks)
+// source: automatised-pipeline Rust AST parser — impl_item methods emit "method" kind.
+const RUST_METHOD =
+  /^[ \t]{2,4}(?:pub\s+)?(?:async\s+)?fn\s+(\w+)\s*(?:<[^>]*)?\s*\(([^)]*)\)/gm;
 const RUST_STRUCT = /^(?:pub\s+)?struct\s+(\w+)/gm;
 const RUST_ENUM = /^(?:pub\s+)?enum\s+(\w+)/gm;
 const RUST_TRAIT = /^(?:pub\s+)?trait\s+(\w+)/gm;
@@ -121,8 +156,14 @@ export function extractImportsSwift(content: string): ImportInfo[] {
 
 export function extractSymbolsPython(content: string): SymbolDef[] {
   const defs: SymbolDef[] = [];
+  // Top-level functions (not indented)
   for (const m of allMatches(PY_DEF, content)) {
-    defs.push(makeSymbolDef(m[1]!, "function", (m[2] ?? "").slice(0, 120)));
+    defs.push(makeSymbolDef(m[1]!, "function", (m[2] ?? "").slice(0, SIG_MAX_CHARS)));
+  }
+  // Method definitions (indented def) — emit "method" kind
+  // source: automatised-pipeline Rust codebase_parser — indented def inside class → method
+  for (const m of allMatches(PY_METHOD, content)) {
+    defs.push(makeSymbolDef(m[1]!, "method", (m[2] ?? "").slice(0, SIG_MAX_CHARS)));
   }
   for (const m of allMatches(PY_CLASS, content)) {
     defs.push(makeSymbolDef(m[1]!, "class", m[2] ?? ""));
@@ -132,11 +173,44 @@ export function extractSymbolsPython(content: string): SymbolDef[] {
 
 export function extractSymbolsJs(content: string): SymbolDef[] {
   const defs: SymbolDef[] = [];
+  // Named function declarations
   for (const m of allMatches(JS_FUNC, content)) {
-    defs.push(makeSymbolDef(m[1]!, "function", (m[2] ?? "").slice(0, 120)));
+    defs.push(makeSymbolDef(m[1]!, "function", (m[2] ?? "").slice(0, SIG_MAX_CHARS)));
   }
+  // Arrow function assignments: `const foo = () => {}`
+  // source: automatised-pipeline Rust codebase_parser — variable_declarator
+  //   containing arrow_function emits a function entity. Regex fallback path.
+  const funcNames = new Set(defs.map((d) => d.name));
+  for (const m of allMatches(JS_ARROW_FUNC, content)) {
+    if (!funcNames.has(m[1]!)) {
+      defs.push(makeSymbolDef(m[1]!, "function"));
+      funcNames.add(m[1]!);
+    }
+  }
+  // Function expression assignments: `const foo = function() {}`
+  for (const m of allMatches(JS_FUNC_EXPR, content)) {
+    if (!funcNames.has(m[1]!)) {
+      defs.push(makeSymbolDef(m[1]!, "function"));
+      funcNames.add(m[1]!);
+    }
+  }
+  // Method definitions in class bodies (indented)
+  // source: tree-sitter JS/TS grammar — method_definition in class_body
+  const classNames = new Set<string>();
   for (const m of allMatches(JS_CLASS, content)) {
     defs.push(makeSymbolDef(m[1]!, "class", m[2] ?? ""));
+    classNames.add(m[1]!);
+  }
+  const SKIP_METHODS = new Set([
+    "if", "for", "while", "switch", "catch", "try", "do", "return",
+    "const", "let", "var", "import", "export", "class", "function",
+    "get", "set", "constructor",
+  ]);
+  for (const m of allMatches(JS_METHOD, content)) {
+    const name = m[1]!;
+    if (!SKIP_METHODS.has(name) && !funcNames.has(name)) {
+      defs.push(makeSymbolDef(name, "method", (m[2] ?? "").slice(0, SIG_MAX_CHARS)));
+    }
   }
   for (const m of allMatches(JS_INTERFACE, content)) {
     defs.push(makeSymbolDef(m[1]!, "interface"));
@@ -149,22 +223,42 @@ export function extractSymbolsJs(content: string): SymbolDef[] {
 
 export function extractSymbolsGo(content: string): SymbolDef[] {
   const defs: SymbolDef[] = [];
+  // Top-level functions (no receiver)
   for (const m of allMatches(GO_FUNC, content)) {
-    defs.push(makeSymbolDef(m[1]!, "function", (m[2] ?? "").slice(0, 120)));
+    defs.push(makeSymbolDef(m[1]!, "function", (m[2] ?? "").slice(0, SIG_MAX_CHARS)));
+  }
+  // Receiver methods: func (r *Type) Name(...) → "method" kind
+  // source: automatised-pipeline Rust codebase_parser — method_declaration → "method" kind
+  for (const m of allMatches(GO_METHOD, content)) {
+    defs.push(makeSymbolDef(m[1]!, "method", (m[2] ?? "").slice(0, SIG_MAX_CHARS)));
   }
   for (const m of allMatches(GO_TYPE, content)) {
-    defs.push(makeSymbolDef(m[1]!, m[2]!));
+    // Go struct/interface type declarations
+    // source: automatised-pipeline Rust codebase_parser — type_declaration → "struct" or "interface"
+    const kind = m[2] === "struct" ? "struct" : "interface";
+    defs.push(makeSymbolDef(m[1]!, kind));
   }
   return defs;
 }
 
 export function extractSymbolsRust(content: string): SymbolDef[] {
   const defs: SymbolDef[] = [];
+  // Top-level functions (not indented)
   for (const m of allMatches(RUST_FN, content)) {
-    defs.push(makeSymbolDef(m[1]!, "function", (m[2] ?? "").slice(0, 120)));
+    defs.push(makeSymbolDef(m[1]!, "function", (m[2] ?? "").slice(0, SIG_MAX_CHARS)));
   }
+  // Impl block methods (indented) — emit "method" kind
+  // source: automatised-pipeline Rust AST parser — impl_item methods emit "method" kind.
+  const topLevelFnNames = new Set(defs.map((d) => d.name));
+  for (const m of allMatches(RUST_METHOD, content)) {
+    if (!topLevelFnNames.has(m[1]!)) {
+      defs.push(makeSymbolDef(m[1]!, "method", (m[2] ?? "").slice(0, SIG_MAX_CHARS)));
+    }
+  }
+  // source: automatised-pipeline Rust AST parser — struct_item emits kind="struct".
+  //   Previous mapping to "class" caused Struct entities to be miscounted.
   for (const m of allMatches(RUST_STRUCT, content)) {
-    defs.push(makeSymbolDef(m[1]!, "class"));
+    defs.push(makeSymbolDef(m[1]!, "struct"));
   }
   for (const m of allMatches(RUST_ENUM, content)) {
     defs.push(makeSymbolDef(m[1]!, "enum"));
@@ -178,13 +272,14 @@ export function extractSymbolsRust(content: string): SymbolDef[] {
 export function extractSymbolsSwift(content: string): SymbolDef[] {
   const defs: SymbolDef[] = [];
   for (const m of allMatches(SWIFT_FUNC, content)) {
-    defs.push(makeSymbolDef(m[1]!, "function", (m[2] ?? "").slice(0, 120)));
+    defs.push(makeSymbolDef(m[1]!, "function", (m[2] ?? "").slice(0, SIG_MAX_CHARS)));
   }
   for (const m of allMatches(SWIFT_CLASS, content)) {
     defs.push(makeSymbolDef(m[1]!, "class"));
   }
+  // source: automatised-pipeline Rust AST parser — struct_item emits "struct" kind.
   for (const m of allMatches(SWIFT_STRUCT, content)) {
-    defs.push(makeSymbolDef(m[1]!, "class"));
+    defs.push(makeSymbolDef(m[1]!, "struct"));
   }
   for (const m of allMatches(SWIFT_PROTOCOL, content)) {
     defs.push(makeSymbolDef(m[1]!, "protocol"));
