@@ -1,6 +1,6 @@
 {
   "name": "@agentic/mcp-server-memory",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "private": true,
   "description": "Composition root: exposes all 46 Cortex memory tools via stdio MCP transport.",
   "type": "module",
