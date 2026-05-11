@@ -56,9 +56,11 @@ describe("backfillMemoriesHandler schema", () => {
     expect(maxFiles.default).toBe(20);
   });
 
-  it("schema.inputSchema has min_importance with default=0.35", () => {
+  it("schema.inputSchema has min_importance with default=0.3", () => {
+    // source: src/import/backfill-memories.ts:121-123 — default lowered from 0.35
+    // to 0.3 on 2026-05-08 to capture all msgs above length/noise floor.
     const mi = schema.inputSchema.properties.min_importance;
-    expect(mi.default).toBe(0.35);
+    expect(mi.default).toBe(0.3);
   });
 });
 

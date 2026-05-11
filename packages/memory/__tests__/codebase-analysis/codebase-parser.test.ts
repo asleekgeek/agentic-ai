@@ -83,9 +83,12 @@ describe("extractSymbolsPython — models.py", () => {
   });
 
   it("finds is_hot method", () => {
+    // source: src/codebase-analysis/codebase-extractors.ts:163-167 — indented def
+    // inside a class emits kind "method" (parity with automatised-pipeline Rust
+    // codebase_parser); top-level defs still emit "function".
     const method = symbols.find((s) => s.name === "is_hot");
     expect(method).toBeDefined();
-    expect(method?.kind).toBe("function");
+    expect(method?.kind).toBe("method");
   });
 
   it("finds decay method", () => {
