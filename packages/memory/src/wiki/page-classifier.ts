@@ -18,6 +18,7 @@
 
 import { loadRegistry, type ClassifierRule } from "./schema-loader.js";
 import { applyRules } from "./rule-engine.js";
+import { WIKI_ROOT as DEFAULT_WIKI_ROOT } from "../infrastructure/config.js";
 import {
   AXIS_AUDIENCE,
   AXIS_KIND,
@@ -67,7 +68,11 @@ const REJECT_PATTERNS = [
   /^#*\s*Take the code and split/i,
   /^\s*\{[\s\S]*\}\s*$/,
   /^\s*\[[\s\S]*\]\s*$/,
-  /<command-(message|name|args)>/i,
+  // Anchored at start to match Cortex Python's ``re.match`` semantics —
+  // the marker is meant to catch Claude Code slash-command FRAMING at
+  // the top of a memory, not an embedded literal deep inside JSON or
+  // source code (false-positives on stored TS/Python sources).
+  /^<command-(message|name|args)>/i,
   /^#*\s*Spell:\s*\w+/i,
   /^#*\s*Shape test content/i,
 ] as const;
@@ -119,11 +124,29 @@ const PATH_OR_URL_TITLE_PATTERNS = [
   /^\s*#*\s*[\w.-]+\.(pdf|png|jpg|jpeg|svg|gif|zip|tar\.gz|docx?|xlsx?|csv|log|yaml|yml)\b/i,
 ] as const;
 
+// 2026-05-17 (Cortex 836f7d6): PostToolUse auto-captures are journal
+// entries — tool dumps, command outputs, edit diffs — useful as memories
+// for halo retrieval but polluting the wiki with hundreds of
+// ``Lesson: Command: `git log...``` pages that aren't curated
+// knowledge. ``auto-captured`` + ``tool:*`` belong as memories in PG,
+// never on wiki pages.
+//
+// 2026-05-17 (Cortex 9ebe1ad): codebase_analyze dumped one wiki page per
+// scanned file PER scan invocation — 2176 of 2248 notes were the same
+// auth/middleware/crypto files repeated 290-349 times each. ``seeded``
+// (seed_project tag) and ``codebase`` (codebase_analyze file extractor
+// tag) belong in PG memory but never on a curated wiki.
 const AUDIT_TAGS = new Set([
   "_backfill",
   "imported",
   "session-summary",
   "tool-output",
+  "auto-captured",
+  "tool:bash", "tool:edit", "tool:write", "tool:multiedit",
+  "tool:notebookedit", "tool:read", "tool:notebookread",
+  "tool:glob", "tool:grep", "tool:webfetch", "tool:websearch",
+  "seeded",
+  "codebase",
   "code-review",
   "stage-1", "stage-2", "stage-3", "stage-4", "stage-5",
   "stage-6", "stage-7", "stage-8", "stage-9", "stage-10",
@@ -238,18 +261,32 @@ const TITLE_STRIP_PREFIXES = [
   /^(Here is|Here's|The following)\s+/i,
 ] as const;
 
+// 2026-05-17 (Cortex 4bcb684): markdown unwrappers. Applied before
+// prefix-stripping + path-detection so a line like
+// ``**File:** `/Users/.../remember.py` `` is tested against the path
+// detector as ``File: /Users/.../remember.py`` — previously the
+// backtick before ``/Users/`` wasn't whitespace so the path filter
+// missed and the raw markdown-wrapped path leaked into the page title.
+const TITLE_MARKDOWN_UNWRAP: ReadonlyArray<RegExp> = [
+  /\*\*([^*]+)\*\*/g,   // **bold** → bold
+  /`([^`]+)`/g,         // `code` → code
+  /\*([^*]+)\*/g,       // *italic* → italic
+  /_([^_]+)_/g,         // _italic_ → italic
+];
+
 // ── User-rule integration ─────────────────────────────────────────────────
 
 let userRulesCache: readonly ClassifierRule[] | null = null;
 
 function loadUserRules(wikiRoot?: string): readonly ClassifierRule[] {
   if (userRulesCache !== null) return userRulesCache;
-  if (!wikiRoot) {
-    userRulesCache = [];
-    return userRulesCache;
-  }
+  // Match Cortex Python's behavior — when no explicit root is supplied,
+  // fall back to the configured WIKI_ROOT so the default rule pack at
+  // ~/.claude/methodology/wiki/_rules/ is honored. Returns [] silently
+  // if the directory does not exist.
+  const root = wikiRoot ?? DEFAULT_WIKI_ROOT;
   try {
-    const registry = loadRegistry(wikiRoot);
+    const registry = loadRegistry(root);
     userRulesCache = registry.rules;
   } catch {
     userRulesCache = [];
@@ -390,6 +427,13 @@ export function deriveTitle(
   let firstMeaningful = "";
   for (const line of lines) {
     let cleaned = line.trim();
+    // Unwrap markdown formatting first so the underlying text is what
+    // gets prefix-stripped and tested by downstream filters. Without
+    // this step ``**File:** `/path` `` keeps its asterisks/backticks
+    // and the raw markdown leaks through as the title.
+    for (const unwrap of TITLE_MARKDOWN_UNWRAP) {
+      cleaned = cleaned.replace(unwrap, "$1").trim();
+    }
     for (const pat of TITLE_STRIP_PREFIXES) {
       cleaned = cleaned.replace(pat, "").trim();
     }

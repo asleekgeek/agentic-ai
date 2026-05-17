@@ -20,6 +20,8 @@
 import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
+import { WIKI_ROOT as DEFAULT_WIKI_ROOT } from "../infrastructure/config.js";
+
 // ── Axis names ────────────────────────────────────────────────────────────
 
 export const AXIS_KIND = "kind" as const;
@@ -695,7 +697,11 @@ let _cacheRoot: string | null = null;
  * a reload — e.g. after the user edits a schema file.
  */
 export function getRegistry(wikiRoot?: string | null): AxisRegistry {
-  const normRoot = wikiRoot ?? null;
+  // Default to the configured WIKI_ROOT so user-edited
+  // wiki/_schema/<axis>/<value>.md files are picked up automatically
+  // (mirrors Cortex Python's behavior — the Python ``get_registry``
+  // reads WIKI_ROOT from infrastructure.config with no argument).
+  const normRoot = wikiRoot ?? DEFAULT_WIKI_ROOT;
   if (_registryCache !== null && _cacheRoot === normRoot) {
     return _registryCache;
   }

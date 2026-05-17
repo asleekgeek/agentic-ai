@@ -32,7 +32,8 @@ import { runCascadeAdvancement } from "../consolidation/stages/cascade.js";
 
 const LOG_PREFIX = "[cortex-post-tool-capture]";
 
-// Tools whose FULL output (truncated to MAX_OUTPUT_LENGTH) is stored.
+// Tools whose full output is stored. 2026-05-17 (Cortex 4bcb684): the
+// truncation cap was removed per user directive — full output preserved.
 const HIGH_VALUE_TOOLS = new Set([
   "Edit",
   "Write",
@@ -53,7 +54,10 @@ const LIGHT_VALUE_TOOLS = new Set([
 const CONDITIONAL_TOOLS = new Set(["WebFetch", "WebSearch"]);
 
 const MIN_OUTPUT_LENGTH = 50;
-const MAX_OUTPUT_LENGTH = 4096; // source: post_tool_capture.py:_MAX_OUTPUT_LENGTH — keeps DB row under typical 8KB page
+// 2026-05-17 (Cortex 4bcb684): MAX_OUTPUT_LENGTH removed — silent
+// truncation was destroying real Edit diffs / Bash outputs. If corpus
+// size becomes an issue address via compression or filesystem refs,
+// not silent truncation.
 // source: post_tool_capture.py:_reference_line — command truncated to 200 chars for readability in memory content
 const MAX_CMD_PREVIEW_LENGTH = 200;
 
@@ -93,10 +97,66 @@ function log(msg: string): void {
   process.stderr.write(`${LOG_PREFIX} ${msg}\n`);
 }
 
+/**
+ * Normalize tool output to a HUMAN-READABLE string.
+ *
+ * 2026-05-17 (Cortex 3f82eff): previously every dict response went
+ * through ``JSON.stringify`` which encoded real newlines as the two-
+ * character ``\n`` escape sequence — so a multi-line grep stdout
+ * rendered in the wiki as one literal-escape-laden string instead of
+ * a readable code block.
+ *
+ * Per-known-shape rendering:
+ *   - Bash:   {stdout, stderr, interrupted?}
+ *   - Edit/Write/MultiEdit: {filePath, oldString?, newString?}
+ *   - generic dict/list: JSON.stringify with 2-space indent
+ *   - anything else: String()
+ */
 function normalizeOutput(raw: unknown): string {
   if (typeof raw === "string") return raw;
   if (raw === null || raw === undefined) return "";
-  return JSON.stringify(raw);
+
+  if (Array.isArray(raw)) {
+    return JSON.stringify(raw, null, 2);
+  }
+
+  if (typeof raw === "object") {
+    const obj = raw as Record<string, unknown>;
+
+    // Bash-shaped: render stdout + stderr as fenced sections with real
+    // newlines preserved.
+    if ("stdout" in obj || "stderr" in obj) {
+      const parts: string[] = [];
+      const stdout = String(obj.stdout ?? "");
+      const stderr = String(obj.stderr ?? "");
+      if (stdout.trim()) {
+        parts.push(`**stdout:**\n\`\`\`\n${stdout.replace(/\s+$/, "")}\n\`\`\``);
+      }
+      if (stderr.trim()) {
+        parts.push(`**stderr:**\n\`\`\`\n${stderr.replace(/\s+$/, "")}\n\`\`\``);
+      }
+      const interrupted = obj.interrupted;
+      if (interrupted) {
+        parts.push(`**interrupted:** ${String(interrupted)}`);
+      }
+      if (parts.length === 0) parts.push("_(no output)_");
+      return parts.join("\n\n");
+    }
+
+    // Edit/Write-shaped: file_path + oldString/newString diff.
+    if ("filePath" in obj && ("oldString" in obj || "newString" in obj)) {
+      const parts: string[] = [`**file:** \`${String(obj.filePath)}\``];
+      const old = obj.oldString;
+      const next = obj.newString;
+      if (old) parts.push(`**before:**\n\`\`\`\n${String(old).replace(/\s+$/, "")}\n\`\`\``);
+      if (next) parts.push(`**after:**\n\`\`\`\n${String(next).replace(/\s+$/, "")}\n\`\`\``);
+      return parts.join("\n\n");
+    }
+
+    return JSON.stringify(obj, null, 2);
+  }
+
+  return String(raw);
 }
 
 function shouldCapture(
@@ -180,13 +240,23 @@ function buildMemoryContent(
     return parts.join("\n");
   }
 
-  // High-value: include truncated output
-  const truncated =
-    output.length > MAX_OUTPUT_LENGTH
-      ? output.slice(0, MAX_OUTPUT_LENGTH) +
-        `\n... [truncated ${output.length - MAX_OUTPUT_LENGTH} chars]`
-      : output;
-  parts.push(`\n**Output:**\n\`\`\`\n${truncated}\n\`\`\``);
+  // 2026-05-17 (Cortex 4bcb684): no truncation — full output is stored.
+  // Per user directive "truncated info are prohibited"; the cap was
+  // chopping 20k-char Edit diffs into useless fragments.
+  //
+  // 2026-05-17 (Cortex 3f82eff): if normalizeOutput already produced
+  // markdown sections (stdout/file: heads), embed verbatim instead of
+  // wrapping in a single code fence (which would render the markdown
+  // as literal text).
+  const alreadyFormatted =
+    output.includes("**stdout:**") ||
+    output.includes("**before:**") ||
+    output.startsWith("**file:**");
+  if (alreadyFormatted) {
+    parts.push(`\n## Output\n\n${output}`);
+  } else {
+    parts.push(`\n**Output:**\n\`\`\`\n${output}\n\`\`\``);
+  }
   return parts.join("\n");
 }
 
