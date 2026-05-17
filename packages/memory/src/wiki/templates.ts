@@ -14,14 +14,22 @@
 // ── Required front-matter fields per page kind ───────────────────────────
 
 export const REQUIRED_FRONTMATTER: Record<string, readonly string[]> = {
+  // Modern (ADR-2244 §4.1) — each lists ``kind, lifecycle, audience,
+  // provenance, title`` as the minimum; extras are kind-specific.
   adr: ["id", "title", "status", "date", "context", "decision", "consequences"],
+  tutorial: ["title", "audience", "updated"],
+  "how-to": ["title", "audience", "updated"],
+  reference: ["title", "scope", "updated"],
+  explanation: ["title", "updated"],
+  runbook: ["title", "audience", "updated"],
+  rfc: ["title", "status", "owner", "created", "updated"],
+  journal: ["title", "date"],
+  // Legacy — readable for backward-compat.
   specs: ["title", "status", "owner", "created", "updated"],
   guides: ["title", "audience", "prerequisites", "updated"],
-  reference: ["title", "scope", "updated"],
   conventions: ["title", "applies_to", "updated"],
   lessons: ["title", "date", "triggering_event", "updated"],
   notes: ["title", "updated"],
-  journal: ["title", "date"],
   files: ["file_path", "language", "updated"],
 } as const;
 
@@ -278,15 +286,153 @@ updated: {{updated}}
 {{notes}}
 `;
 
+// ── Modern ADR-2244 templates (Phase 1) ──────────────────────────────────
+// Re-use the closest legacy template as the body for the modern kinds
+// that did not exist before ADR-2244. The frontmatter is shaped by the
+// classification 4-tuple at write time; these provide a sensible body
+// outline.
+
+export const TUTORIAL_TEMPLATE = `---
+kind: tutorial
+title: {{title}}
+audience: {{audience}}
+lifecycle: seedling
+provenance: human
+updated: {{updated}}
+---
+
+# {{title}}
+
+## What you'll learn
+
+{{learning_outcome}}
+
+## Prerequisites
+
+{{prerequisites}}
+
+## Steps
+
+{{steps}}
+
+## Next steps
+
+{{next_steps}}
+`;
+
+export const HOW_TO_TEMPLATE = `---
+kind: how-to
+title: {{title}}
+audience: {{audience}}
+lifecycle: seedling
+provenance: human
+updated: {{updated}}
+---
+
+# How to {{title}}
+
+## Goal
+
+{{goal}}
+
+## Procedure
+
+{{procedure}}
+
+## Verification
+
+{{verification}}
+`;
+
+export const EXPLANATION_TEMPLATE = `---
+kind: explanation
+title: {{title}}
+lifecycle: seedling
+provenance: human
+updated: {{updated}}
+---
+
+# {{title}}
+
+{{body}}
+`;
+
+export const RUNBOOK_TEMPLATE = `---
+kind: runbook
+title: {{title}}
+audience: ops
+lifecycle: seedling
+provenance: human
+updated: {{updated}}
+---
+
+# Runbook — {{title}}
+
+## When this fires
+
+{{trigger}}
+
+## Diagnose
+
+{{diagnose}}
+
+## Mitigate
+
+{{mitigate}}
+
+## Verify recovery
+
+{{verify}}
+`;
+
+export const RFC_TEMPLATE = `---
+kind: rfc
+title: {{title}}
+status: {{status}}
+owner: {{owner}}
+created: {{created}}
+updated: {{updated}}
+---
+
+# RFC: {{title}}
+
+## Summary
+
+{{summary}}
+
+## Motivation
+
+{{motivation}}
+
+## Proposed design
+
+{{design}}
+
+## Alternatives considered
+
+{{alternatives}}
+
+## Open questions
+
+{{questions}}
+`;
+
 export const TEMPLATES: Readonly<Record<string, string>> = {
+  // Modern (ADR-2244)
   adr: ADR_TEMPLATE,
+  tutorial: TUTORIAL_TEMPLATE,
+  "how-to": HOW_TO_TEMPLATE,
+  reference: REFERENCE_TEMPLATE,
+  explanation: EXPLANATION_TEMPLATE,
+  runbook: RUNBOOK_TEMPLATE,
+  rfc: RFC_TEMPLATE,
+  journal: JOURNAL_TEMPLATE,
+  // Legacy
   specs: SPEC_TEMPLATE,
   guides: GUIDE_TEMPLATE,
-  reference: REFERENCE_TEMPLATE,
   conventions: CONVENTION_TEMPLATE,
   lessons: LESSON_TEMPLATE,
   notes: NOTE_TEMPLATE,
-  journal: JOURNAL_TEMPLATE,
   files: FILE_TEMPLATE,
 } as const;
 

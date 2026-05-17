@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-magic-numbers -- source: process-page rendering constants (50-symbol cap, 80-char slug) copied from mcp_server/handlers/ingest_codebase_pages.py. */
 /**
  * Wiki-page rendering for ingest-codebase processes.
  *
@@ -32,11 +33,22 @@ export function renderProcessPage(
   const slug = _slug(entry) || "process";
   const relPath = `reference/codebase/${slug}.md`;
 
+  // ADR-2244 Phase 6: codebase_analyze output is auto-generated reference
+  // content. Setting ``provenance: auto-generated`` lets wiki_list / the
+  // INDEX hide these pages from default views (Phase 5).
   const lines = [
     "---",
     `title: Process — ${entry}`,
     "kind: reference",
-    `tags: [code-reference, process, ${kind}]`,
+    "lifecycle: active",
+    "audience: [developer]",
+    "provenance: auto-generated",
+    "generator:",
+    "  model: codebase_analyze",
+    "  version: ''",
+    "  prompt_template: ''",
+    `  generated_at: ${new Date().toISOString().replace(/\.\d{3}Z$/, "Z")}`,
+    `tags: [code-reference, codebase, process, ${kind}]`,
     "---",
     "",
     `# Process — \`${entry}\``,

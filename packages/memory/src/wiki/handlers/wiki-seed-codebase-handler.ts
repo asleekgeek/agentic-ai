@@ -95,17 +95,26 @@ export interface WikiSeedCodebaseResult {
 }
 
 /**
- * Infer wiki kind from a relative path.
- * source: mcp_server/handlers/wiki_seed_codebase.py:138-151 (_kind_for)
+ * Map a seed-eligible markdown path to a *modern* (ADR-2244) kind.
+ *
+ * Returned values are themselves tag aliases registered in the wiki
+ * axis registry's _DEFAULT_KINDS, so emitting the value as a memory tag
+ * lets the classifier route the page to the correct kind directory.
+ *
+ * Before ADR-2244 Phase 6.2 this returned legacy kinds (``spec``,
+ * ``convention``, ``lesson``, ``note``) and the call-site wrote them
+ * as ``kind:<value>`` tags — a shape the classifier never read.
+ *
+ * source: mcp_server/handlers/wiki_seed_codebase.py _kind_for (PR #40)
  */
 function kindFor(relPath: string): string {
   const low = relPath.toLowerCase();
   if (low.includes("adr") || low.includes("decision")) return "adr";
-  if (low.includes("architecture")) return "spec";
-  if (low.includes("convention") || low.includes("style")) return "convention";
-  if (low.includes("lesson") || low.includes("postmortem")) return "lesson";
-  if (low.startsWith("readme") || low.endsWith("/readme.md")) return "note";
-  return "note";
+  if (low.includes("architecture")) return "rfc";          // was: spec
+  if (low.includes("convention") || low.includes("style")) return "explanation"; // was: convention
+  if (low.includes("lesson") || low.includes("postmortem")) return "explanation"; // was: lesson
+  // README and bare notes route to explanation in the modern taxonomy.
+  return "explanation";
 }
 
 /**
@@ -278,9 +287,14 @@ export async function wikiSeedCodebaseHandler(
         content = content.slice(0, maxBytes) + "\n\n[...truncated]";
       }
       const kind = kindFor(relPath);
+      // ADR-2244 Phase 6.2: emit ``kind`` as a registered tag alias
+      // (``adr`` / ``rfc`` / ``explanation``) so the classifier actually
+      // routes the page; emit ``imported`` so provenance resolves to
+      // ``imported`` (these are bulk-imported markdown files, not human-
+      // authored fresh in the wiki).
       const result = await rememberFn({
         content,
-        tags: ["seed:codebase", `kind:${kind}`, `file:${relPath}`],
+        tags: ["seed:codebase", "imported", kind, `file:${relPath}`],
         domain,
         source: `seed:${relPath}`,
         force: true,

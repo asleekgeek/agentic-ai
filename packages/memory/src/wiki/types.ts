@@ -218,15 +218,33 @@ export interface CurationMemo {
 
 // ── Wiki page kinds ───────────────────────────────────────────────────────
 
+/**
+ * Wiki page kinds — union of modern ADR-2244 kinds and legacy kinds for
+ * read-time backward compatibility.
+ *
+ * Modern (ADR-2244 §4.1): tutorial, how-to, reference, explanation, adr,
+ * runbook, rfc, journal.
+ *
+ * Legacy: specs, guides, conventions, lessons, notes, files, adrs. These
+ * remain readable but are never produced by new writes; the read path
+ * normalizes them via classification.ts normalizeLegacyKind.
+ */
 export type WikiKind =
+  // Modern (ADR-2244)
+  | "tutorial"
+  | "how-to"
+  | "reference"
+  | "explanation"
   | "adr"
+  | "runbook"
+  | "rfc"
+  | "journal"
+  // Legacy
   | "specs"
   | "guides"
-  | "reference"
   | "conventions"
   | "lessons"
   | "notes"
-  | "journal"
   | "files";
 
 export interface WikiPage {

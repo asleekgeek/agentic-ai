@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-magic-numbers -- source: exact port of mcp_server/core/wiki_classifier.py; all numeric literals (positive-score threshold, length bounds, title cap) copied verbatim. */
 /**
  * Wiki content classifier — determines page kind or rejects noise.
  *
@@ -15,8 +16,21 @@
  * source: mcp_server/core/wiki_classifier.py
  */
 
-import type { ClassifierRule } from "./schema-loader.js";
+import { loadRegistry, type ClassifierRule } from "./schema-loader.js";
 import { applyRules } from "./rule-engine.js";
+import {
+  AXIS_AUDIENCE,
+  AXIS_KIND,
+  AXIS_LIFECYCLE,
+  AXIS_PROVENANCE,
+  getRegistry,
+  matchAxis,
+} from "./axis-registry.js";
+import {
+  type Classification,
+  type Generator,
+  makeClassification,
+} from "./classification.js";
 
 // ── Rejection patterns ────────────────────────────────────────────────────
 
@@ -235,7 +249,6 @@ function loadUserRules(wikiRoot?: string): readonly ClassifierRule[] {
     return userRulesCache;
   }
   try {
-    const { loadRegistry } = require("./schema-loader.js") as typeof import("./schema-loader.js");
     const registry = loadRegistry(wikiRoot);
     userRulesCache = registry.rules;
   } catch {
@@ -303,10 +316,23 @@ export function classifyMemory(
   // Gate 2 — Hard-negative gate
   if (failsHardNegatives(content, firstLine)) return null;
 
-  // Tag-based fast-path
+  // Tag-based fast-path.
+  //
+  // ADR-2244 Phase 6/6.2: extended to include the new modern-kind shape
+  // tags (runbook/playbook/tutorial/getting-started/how-to/howto/rfc/
+  // proposal/journal) plus the auto-gen producer markers (code-reference/
+  // codebase) so codebase_analyze output is admitted by the gate and the
+  // provenance facet downstream marks it as auto-generated.
   const EXPLICIT_KNOWLEDGE_TAGS = new Set([
+    // Legacy knowledge tags.
     "decision", "adr", "architecture", "spec", "design", "lesson",
     "convention", "rule", "standard", "paper", "research",
+    // ADR-2244 modern-kind shape tags.
+    "runbook", "playbook", "tutorial", "getting-started",
+    "how-to", "howto", "rfc", "proposal", "journal",
+    // Auto-gen producer markers — bypass positive score because the
+    // producer has already filtered to high-signal content.
+    "code-reference", "codebase",
   ]);
   let hasExplicitTag = false;
   for (const tag of tagSetPre) {
@@ -407,4 +433,149 @@ function slugify(text: string): string {
   return text.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 80);
 }
 
+// ── ADR-2244 4-tuple classification ───────────────────────────────────────
+//
+// Layer the multi-axis registry on top of the legacy single-kind gate.
+// classifyMemory() above is preserved unchanged so existing callers
+// (wiki/sync.ts, wiki/handlers/wiki-purge.ts) keep working. New code
+// should prefer classifyMemoryFull() which returns the 4-tuple plus tags.
+//
+// source: mcp_server/core/wiki_classifier.py (PR #27 + PR #28)
 
+/**
+ * Legacy → modern kind mapping. One-time backward-compat transformation
+ * (the legacy classifier returns 5 kinds; the modern axis defines 8).
+ * Per ADR-2244 §4.1.
+ */
+const LEGACY_TO_MODERN: Readonly<Record<string, string>> = {
+  adr: "adr",
+  lesson: "explanation",
+  convention: "explanation",
+  spec: "rfc",
+  note: "explanation",
+  reference: "reference",
+};
+
+function detectModernKind(
+  content: string,
+  tags: readonly string[] | null,
+  legacyKind: string,
+  wikiRoot?: string,
+): string {
+  const reg = getRegistry(wikiRoot ?? null);
+  const matches = matchAxis(content, tags, AXIS_KIND, reg);
+  const head = matches.length > 0 ? matches[0] : undefined;
+  if (head !== undefined) return head;
+  return LEGACY_TO_MODERN[legacyKind] ?? "explanation";
+}
+
+function detectProvenance(
+  tags: readonly string[] | null,
+  wikiRoot?: string,
+): string {
+  const reg = getRegistry(wikiRoot ?? null);
+  const matches = matchAxis("", tags, AXIS_PROVENANCE, reg);
+  const head = matches.length > 0 ? matches[0] : undefined;
+  if (head !== undefined) return head;
+  const def = reg.defaultFor(AXIS_PROVENANCE);
+  return def !== null ? def.name : "human";
+}
+
+function detectAudiences(
+  content: string,
+  tags: readonly string[] | null,
+  wikiRoot?: string,
+): readonly string[] {
+  const reg = getRegistry(wikiRoot ?? null);
+  const matches = [...matchAxis(content, tags, AXIS_AUDIENCE, reg)];
+  if (matches.length === 0) {
+    const def = reg.defaultFor(AXIS_AUDIENCE);
+    matches.push(def !== null ? def.name : "developer");
+  }
+  // Deduplicate preserving order.
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const a of matches) {
+    if (!seen.has(a)) {
+      seen.add(a);
+      out.push(a);
+    }
+  }
+  return out;
+}
+
+function pickLifecycle(kind: string, wikiRoot?: string): string {
+  const reg = getRegistry(wikiRoot ?? null);
+  for (const v of reg.values(AXIS_LIFECYCLE)) {
+    if (!v.default) continue;
+    const isAdrDefault = kind === "adr" && v.applies_to_kinds.includes("adr");
+    const isUniversalDefault = kind !== "adr" && v.applies_to_kinds.length === 0;
+    if (isAdrDefault || isUniversalDefault) return v.name;
+  }
+  return kind === "adr" ? "proposed" : "seedling";
+}
+
+/**
+ * Classify memory content into the ADR-2244 4-tuple Classification, or
+ * null to reject.
+ *
+ * Returns Classification (kind, lifecycle, audience, provenance,
+ * generator, tags) when the memory should be admitted, or null to reject.
+ *
+ * Open-world dispatch — every axis consults the wiki axis registry, so
+ * adding a new kind / lifecycle / audience / provenance is a wiki schema
+ * edit (drop a file in wiki/_schema/<axis>/<name>.md), not a code edit.
+ *
+ * Admission gates are identical to the legacy classifyMemory():
+ *   1. Audit-tag gate
+ *   2. User-editable rules from wiki/_rules/
+ *   3. Noise rejection
+ *   4. Hard-negative gate
+ *   5. Positive scoring (≥ 4 of 8 signals unless explicit-tag bypass)
+ *
+ * source: mcp_server/core/wiki_classifier.py classify_memory
+ */
+export function classifyMemoryFull(
+  content: string,
+  tags?: readonly string[] | null,
+  wikiRoot?: string,
+): Classification | null {
+  const legacyKind = classifyMemory(content, tags, wikiRoot);
+  if (legacyKind === null) return null;
+
+  const modernKind = detectModernKind(content, tags ?? null, legacyKind, wikiRoot);
+  const provenance = detectProvenance(tags ?? null, wikiRoot);
+  const lifecycle = pickLifecycle(modernKind, wikiRoot);
+  const audiences = detectAudiences(content, tags ?? null, wikiRoot);
+
+  // Provenance with full generator block when the registered provenance
+  // requires it. The registry entry's requires_generator flag is the
+  // source of truth — no hardcoded set of provenance names here.
+  let generator: Generator | null = null;
+  const reg = getRegistry(wikiRoot ?? null);
+  const provValue = reg.get(AXIS_PROVENANCE, provenance);
+  if (provValue !== null && provValue.requires_generator) {
+    generator = {
+      model: "unknown",
+      version: "",
+      prompt_template: "",
+      generated_at: "",
+    };
+  }
+
+  // Tags pass through (capped at 50, lowercased + deduped + sorted).
+  const tagSet = new Set((tags ?? []).map((t) => t.toLowerCase()));
+  const outTags = [...tagSet].sort().slice(0, 50);
+
+  return makeClassification(
+    {
+      kind: modernKind,
+      lifecycle,
+      audience: audiences,
+      provenance,
+      generator,
+      tags: outTags,
+    },
+    reg,
+  );
+}

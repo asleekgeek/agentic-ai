@@ -1,3 +1,4 @@
+/* eslint-disable @typescript-eslint/no-magic-numbers -- source: FNV-1a hash constants (0x811c9dc5 offset, 0x01000193 prime) per Fowler/Noll/Vo, hex-encoding constants (16 base, 8 width) per UUID/hex output, and 40-char domain slug cap matching mcp_server/core/wiki_layout.py. */
 /**
  * Wiki sync — decide whether a stored memory should be promoted to an
  * authored wiki page, and build the page payload.
@@ -9,19 +10,25 @@
  * -------------
  * The wiki is an *authored* layer, not a projection of every memory. Only
  * memories that pass the classifier gate are promoted. The promotion
- * produces a kind-routed page per memory. The ADR / spec structured
- * templates stay reserved for explicit wiki_adr / wiki_write tool calls
- * where the caller supplies the structure.
+ * produces a kind-routed page per memory.
  *
- * Filename format: <kind>/<domain>/<memory_id>-<slug>.md
- * Including the memory ID makes sync idempotent.
+ * Routing: ADR-2244 §4.1 modern kinds (tutorial, how-to, reference,
+ * explanation, adr, runbook, rfc, journal). The legacy directories
+ * (notes, specs, conventions, lessons, guides, files) remain readable
+ * for back-compat but new writes always route to modern kinds.
  *
- * source: mcp_server/core/wiki_sync.py (Cortex ed33435)
+ * Filename format: <modern-kind>/<domain>/<memory_id>-<slug>.md.
+ *
+ * source: mcp_server/core/wiki_sync.py
  */
 
-import { classifyMemory, deriveTitle } from "./page-classifier.js";
+import {
+  classifyMemoryFull,
+  deriveTitle,
+} from "./page-classifier.js";
+import { toFrontmatter } from "./classification.js";
+import { generatePageId } from "./identity.js";
 import { slugify } from "./layout.js";
-import { buildNote } from "./pages.js";
 
 // source: mcp_server/core/wiki_sync.py:31
 const DECISION_TAGS = new Set([
@@ -39,9 +46,6 @@ function nowIso(): string {
 /**
  * True if the memory's tags warrant a wiki page.
  *
- * Precondition: tags is an array of strings (may be null / undefined).
- * Postcondition: returns true iff at least one tag (lowercased) is in DECISION_TAGS.
- *
  * source: mcp_server/core/wiki_sync.py:40-44
  */
 export function shouldSync(tags: readonly string[] | null | undefined): boolean {
@@ -49,26 +53,44 @@ export function shouldSync(tags: readonly string[] | null | undefined): boolean 
   return tags.some((t) => DECISION_TAGS.has(t.toLowerCase()));
 }
 
-// Map classifier kind (singular) to PAGE_KINDS directory (plural)
-// source: mcp_server/core/wiki_sync.py:94-103
-const KIND_TO_DIR: Readonly<Record<string, string>> = {
-  adr: "adr",
-  spec: "specs",
-  lesson: "lessons",
-  convention: "conventions",
-  note: "notes",
-  guide: "guides",
-  reference: "reference",
-  journal: "journal",
-} as const;
+/**
+ * Format a frontmatter object with deterministic key ordering. Lists
+ * render as YAML inline arrays for round-trippability with the redirect/
+ * axis-registry parsers.
+ */
+function formatFrontmatterYaml(fm: Record<string, unknown>): string {
+  const lines: string[] = ["---"];
+  for (const key of Object.keys(fm).sort()) {
+    const value = fm[key];
+    if (value === null || value === undefined) continue;
+    if (Array.isArray(value)) {
+      const inner = value.map((v) => String(v)).join(", ");
+      lines.push(`${key}: [${inner}]`);
+    } else if (typeof value === "object") {
+      lines.push(`${key}:`);
+      const obj = value as Record<string, unknown>;
+      for (const k of Object.keys(obj).sort()) {
+        lines.push(`  ${k}: ${String(obj[k] ?? "")}`);
+      }
+    } else {
+      lines.push(`${key}: ${String(value)}`);
+    }
+  }
+  lines.push("---");
+  return lines.join("\n");
+}
 
 /**
  * Build (relativePath, markdown) for a memory, or null if rejected.
  *
- * Precondition: memoryId is a positive integer or string; content is non-empty string.
- * Postcondition: returns [relPath, markdown] if the memory is wiki-worthy, else null.
- *   relPath is domain-scoped: <kind>/<domain>/<memoryId>-<slug>.md
- *   markdown is a valid wiki page in the note template.
+ * Routes via the ADR-2244 4-tuple. The frontmatter carries the full
+ * classification (kind, lifecycle, audience, provenance, generator,
+ * tags) plus a stable page id (UUID4) so the page can be renamed
+ * without rotting inbound links.
+ *
+ * Precondition: memoryId is positive integer or string; content non-empty.
+ * Postcondition: returns [relPath, markdown] if memory is wiki-worthy.
+ *   relPath is <modern-kind>/<domain>/<memoryId>-<slug>.md.
  *
  * source: mcp_server/core/wiki_sync.py:67-112
  */
@@ -77,16 +99,16 @@ export function buildFromMemory(opts: {
   readonly content: string;
   readonly tags?: readonly string[] | null;
   readonly domain?: string;
+  readonly wiki_root?: string;
 }): [string, string] | null {
-  const { memory_id, content, tags, domain = "" } = opts;
+  const { memory_id, content, tags, domain = "", wiki_root } = opts;
 
-  const kind = classifyMemory(content, tags ?? null);
-  if (kind === null) return null;
+  const classification = classifyMemoryFull(content, tags ?? null, wiki_root);
+  if (classification === null) return null;
 
-  let title = deriveTitle(content, kind, tags ?? null);
+  let title = deriveTitle(content, classification.kind, tags ?? null);
   if (!title) {
     // Fallback: FNV-1a style hash prefix (deterministic, no crypto dep)
-    // source: empirical — matches Python: hashlib.sha256(content.encode()).hexdigest()[:8]
     let h = 0x811c9dc5;
     const enc = new TextEncoder();
     const bytes = enc.encode(content);
@@ -99,16 +121,20 @@ export function buildFromMemory(opts: {
 
   const slug = slugify(title);
   const filename = `${memory_id}-${slug}.md`;
-  const dirName = KIND_TO_DIR[kind] ?? "notes";
+  // ADR-2244: route to the modern kind directory directly. No legacy map.
+  const dirName = classification.kind;
   const safeDomain = domain ? slugify(domain, 40) : "_general";
   const rel = `${dirName}/${safeDomain}/${filename}`;
 
-  const markdown = buildNote({
+  const fm: Record<string, unknown> = {
+    id: generatePageId(),
+    memory_id,
     title,
-    body: content,
-    tags: tags?.slice() ?? [kind],
-    updated: nowIso(),
-  });
+    created: nowIso(),
+    ...toFrontmatter(classification),
+  };
+
+  const markdown = `${formatFrontmatterYaml(fm)}\n\n# ${title}\n\n${content}\n`;
 
   return [rel, markdown];
 }

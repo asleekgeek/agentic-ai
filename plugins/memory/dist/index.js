@@ -38,7 +38,6 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   isNodeMode || !mod || !mod.__esModule ? __defProp(target, "default", { value: mod, enumerable: true }) : target,
   mod
 ));
-var __toCommonJS = (mod) => __copyProps(__defProp({}, "__esModule", { value: true }), mod);
 
 // node_modules/.pnpm/ajv@8.20.0/node_modules/ajv/dist/compile/codegen/code.js
 var require_code = __commonJS({
@@ -13206,349 +13205,6 @@ var init_fileFromPath = __esm({
         return "File";
       }
     };
-  }
-});
-
-// packages/memory/dist/wiki/layout.js
-function slugify(value, maxLen = _MAX_SLUG_LEN) {
-  if (!value)
-    return "unknown";
-  const cleaned = value.trim().toLowerCase().replace(_SAFE, "-").replace(/^-+|-+$/g, "");
-  if (!cleaned)
-    return "unknown";
-  const trimmed = cleaned.slice(0, maxLen).replace(/-+$/, "");
-  return trimmed || "unknown";
-}
-function adrFilename(number3, slug) {
-  return `${String(number3).padStart(4, "0")}-${slug}.md`;
-}
-function pagePath(kind2, filename) {
-  if (!PAGE_KINDS.includes(kind2)) {
-    throw new Error(`unknown wiki page kind: ${kind2}`);
-  }
-  return `${kind2}/${filename}`;
-}
-function indexPath() {
-  return ".generated/INDEX.md";
-}
-var PAGE_KINDS, _SAFE, _MAX_SLUG_LEN;
-var init_layout = __esm({
-  "packages/memory/dist/wiki/layout.js"() {
-    "use strict";
-    PAGE_KINDS = [
-      "adr",
-      "specs",
-      "guides",
-      "reference",
-      "conventions",
-      "lessons",
-      "notes",
-      "journal",
-      "files"
-    ];
-    _SAFE = /[^a-zA-Z0-9_.\\-]+/g;
-    _MAX_SLUG_LEN = 80;
-  }
-});
-
-// packages/memory/dist/wiki/pages.js
-function nowIso3() {
-  return (/* @__PURE__ */ new Date()).toISOString().replace(/\.\d{3}Z$/, "Z");
-}
-function formatFrontmatter(fm) {
-  if (!fm || Object.keys(fm).length === 0)
-    return "";
-  const lines = ["---"];
-  for (const key of Object.keys(fm).sort()) {
-    const value = fm[key];
-    let rendered;
-    if (Array.isArray(value)) {
-      rendered = "[" + value.map(String).join(", ") + "]";
-    } else if (value == null) {
-      rendered = "";
-    } else {
-      rendered = String(value);
-    }
-    lines.push(`${key}: ${rendered}`);
-  }
-  lines.push("---");
-  lines.push("");
-  return lines.join("\n");
-}
-function stripInlineList(value) {
-  let inner = value.trim();
-  if (inner.startsWith("[") && inner.endsWith("]")) {
-    inner = inner.slice(1, -1);
-  }
-  return inner.split(",").map((s2) => s2.trim()).filter(Boolean);
-}
-function parsePage(text) {
-  if (!text.startsWith("---\n") && !text.startsWith("---\r\n")) {
-    return { frontmatter: {}, body: text };
-  }
-  const lines = text.split("\n");
-  if (!lines[0] || lines[0].trim() !== "---") {
-    return { frontmatter: {}, body: text };
-  }
-  const fm = {};
-  let bodyStart = lines.length;
-  for (let idx = 1; idx < lines.length; idx++) {
-    const line = lines[idx];
-    if (!line)
-      continue;
-    if (line.trim() === "---") {
-      bodyStart = idx + 1;
-      break;
-    }
-    if (!line.includes(":"))
-      continue;
-    const colonIdx = line.indexOf(":");
-    const key = line.slice(0, colonIdx).trim();
-    const raw = line.slice(colonIdx + 1).trim();
-    if (raw.startsWith("[") && raw.endsWith("]")) {
-      fm[key] = stripInlineList(raw);
-    } else {
-      fm[key] = raw;
-    }
-  }
-  let bodyLines = lines.slice(bodyStart);
-  while (bodyLines.length > 0 && bodyLines[0] === "") {
-    bodyLines = bodyLines.slice(1);
-  }
-  return { frontmatter: fm, body: bodyLines.join("\n") };
-}
-function renderPage(doc) {
-  const header = formatFrontmatter(doc.frontmatter);
-  if (header && doc.body) {
-    return header + doc.body + (doc.body.endsWith("\n") ? "" : "\n");
-  }
-  if (header)
-    return header;
-  return doc.body ? doc.body + (doc.body.endsWith("\n") ? "" : "\n") : "";
-}
-function buildAdr(args) {
-  const status = args.status ?? "accepted";
-  if (!ADR_STATUSES.includes(status)) {
-    throw new Error(`unknown ADR status: ${status}`);
-  }
-  const fm = {
-    kind: "adr",
-    number: String(args.number).padStart(4, "0"),
-    title: args.title,
-    status,
-    created: nowIso3(),
-    tags: args.tags ?? ["adr"]
-  };
-  const body = `# ADR-${String(args.number).padStart(4, "0")}: ${args.title}
-
-## Status
-
-${status}
-
-## Context
-
-${args.context}
-
-## Decision
-
-${args.decision}
-
-## Consequences
-
-${args.consequences}
-`;
-  return renderPage({ frontmatter: fm, body });
-}
-var ADR_STATUSES;
-var init_pages = __esm({
-  "packages/memory/dist/wiki/pages.js"() {
-    "use strict";
-    init_layout();
-    ADR_STATUSES = [
-      "proposed",
-      "accepted",
-      "rejected",
-      "superseded",
-      "deprecated"
-    ];
-  }
-});
-
-// packages/memory/dist/wiki/schema-loader.js
-var schema_loader_exports = {};
-__export(schema_loader_exports, {
-  loadRegistry: () => loadRegistry
-});
-import * as fs4 from "node:fs";
-import * as path4 from "node:path";
-function parseKind(relPath, content) {
-  const doc = parsePage(content);
-  const fm = doc.frontmatter;
-  const name = fm["name"] ?? path4.basename(relPath, ".md");
-  if (!name)
-    return null;
-  const toStringArray = (v2) => {
-    if (Array.isArray(v2))
-      return v2.map(String);
-    if (typeof v2 === "string" && v2)
-      return [v2];
-    return [];
-  };
-  return {
-    name,
-    display_name: String(fm["display_name"] ?? name),
-    dir_name: String(fm["dir_name"] ?? name + "s"),
-    required_sections: toStringArray(fm["required_sections"]),
-    optional_sections: toStringArray(fm["optional_sections"]),
-    parent_kind: fm["parent_kind"] ?? null,
-    autofill_prompt: String(fm["autofill_prompt"] ?? "")
-  };
-}
-function parseRulesTable(body) {
-  const rows = [];
-  let m2;
-  const re2 = /^\|(.+)\|$/gm;
-  while ((m2 = re2.exec(body)) !== null) {
-    rows.push(m2[1]);
-  }
-  if (rows.length < 2)
-    return [];
-  const headerCells = rows[0].split("|").map((c2) => c2.trim().toLowerCase());
-  const rules = [];
-  for (const row of rows.slice(2)) {
-    const cells = row.split("|").map((c2) => c2.trim());
-    if (cells.length !== headerCells.length)
-      continue;
-    const r2 = {};
-    headerCells.forEach((h2, i2) => {
-      r2[h2] = cells[i2] ?? "";
-    });
-    if (!r2["pattern"] || !r2["kind"])
-      continue;
-    let target = r2["target"] ?? null;
-    if (target === "reject" || target === "-" || target === "") {
-      target = null;
-    }
-    let weight = 1;
-    const rawWeight = r2["weight"];
-    if (rawWeight) {
-      const parsed = parseFloat(rawWeight);
-      if (!isNaN(parsed))
-        weight = parsed;
-    }
-    rules.push({
-      pattern: r2["pattern"],
-      pattern_kind: r2["kind"],
-      target_kind: target,
-      weight,
-      note: r2["note"] ?? ""
-    });
-  }
-  return rules;
-}
-function parseView(relPath, content) {
-  const doc = parsePage(content);
-  const m2 = QUERY_BLOCK_RE.exec(doc.body);
-  if (!m2)
-    return null;
-  const fm = doc.frontmatter;
-  return {
-    name: String(fm["name"] ?? path4.basename(relPath, ".md")),
-    rel_path: relPath,
-    query: m2[1].trim(),
-    description: String(fm["description"] ?? "")
-  };
-}
-function parseTrigger(relPath, content) {
-  const doc = parsePage(content);
-  const fm = doc.frontmatter;
-  const event = fm["event"];
-  if (!event)
-    return null;
-  return {
-    name: String(fm["name"] ?? path4.basename(relPath, ".md")),
-    event: String(event),
-    condition: String(fm["condition"] ?? ""),
-    action: String(fm["action"] ?? "")
-  };
-}
-function loadFolderDirect(wikiRoot, folder, parser) {
-  const results = {};
-  const full = path4.join(wikiRoot, folder);
-  if (!fs4.existsSync(full))
-    return results;
-  function walk(dir) {
-    let entries;
-    try {
-      entries = fs4.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      const entryPath = path4.join(dir, entry.name);
-      if (entry.isDirectory()) {
-        walk(entryPath);
-      } else if (entry.isFile() && entry.name.endsWith(".md")) {
-        const relPath = path4.relative(wikiRoot, entryPath).replace(/\\/g, "/");
-        try {
-          const content = fs4.readFileSync(entryPath, "utf-8");
-          const parsed = parser(relPath, content);
-          if (parsed !== null) {
-            const key = parsed.name ?? relPath;
-            results[key] = parsed;
-          }
-        } catch {
-        }
-      }
-    }
-  }
-  walk(full);
-  return results;
-}
-function loadRegistry(wikiRoot) {
-  const kinds = loadFolderDirect(wikiRoot, "_kinds", parseKind);
-  const rules = [];
-  const rulesDir = path4.join(wikiRoot, "_rules");
-  if (fs4.existsSync(rulesDir)) {
-    const walk = (dir) => {
-      let entries;
-      try {
-        entries = fs4.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of [...entries].sort((a2, b2) => a2.name.localeCompare(b2.name))) {
-        const entryPath = path4.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          walk(entryPath);
-        } else if (entry.isFile() && entry.name.endsWith(".md")) {
-          try {
-            const content = fs4.readFileSync(entryPath, "utf-8");
-            const body = parsePage(content).body;
-            rules.push(...parseRulesTable(body));
-          } catch {
-          }
-        }
-      }
-    };
-    walk(rulesDir);
-  }
-  const views = loadFolderDirect(wikiRoot, "_views", parseView);
-  const triggers = loadFolderDirect(wikiRoot, "_triggers", parseTrigger);
-  return {
-    kinds,
-    rules,
-    views,
-    triggers,
-    known_kind_names: new Set(Object.keys(kinds))
-  };
-}
-var QUERY_BLOCK_RE;
-var init_schema_loader = __esm({
-  "packages/memory/dist/wiki/schema-loader.js"() {
-    "use strict";
-    init_pages();
-    QUERY_BLOCK_RE = /```cortex-query\n([\s\S]*?)\n```/;
   }
 });
 
@@ -37671,9 +37327,9 @@ var SUCCESS_DOMAIN_RE = /\b(fixed|resolved|working|success|passed|deployed|compl
 var QUESTION_MARKERS_RE = /\?|\b(confus|unclear|don'?t understand|makes no sense|weird|bizarre|unexpected|strange|mysterious|puzzling|why does|how come|what the)\b/gi;
 var URGENCY_DOMAIN_RE = /\b(urgent|critical|blocking|deadline|asap|immediately|production|outage|down|hotfix|p0|sev[- ]?1)\b/gi;
 var INSIGHT_DOMAIN_RE = /\b(realized|discovered|found out|turns out|TIL|interesting|insight|key finding|important lesson|aha|eureka|lightbulb)\b/gi;
-function countMatches(re2, content) {
-  re2.lastIndex = 0;
-  const matches2 = content.match(re2);
+function countMatches(re3, content) {
+  re3.lastIndex = 0;
+  const matches2 = content.match(re3);
   return matches2 ? Math.min(matches2.length, 3) : 0;
 }
 function detectEmotions(content) {
@@ -45773,14 +45429,14 @@ var AST = class {
     if (this !== this.#root)
       return this.#root.toMMPattern();
     const glob = this.toString();
-    const [re2, body, hasMagic, uflag] = this.toRegExpSource();
+    const [re3, body, hasMagic, uflag] = this.toRegExpSource();
     const anyMagic = hasMagic || this.#hasMagic || this.#options.nocase && !this.#options.nocaseMagicOnly && glob.toUpperCase() !== glob.toLowerCase();
     if (!anyMagic) {
       return body;
     }
     const flags = (this.#options.nocase ? "i" : "") + (uflag ? "u" : "");
-    return Object.assign(new RegExp(`^${re2}$`, flags), {
-      _src: re2,
+    return Object.assign(new RegExp(`^${re3}$`, flags), {
+      _src: re3,
       _glob: glob
     });
   }
@@ -45865,10 +45521,10 @@ var AST = class {
     if (!isExtglobAST(this)) {
       const noEmpty = this.isStart() && this.isEnd() && !this.#parts.some((s2) => typeof s2 !== "string");
       const src = this.#parts.map((p2) => {
-        const [re2, _2, hasMagic, uflag] = typeof p2 === "string" ? _a2.#parseGlob(p2, this.#hasMagic, noEmpty) : p2.toRegExpSource(allowDot);
+        const [re3, _2, hasMagic, uflag] = typeof p2 === "string" ? _a2.#parseGlob(p2, this.#hasMagic, noEmpty) : p2.toRegExpSource(allowDot);
         this.#hasMagic = this.#hasMagic || hasMagic;
         this.#uflag = this.#uflag || uflag;
-        return re2;
+        return re3;
       }).join("");
       let start2 = "";
       if (this.isStart()) {
@@ -45971,28 +45627,28 @@ var AST = class {
       if (typeof p2 === "string") {
         throw new Error("string type in extglob ast??");
       }
-      const [re2, _2, _hasMagic, uflag] = p2.toRegExpSource(dot4);
+      const [re3, _2, _hasMagic, uflag] = p2.toRegExpSource(dot4);
       this.#uflag = this.#uflag || uflag;
-      return re2;
+      return re3;
     }).filter((p2) => !(this.isStart() && this.isEnd()) || !!p2).join("|");
   }
   static #parseGlob(glob, hasMagic, noEmpty = false) {
     let escaping = false;
-    let re2 = "";
+    let re3 = "";
     let uflag = false;
     let inStar = false;
     for (let i2 = 0; i2 < glob.length; i2++) {
       const c2 = glob.charAt(i2);
       if (escaping) {
         escaping = false;
-        re2 += (reSpecials.has(c2) ? "\\" : "") + c2;
+        re3 += (reSpecials.has(c2) ? "\\" : "") + c2;
         continue;
       }
       if (c2 === "*") {
         if (inStar)
           continue;
         inStar = true;
-        re2 += noEmpty && /^[*]+$/.test(glob) ? starNoEmpty : star;
+        re3 += noEmpty && /^[*]+$/.test(glob) ? starNoEmpty : star;
         hasMagic = true;
         continue;
       } else {
@@ -46000,7 +45656,7 @@ var AST = class {
       }
       if (c2 === "\\") {
         if (i2 === glob.length - 1) {
-          re2 += "\\\\";
+          re3 += "\\\\";
         } else {
           escaping = true;
         }
@@ -46009,7 +45665,7 @@ var AST = class {
       if (c2 === "[") {
         const [src, needUflag, consumed, magic] = parseClass(glob, i2);
         if (consumed) {
-          re2 += src;
+          re3 += src;
           uflag = uflag || needUflag;
           i2 += consumed - 1;
           hasMagic = hasMagic || magic;
@@ -46017,13 +45673,13 @@ var AST = class {
         }
       }
       if (c2 === "?") {
-        re2 += qmark;
+        re3 += qmark;
         hasMagic = true;
         continue;
       }
-      re2 += regExpEscape(c2);
+      re3 += regExpEscape(c2);
     }
-    return [re2, unescape2(glob), !!hasMagic, uflag];
+    return [re3, unescape2(glob), !!hasMagic, uflag];
   }
 };
 _a2 = AST;
@@ -46716,11 +46372,11 @@ var Minimatch = class {
     } else if (m2 = pattern.match(dotStarRE)) {
       fastTest = dotStarTest;
     }
-    const re2 = AST.fromGlob(pattern, this.options).toMMPattern();
-    if (fastTest && typeof re2 === "object") {
-      Reflect.defineProperty(re2, "test", { value: fastTest });
+    const re3 = AST.fromGlob(pattern, this.options).toMMPattern();
+    if (fastTest && typeof re3 === "object") {
+      Reflect.defineProperty(re3, "test", { value: fastTest });
     }
-    return re2;
+    return re3;
   }
   makeRe() {
     if (this.regexp || this.regexp === false)
@@ -46733,7 +46389,7 @@ var Minimatch = class {
     const options = this.options;
     const twoStar = options.noglobstar ? star2 : options.dot ? twoStarDot : twoStarNoDot;
     const flags = new Set(options.nocase ? ["i"] : []);
-    let re2 = set.map((pattern) => {
+    let re3 = set.map((pattern) => {
       const pp = pattern.map((p2) => {
         if (p2 instanceof RegExp) {
           for (const f2 of p2.flags.split(""))
@@ -46771,14 +46427,14 @@ var Minimatch = class {
       return filtered.join("/");
     }).join("|");
     const [open, close] = set.length > 1 ? ["(?:", ")"] : ["", ""];
-    re2 = "^" + open + re2 + close + "$";
+    re3 = "^" + open + re3 + close + "$";
     if (this.partial) {
-      re2 = "^(?:\\/|" + open + re2.slice(1, -1) + close + ")$";
+      re3 = "^(?:\\/|" + open + re3.slice(1, -1) + close + ")$";
     }
     if (this.negate)
-      re2 = "^(?!" + re2 + ").+$";
+      re3 = "^(?!" + re3 + ").+$";
     try {
-      this.regexp = new RegExp(re2, [...flags].join(""));
+      this.regexp = new RegExp(re3, [...flags].join(""));
     } catch {
       this.regexp = false;
     }
@@ -47390,38 +47046,270 @@ async function handler4(args, deps) {
   }
 }
 
+// packages/memory/dist/wiki/identity.js
+var _UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+function isValidPageId(value) {
+  if (!value)
+    return false;
+  return _UUID_RE.test(value);
+}
+
+// packages/memory/dist/wiki/redirect.js
+function parseRedirect(frontmatter) {
+  const rawPath = frontmatter.redirect_to;
+  const rawId = frontmatter.redirect_id;
+  const targetPath = typeof rawPath === "string" ? rawPath.trim() : "";
+  const targetIdStr = typeof rawId === "string" ? rawId.trim() : "";
+  if (!targetPath && !targetIdStr)
+    return null;
+  let targetId = targetIdStr || null;
+  if (targetId !== null && !isValidPageId(targetId)) {
+    targetId = null;
+    if (!targetPath)
+      return null;
+  }
+  const reasonRaw = frontmatter.redirect_reason;
+  const reason = typeof reasonRaw === "string" ? reasonRaw.trim() : "";
+  return { target_path: targetPath, target_id: targetId, reason };
+}
+function isRedirect(frontmatter) {
+  return parseRedirect(frontmatter) !== null;
+}
+var _FRONTMATTER_RE = /^---\s*\n([\s\S]*?)\n---\s*\n?/;
+function parseFrontmatter(text) {
+  const m2 = text.match(_FRONTMATTER_RE);
+  if (!m2)
+    return {};
+  const fm = {};
+  let currentListKey = null;
+  let currentList = [];
+  function closeList() {
+    if (currentListKey !== null) {
+      fm[currentListKey] = currentList;
+      currentListKey = null;
+      currentList = [];
+    }
+  }
+  for (const raw of (m2[1] ?? "").split("\n")) {
+    const stripped = raw.trim();
+    if (!stripped) {
+      closeList();
+      continue;
+    }
+    if (currentListKey !== null && raw.startsWith(" ") && stripped.startsWith("- ")) {
+      currentList.push(stripped.slice(2).trim().replace(/^['"]|['"]$/g, ""));
+      continue;
+    }
+    closeList();
+    if (!stripped.includes(":"))
+      continue;
+    const idx = stripped.indexOf(":");
+    const key = stripped.slice(0, idx).trim();
+    const value = stripped.slice(idx + 1).trim();
+    if (value === "") {
+      currentListKey = key;
+      currentList = [];
+      continue;
+    }
+    if (value.startsWith("[") && value.endsWith("]")) {
+      fm[key] = value.slice(1, -1).split(",").map((t2) => t2.trim().replace(/^['"]|['"]$/g, "")).filter((t2) => t2.length > 0);
+      continue;
+    }
+    fm[key] = value.replace(/^['"]|['"]$/g, "");
+  }
+  closeList();
+  return fm;
+}
+
 // packages/memory/dist/wiki/handlers/wiki-read.js
 async function handler5(args, deps) {
   const relPath = (args.path ?? "").trim();
   if (!relPath)
     return { error: "path is required" };
+  const followRedirects = args.follow_redirects !== false;
+  let content;
   try {
-    const content = await deps.readPage(deps.wikiRoot, relPath);
-    if (content === null)
-      return { error: `page not found: ${relPath}` };
-    return { path: relPath, content, root: deps.wikiRoot };
+    content = await deps.readPage(deps.wikiRoot, relPath);
   } catch (err) {
     return { error: `read failed: ${String(err)}` };
   }
+  if (content === null)
+    return { error: `page not found: ${relPath}` };
+  if (!followRedirects) {
+    return {
+      path: relPath,
+      content,
+      root: deps.wikiRoot,
+      resolved_path: relPath,
+      redirect_hops: 0
+    };
+  }
+  const cache = /* @__PURE__ */ new Map();
+  cache.set(relPath, content);
+  let current = relPath;
+  const chain = [current];
+  const seen = /* @__PURE__ */ new Set([current]);
+  const MAX_DEPTH = 5;
+  for (let i2 = 0; i2 < MAX_DEPTH; i2++) {
+    const cached2 = cache.get(current);
+    if (cached2 === void 0) {
+      try {
+        const fetched = await deps.readPage(deps.wikiRoot, current);
+        cache.set(current, fetched);
+      } catch {
+        cache.set(current, null);
+      }
+    }
+    const text = cache.get(current);
+    if (!text) {
+      return { error: `redirect target missing: ${current}` };
+    }
+    const fm = parseFrontmatter(text);
+    if (!isRedirect(fm)) {
+      return {
+        path: relPath,
+        content: text,
+        root: deps.wikiRoot,
+        resolved_path: current,
+        redirect_hops: chain.length - 1
+      };
+    }
+    const rawPath = fm.redirect_to;
+    const nextPath = typeof rawPath === "string" ? rawPath.trim() : "";
+    if (!nextPath) {
+      return {
+        error: `id-only redirect at ${current} cannot be followed without id index`
+      };
+    }
+    if (seen.has(nextPath)) {
+      return { error: `redirect cycle detected at ${current} \u2192 ${nextPath}` };
+    }
+    chain.push(nextPath);
+    seen.add(nextPath);
+    current = nextPath;
+  }
+  return { error: `redirect depth exceeded (>${MAX_DEPTH} hops) from ${relPath}` };
+}
+
+// packages/memory/dist/wiki/layout.js
+var MODERN_PAGE_KINDS = [
+  "tutorial",
+  "how-to",
+  "reference",
+  "explanation",
+  "adr",
+  "runbook",
+  "rfc",
+  "journal"
+];
+var LEGACY_PAGE_KINDS = [
+  "specs",
+  "guides",
+  "conventions",
+  "lessons",
+  "notes",
+  "files"
+];
+var PAGE_KINDS = [
+  ...MODERN_PAGE_KINDS,
+  ...LEGACY_PAGE_KINDS
+];
+var _SAFE = /[^a-zA-Z0-9_.\-]+/g;
+var _MAX_SLUG_LEN = 80;
+var _TRAILING_MD_EXT = /(?:\.md)+$/i;
+function slugify(value, maxLen = _MAX_SLUG_LEN) {
+  if (!value)
+    return "unknown";
+  let cleaned = value.trim().toLowerCase().replace(_SAFE, "-").replace(/^-+|-+$/g, "");
+  if (!cleaned)
+    return "unknown";
+  cleaned = cleaned.replace(_TRAILING_MD_EXT, "").replace(/[-.]+$/, "");
+  if (!cleaned)
+    return "unknown";
+  const trimmed = cleaned.slice(0, maxLen).replace(/[-.]+$/, "");
+  return trimmed || "unknown";
+}
+function adrFilename(number3, slug) {
+  return `${String(number3).padStart(4, "0")}-${slug}.md`;
+}
+function pagePath(kind2, filename) {
+  if (!PAGE_KINDS.includes(kind2)) {
+    throw new Error(`unknown wiki page kind: ${kind2}`);
+  }
+  return `${kind2}/${filename}`;
+}
+function indexPath() {
+  return ".generated/INDEX.md";
 }
 
 // packages/memory/dist/wiki/handlers/wiki-list.js
-init_layout();
+function classifyPage(content) {
+  const fm = parseFrontmatter(content);
+  const redirectFlag = isRedirect(fm);
+  const rawProv = fm.provenance;
+  const autoGenFlag = typeof rawProv === "string" && rawProv.trim().toLowerCase() === "auto-generated";
+  return { isRedirectStub: redirectFlag, isAutoGenerated: autoGenFlag };
+}
 async function handler6(args, deps) {
   const kind2 = args.kind ?? null;
+  const includeRedirects = Boolean(args.include_redirects ?? false);
+  const includeAutoGenerated = Boolean(args.include_auto_generated ?? false);
   if (kind2 && !PAGE_KINDS.includes(kind2)) {
     return { error: `unknown kind: ${kind2}` };
   }
+  let allPages;
   try {
-    const pages = await deps.listPages(deps.wikiRoot, kind2);
-    return { root: deps.wikiRoot, count: pages.length, pages };
+    allPages = await deps.listPages(deps.wikiRoot, kind2);
   } catch (err) {
     return { error: `list failed: ${String(err)}` };
   }
+  if (includeRedirects && includeAutoGenerated) {
+    return {
+      root: deps.wikiRoot,
+      count: allPages.length,
+      pages: allPages,
+      redirect_count: 0,
+      auto_generated_count: 0
+    };
+  }
+  const kept = [];
+  let redirectCount = 0;
+  let autoGeneratedCount = 0;
+  for (const rel of allPages) {
+    let content = null;
+    try {
+      content = await deps.readPage(deps.wikiRoot, rel);
+    } catch {
+      content = null;
+    }
+    if (content === null) {
+      kept.push(rel);
+      continue;
+    }
+    const { isRedirectStub, isAutoGenerated } = classifyPage(content);
+    if (isRedirectStub) {
+      redirectCount += 1;
+      if (!includeRedirects)
+        continue;
+    }
+    if (isAutoGenerated) {
+      autoGeneratedCount += 1;
+      if (!includeAutoGenerated)
+        continue;
+    }
+    kept.push(rel);
+  }
+  return {
+    root: deps.wikiRoot,
+    count: kept.length,
+    pages: kept,
+    redirect_count: redirectCount,
+    auto_generated_count: autoGeneratedCount
+  };
 }
 var schema2 = {
   title: "Wiki \u2014 list pages",
-  description: "Enumerate every authored wiki page under ~/.claude/methodology/wiki/, filesystem-walked from the wiki root. Optionally restrict by kind.",
+  description: "Enumerate every authored wiki page under the wiki root. Optionally restrict by kind (adr, tutorial, how-to, reference, explanation, runbook, rfc, journal, plus legacy specs/guides/conventions/lessons/notes/files). Two filters are applied by default and can be opted out of: (1) redirect stubs are excluded \u2014 pass include_redirects: true to see them; (2) auto-generated pages (provenance: auto-generated, produced by codebase_analyze) are excluded \u2014 pass include_auto_generated: true to see them. Returns {root, count, pages, redirect_count, auto_generated_count}.",
   inputSchema: {
     type: "object",
     required: [],
@@ -47430,6 +47318,16 @@ var schema2 = {
         type: "string",
         enum: [...PAGE_KINDS],
         description: "Restrict the listing to a single page kind."
+      },
+      include_redirects: {
+        type: "boolean",
+        default: false,
+        description: "When true, redirect stubs are included in the listing. Default false."
+      },
+      include_auto_generated: {
+        type: "boolean",
+        default: false,
+        description: "When true, auto-generated pages (provenance: auto-generated) are included. Default false \u2014 at thousands of pages they dominate listings."
       }
     }
   }
@@ -47576,9 +47474,123 @@ var schema3 = {
   }
 };
 
+// packages/memory/dist/wiki/pages.js
+var ADR_STATUSES = [
+  "proposed",
+  "accepted",
+  "rejected",
+  "superseded",
+  "deprecated"
+];
+function nowIso3() {
+  return (/* @__PURE__ */ new Date()).toISOString().replace(/\.\d{3}Z$/, "Z");
+}
+function formatFrontmatter(fm) {
+  if (!fm || Object.keys(fm).length === 0)
+    return "";
+  const lines = ["---"];
+  for (const key of Object.keys(fm).sort()) {
+    const value = fm[key];
+    let rendered;
+    if (Array.isArray(value)) {
+      rendered = "[" + value.map(String).join(", ") + "]";
+    } else if (value == null) {
+      rendered = "";
+    } else {
+      rendered = String(value);
+    }
+    lines.push(`${key}: ${rendered}`);
+  }
+  lines.push("---");
+  lines.push("");
+  return lines.join("\n");
+}
+function stripInlineList(value) {
+  let inner = value.trim();
+  if (inner.startsWith("[") && inner.endsWith("]")) {
+    inner = inner.slice(1, -1);
+  }
+  return inner.split(",").map((s2) => s2.trim()).filter(Boolean);
+}
+function parsePage(text) {
+  if (!text.startsWith("---\n") && !text.startsWith("---\r\n")) {
+    return { frontmatter: {}, body: text };
+  }
+  const lines = text.split("\n");
+  if (!lines[0] || lines[0].trim() !== "---") {
+    return { frontmatter: {}, body: text };
+  }
+  const fm = {};
+  let bodyStart = lines.length;
+  for (let idx = 1; idx < lines.length; idx++) {
+    const line = lines[idx];
+    if (!line)
+      continue;
+    if (line.trim() === "---") {
+      bodyStart = idx + 1;
+      break;
+    }
+    if (!line.includes(":"))
+      continue;
+    const colonIdx = line.indexOf(":");
+    const key = line.slice(0, colonIdx).trim();
+    const raw = line.slice(colonIdx + 1).trim();
+    if (raw.startsWith("[") && raw.endsWith("]")) {
+      fm[key] = stripInlineList(raw);
+    } else {
+      fm[key] = raw;
+    }
+  }
+  let bodyLines = lines.slice(bodyStart);
+  while (bodyLines.length > 0 && bodyLines[0] === "") {
+    bodyLines = bodyLines.slice(1);
+  }
+  return { frontmatter: fm, body: bodyLines.join("\n") };
+}
+function renderPage(doc) {
+  const header = formatFrontmatter(doc.frontmatter);
+  if (header && doc.body) {
+    return header + doc.body + (doc.body.endsWith("\n") ? "" : "\n");
+  }
+  if (header)
+    return header;
+  return doc.body ? doc.body + (doc.body.endsWith("\n") ? "" : "\n") : "";
+}
+function buildAdr(args) {
+  const status = args.status ?? "accepted";
+  if (!ADR_STATUSES.includes(status)) {
+    throw new Error(`unknown ADR status: ${status}`);
+  }
+  const fm = {
+    kind: "adr",
+    number: String(args.number).padStart(4, "0"),
+    title: args.title,
+    status,
+    created: nowIso3(),
+    tags: args.tags ?? ["adr"]
+  };
+  const body = `# ADR-${String(args.number).padStart(4, "0")}: ${args.title}
+
+## Status
+
+${status}
+
+## Context
+
+${args.context}
+
+## Decision
+
+${args.decision}
+
+## Consequences
+
+${args.consequences}
+`;
+  return renderPage({ frontmatter: fm, body });
+}
+
 // packages/memory/dist/wiki/handlers/wiki-adr.js
-init_layout();
-init_pages();
 async function handler8(args, deps) {
   const title = (args.title ?? "").trim();
   const context = (args.context ?? "").trim();
@@ -47639,16 +47651,12 @@ var schema4 = {
 };
 
 // packages/memory/dist/wiki/handlers/wiki-reindex.js
-init_layout();
 var BANNER = "<!-- Generated by Cortex wiki-reindex \u2014 the authored pages are the source of truth. -->";
-function renderIndex(grouped) {
-  const lines = [BANNER, "", "# Wiki Index", ""];
-  const total = Object.values(grouped).reduce((s2, ps) => s2 + ps.length, 0);
-  lines.push(`**${total} authored pages across ${PAGE_KINDS.length} kinds.**`);
-  lines.push("");
+function renderSection(heading, grouped) {
+  const lines = [`## ${heading}`, ""];
   for (const kind2 of PAGE_KINDS) {
     const pages = grouped[kind2] ?? [];
-    lines.push(`## ${kind2} (${pages.length})`);
+    lines.push(`### ${kind2} (${pages.length})`);
     lines.push("");
     if (!pages.length) {
       lines.push("_No pages yet._");
@@ -47661,18 +47669,60 @@ function renderIndex(grouped) {
     }
     lines.push("");
   }
+  return lines;
+}
+function renderIndex(humanGrouped, autoGrouped) {
+  const humanTotal = Object.values(humanGrouped).reduce((s2, ps) => s2 + ps.length, 0);
+  const autoTotal = Object.values(autoGrouped).reduce((s2, ps) => s2 + ps.length, 0);
+  const total = humanTotal + autoTotal;
+  const lines = [BANNER, "", "# Wiki Index", ""];
+  lines.push(`**${total} authored pages across ${PAGE_KINDS.length} kinds.** ${humanTotal} human-authored, ${autoTotal} auto-generated.`);
+  lines.push("");
+  lines.push(...renderSection("Human-authored", humanGrouped));
+  if (autoTotal > 0) {
+    lines.push(...renderSection("Auto-generated reference", autoGrouped));
+  }
   return lines.join("\n");
 }
 async function handler9(_args, deps) {
-  const grouped = {};
+  const humanGrouped = {};
+  const autoGrouped = {};
   for (const kind2 of PAGE_KINDS) {
+    humanGrouped[kind2] = [];
+    autoGrouped[kind2] = [];
+  }
+  let humanCount = 0;
+  let autoCount = 0;
+  for (const kind2 of PAGE_KINDS) {
+    let pages = [];
     try {
-      grouped[kind2] = await deps.listPages(deps.wikiRoot, kind2);
+      pages = await deps.listPages(deps.wikiRoot, kind2);
     } catch {
-      grouped[kind2] = [];
+      pages = [];
+    }
+    for (const rel of pages) {
+      let isAuto = false;
+      try {
+        const content2 = await deps.readPage(deps.wikiRoot, rel);
+        if (content2 !== null) {
+          const fm = parseFrontmatter(content2);
+          const prov = fm.provenance;
+          isAuto = typeof prov === "string" && prov.trim().toLowerCase() === "auto-generated";
+        }
+      } catch {
+        isAuto = false;
+      }
+      const target2 = isAuto ? autoGrouped[kind2] : humanGrouped[kind2];
+      if (target2) {
+        target2.push(rel);
+        if (isAuto)
+          autoCount += 1;
+        else
+          humanCount += 1;
+      }
     }
   }
-  const content = renderIndex(grouped);
+  const content = renderIndex(humanGrouped, autoGrouped);
   const target = deps.joinPath(deps.wikiRoot, indexPath());
   const dir = target.split("/").slice(0, -1).join("/");
   try {
@@ -47681,11 +47731,184 @@ async function handler9(_args, deps) {
   } catch (err) {
     return { error: `reindex failed: ${String(err)}` };
   }
+  const byKind = {};
+  for (const kind2 of PAGE_KINDS) {
+    byKind[kind2] = (humanGrouped[kind2]?.length ?? 0) + (autoGrouped[kind2]?.length ?? 0);
+  }
   return {
     path: indexPath(),
-    total_pages: Object.values(grouped).reduce((s2, ps) => s2 + ps.length, 0),
-    by_kind: Object.fromEntries(Object.entries(grouped).map(([k2, v2]) => [k2, v2.length])),
+    total_pages: humanCount + autoCount,
+    human_authored_count: humanCount,
+    auto_generated_count: autoCount,
+    by_kind: byKind,
     root: deps.wikiRoot
+  };
+}
+
+// packages/memory/dist/wiki/schema-loader.js
+import * as fs4 from "node:fs";
+import * as path4 from "node:path";
+function parseKind(relPath, content) {
+  const doc = parsePage(content);
+  const fm = doc.frontmatter;
+  const name = fm["name"] ?? path4.basename(relPath, ".md");
+  if (!name)
+    return null;
+  const toStringArray = (v2) => {
+    if (Array.isArray(v2))
+      return v2.map(String);
+    if (typeof v2 === "string" && v2)
+      return [v2];
+    return [];
+  };
+  return {
+    name,
+    display_name: String(fm["display_name"] ?? name),
+    dir_name: String(fm["dir_name"] ?? name + "s"),
+    required_sections: toStringArray(fm["required_sections"]),
+    optional_sections: toStringArray(fm["optional_sections"]),
+    parent_kind: fm["parent_kind"] ?? null,
+    autofill_prompt: String(fm["autofill_prompt"] ?? "")
+  };
+}
+function parseRulesTable(body) {
+  const rows = [];
+  let m2;
+  const re3 = /^\|(.+)\|$/gm;
+  while ((m2 = re3.exec(body)) !== null) {
+    rows.push(m2[1]);
+  }
+  if (rows.length < 2)
+    return [];
+  const headerCells = rows[0].split("|").map((c2) => c2.trim().toLowerCase());
+  const rules = [];
+  for (const row of rows.slice(2)) {
+    const cells = row.split("|").map((c2) => c2.trim());
+    if (cells.length !== headerCells.length)
+      continue;
+    const r2 = {};
+    headerCells.forEach((h2, i2) => {
+      r2[h2] = cells[i2] ?? "";
+    });
+    if (!r2["pattern"] || !r2["kind"])
+      continue;
+    let target = r2["target"] ?? null;
+    if (target === "reject" || target === "-" || target === "") {
+      target = null;
+    }
+    let weight = 1;
+    const rawWeight = r2["weight"];
+    if (rawWeight) {
+      const parsed = parseFloat(rawWeight);
+      if (!isNaN(parsed))
+        weight = parsed;
+    }
+    rules.push({
+      pattern: r2["pattern"],
+      pattern_kind: r2["kind"],
+      target_kind: target,
+      weight,
+      note: r2["note"] ?? ""
+    });
+  }
+  return rules;
+}
+var QUERY_BLOCK_RE = /```cortex-query\n([\s\S]*?)\n```/;
+function parseView(relPath, content) {
+  const doc = parsePage(content);
+  const m2 = QUERY_BLOCK_RE.exec(doc.body);
+  if (!m2)
+    return null;
+  const fm = doc.frontmatter;
+  return {
+    name: String(fm["name"] ?? path4.basename(relPath, ".md")),
+    rel_path: relPath,
+    query: m2[1].trim(),
+    description: String(fm["description"] ?? "")
+  };
+}
+function parseTrigger(relPath, content) {
+  const doc = parsePage(content);
+  const fm = doc.frontmatter;
+  const event = fm["event"];
+  if (!event)
+    return null;
+  return {
+    name: String(fm["name"] ?? path4.basename(relPath, ".md")),
+    event: String(event),
+    condition: String(fm["condition"] ?? ""),
+    action: String(fm["action"] ?? "")
+  };
+}
+function loadFolderDirect(wikiRoot, folder, parser) {
+  const results = {};
+  const full = path4.join(wikiRoot, folder);
+  if (!fs4.existsSync(full))
+    return results;
+  function walk(dir) {
+    let entries;
+    try {
+      entries = fs4.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      const entryPath = path4.join(dir, entry.name);
+      if (entry.isDirectory()) {
+        walk(entryPath);
+      } else if (entry.isFile() && entry.name.endsWith(".md")) {
+        const relPath = path4.relative(wikiRoot, entryPath).replace(/\\/g, "/");
+        try {
+          const content = fs4.readFileSync(entryPath, "utf-8");
+          const parsed = parser(relPath, content);
+          if (parsed !== null) {
+            const key = parsed.name ?? relPath;
+            results[key] = parsed;
+          }
+        } catch {
+        }
+      }
+    }
+  }
+  walk(full);
+  return results;
+}
+function loadRegistry(wikiRoot) {
+  const kinds = loadFolderDirect(wikiRoot, "_kinds", parseKind);
+  const rules = [];
+  const rulesDir = path4.join(wikiRoot, "_rules");
+  if (fs4.existsSync(rulesDir)) {
+    const walk = (dir) => {
+      let entries;
+      try {
+        entries = fs4.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of [...entries].sort((a2, b2) => a2.name.localeCompare(b2.name))) {
+        const entryPath = path4.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(entryPath);
+        } else if (entry.isFile() && entry.name.endsWith(".md")) {
+          try {
+            const content = fs4.readFileSync(entryPath, "utf-8");
+            const body = parsePage(content).body;
+            rules.push(...parseRulesTable(body));
+          } catch {
+          }
+        }
+      }
+    };
+    walk(rulesDir);
+  }
+  const views = loadFolderDirect(wikiRoot, "_views", parseView);
+  const triggers = loadFolderDirect(wikiRoot, "_triggers", parseTrigger);
+  return {
+    kinds,
+    rules,
+    views,
+    triggers,
+    known_kind_names: new Set(Object.keys(kinds))
   };
 }
 
@@ -47744,6 +47967,293 @@ function applyRules2(content, tags, rules) {
     rationale: `rule [${best.pattern_kind}] ${JSON.stringify(best.pattern)} \u2192 ${best.target_kind ?? "reject"}`
   };
 }
+
+// packages/memory/dist/wiki/axis-registry.js
+var AXIS_KIND = "kind";
+var AXIS_LIFECYCLE = "lifecycle";
+var AXIS_AUDIENCE = "audience";
+var AXIS_PROVENANCE = "provenance";
+function av(opts) {
+  return {
+    name: opts.name,
+    axis: opts.axis,
+    display_name: opts.display_name ?? "",
+    patterns: opts.patterns ?? [],
+    tag_aliases: opts.tag_aliases ?? [],
+    default: opts.default ?? false,
+    requires_generator: opts.requires_generator ?? false,
+    applies_to_kinds: opts.applies_to_kinds ?? [],
+    description: opts.description ?? ""
+  };
+}
+function re2(pat) {
+  return new RegExp(pat, "i");
+}
+function reMl(pat) {
+  return new RegExp(pat, "im");
+}
+var _DEFAULT_KINDS = [
+  av({
+    name: "adr",
+    axis: AXIS_KIND,
+    display_name: "ADR (Architecture Decision Record)",
+    patterns: [
+      re2("\\b(decided to|decision:|the decision is|chose .+ because)\\b"),
+      re2("\\b(rejected .+ (due to|because)|we will use|selected .+ over)\\b"),
+      reMl("^##+\\s*Decision\\s*$"),
+      reMl("^##+\\s*Consequences\\s*$")
+    ],
+    // ``architecture`` removed (pilot 2026-05-13): too broad to be ADR-only.
+    tag_aliases: ["decision", "adr"],
+    description: "Nygard/MADR-style record of a single architectural decision."
+  }),
+  av({
+    name: "tutorial",
+    axis: AXIS_KIND,
+    display_name: "Tutorial",
+    patterns: [
+      re2("\\b(tutorial:|in this tutorial|we['\u2019]?ll (learn|build|create|walk through))\\b"),
+      re2("\\b(by the end of this tutorial|getting started:|step 1[:.])\\b")
+    ],
+    tag_aliases: ["tutorial", "getting-started"],
+    description: "Learn-by-doing walkthrough (Di\xE1taxis)."
+  }),
+  av({
+    name: "how-to",
+    axis: AXIS_KIND,
+    display_name: "How-to guide",
+    patterns: [re2("\\b(how to |how do (you|i) |here['\u2019]?s how to )\\b")],
+    tag_aliases: ["how-to", "howto", "guide"],
+    description: "Task-oriented recipe for a known goal (Di\xE1taxis / DITA task)."
+  }),
+  av({
+    name: "reference",
+    axis: AXIS_KIND,
+    display_name: "Reference",
+    // Producer audit (ADR-2244 Phase 6): ``codebase`` is the bare tag
+    // written by ``codebase_analyze``; without it here, file-doc pages
+    // got routed to ``explanation``.
+    tag_aliases: ["reference", "api", "spec", "code-reference", "codebase"],
+    description: "Authoritative lookup table \u2014 API docs, file docs, schema refs."
+  }),
+  av({
+    name: "explanation",
+    axis: AXIS_KIND,
+    display_name: "Explanation",
+    patterns: [
+      re2("\\b(what is|why does|the reason|conceptually|under the hood)\\b"),
+      re2("\\b(the bug was|root cause|lesson learned|fix:|fixed by)\\b"),
+      re2("\\b(always use|never |the canonical|convention:|rule:|standard:)\\b")
+    ],
+    tag_aliases: [
+      "explanation",
+      "concept",
+      "lesson",
+      "convention",
+      "rule",
+      "standard"
+    ],
+    description: "Concept-oriented prose explaining the 'why' (Di\xE1taxis)."
+  }),
+  av({
+    name: "runbook",
+    axis: AXIS_KIND,
+    display_name: "Runbook",
+    patterns: [
+      re2("\\b(runbook|incident response|on[- ]call|when (the )?alert fires)\\b"),
+      re2("\\b(if (this|that) happens|recovery procedure|rollback steps?)\\b")
+    ],
+    tag_aliases: ["runbook", "playbook", "incident", "oncall"],
+    description: "SRE incident-response procedure (Rootly/Squadcast convention)."
+  }),
+  av({
+    name: "rfc",
+    axis: AXIS_KIND,
+    display_name: "RFC (Request For Comments)",
+    patterns: [
+      re2("\\b(rfc:|proposal:|we propose to|proposed (design|change|approach))\\b"),
+      re2("\\b(this rfc|request for comments)\\b")
+    ],
+    tag_aliases: ["rfc", "proposal", "spec", "design"],
+    description: "Pre-decision design proposal open for comment (IETF/arc42 \xA74)."
+  }),
+  av({
+    name: "journal",
+    axis: AXIS_KIND,
+    display_name: "Journal entry",
+    patterns: [reMl("^##?\\s*\\d{4}-\\d{2}-\\d{2}\\b")],
+    tag_aliases: ["journal", "diary", "log"],
+    description: "Dated reflective entry \u2014 digital-garden / Confluence blog style."
+  })
+];
+var _DEFAULT_LIFECYCLES = [
+  av({
+    name: "seedling",
+    axis: AXIS_LIFECYCLE,
+    display_name: "Seedling",
+    default: true,
+    patterns: [re2("_to be (filled|written)_")],
+    tag_aliases: ["seedling", "seed", "new", "stub"],
+    description: "Initial stub, expected to grow (digital-garden convention)."
+  }),
+  av({
+    name: "draft",
+    axis: AXIS_LIFECYCLE,
+    display_name: "Draft",
+    patterns: [re2("\\bdraft\\b")],
+    tag_aliases: ["draft", "wip"],
+    description: "Work in progress, not yet published."
+  }),
+  av({
+    name: "active",
+    axis: AXIS_LIFECYCLE,
+    display_name: "Active",
+    tag_aliases: ["active", "current", "live"],
+    description: "Maintained and authoritative."
+  }),
+  av({
+    name: "deprecated",
+    axis: AXIS_LIFECYCLE,
+    display_name: "Deprecated",
+    patterns: [re2("\\bdeprecated\\b")],
+    tag_aliases: ["deprecated", "legacy"],
+    description: "Still readable, but new use should prefer the replacement."
+  }),
+  av({
+    name: "archived",
+    axis: AXIS_LIFECYCLE,
+    display_name: "Archived",
+    patterns: [re2("\\barchived\\b")],
+    tag_aliases: ["archived", "historic"],
+    description: "Frozen historical record; do not modify."
+  }),
+  // ADR-specific lifecycle subset (Nygard / MADR).
+  av({
+    name: "proposed",
+    axis: AXIS_LIFECYCLE,
+    display_name: "Proposed (ADR)",
+    default: true,
+    applies_to_kinds: ["adr"],
+    patterns: [re2("\\bproposed\\b")],
+    tag_aliases: ["proposed"],
+    description: "ADR awaiting decision (Nygard)."
+  }),
+  av({
+    name: "accepted",
+    axis: AXIS_LIFECYCLE,
+    display_name: "Accepted (ADR)",
+    applies_to_kinds: ["adr"],
+    patterns: [re2("\\baccepted\\b")],
+    tag_aliases: ["accepted"],
+    description: "ADR adopted and in effect (Nygard)."
+  }),
+  av({
+    name: "rejected",
+    axis: AXIS_LIFECYCLE,
+    display_name: "Rejected (ADR)",
+    applies_to_kinds: ["adr"],
+    patterns: [re2("\\brejected\\b")],
+    tag_aliases: ["rejected"],
+    description: "ADR considered and dismissed (Nygard)."
+  }),
+  av({
+    name: "superseded",
+    axis: AXIS_LIFECYCLE,
+    display_name: "Superseded (ADR)",
+    applies_to_kinds: ["adr"],
+    patterns: [re2("\\bsuperseded\\b")],
+    tag_aliases: ["superseded"],
+    description: "ADR replaced by a later one (Nygard)."
+  })
+];
+var _DEFAULT_AUDIENCES = [
+  av({
+    name: "developer",
+    axis: AXIS_AUDIENCE,
+    display_name: "Developer",
+    default: true,
+    patterns: [
+      re2("\\b(function|class|method|import|module|API|SDK|library|interface)\\b")
+    ],
+    tag_aliases: ["dev", "developer", "engineer", "code"],
+    description: "Software engineers writing or modifying code."
+  }),
+  av({
+    name: "ops",
+    axis: AXIS_AUDIENCE,
+    display_name: "Operations / SRE",
+    patterns: [
+      re2("\\b(deploy(ment)?|kubernetes|terraform|infra(structure)?|cluster|node|pod)\\b"),
+      re2("\\b(sre|on[- ]call|incident|alert|monitoring|observability)\\b")
+    ],
+    tag_aliases: ["ops", "sre", "infra", "deploy", "k8s"],
+    description: "Operators of production systems."
+  }),
+  av({
+    name: "security",
+    axis: AXIS_AUDIENCE,
+    display_name: "Security",
+    patterns: [
+      re2("\\b(authentication|authorization|cryptograph(y|ic)|vulnerab(le|ility)|cve|threat model)\\b"),
+      re2("\\b(credential|oauth|sso|encryption|decrypt(ed|ion)?|key rotation|HSM|secret manager)\\b")
+    ],
+    tag_aliases: ["security", "auth", "crypto", "vulnerability", "secops"],
+    description: "Security engineers and reviewers."
+  }),
+  av({
+    name: "internal",
+    axis: AXIS_AUDIENCE,
+    display_name: "Internal",
+    tag_aliases: ["internal", "private"],
+    description: "Internal team-only content (not for external publication)."
+  }),
+  av({
+    name: "external",
+    axis: AXIS_AUDIENCE,
+    display_name: "External",
+    tag_aliases: ["external", "public", "customer"],
+    description: "External-facing documentation for users / customers."
+  })
+];
+var _DEFAULT_PROVENANCES = [
+  av({
+    name: "human",
+    axis: AXIS_PROVENANCE,
+    display_name: "Human-authored",
+    default: true,
+    tag_aliases: ["human", "authored"],
+    description: "Hand-written by a person."
+  }),
+  av({
+    name: "ai-generated",
+    axis: AXIS_PROVENANCE,
+    display_name: "AI-generated",
+    tag_aliases: ["ai-generated", "synthesized", "synth"],
+    requires_generator: true,
+    description: "Produced by an LLM via a template prompt."
+  }),
+  av({
+    name: "imported",
+    axis: AXIS_PROVENANCE,
+    display_name: "Imported",
+    tag_aliases: ["imported", "import"],
+    description: "Bulk-imported from an external memory system."
+  }),
+  av({
+    name: "auto-generated",
+    axis: AXIS_PROVENANCE,
+    display_name: "Auto-generated (codebase)",
+    tag_aliases: ["auto-generated", "code-reference", "codebase"],
+    requires_generator: true,
+    description: "Produced by ``codebase_analyze`` / ``wiki_seed_codebase``."
+  })
+];
+var _ALL_DEFAULTS = [
+  ..._DEFAULT_KINDS,
+  ..._DEFAULT_LIFECYCLES,
+  ..._DEFAULT_AUDIENCES,
+  ..._DEFAULT_PROVENANCES
+];
 
 // packages/memory/dist/wiki/page-classifier.js
 var REJECT_PREFIXES = [
@@ -47937,8 +48447,7 @@ function loadUserRules(wikiRoot) {
     return userRulesCache;
   }
   try {
-    const { loadRegistry: loadRegistry2 } = (init_schema_loader(), __toCommonJS(schema_loader_exports));
-    const registry2 = loadRegistry2(wikiRoot);
+    const registry2 = loadRegistry(wikiRoot);
     userRulesCache = registry2.rules;
   } catch {
     userRulesCache = [];
@@ -47973,6 +48482,7 @@ function classifyMemory(content, tags, wikiRoot) {
   if (failsHardNegatives(content, firstLine2))
     return null;
   const EXPLICIT_KNOWLEDGE_TAGS = /* @__PURE__ */ new Set([
+    // Legacy knowledge tags.
     "decision",
     "adr",
     "architecture",
@@ -47983,7 +48493,21 @@ function classifyMemory(content, tags, wikiRoot) {
     "rule",
     "standard",
     "paper",
-    "research"
+    "research",
+    // ADR-2244 modern-kind shape tags.
+    "runbook",
+    "playbook",
+    "tutorial",
+    "getting-started",
+    "how-to",
+    "howto",
+    "rfc",
+    "proposal",
+    "journal",
+    // Auto-gen producer markers — bypass positive score because the
+    // producer has already filtered to high-signal content.
+    "code-reference",
+    "codebase"
   ]);
   let hasExplicitTag = false;
   for (const tag of tagSetPre) {
@@ -48034,7 +48558,6 @@ function slugify2(text) {
 }
 
 // packages/memory/dist/wiki/handlers/wiki-purge.js
-init_pages();
 var PAGE_DIRS = /* @__PURE__ */ new Set(["adr", "conventions", "guides", "journal", "lessons", "notes", "reference", "specs"]);
 function parseTags2(raw) {
   if (Array.isArray(raw))
@@ -48327,7 +48850,6 @@ async function handler11(args, deps) {
 }
 
 // packages/memory/dist/wiki/storage/wiki-store.js
-init_layout();
 import * as fs5 from "node:fs";
 import * as path5 from "node:path";
 function safeJoin(root, relPath) {
@@ -48518,13 +49040,23 @@ function registerWikiTools(server2) {
     }
   });
   server2.registerTool("wiki_list", {
-    description: "List authored wiki pages, optionally filtered by kind.",
+    description: "List authored wiki pages, optionally filtered by kind. Redirect stubs and auto-generated pages (provenance: auto-generated) are hidden by default \u2014 pass include_redirects / include_auto_generated to see them.",
     inputSchema: {
-      kind: external_exports.string().optional().describe("Page kind filter")
+      kind: external_exports.string().optional().describe("Page kind filter"),
+      include_redirects: external_exports.boolean().optional().describe("Include redirect stubs (default false)."),
+      include_auto_generated: external_exports.boolean().optional().describe("Include auto-generated pages (default false).")
     }
   }, async (args) => {
     try {
-      const response = await handler6({ kind: args.kind }, { wikiRoot: WIKI_ROOT, listPages: asyncListPages });
+      const response = await handler6({
+        kind: args.kind,
+        include_redirects: args.include_redirects,
+        include_auto_generated: args.include_auto_generated
+      }, {
+        wikiRoot: WIKI_ROOT,
+        listPages: asyncListPages,
+        readPage: asyncReadPage
+      });
       return { content: [{ type: "text", text: JSON.stringify(response) }] };
     } catch (err) {
       return errorText8("wiki_list", err);
@@ -48582,6 +49114,7 @@ function registerWikiTools(server2) {
       const response = await handler9({}, {
         wikiRoot: WIKI_ROOT,
         listPages: asyncListPages,
+        readPage: asyncReadPage,
         writeFile: asyncWriteFile,
         ensureDir: asyncEnsureDir,
         joinPath: join9
@@ -49441,9 +49974,9 @@ var SWIFT_PROTOCOL = /^\s*(?:public\s+|private\s+)*protocol\s+(\w+)/gm;
 var SWIFT_ENUM = /^\s*(?:public\s+|private\s+)*enum\s+(\w+)/gm;
 var PY_MODULE_DOC = /^(?:"""([\s\S]*?)"""|'''([\s\S]*?)''')/;
 var JS_MODULE_DOC = /^\/\*\*([\s\S]*?)\*\//;
-function allMatches(re2, content) {
+function allMatches(re3, content) {
   const results = [];
-  const g2 = new RegExp(re2.source, re2.flags.includes("g") ? re2.flags : re2.flags + "g");
+  const g2 = new RegExp(re3.source, re3.flags.includes("g") ? re3.flags : re3.flags + "g");
   let m2;
   while ((m2 = g2.exec(content)) !== null)
     results.push(m2);
@@ -50049,8 +50582,8 @@ function resolveTypeReferences(analyses, fileContents) {
     for (const [typeName2, defFile] of typeIndex) {
       if (defFile === analysis.path)
         continue;
-      const re2 = new RegExp(`\\b${escapeRegex2(typeName2)}\\b`);
-      if (re2.test(content)) {
+      const re3 = new RegExp(`\\b${escapeRegex2(typeName2)}\\b`);
+      if (re3.test(content)) {
         const key = `${analysis.path}::${defFile}`;
         if (!seen.has(key)) {
           edges.push([analysis.path, defFile]);
@@ -52408,7 +52941,15 @@ function renderProcessPage(process3) {
     "---",
     `title: Process \u2014 ${entry}`,
     "kind: reference",
-    `tags: [code-reference, process, ${kind2}]`,
+    "lifecycle: active",
+    "audience: [developer]",
+    "provenance: auto-generated",
+    "generator:",
+    "  model: codebase_analyze",
+    "  version: ''",
+    "  prompt_template: ''",
+    `  generated_at: ${(/* @__PURE__ */ new Date()).toISOString().replace(/\.\d{3}Z$/, "Z")}`,
+    `tags: [code-reference, codebase, process, ${kind2}]`,
     "---",
     "",
     `# Process \u2014 \`${entry}\``,
@@ -53237,10 +53778,6 @@ var schema10 = {
   )
 };
 
-// packages/memory/dist/wiki/index.js
-init_layout();
-init_pages();
-
 // packages/memory/dist/wiki/templates.js
 var ADR_CONVENTION = {
   pattern: String.raw`^\d{4}-[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$`,
@@ -53255,38 +53792,10 @@ var DEFAULT_CONVENTION = {
   description: "Page: <kebab-slug>.md \u2014 lowercase alphanum + hyphens, no underscores, no leading/trailing hyphens."
 };
 
-// packages/memory/dist/wiki/index.js
-init_schema_loader();
-
-// packages/memory/dist/wiki/groomer.js
-init_layout();
-
-// packages/memory/dist/wiki/sync.js
-init_layout();
-init_pages();
-
-// packages/memory/dist/wiki/readme.js
-init_layout();
-
-// packages/memory/dist/wiki/handlers/wiki-handlers.js
-init_schema_loader();
-
-// packages/memory/dist/wiki/handlers/wiki-curate-handler.js
-init_schema_loader();
-
-// packages/memory/dist/wiki/handlers/wiki-compile-handler.js
-init_layout();
-
 // packages/memory/dist/wiki/handlers/wiki-export-handler.js
 import * as childProcess from "node:child_process";
 import { promisify } from "node:util";
 var execFile2 = promisify(childProcess.execFile);
-
-// packages/memory/dist/wiki/handlers/wiki-migrate-handler.js
-init_pages();
-
-// packages/memory/dist/wiki/handlers/wiki-api-handler.js
-init_pages();
 
 // packages/memory/dist/methodology/metacognition-analysis.js
 var RECENCY_THRESHOLDS_MS = [

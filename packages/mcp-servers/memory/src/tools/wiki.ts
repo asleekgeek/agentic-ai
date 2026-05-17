@@ -172,17 +172,35 @@ export function registerWikiTools(server: McpServer): void {
   server.registerTool(
     "wiki_list",
     {
-      description: "List authored wiki pages, optionally filtered by kind.",
+      description:
+        "List authored wiki pages, optionally filtered by kind. " +
+        "Redirect stubs and auto-generated pages (provenance: " +
+        "auto-generated) are hidden by default — pass " +
+        "include_redirects / include_auto_generated to see them.",
       inputSchema: {
         kind: z.string().optional().describe("Page kind filter"),
+        include_redirects: z.boolean().optional().describe(
+          "Include redirect stubs (default false).",
+        ),
+        include_auto_generated: z.boolean().optional().describe(
+          "Include auto-generated pages (default false).",
+        ),
       },
     },
     async (args) => {
       try {
         // source: packages/memory/src/wiki/handlers/wiki-list.ts::handler
         const response = await wikiListHandler(
-          { kind: args.kind as Parameters<typeof wikiListHandler>[0]["kind"] },
-          { wikiRoot: WIKI_ROOT, listPages: asyncListPages },
+          {
+            kind: args.kind as Parameters<typeof wikiListHandler>[0]["kind"],
+            include_redirects: args.include_redirects,
+            include_auto_generated: args.include_auto_generated,
+          },
+          {
+            wikiRoot: WIKI_ROOT,
+            listPages: asyncListPages,
+            readPage: asyncReadPage,
+          },
         );
         return { content: [{ type: "text" as const, text: JSON.stringify(response) }] };
       } catch (err) {
@@ -270,6 +288,7 @@ export function registerWikiTools(server: McpServer): void {
           {
             wikiRoot:  WIKI_ROOT,
             listPages: asyncListPages,
+            readPage:  asyncReadPage,
             writeFile: asyncWriteFile,
             ensureDir: asyncEnsureDir,
             joinPath:  join,
