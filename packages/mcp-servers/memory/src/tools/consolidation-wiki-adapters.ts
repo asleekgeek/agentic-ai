@@ -228,7 +228,6 @@ export async function runConsolidateWikiCycle(
     memories: memories as Parameters<typeof runWikiMaintenance>[0]["memories"],
     purgeDeps: {
       wikiRoot:             CONSOLIDATE_WIKI_ROOT,
-      wikiRoot_string:      CONSOLIDATE_WIKI_ROOT,
       // wikiPurgeDeps.listAllMarkdownFiles expects a mutable PageEntry[];
       // our listPageBodies returns readonly. Spread copies to a mutable array.
       listAllMarkdownFiles: async (root) => [...(await listPageBodies(root))],

@@ -37,7 +37,6 @@ function makeStatsDeps(over: Partial<MaintenanceStatsDeps> = {}): MaintenanceSta
 function makePurgeDeps(over: Partial<WikiPurgeDeps> = {}): WikiPurgeDeps {
   return {
     wikiRoot:             "/wiki",
-    wikiRoot_string:      "/wiki",
     listAllMarkdownFiles: async () => [],
     deleteFile:           async () => undefined,
     ...over,

@@ -403,7 +403,6 @@ export function registerWikiTools(server: McpServer, deps?: WikiToolDeps): void 
           },
           {
             wikiRoot:             WIKI_ROOT,
-            wikiRoot_string:      WIKI_ROOT,
             listAllMarkdownFiles: asyncListAllMarkdownFiles,
             deleteFile:           asyncDeleteFile,
           },

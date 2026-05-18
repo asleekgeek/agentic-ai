@@ -237,7 +237,6 @@ async function buildWikiMaintenanceDeps(
     memories: memories as Parameters<typeof RunWikiMaintenanceFn>[0]["memories"],
     purgeDeps: {
       wikiRoot:             WIKI_ROOT,
-      wikiRoot_string:      WIKI_ROOT,
       listAllMarkdownFiles: async (root) => [...(await listPageBodies(root))],
       deleteFile:           async (absPath) => { try { fs.unlinkSync(absPath); } catch { /* best effort */ } },
     },
