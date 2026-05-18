@@ -159,6 +159,14 @@
       "import": "./dist/wiki/handlers/wiki-verify.js",
       "types": "./dist/wiki/handlers/wiki-verify.d.ts"
     },
+    "./wiki/handlers/curate-wiki.js": {
+      "import": "./dist/wiki/handlers/curate-wiki.js",
+      "types": "./dist/wiki/handlers/curate-wiki.d.ts"
+    },
+    "./wiki/auto-curator.js": {
+      "import": "./dist/wiki/auto-curator.js",
+      "types": "./dist/wiki/auto-curator.d.ts"
+    },
     "./wiki/storage/wiki-store.js": {
       "import": "./dist/wiki/storage/wiki-store.js",
       "types": "./dist/wiki/storage/wiki-store.d.ts"

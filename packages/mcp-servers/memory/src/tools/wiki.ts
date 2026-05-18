@@ -26,6 +26,9 @@ import { handler as wikiAdrHandler } from "@agentic/memory/wiki/handlers/wiki-ad
 import { handler as wikiReindexHandler } from "@agentic/memory/wiki/handlers/wiki-reindex.js";
 import { handler as wikiPurgeHandler } from "@agentic/memory/wiki/handlers/wiki-purge.js";
 import { handler as wikiVerifyHandler } from "@agentic/memory/wiki/handlers/wiki-verify.js";
+import { handler as curateWikiHandler } from "@agentic/memory/wiki/handlers/curate-wiki.js";
+import type { CuratorMemory } from "@agentic/memory/wiki/auto-curator.js";
+import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-store.js";
 import {
   readPage as fsReadPage,
   writePage as fsWritePage,
@@ -111,14 +114,36 @@ function errorText(tool: string, err: unknown): { content: Array<{ type: "text";
 // ── registerWikiTools ─────────────────────────────────────────────────────────
 
 /**
- * Registers all 8 wiki MCP tools.
+ * Optional dependencies for the wiki tool surface.
+ *
+ * Wiki authoring tools (write/read/list/link/adr/reindex/purge/verify) are
+ * pure-FS and need no store. The auto-curator (``curate_wiki``) needs a
+ * live memory store to draw the cluster pool from — it is registered
+ * only when ``deps.store`` is supplied. This keeps the legacy
+ * ``registerWikiTools(server)`` call site working while letting the
+ * memory MCP server opt the curator in.
+ */
+export interface WikiToolDeps {
+  /**
+   * Live MemoryStore (extended interface — needs ``getHotMemories`` and
+   * ``getRecentlyAccessedMemories``, both on MemoryStoreExt). When
+   * omitted, ``curate_wiki`` is skipped.
+   */
+  readonly store?: MemoryStoreExt;
+}
+
+/**
+ * Registers all wiki MCP tools (8 authoring tools, plus ``curate_wiki``
+ * when ``deps.store`` is provided).
  *
  * precondition:  WIKI_ROOT directory exists or will be created on first write.
- * postcondition: 8 tools registered; each body calls the real domain handler.
+ * postcondition: 8 tools registered; ``curate_wiki`` is registered when a
+ *                memory store is injected; each body calls the real domain handler.
  *
  * source: MCP_TOOLS.md §"wiki_write" through §"wiki_verify"
+ * source: cortex@47b818d mcp_server/handlers/curate_wiki.py (auto-curator)
  */
-export function registerWikiTools(server: McpServer): void {
+export function registerWikiTools(server: McpServer, deps?: WikiToolDeps): void {
   // ── wiki_write ────────────────────────────────────────────────────────────
   server.registerTool(
     "wiki_write",
@@ -363,4 +388,76 @@ export function registerWikiTools(server: McpServer): void {
       }
     },
   );
+
+  // ── curate_wiki ───────────────────────────────────────────────────────────
+  //
+  // Auto-curator — clusters recent PG memories and returns structured
+  // authoring jobs the in-session LLM (Opus 4.7) consumes to produce
+  // wiki pages. The handler needs a live memory store, so registration
+  // is gated on deps.store being supplied.
+  //
+  // source: cortex@47b818d mcp_server/handlers/curate_wiki.py
+  if (deps?.store) {
+    const store = deps.store;
+    // Per-call upper bound on jobs returned. Matches the schema's
+    // ``maximum`` in cortex@47b818d mcp_server/handlers/curate_wiki.py:94.
+    const MAX_JOBS_PER_CALL = 20; // source: cortex@47b818d curate_wiki.py:94 ("maximum": 20)
+    server.registerTool(
+      "curate_wiki",
+      {
+        description:
+          "Auto-curator: emits structured authoring jobs from PG " +
+          "memory clusters. Each job carries one cluster's memories, " +
+          "the suggested wiki path, related-page cross-links, and a " +
+          "complete authoring prompt encoding the wiki conventions. " +
+          "The in-session LLM authors the page in Markdown and writes " +
+          "it via wiki_write. No external Anthropic key required.",
+        inputSchema: {
+          domain:           z.string().optional().describe("Restrict to a domain (e.g. 'cortex')."),
+          limit:            z.number().int().min(1).max(MAX_JOBS_PER_CALL).optional().describe("Max jobs returned (default 3)."),
+          min_memories:     z.number().int().min(1).optional().describe("Minimum memories per cluster."),
+          min_avg_heat:     z.number().min(0).max(1).optional().describe("Minimum cluster average heat."),
+          recent_only:      z.boolean().optional().describe("Use recently-accessed memories only (default true)."),
+          memory_pool_size: z.number().int().min(1).optional().describe("Memory pool size to draw from."),
+        },
+      },
+      async (args) => {
+        try {
+          // Adapters — the store returns Record<string, unknown>[]; the
+          // handler's CuratorMemory is a strict structural subset, so
+          // the cast is type-only. Prefer async paths when the impl
+          // exposes them (PG); fall back to the sync interface methods.
+          // source: packages/memory/src/wiki/auto-curator.ts::CuratorMemory
+          // source: packages/memory/src/remember/storage/pg-store.ts:1083
+          //   (getRecentlyAccessedMemoriesAsync exists on PgStore but is
+          //    not on the MemoryStore interface — narrow via ``in``.)
+          const storeExt = store as MemoryStoreExt & {
+            getRecentlyAccessedMemoriesAsync?: (limit: number, minAccessCount: number) => Promise<Record<string, unknown>[]>;
+          };
+          const getRecent = async (limit: number): Promise<CuratorMemory[]> => {
+            const rows = storeExt.getRecentlyAccessedMemoriesAsync
+              ? await storeExt.getRecentlyAccessedMemoriesAsync(limit, 1)
+              : store.getRecentlyAccessedMemories(limit, 1);
+            return rows as CuratorMemory[];
+          };
+          const getRecentByHeat = async (limit: number): Promise<CuratorMemory[]> => {
+            const rows = store.getHotMemoriesAsync
+              ? await store.getHotMemoriesAsync(0, limit, false)
+              : store.getHotMemories(0, limit, false);
+            return rows as CuratorMemory[];
+          };
+
+          const response = await curateWikiHandler(args, {
+            wikiRoot:                    WIKI_ROOT,
+            getRecentlyAccessedMemories: getRecent,
+            getRecentMemories:           getRecentByHeat,
+            listMdPages:                 asyncListPages,
+          });
+          return { content: [{ type: "text" as const, text: JSON.stringify(response) }] };
+        } catch (err) {
+          return errorText("curate_wiki", err);
+        }
+      },
+    );
+  }
 }

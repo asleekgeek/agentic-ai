@@ -284,7 +284,7 @@ registerConsolidationTools(server, { store: memoryStore });                     
 registerManagementTools(server, { store: memoryStore });                            // 5 tools (validate_memory, seed_project, backfill_memories, get_methodology_graph, get_telemetry)
 registerNarrativeTools(server, { store: narrativeStore, llmClient });               // 3 tools
 registerAdvancedTools(server, { store: memoryStore });                              // 6 tools
-registerWikiTools(server);                                                           // 8 tools
+registerWikiTools(server, { store: memoryStore });                                   // 9 tools (8 authoring + curate_wiki)
 registerIngestTools(server, { store: memoryStore, wikiRoot: process.env["CORTEX_WIKI_ROOT"] ?? join(homedir(), ".claude", "methodology", "wiki"), mcpClientPool: null }); // 6 tools
 registerNavigationTools(server, { store: memoryStore });                            // 2 tools
 
