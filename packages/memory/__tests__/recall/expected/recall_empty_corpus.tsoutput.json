@@ -6,6 +6,7 @@
     "total": 0,
     "query_intent": "general",
     "dispatch_tier": "ts",
-    "signals": {}
+    "signals": {},
+    "low_signal_dropped": 0
   }
 }

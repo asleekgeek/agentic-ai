@@ -61,6 +61,13 @@ export const RecallRequestSchema = z.object({
   max_results: z.number().int().min(1).max(MAX_RESULTS_LIMIT).default(MAX_RESULTS_DEFAULT),
   min_heat: z.number().min(0).max(1).default(MIN_HEAT_DEFAULT),
   agent_topic: z.string().optional(),
+  // Default false: drop memories tagged as auto-captures (``auto-captured``,
+  // ``tool:edit``, ``_backfill``, ``stage-N``, ``session-summary``, …) so
+  // curated content (ADRs, lessons, conventions) surfaces in the first
+  // few results. Set true for debugging / replay tooling that needs the
+  // raw memory feed.
+  // source: cortex@f425157 mcp_server/handlers/recall.py — include_low_signal default=False
+  include_low_signal: z.boolean().default(false),
 });
 
 export type RecallRequest = z.infer<typeof RecallRequestSchema>;
@@ -125,6 +132,11 @@ export const RecallResponseSchema = z.object({
   dispatch_tier: z.string(),
   signals: z.record(z.unknown()).default({}),
   enhancements: RecallEnhancementsSchema.optional(),
+  // Number of memories filtered as low-signal (auto-captures, backfill
+  // imports, stage reports). Surfaced so callers see how much was
+  // dropped — useful for debugging "why didn't I get the result I expected".
+  // source: cortex@f425157 mcp_server/handlers/recall.py — low_signal_dropped
+  low_signal_dropped: z.number().int().default(0),
 });
 
 export type RecallResponse = z.infer<typeof RecallResponseSchema>;

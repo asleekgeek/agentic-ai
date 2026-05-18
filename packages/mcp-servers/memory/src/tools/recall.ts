@@ -76,6 +76,11 @@ export function registerRecallTools(server: McpServer, deps: RecallDeps): void {
         max_results: z.number().int().min(1).max(RECALL_MAX_RESULTS_CAP).default(RECALL_DEFAULT_RESULTS).describe("Max memories to return"), // source: MCP_TOOLS.md §recall max_results cap=100
         min_heat:    z.number().min(0).max(1).default(RECALL_MIN_HEAT_DEFAULT).describe("Minimum heat threshold"), // source: MCP_TOOLS.md §recall min_heat default=0.05
         agent_topic: z.string().optional().describe("Agent topic scope"),
+        include_low_signal: z.boolean().optional().describe(
+          "Default false: drop memories tagged as auto-captures " +
+          "(auto-captured, tool:*, _backfill, stage-N, …) so curated " +
+          "content surfaces. Set true for debugging / replay tooling.",
+        ),
       },
     },
     async (args) => {
@@ -83,12 +88,13 @@ export function registerRecallTools(server: McpServer, deps: RecallDeps): void {
         // source: packages/memory/src/recall/recall-handler.ts::recallHandler
         const response = await recallHandler(
           {
-            query:       args.query,
-            domain:      args.domain,
-            directory:   args.directory,
-            max_results: args.max_results,
-            min_heat:    args.min_heat,
-            agent_topic: args.agent_topic,
+            query:              args.query,
+            domain:             args.domain,
+            directory:          args.directory,
+            max_results:        args.max_results,
+            min_heat:           args.min_heat,
+            agent_topic:        args.agent_topic,
+            include_low_signal: args.include_low_signal ?? false,
           },
           deps.store,
           deps.embedder,

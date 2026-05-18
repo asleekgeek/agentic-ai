@@ -252,7 +252,7 @@ export async function recallHierarchicalHandler(
   if (!embeddings) {
     // No embedding engine — fall back to flat recall
     const flatResult = await recallHandler(
-      { query, domain: domain || undefined, max_results, min_heat },
+      { query, domain: domain || undefined, max_results, min_heat, include_low_signal: false },
       store,
       null,
       settings,
@@ -287,7 +287,7 @@ export async function recallHierarchicalHandler(
   // Fall back to flat recall when too few embeddings
   if (memoriesWithEmb.length < MIN_EMBEDDINGS_FOR_HIERARCHY) {
     const flatResult = await recallHandler(
-      { query, domain: domain || undefined, max_results, min_heat },
+      { query, domain: domain || undefined, max_results, min_heat, include_low_signal: false },
       store,
       embeddings,
       settings,

@@ -43,6 +43,7 @@ import {
   extractHeatSignal,
   fuseSignals,
 } from "./multi-signal-fusion.js";
+import { filterLowSignal } from "./recall-helpers.js";
 import type { EmbeddingEngine, MemoryStore } from "./port.js";
 import { classifyQueryIntent, computeRetrievalWeights } from "./query-intent.js";
 import { applyRules } from "./rules.js";
@@ -286,12 +287,19 @@ export async function recallHandler(
     dispatch_tier: "ts",
     signals: {},
     enhancements: undefined,
+    low_signal_dropped: 0,
   };
 
   if (!args || !args.query) return empty;
 
   // source: cortex@bc0ae4f mcp_server/handlers/recall.py (max_results=10, min_heat=0.05 — empirical defaults)
-  const { query, max_results = DEFAULT_MAX_RESULTS, min_heat = DEFAULT_MIN_HEAT } = args;
+  // source: cortex@f425157 mcp_server/handlers/recall.py (include_low_signal default=False)
+  const {
+    query,
+    max_results = DEFAULT_MAX_RESULTS,
+    min_heat = DEFAULT_MIN_HEAT,
+    include_low_signal = false,
+  } = args;
 
   // 1. Intent classification
   const intentInfo = classifyQueryIntent(query);
@@ -483,8 +491,28 @@ export async function recallHandler(
         ) as ReturnType<typeof buildRecallResult>[])
       : withTriggers;
 
+  // 12.5. Low-signal filter (spike 2026-05-13).
+  //
+  // Tool-output captures, backfilled imports, and stage reports dominate
+  // unfiltered recall even for queries about design decisions, drowning
+  // out curated ADRs / lessons / conventions. Filter unless the caller
+  // opts in via include_low_signal=true (debugging / replay tooling).
+  //
+  // The fetch pool above is already over-fetched (POOL_MULTIPLIER=3 +
+  // POOL_FLOOR=30), so post-filter we still have enough candidates to
+  // cap at max_results without iterative refill.
+  //
+  // source: cortex@f425157 mcp_server/handlers/recall.py — low_signal_dropped wiring
+  let lowSignalDropped = 0;
+  let afterFilter = afterRules;
+  if (!include_low_signal) {
+    const filtered = filterLowSignal(afterRules);
+    afterFilter = filtered.kept as typeof afterRules;
+    lowSignalDropped = filtered.dropped;
+  }
+
   // 13. Cap to max_results
-  const capped = afterRules.slice(0, max_results);
+  const capped = afterFilter.slice(0, max_results);
 
   // 14. Strategic ordering (Lost-in-the-Middle mitigation)
   // source: Liu et al. (2023) "Lost in the Middle: How Language Models Use Long Contexts."
@@ -519,6 +547,7 @@ export async function recallHandler(
       knowledge_update_boost: intent === QueryIntent.KNOWLEDGE_UPDATE,
       strategic_ordering: settings.STRATEGIC_ORDERING_ENABLED,
     },
+    low_signal_dropped: lowSignalDropped,
   };
 }
 

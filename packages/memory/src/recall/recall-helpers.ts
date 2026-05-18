@@ -282,6 +282,86 @@ export function parseTags(tags: unknown): string[] {
   return [];
 }
 
+// ── Low-signal filter ─────────────────────────────────────────────────────
+// source: cortex@f425157 mcp_server/handlers/recall_helpers.py — LOW_SIGNAL_TAGS + filter_low_signal
+
+/**
+ * Tags that mark memories as low-signal noise at the retrieval layer.
+ *
+ * Spike 2026-05-13 in Cortex found three diverse queries about ADR-2244
+ * design decisions returned exclusively ``# Tool: Edit`` captures from
+ * unrelated repos. The curated wiki (31 ADRs + 21 lessons + 54
+ * conventions) was drowned because every captured tool call scores
+ * high on WRRF + heat + recency. The wiki classifier's AUDIT_TAGS
+ * already rejects such content from the wiki; recall reuses the same
+ * concept at the retrieval layer.
+ *
+ * source: cortex@f425157 mcp_server/handlers/recall_helpers.py:LOW_SIGNAL_TAGS
+ */
+export const LOW_SIGNAL_TAGS: ReadonlySet<string> = new Set([
+  "auto-captured",
+  "_backfill",
+  "imported",
+  "session-summary",
+  "tool-output",
+  "code-review",
+  "tool:edit",
+  "tool:bash",
+  "tool:read",
+  "tool:write",
+  "tool:grep",
+  "tool:glob",
+  "tool:search",
+  "tool:webfetch",
+  "tool:websearch",
+  "tool:notebookedit",
+  "stage-1",
+  "stage-2",
+  "stage-3",
+  "stage-4",
+  "stage-5",
+  "stage-6",
+  "stage-7",
+  "stage-8",
+  "stage-9",
+  "stage-10",
+  "stage-11",
+  "audit",
+  "automated",
+  "wip",
+  "progress",
+]);
+
+/**
+ * Drop memories whose tags mark them as low-signal noise.
+ *
+ * Returns ``{ kept, dropped }``. The dropped count is surfaced in the
+ * recall response so callers see how much was filtered — important for
+ * debugging "why didn't I get the result I expected".
+ *
+ * Callers that explicitly want low-signal memories (debugging, replay
+ * tooling) skip this filter via the ``include_low_signal`` input
+ * parameter on the recall handler.
+ *
+ * source: cortex@f425157 mcp_server/handlers/recall_helpers.py:filter_low_signal
+ */
+export function filterLowSignal<T extends { readonly tags?: unknown }>(
+  results: readonly T[],
+): { readonly kept: T[]; readonly dropped: number } {
+  const kept: T[] = [];
+  let dropped = 0;
+  for (const r of results) {
+    const tags = parseTags(r.tags).map((t) => t.toLowerCase());
+    const isLowSignal = tags.some((t) => LOW_SIGNAL_TAGS.has(t));
+    if (isLowSignal) {
+      dropped += 1;
+      continue;
+    }
+    kept.push(r);
+  }
+  return { kept, dropped };
+}
+
 // ── buildResult ───────────────────────────────────────────────────────────
 // source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:build_result
 

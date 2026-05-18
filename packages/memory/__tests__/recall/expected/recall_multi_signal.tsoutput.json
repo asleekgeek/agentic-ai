@@ -63,6 +63,7 @@
       "reranked": false,
       "knowledge_update_boost": false,
       "strategic_ordering": true
-    }
+    },
+    "low_signal_dropped": 0
   }
 }
