@@ -32,6 +32,17 @@ import {
   type CuratorMemory,
   type PageMtimeFn,
 } from "@agentic/memory/wiki/auto-curator.js";
+import {
+  computeWikiMaintenanceStats,
+  defaultExtractDomain,
+} from "@agentic/memory/wiki/maintenance-stats.js";
+import { autoResolveProjectRoot } from "@agentic/memory/wiki/project-roots.js";
+import { collectSourceFiles as codebaseCollectSourceFiles } from "@agentic/memory/codebase-analysis/handlers/codebase-analyze-helpers.js";
+import {
+  readFileSync as nodeReadFileSync,
+  readdirSync,
+} from "node:fs";
+import { join as nodeJoin } from "node:path";
 
 // ── Named constants ───────────────────────────────────────────────────────────
 // source: cortex@ed33435 memory_stats.py:77 — avg_heat rounded to 4 decimal places
@@ -272,6 +283,92 @@ async function countPendingCurationsSafe(store: MemoryStoreExt): Promise<number 
   }
 }
 
+// ── Pending drift + coverage counts (Phase C) ────────────────────────────────
+//
+// Same failure-isolation contract as countPendingCurationsSafe: any
+// error returns null and consolidate continues. Uses the maintenance-stats
+// engine to keep the numbers identical to what the dashboard cards and
+// SessionStart preamble show.
+//
+// source: packages/memory/src/wiki/maintenance-stats.ts
+
+// POSIX-style join for wiki rel paths — keeps slash-shaped paths regardless of OS.
+function joinWiki(root: string, rel: string): string {
+  if (!rel) return root;
+  if (rel.startsWith("/")) return rel;
+  return root.replace(/\/+$/, "") + "/" + rel.replace(/^\/+/, "");
+}
+
+// Walk a wiki directory and return rel-paths of every ``.md`` file.
+// We do it locally rather than reaching for the dashboard helper so
+// consolidate stays decoupled from the dashboard package.
+// source: this module — wiki-listing for maintenance scan
+function listMdRelPaths(root: string): string[] {
+  const out: string[] = [];
+  function walk(absDir: string, prefix: string): void {
+    let entries;
+    try { entries = readdirSync(absDir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (e.name.startsWith(".")) continue;
+      const next = prefix ? `${prefix}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(nodeJoin(absDir, e.name), next);
+      else if (e.isFile() && e.name.endsWith(".md")) out.push(next);
+    }
+  }
+  walk(root, "");
+  return out;
+}
+
+// Page-body reader for the drift scan; failure returns null.
+function readPageBody(root: string, rel: string): string | null {
+  try { return nodeReadFileSync(joinWiki(root, rel), "utf-8"); } catch { return null; }
+}
+
+// Project-rooted file mtime adapter.
+function projectFileMtime(projectRoot: string, rel: string): number | null {
+  try {
+    const MS_PER_SECOND = 1000; // source: ECMAScript Date timestamps are ms
+    return statSync(nodeJoin(projectRoot, rel)).mtimeMs / MS_PER_SECOND;
+  } catch {
+    return null;
+  }
+}
+
+// Source-file walker bounded to a sensible coverage cap.
+async function listProjectSources(projectRoot: string, maxFiles: number): Promise<string[]> {
+  try {
+    const FILE_KB = 100; // source: codebase_analyze max_file_size_kb default
+    const KB = 1024;     // source: IEC 80000-13 — 1 KiB = 1024 bytes
+    const abs = codebaseCollectSourceFiles(projectRoot, null, maxFiles, FILE_KB * KB);
+    return abs.map((p) => p.startsWith(projectRoot) ? p.slice(projectRoot.length + 1) : p);
+  } catch {
+    return [];
+  }
+}
+
+interface MaintenanceCounts {
+  readonly drift: number | null;
+  readonly coverage: number | null;
+}
+
+async function countPendingMaintenance(): Promise<MaintenanceCounts> {
+  try {
+    const stats = await computeWikiMaintenanceStats({
+      wikiRoot:        CONSOLIDATE_WIKI_ROOT,
+      listMdPages:     async (root) => listMdRelPaths(root),
+      readPage:        async (root, rel) => readPageBody(root, rel),
+      pageMtime:       SECONDS_DIV,
+      projectRootFor:  autoResolveProjectRoot,
+      listSourceFiles: listProjectSources,
+      fileMtime:       projectFileMtime,
+      extractDomain:   defaultExtractDomain,
+    });
+    return { drift: stats.totalDrift, coverage: stats.totalCoverage };
+  } catch {
+    return { drift: null, coverage: null };
+  }
+}
+
 // ── registerConsolidationTools ────────────────────────────────────────────────
 
 /**
@@ -320,7 +417,20 @@ export function registerConsolidationTools(server: McpServer, deps: Consolidatio
         // missing curation count must never break consolidate itself.
         // source: cortex@4883307 mcp_server/handlers/consolidate.py:153-172
         const pendingCurations = await countPendingCurationsSafe(deps.store);
-        const enrichedResult = { ...result, pending_curations: pendingCurations };
+
+        // 2026-05-18 (Phase C): surface drift + coverage counts so
+        // SessionStart preamble + dashboard show the FULL maintenance
+        // queue, not just curator. Same failure isolation; both fields
+        // may be null when project_root resolution fails.
+        // source: packages/memory/src/wiki/maintenance-stats.ts
+        const maintenance = await countPendingMaintenance();
+
+        const enrichedResult = {
+          ...result,
+          pending_curations: pendingCurations,
+          pending_drift:    maintenance.drift,
+          pending_coverage: maintenance.coverage,
+        };
 
         return { content: [{ type: "text" as const, text: JSON.stringify(enrichedResult) }] };
       } catch (err) {

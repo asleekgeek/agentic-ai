@@ -2535,3 +2535,39 @@ figure figcaption, .wiki-caption {
   font-size: 13px;
   padding: 24px 0;
 }
+
+/* ── Phase C: maintenance badges on project cards ─────────────────── */
+/* source: packages/memory/src/wiki/maintenance-stats.ts — Phase C drift+coverage */
+
+.wiki-project-card-maintenance {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-top: 2px;
+}
+
+.wiki-project-card-badge {
+  font-size: 10.5px;
+  font-family: var(--mono, 'JetBrains Mono', monospace);
+  border-radius: 3px;
+  padding: 2px 6px;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  font-weight: 500;
+}
+
+/* Drift = amber. Pages cite source files that have changed; not
+   broken, but stale. */
+.wiki-project-card-badge--drift {
+  background: rgba(255, 184, 107, 0.15);
+  border: 1px solid rgba(255, 184, 107, 0.32);
+  color: #f0b070;
+}
+
+/* Coverage = teal. Source files with no page yet — a gap, not an
+   error. Distinct from drift so the eye can separate the two. */
+.wiki-project-card-badge--coverage {
+  background: rgba(120, 200, 220, 0.14);
+  border: 1px solid rgba(120, 200, 220, 0.32);
+  color: #80c8dc;
+}

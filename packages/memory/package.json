@@ -175,6 +175,14 @@
       "import": "./dist/wiki/file-coverage.js",
       "types": "./dist/wiki/file-coverage.d.ts"
     },
+    "./wiki/maintenance-stats.js": {
+      "import": "./dist/wiki/maintenance-stats.js",
+      "types": "./dist/wiki/maintenance-stats.d.ts"
+    },
+    "./wiki/project-roots.js": {
+      "import": "./dist/wiki/project-roots.js",
+      "types": "./dist/wiki/project-roots.d.ts"
+    },
     "./wiki/storage/wiki-store.js": {
       "import": "./dist/wiki/storage/wiki-store.js",
       "types": "./dist/wiki/storage/wiki-store.d.ts"

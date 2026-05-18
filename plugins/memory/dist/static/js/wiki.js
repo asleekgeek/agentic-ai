@@ -22,6 +22,13 @@
   // domain frontmatter and no second path segment to extract from.
   var DOMAIN_ROOT_LABEL = '_root';
   var DOMAIN_GENERAL_LABEL = '_general';
+  // Phase C: per-project maintenance stats (drift + coverage).
+  // Populated asynchronously after the page list loads so the project
+  // cards render immediately with placeholder badges, then update when
+  // the maintenance scan finishes.
+  //   maintenanceByProject[name] = { drift: N, coverage: N, projectRoot: <path|null> }
+  // null = not yet fetched; {} = fetched but empty.
+  var maintenanceByProject = null;
 
   var KIND_ORDER = ['adr', 'spec', 'lesson', 'convention', 'note', 'guide', 'domain', 'entity', 'index', 'misc'];
   var KIND_LABELS = {
@@ -89,6 +96,10 @@
       .then(function(data) {
         pages = data.pages || [];
         buildLayout();
+        // Phase C: fire-and-forget maintenance fetch. The project
+        // cards render with placeholder badges first, then update
+        // when /api/wiki/maintenance returns.
+        fetchMaintenanceStats();
       })
       .catch(function(err) {
         console.warn('[cortex] Wiki list fetch error:', err.message);
@@ -388,6 +399,35 @@
     }, 0);
   }
 
+  // ── Maintenance stats (Phase C) ──
+  // Fetches per-project drift + coverage counts from
+  // /api/wiki/maintenance, populates maintenanceByProject, and
+  // refreshes any open projects landing so the badges update in place.
+  // Failure is non-fatal — cards just keep their placeholder badges.
+  function fetchMaintenanceStats() {
+    fetch('/api/wiki/maintenance')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data || !Array.isArray(data.per_project)) return;
+        var map = {};
+        data.per_project.forEach(function(p) {
+          map[p.name] = {
+            drift:       Number(p.drift || 0),
+            coverage:    Number(p.coverage || 0),
+            projectRoot: p.project_root || null,
+          };
+        });
+        maintenanceByProject = map;
+        // If the projects landing is currently visible, re-render so
+        // the new badges show up immediately.
+        if (!currentProject && visible) showProjectsLanding();
+      })
+      .catch(function(err) {
+        console.warn('[cortex] Wiki maintenance fetch error:', err && err.message);
+        maintenanceByProject = {};
+      });
+  }
+
   // ── Projects (Phase B) ──
 
   // Returns the page list scoped to the current project. When
@@ -570,6 +610,27 @@
           kinds.appendChild(chip);
         });
         card.appendChild(kinds);
+
+        // Phase C: maintenance badges. Show "drift N" / "coverage N"
+        // when the maintenance fetch has returned a positive count
+        // for this project. Pending → no badge (the card stays clean).
+        var m = maintenanceByProject ? maintenanceByProject[proj.name] : null;
+        if (m && (m.drift > 0 || m.coverage > 0)) {
+          var maint = el('div', 'wiki-project-card-maintenance');
+          if (m.drift > 0) {
+            var driftBadge = el('span', 'wiki-project-card-badge wiki-project-card-badge--drift');
+            driftBadge.title = 'Pages whose cited source files have been modified since the page was written';
+            driftBadge.textContent = 'drift ' + m.drift;
+            maint.appendChild(driftBadge);
+          }
+          if (m.coverage > 0) {
+            var covBadge = el('span', 'wiki-project-card-badge wiki-project-card-badge--coverage');
+            covBadge.title = 'Source files in this project with no wiki page yet';
+            covBadge.textContent = 'coverage ' + m.coverage;
+            maint.appendChild(covBadge);
+          }
+          card.appendChild(maint);
+        }
 
         if (proj.lastUpdated) {
           var stamp = el('div', 'wiki-project-card-stamp');

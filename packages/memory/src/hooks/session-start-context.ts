@@ -82,10 +82,13 @@ export function buildContext(
   checkpoint: CheckpointRow | null,
   teamDecisions: MemoryRow[],
   pendingCurations: number = 0,
+  pendingDrift: number = 0,
+  pendingCoverage: number = 0,
 ): string {
   if (
     !anchors.length && !hot.length && !checkpoint &&
-    !teamDecisions.length && !pendingCurations
+    !teamDecisions.length && !pendingCurations &&
+    !pendingDrift && !pendingCoverage
   ) {
     return "";
   }
@@ -136,16 +139,42 @@ export function buildContext(
   // documentation work waiting — surfacing it here lets it happen
   // "without a human asking", per the 2026-05-17 user directive.
   // source: cortex@4883307 mcp_server/hooks/session_start.py:463-479
-  if (pendingCurations > 0) {
-    lines.push("### Pending Wiki Curation");
-    const plural = pendingCurations === 1 ? "" : "s";
+  //
+  // 2026-05-18 (Phase C): pendingDrift + pendingCoverage land in the
+  // same section. The LLM gets one consolidated maintenance prompt
+  // instead of three separate ones.
+  // source: packages/memory/src/wiki/maintenance-stats.ts
+  if (pendingCurations > 0 || pendingDrift > 0 || pendingCoverage > 0) {
+    lines.push("### Pending Wiki Maintenance");
+    const lineParts: string[] = [];
+    if (pendingCurations > 0) {
+      lineParts.push(
+        `**${pendingCurations}** topic cluster${pendingCurations === 1 ? "" : "s"} ` +
+        "warrant a new curated page",
+      );
+    }
+    if (pendingDrift > 0) {
+      lineParts.push(
+        `**${pendingDrift}** page${pendingDrift === 1 ? "" : "s"} cite ` +
+        "source files newer than the page (drift)",
+      );
+    }
+    if (pendingCoverage > 0) {
+      lineParts.push(
+        `**${pendingCoverage}** source file${pendingCoverage === 1 ? "" : "s"} ` +
+        "have no wiki page yet (coverage gap)",
+      );
+    }
+    lines.push("Auto-curator detected: " + lineParts.join("; ") + ".");
     lines.push(
-      `Auto-curator detected **${pendingCurations}** topic cluster${plural} of ` +
-      "PG memories warrant a curated wiki page. Call `curate_wiki` to " +
-      "fetch authoring jobs and write the pages via `wiki_write` — " +
-      "each job carries a structured prompt with the cluster's memories " +
-      "and the documentation conventions. No human needs to ask; the " +
-      "curator works queued.",
+      "Call `curate_wiki` with " +
+      [
+        "{}",
+        pendingDrift > 0 ? "include_drift: true" : null,
+        pendingCoverage > 0 ? "include_file_coverage: true, project_root: <abs path>, domain: <name>" : null,
+      ].filter(Boolean).join(", ").replace("{}, ", "") +
+      " to fetch authoring jobs. Each job carries a structured prompt; " +
+      "write via `wiki_write`. No human needs to ask — the queue works itself.",
     );
     lines.push("");
   }

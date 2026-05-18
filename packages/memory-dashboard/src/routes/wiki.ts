@@ -23,6 +23,16 @@ import fs from "node:fs";
 import path from "node:path";
 import os from "node:os";
 import type { FastifyInstance } from "fastify";
+// Phase C — per-project maintenance counts (drift + coverage) so the
+// dashboard project cards can show maintenance badges.
+// source: packages/memory/src/wiki/maintenance-stats.ts
+import {
+  computeWikiMaintenanceStats,
+  defaultExtractDomain,
+} from "@agentic/memory/wiki/maintenance-stats.js";
+import { autoResolveProjectRoot } from "@agentic/memory/wiki/project-roots.js";
+import { collectSourceFiles } from "@agentic/memory/codebase-analysis/handlers/codebase-analyze-helpers.js";
+import type { PageMtimeFn } from "@agentic/memory/wiki/auto-curator.js";
 
 // ── Named constants ───────────────────────────────────────────────────────────
 const HTTP_400 = 400; // source: RFC 7231 §6.5.1 — Bad Request
@@ -281,4 +291,133 @@ export async function registerWikiRoutes(fastify: FastifyInstance): Promise<void
       return reply.status(HTTP_500).send({ error: err instanceof Error ? err.constructor.name : "UnknownError" }); // source: RFC 7231 §6.6 — 500 Internal Server Error
     }
   });
+
+  // ── GET /api/wiki/maintenance ──────────────────────────────────────────────
+  //
+  // Returns per-project drift + coverage counts so the dashboard's
+  // project cards (Phase B) can show maintenance badges. The same
+  // engine powers the consolidate tool's pending_drift /
+  // pending_coverage fields and the SessionStart preamble's
+  // maintenance section.
+  //
+  // Response shape:
+  //   {
+  //     totalDrift: number,
+  //     totalCoverage: number,
+  //     totalPages: number,
+  //     perProject: [{ name, drift, coverage, projectRoot }]
+  //   }
+  //
+  // source: packages/memory/src/wiki/maintenance-stats.ts
+  fastify.get("/api/wiki/maintenance", async (_req, reply) => {
+    try {
+      const stats = await computeMaintenanceStatsForDashboard();
+      const perProject = Array.from(stats.perProject.entries())
+        .map(([name, p]) => ({
+          name,
+          drift:        p.drift,
+          coverage:     p.coverage,
+          project_root: p.projectRoot,
+        }));
+      return reply.send({
+        total_drift:    stats.totalDrift,
+        total_coverage: stats.totalCoverage,
+        total_pages:    stats.totalPages,
+        per_project:    perProject,
+      });
+    } catch (err) {
+      return reply.status(HTTP_500).send({ error: err instanceof Error ? err.constructor.name : "UnknownError" }); // source: RFC 7231 §6.6 — 500 Internal Server Error
+    }
+  });
+}
+
+// ── Maintenance-stats glue for the dashboard ────────────────────────────
+
+// Per-project file walk cap for the dashboard's maintenance API. Higher
+// than SessionStart (5000) because the dashboard is interactive-but-
+// patient — the badge populates after page-load, not in the hot path.
+// source: this module — dashboard latency budget vs accuracy trade-off
+const DASHBOARD_COVERAGE_MAX_FILES = 10_000;
+
+// Per-source-file size cap during walk — matches codebase_analyze's
+// default so coverage and the analyze tool see the same file set.
+// source: cortex codebase_analyze.py — max_file_size_kb default = 100
+const DASHBOARD_MAX_FILE_KB = 100;
+const DASHBOARD_BYTES_PER_KB = 1024; // source: IEC 80000-13:2008 §21-12
+
+// POSIX-style join for wiki rel paths.
+function joinWikiPath(root: string, rel: string): string {
+  if (!rel) return root;
+  if (rel.startsWith("/")) return rel;
+  return root.replace(/\/+$/, "") + "/" + rel.replace(/^\/+/, "");
+}
+
+// Walk wiki directory recursively and return rel-paths of every ``.md``.
+// source: packages/memory/src/hooks/session-start.ts::listMdRelPaths — same
+function listMdRelPathsForDashboard(root: string): string[] {
+  const out: string[] = [];
+  function walk(absDir: string, prefix: string): void {
+    let entries;
+    try { entries = fs.readdirSync(absDir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (e.name.startsWith(".")) continue;
+      const next = prefix ? `${prefix}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(path.join(absDir, e.name), next);
+      else if (e.isFile() && e.name.endsWith(".md")) out.push(next);
+    }
+  }
+  walk(root, "");
+  return out;
+}
+
+function readWikiPageBody(root: string, rel: string): string | null {
+  try { return fs.readFileSync(joinWikiPath(root, rel), "utf-8"); } catch { return null; }
+}
+
+const dashboardPageMtime: PageMtimeFn = (absPath: string): number | null => {
+  try {
+    const MS_PER_SECOND = 1000; // source: ECMAScript Date timestamps are ms
+    return fs.statSync(absPath).mtimeMs / MS_PER_SECOND;
+  } catch {
+    return null;
+  }
+};
+
+function dashboardProjectFileMtime(projectRoot: string, rel: string): number | null {
+  try {
+    const MS_PER_SECOND = 1000; // source: ECMAScript Date timestamps are ms
+    return fs.statSync(path.join(projectRoot, rel)).mtimeMs / MS_PER_SECOND;
+  } catch {
+    return null;
+  }
+}
+
+async function dashboardListSourceFiles(projectRoot: string, maxFiles: number): Promise<string[]> {
+  try {
+    const abs = collectSourceFiles(
+      projectRoot,
+      null,
+      maxFiles,
+      DASHBOARD_MAX_FILE_KB * DASHBOARD_BYTES_PER_KB,
+    );
+    return abs.map((p) => p.startsWith(projectRoot) ? p.slice(projectRoot.length + 1) : p);
+  } catch {
+    return [];
+  }
+}
+
+async function computeMaintenanceStatsForDashboard(): Promise<ReturnType<typeof computeWikiMaintenanceStats> extends Promise<infer R> ? R : never> {
+  return computeWikiMaintenanceStats(
+    {
+      wikiRoot:        getWikiDir(),
+      listMdPages:     async (root) => listMdRelPathsForDashboard(root),
+      readPage:        async (root, rel) => readWikiPageBody(root, rel),
+      pageMtime:       dashboardPageMtime,
+      projectRootFor:  autoResolveProjectRoot,
+      listSourceFiles: dashboardListSourceFiles,
+      fileMtime:       dashboardProjectFileMtime,
+      extractDomain:   defaultExtractDomain,
+    },
+    { maxCoverageFiles: DASHBOARD_COVERAGE_MAX_FILES },
+  );
 }

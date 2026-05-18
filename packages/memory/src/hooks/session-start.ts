@@ -34,9 +34,9 @@
  * source: Wegner (1987) Transactive Memory Systems.
  */
 
-import { existsSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, basename } from "node:path";
+import { join, join as pathJoin, basename } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import {
   countMemories,
@@ -55,6 +55,12 @@ import {
 } from "./session-start-context.js";
 import { loadHookConfig } from "./types.js";
 import { countPendingClusters, type PageMtimeFn } from "../wiki/auto-curator.js";
+import {
+  computeWikiMaintenanceStats,
+  defaultExtractDomain,
+} from "../wiki/maintenance-stats.js";
+import { autoResolveProjectRoot } from "../wiki/project-roots.js";
+import { collectSourceFiles } from "../codebase-analysis/handlers/codebase-analyze-helpers.js";
 
 const LOG_PREFIX = "[session-start-hook]";
 
@@ -105,6 +111,88 @@ async function countPendingCurationsSafe(databaseUrl: string): Promise<number> {
     );
   } catch {
     return 0;
+  }
+}
+
+// ── Pending drift + coverage counts (Phase C) ────────────────────────────
+//
+// Same failure-tolerant contract as countPendingCurationsSafe; any
+// error returns zeros and the preamble continues. Uses the
+// maintenance-stats engine so the numbers match the consolidate tool
+// + dashboard cards.
+//
+// source: packages/memory/src/wiki/maintenance-stats.ts
+
+// POSIX-style join for wiki rel paths.
+function joinWikiPath(root: string, rel: string): string {
+  if (!rel) return root;
+  if (rel.startsWith("/")) return rel;
+  return root.replace(/\/+$/, "") + "/" + rel.replace(/^\/+/, "");
+}
+
+// Walk a wiki directory and return rel-paths of every ``.md`` file.
+function listMdRelPaths(root: string): string[] {
+  const out: string[] = [];
+  function walk(absDir: string, prefix: string): void {
+    let entries;
+    try { entries = readdirSync(absDir, { withFileTypes: true }); } catch { return; }
+    for (const e of entries) {
+      if (e.name.startsWith(".")) continue;
+      const next = prefix ? `${prefix}/${e.name}` : e.name;
+      if (e.isDirectory()) walk(pathJoin(absDir, e.name), next);
+      else if (e.isFile() && e.name.endsWith(".md")) out.push(next);
+    }
+  }
+  walk(root, "");
+  return out;
+}
+
+function readWikiPageBody(root: string, rel: string): string | null {
+  try { return readFileSync(joinWikiPath(root, rel), "utf-8"); } catch { return null; }
+}
+
+function projectFileMtimeFn(projectRoot: string, rel: string): number | null {
+  try {
+    const MS_PER_SECOND = 1000; // source: ECMAScript Date timestamps are ms
+    return statSync(pathJoin(projectRoot, rel)).mtimeMs / MS_PER_SECOND;
+  } catch {
+    return null;
+  }
+}
+
+// Cap source files walked per project at SessionStart. Past this the
+// coverage count is an underestimate; the preamble nudge still fires
+// when the queue is non-empty, which is the load-bearing property.
+// source: this module — SessionStart latency budget
+const SESSION_START_COVERAGE_MAX_FILES = 5000;
+
+interface MaintenanceCountsLocal {
+  readonly drift: number;
+  readonly coverage: number;
+}
+
+async function countPendingMaintenanceSafe(): Promise<MaintenanceCountsLocal> {
+  try {
+    const FILE_KB = 100; // source: codebase_analyze max_file_size_kb default
+    const KB = 1024;     // source: IEC 80000-13 — 1 KiB = 1024 bytes
+    const stats = await computeWikiMaintenanceStats(
+      {
+        wikiRoot:        SESSION_START_WIKI_ROOT,
+        listMdPages:     async (root) => listMdRelPaths(root),
+        readPage:        async (root, rel) => readWikiPageBody(root, rel),
+        pageMtime:       SESSION_START_PAGE_MTIME,
+        projectRootFor:  autoResolveProjectRoot,
+        listSourceFiles: async (root, maxFiles) =>
+          collectSourceFiles(root, null, maxFiles, FILE_KB * KB)
+            .map((p) => p.startsWith(root) ? p.slice(root.length + 1) : p),
+        fileMtime:       projectFileMtimeFn,
+        extractDomain:   defaultExtractDomain,
+      },
+      { maxCoverageFiles: SESSION_START_COVERAGE_MAX_FILES },
+    );
+    return { drift: stats.totalDrift, coverage: stats.totalCoverage };
+  } catch {
+    return { drift: 0, coverage: 0 };
   }
 }
 
@@ -541,20 +629,31 @@ export async function main(): Promise<void> {
   const anchorIds = new Set(anchors.map((a) => a.id));
 
   // I4 + I3: hot memories and team decisions exclude anchor IDs.
-  const [hot, teamDecisions, checkpoint, pendingCurations] = await Promise.all([
+  // Phase C: drift + coverage counts run in parallel with the other
+  // fetches; their adapters are fs-only so they don't fight the PG pool.
+  const [hot, teamDecisions, checkpoint, pendingCurations, maintenance] = await Promise.all([
     fetchHotMemories(config.databaseUrl, MIN_HEAT, HOT_LIMIT, anchorIds),
     fetchTeamDecisions(config.databaseUrl, anchorIds),
     fetchCheckpoint(config.databaseUrl),
     countPendingCurationsSafe(config.databaseUrl),
+    countPendingMaintenanceSafe(),
   ]);
 
-  const context = buildContext(anchors, hot, checkpoint, teamDecisions, pendingCurations);
+  const context = buildContext(
+    anchors, hot, checkpoint, teamDecisions, pendingCurations,
+    maintenance.drift, maintenance.coverage,
+  );
 
   if (context) {
     process.stdout.write(context + "\n");
+    const extra = [
+      pendingCurations > 0 ? `${pendingCurations} pending curations` : null,
+      maintenance.drift > 0 ? `${maintenance.drift} drift` : null,
+      maintenance.coverage > 0 ? `${maintenance.coverage} coverage gaps` : null,
+    ].filter(Boolean).join(" + ");
     log(
       `Injected ${anchors.length} anchors + ${hot.length} hot memories ` +
-        (pendingCurations > 0 ? `+ ${pendingCurations} pending curations ` : "") +
+        (extra ? `+ ${extra} ` : "") +
         `(total: ${memoryCount})`,
     );
   } else {
