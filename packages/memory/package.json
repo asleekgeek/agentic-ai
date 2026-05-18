@@ -179,6 +179,14 @@
       "import": "./dist/wiki/maintenance-stats.js",
       "types": "./dist/wiki/maintenance-stats.d.ts"
     },
+    "./wiki/maintenance.js": {
+      "import": "./dist/wiki/maintenance.js",
+      "types": "./dist/wiki/maintenance.d.ts"
+    },
+    "./wiki/stub-detector.js": {
+      "import": "./dist/wiki/stub-detector.js",
+      "types": "./dist/wiki/stub-detector.d.ts"
+    },
     "./wiki/project-roots.js": {
       "import": "./dist/wiki/project-roots.js",
       "types": "./dist/wiki/project-roots.d.ts"

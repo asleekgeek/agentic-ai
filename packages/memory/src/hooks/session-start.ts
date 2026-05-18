@@ -34,10 +34,11 @@
  * source: Wegner (1987) Transactive Memory Systems.
  */
 
-import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, join as pathJoin, basename } from "node:path";
+import { join, join as pathJoin, basename, dirname } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import {
   countMemories,
   fetchAnchors,
@@ -457,6 +458,111 @@ export async function lookupCachedGraphPath(
 
 // ── Background codebase reanalysis ────────────────────────────────────────
 
+// ── Background consolidate (G1) ───────────────────────────────────────────
+//
+// Spawns the consolidate cycle detached when the stamp at
+// ~/.claude/methodology/.last_consolidate is older than
+// CORTEX_CONSOLIDATE_TTL_HOURS (default 6h). The consolidate cycle
+// runs the wiki grooming axes too (G2: stub purge, classifier purge,
+// backlog refresh) so the wiki stays up to date "without a human in
+// the loop" per user directive 2026-05-18.
+//
+// source: cortex/mcp_server/hooks/session_start.py:580-700 (_maybe_background_consolidate)
+
+// Path to the compiled worker. Relative to this file's location in
+// the dist tree, the worker is a sibling.
+// source: packages/memory/src/hooks/consolidate-background.ts
+const CONSOLIDATE_WORKER_FILENAME = "consolidate-background.js";
+
+// Default TTL between background consolidate runs (hours). Overridable
+// via CORTEX_CONSOLIDATE_TTL_HOURS env. Matches Cortex's "few times
+// a day" cadence.
+// source: cortex/mcp_server/hooks/session_start.py — CORTEX_CONSOLIDATE_TTL_HOURS default 6
+const DEFAULT_CONSOLIDATE_TTL_HOURS = 6;
+const MS_PER_HOUR = 3_600_000; // source: SI — 3600 s/hr × 1000 ms/s
+
+function consolidateStampPath(): string {
+  return join(homedir(), ".claude", "methodology", ".last_consolidate");
+}
+
+function consolidateTtlHours(): number {
+  const raw = process.env["CORTEX_CONSOLIDATE_TTL_HOURS"];
+  if (!raw) return DEFAULT_CONSOLIDATE_TTL_HOURS;
+  const n = parseFloat(raw);
+  return Number.isFinite(n) && n > 0 ? n : DEFAULT_CONSOLIDATE_TTL_HOURS;
+}
+
+function isStampFresh(stampPath: string, ttlMs: number): boolean {
+  try {
+    const age = Date.now() - statSync(stampPath).mtimeMs;
+    return age < ttlMs;
+  } catch {
+    return false; // missing stamp → always spawn
+  }
+}
+
+function resolveConsolidateWorkerPath(): string | null {
+  try {
+    // __dirname equivalent for ES modules.
+    const here = fileURLToPath(import.meta.url);
+    const dir = dirname(here);
+    const candidate = join(dir, CONSOLIDATE_WORKER_FILENAME);
+    if (existsSync(candidate)) return candidate;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Spawn the consolidate-background worker if the stamp is older than
+ * CORTEX_CONSOLIDATE_TTL_HOURS. Detached — returns immediately.
+ *
+ * No-ops silently when:
+ *   - CORTEX_CONSOLIDATE_BACKGROUND=off
+ *   - the stamp is fresh (TTL not elapsed)
+ *   - the worker file isn't found (e.g. running from source without build)
+ *
+ * source: cortex/mcp_server/hooks/session_start.py:580-700
+ */
+function maybeBackgroundConsolidate(): void {
+  if (process.env["CORTEX_CONSOLIDATE_BACKGROUND"] === "off") {
+    log("background consolidate disabled (CORTEX_CONSOLIDATE_BACKGROUND=off)");
+    return;
+  }
+  try {
+    const stampPath = consolidateStampPath();
+    const ttlMs = consolidateTtlHours() * MS_PER_HOUR;
+    if (isStampFresh(stampPath, ttlMs)) {
+      log(`background consolidate skipped: stamp fresh (TTL ${consolidateTtlHours()}h)`);
+      return;
+    }
+    const workerPath = resolveConsolidateWorkerPath();
+    if (!workerPath) {
+      log("background consolidate skipped: worker file not found (run a build?)");
+      return;
+    }
+    const logDir = join(homedir(), ".claude", "methodology");
+    const logFile = join(logDir, "consolidate_background.log");
+    if (!existsSync(logDir)) {
+      try { mkdirSync(logDir, { recursive: true }); } catch { /* best effort */ }
+    }
+    const child = spawn(
+      process.execPath,
+      [workerPath],
+      {
+        detached: true,
+        stdio: ["ignore", "ignore", "ignore"],
+        env: process.env,
+      },
+    );
+    child.unref();
+    log(`background consolidate spawned (worker pid ${child.pid ?? "?"} → ${logFile})`);
+  } catch (err) {
+    log(`background consolidate skipped: ${String(err)}`);
+  }
+}
+
 /**
  * Spawn background ingest_codebase when the graph is stale.
  *
@@ -597,6 +703,14 @@ export async function main(): Promise<void> {
   // I2: background re-analysis: fire-and-forget when the graph is stale.
   // source: cortex@ed33435 mcp_server/hooks/session_start.py:607-612
   maybeBackgroundReanalyze();
+
+  // I2 (G1): background consolidate: fire-and-forget when the
+  // consolidate stamp is older than CORTEX_CONSOLIDATE_TTL_HOURS
+  // (default 6h). Runs the wiki grooming cycle as part of the
+  // consolidate pipeline, so the wiki stays up to date without a
+  // human in the loop.
+  // source: cortex/mcp_server/hooks/session_start.py:580-700
+  maybeBackgroundConsolidate();
 
   // Attempt DB connection via countMemories.
   const memoryCount = await countMemories(config.databaseUrl);

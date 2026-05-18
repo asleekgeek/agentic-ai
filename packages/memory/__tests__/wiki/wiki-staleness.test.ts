@@ -1,9 +1,15 @@
 /**
- * Tests for wiki-staleness.ts — staleness verdict.
+ * Tests for staleness.ts — wiki-page staleness verdict.
  *
  * Invariant: decision is deterministic for same inputs.
  * Happy path: correct staleness detection.
  * Error path: fewer than MIN_FILE_REFS → never stale.
+ *
+ * Phase-C dedup (2026-05-18): formerly imported from wiki-staleness.ts,
+ * which was a duplicate of staleness.ts under a different name. The
+ * canonical module (staleness.ts) uses snake_case property names to
+ * match the consumer in wiki-consolidate-handler.ts.
+ * source: packages/memory/src/wiki/staleness.ts
  */
 
 import { describe, it, expect } from "vitest";
@@ -13,7 +19,7 @@ import {
   harvestPageRefs,
   STALE_THRESHOLD,
   MIN_FILE_REFS,
-} from "../../src/wiki/wiki-staleness.js";
+} from "../../src/wiki/staleness.js";
 
 describe("extractFileRefs", () => {
   it("extracts .py file references", () => {
@@ -39,56 +45,55 @@ describe("extractFileRefs", () => {
 describe("evaluateStaleness", () => {
   it("not stale when fewer than MIN_FILE_REFS", () => {
     const decision = evaluateStaleness({
-      pageId: 1,
-      isStaleWas: false,
-      fileRefs: ["foo.py"], // only 1 ref < MIN_FILE_REFS=2
+      page_id: 1,
+      is_stale_was: false,
+      file_refs: ["foo.py"],
       existence: { "foo.py": false },
     });
-    expect(decision.isStaleNow).toBe(false);
+    expect(decision.is_stale_now).toBe(false);
   });
 
   it("stale when >= STALE_THRESHOLD of refs are missing", () => {
     const decision = evaluateStaleness({
-      pageId: 1,
-      isStaleWas: false,
-      fileRefs: ["a.py", "b.py", "c.py", "d.py"],
+      page_id: 1,
+      is_stale_was: false,
+      file_refs: ["a.py", "b.py", "c.py", "d.py"],
       existence: { "a.py": false, "b.py": false, "c.py": true, "d.py": true },
-      // 2/4 missing = 0.5 >= STALE_THRESHOLD
     });
-    expect(decision.isStaleNow).toBe(true);
+    expect(decision.is_stale_now).toBe(true);
   });
 
   it("not stale when all refs exist", () => {
     const decision = evaluateStaleness({
-      pageId: 1,
-      isStaleWas: false,
-      fileRefs: ["a.py", "b.py"],
+      page_id: 1,
+      is_stale_was: false,
+      file_refs: ["a.py", "b.py"],
       existence: { "a.py": true, "b.py": true },
     });
-    expect(decision.isStaleNow).toBe(false);
+    expect(decision.is_stale_now).toBe(false);
   });
 
   it("detects transition", () => {
     const decision = evaluateStaleness({
-      pageId: 1,
-      isStaleWas: true,
-      fileRefs: ["a.py", "b.py"],
+      page_id: 1,
+      is_stale_was: true,
+      file_refs: ["a.py", "b.py"],
       existence: { "a.py": true, "b.py": true },
     });
     expect(decision.transitioned).toBe(true);
-    expect(decision.isStaleNow).toBe(false);
+    expect(decision.is_stale_now).toBe(false);
   });
 
   it("is deterministic", () => {
     const opts = {
-      pageId: 1,
-      isStaleWas: false,
-      fileRefs: ["a.py", "b.py"],
+      page_id: 1,
+      is_stale_was: false,
+      file_refs: ["a.py", "b.py"],
       existence: { "a.py": false, "b.py": true },
     };
     const d1 = evaluateStaleness(opts);
     const d2 = evaluateStaleness(opts);
-    expect(d1.isStaleNow).toBe(d2.isStaleNow);
+    expect(d1.is_stale_now).toBe(d2.is_stale_now);
     expect(d1.rationale).toBe(d2.rationale);
   });
 });
@@ -115,5 +120,17 @@ describe("harvestPageRefs", () => {
     const page = { lead: "See foo.py here" };
     const refs = harvestPageRefs(page, ["foo.py"]);
     expect(refs.filter((r) => r === "foo.py")).toHaveLength(1);
+  });
+});
+
+describe("constants", () => {
+  it("STALE_THRESHOLD is between 0 and 1", () => {
+    expect(STALE_THRESHOLD).toBeGreaterThan(0);
+    expect(STALE_THRESHOLD).toBeLessThanOrEqual(1);
+  });
+
+  it("MIN_FILE_REFS is a positive integer", () => {
+    expect(MIN_FILE_REFS).toBeGreaterThan(0);
+    expect(Number.isInteger(MIN_FILE_REFS)).toBe(true);
   });
 });

@@ -18,7 +18,7 @@
  *         §Tier1Core (record_session_end)
  */
 
-import { existsSync, readFileSync, statSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -27,22 +27,15 @@ import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-sto
 import { handler as consolidateHandler } from "@agentic/memory/consolidation/handler.js";
 import type { ConsolidationStore, ConsolidationSettings } from "@agentic/memory/consolidation/handler.js";
 import type { ProfilesStore } from "@agentic/memory/methodology/types.js";
+// Wiki-cycle adapters live in a sibling file to keep this one under
+// the §4.1 file-size limit. Same engine + failure-isolation contract.
+// source: packages/mcp-servers/memory/src/tools/consolidation-wiki-adapters.ts
 import {
-  countPendingClusters,
-  type CuratorMemory,
-  type PageMtimeFn,
-} from "@agentic/memory/wiki/auto-curator.js";
-import {
-  computeWikiMaintenanceStats,
-  defaultExtractDomain,
-} from "@agentic/memory/wiki/maintenance-stats.js";
-import { autoResolveProjectRoot } from "@agentic/memory/wiki/project-roots.js";
-import { collectSourceFiles as codebaseCollectSourceFiles } from "@agentic/memory/codebase-analysis/handlers/codebase-analyze-helpers.js";
-import {
-  readFileSync as nodeReadFileSync,
-  readdirSync,
-} from "node:fs";
-import { join as nodeJoin } from "node:path";
+  countPendingCurationsSafe,
+  countPendingMaintenance,
+  runConsolidateWikiCycle,
+  type WikiMaintenanceResult,
+} from "./consolidation-wiki-adapters.js";
 
 // ── Named constants ───────────────────────────────────────────────────────────
 // source: cortex@ed33435 memory_stats.py:77 — avg_heat rounded to 4 decimal places
@@ -234,140 +227,6 @@ function errorText(tool: string, err: unknown): { content: Array<{ type: "text";
   return { content: [{ type: "text" as const, text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
 }
 
-// ── Pending-curation count for the consolidate stats dict ────────────────────
-//
-// Failure-tolerant adapter: when the curator can't compute (no wiki
-// root, no memories, an unexpected error), we return ``null`` and
-// move on. consolidate must never break because of a curation count.
-// source: cortex@4883307 mcp_server/handlers/consolidate.py:153-172
-
-// source: cortex@ed33435 mcp_server/infrastructure/config.py — WIKI_ROOT default
-const CONSOLIDATE_WIKI_ROOT: string =
-  process.env["CORTEX_WIKI_ROOT"] ??
-  join(homedir(), ".claude", "methodology", "wiki");
-
-// Memory pool size used by the SessionStart helper in Cortex. Matches
-// the curator's default pool so the count is consistent with what
-// curate_wiki returns on a full invocation.
-// source: cortex@4883307 mcp_server/hooks/session_start.py:226 ("LIMIT 500")
-const CONSOLIDATE_MEM_POOL = 500;
-
-// Filesystem-mtime adapter. Returns seconds-since-epoch or null when
-// the file doesn't exist. statSync throws on missing — catch and
-// return null so the curator can treat it as "page absent, eligible".
-// source: cortex@4883307 mcp_server/core/auto_curator.py::is_path_recently_authored
-const SECONDS_DIV: PageMtimeFn = (absPath: string): number | null => {
-  try {
-    const MS_PER_SECOND = 1000; // source: ECMAScript Date timestamps are ms
-    return statSync(absPath).mtimeMs / MS_PER_SECOND;
-  } catch {
-    return null;
-  }
-};
-
-async function countPendingCurationsSafe(store: MemoryStoreExt): Promise<number | null> {
-  try {
-    const storeExt = store as MemoryStoreExt & {
-      getRecentlyAccessedMemoriesAsync?: (limit: number, minAccessCount: number) => Promise<Record<string, unknown>[]>;
-    };
-    const rows = storeExt.getRecentlyAccessedMemoriesAsync
-      ? await storeExt.getRecentlyAccessedMemoriesAsync(CONSOLIDATE_MEM_POOL, 1)
-      : store.getRecentlyAccessedMemories(CONSOLIDATE_MEM_POOL, 1);
-    if (rows.length === 0) return 0;
-    return countPendingClusters(rows as CuratorMemory[], {
-      wikiRoot: CONSOLIDATE_WIKI_ROOT,
-      pageMtime: SECONDS_DIV,
-    });
-  } catch {
-    return null;
-  }
-}
-
-// ── Pending drift + coverage counts (Phase C) ────────────────────────────────
-//
-// Same failure-isolation contract as countPendingCurationsSafe: any
-// error returns null and consolidate continues. Uses the maintenance-stats
-// engine to keep the numbers identical to what the dashboard cards and
-// SessionStart preamble show.
-//
-// source: packages/memory/src/wiki/maintenance-stats.ts
-
-// POSIX-style join for wiki rel paths — keeps slash-shaped paths regardless of OS.
-function joinWiki(root: string, rel: string): string {
-  if (!rel) return root;
-  if (rel.startsWith("/")) return rel;
-  return root.replace(/\/+$/, "") + "/" + rel.replace(/^\/+/, "");
-}
-
-// Walk a wiki directory and return rel-paths of every ``.md`` file.
-// We do it locally rather than reaching for the dashboard helper so
-// consolidate stays decoupled from the dashboard package.
-// source: this module — wiki-listing for maintenance scan
-function listMdRelPaths(root: string): string[] {
-  const out: string[] = [];
-  function walk(absDir: string, prefix: string): void {
-    let entries;
-    try { entries = readdirSync(absDir, { withFileTypes: true }); } catch { return; }
-    for (const e of entries) {
-      if (e.name.startsWith(".")) continue;
-      const next = prefix ? `${prefix}/${e.name}` : e.name;
-      if (e.isDirectory()) walk(nodeJoin(absDir, e.name), next);
-      else if (e.isFile() && e.name.endsWith(".md")) out.push(next);
-    }
-  }
-  walk(root, "");
-  return out;
-}
-
-// Page-body reader for the drift scan; failure returns null.
-function readPageBody(root: string, rel: string): string | null {
-  try { return nodeReadFileSync(joinWiki(root, rel), "utf-8"); } catch { return null; }
-}
-
-// Project-rooted file mtime adapter.
-function projectFileMtime(projectRoot: string, rel: string): number | null {
-  try {
-    const MS_PER_SECOND = 1000; // source: ECMAScript Date timestamps are ms
-    return statSync(nodeJoin(projectRoot, rel)).mtimeMs / MS_PER_SECOND;
-  } catch {
-    return null;
-  }
-}
-
-// Source-file walker bounded to a sensible coverage cap.
-async function listProjectSources(projectRoot: string, maxFiles: number): Promise<string[]> {
-  try {
-    const FILE_KB = 100; // source: codebase_analyze max_file_size_kb default
-    const KB = 1024;     // source: IEC 80000-13 — 1 KiB = 1024 bytes
-    const abs = codebaseCollectSourceFiles(projectRoot, null, maxFiles, FILE_KB * KB);
-    return abs.map((p) => p.startsWith(projectRoot) ? p.slice(projectRoot.length + 1) : p);
-  } catch {
-    return [];
-  }
-}
-
-interface MaintenanceCounts {
-  readonly drift: number | null;
-  readonly coverage: number | null;
-}
-
-async function countPendingMaintenance(): Promise<MaintenanceCounts> {
-  try {
-    const stats = await computeWikiMaintenanceStats({
-      wikiRoot:        CONSOLIDATE_WIKI_ROOT,
-      listMdPages:     async (root) => listMdRelPaths(root),
-      readPage:        async (root, rel) => readPageBody(root, rel),
-      pageMtime:       SECONDS_DIV,
-      projectRootFor:  autoResolveProjectRoot,
-      listSourceFiles: listProjectSources,
-      fileMtime:       projectFileMtime,
-      extractDomain:   defaultExtractDomain,
-    });
-    return { drift: stats.totalDrift, coverage: stats.totalCoverage };
-  } catch {
-    return { drift: null, coverage: null };
-  }
-}
 
 // ── registerConsolidationTools ────────────────────────────────────────────────
 
@@ -385,13 +244,20 @@ export function registerConsolidationTools(server: McpServer, deps: Consolidatio
   server.registerTool(
     "consolidate",
     {
-      description: "Run memory maintenance pipeline: decay, compression, CLS transfer, memify, pruning.",
+      description: "Run memory maintenance pipeline: decay, compression, CLS transfer, memify, pruning, wiki grooming.",
       inputSchema: {
         decay:    z.boolean().default(true).describe("Run decay cycle"),
         compress: z.boolean().default(true).describe("Run compression cycle"),
         cls:      z.boolean().default(true).describe("Run CLS transfer"),
         memify:   z.boolean().default(true).describe("Run memify cycle"),
         deep:     z.boolean().default(false).describe("Deep consolidation (slower)"),
+        // G2 — wiki maintenance axes. Defaults match the autonomous
+        // policy: stub + classifier purge ON, cap 500/cycle, shallow
+        // pages NEVER auto-deleted (queued via curation backlog).
+        // source: packages/memory/src/wiki/maintenance.ts
+        wiki:                          z.boolean().default(true).describe("Run wiki maintenance cycle"),
+        wiki_apply_stubs:              z.boolean().default(true).describe("Purge stub pages (autonomous)"),
+        wiki_apply_classifier_rejects: z.boolean().default(true).describe("Purge classifier-reject pages"),
       },
     },
     async (args) => {
@@ -425,11 +291,29 @@ export function registerConsolidationTools(server: McpServer, deps: Consolidatio
         // source: packages/memory/src/wiki/maintenance-stats.ts
         const maintenance = await countPendingMaintenance();
 
+        // G2 — wiki maintenance cycle. Runs stub purge + classifier
+        // purge + backlog refresh on every consolidate call. Failure
+        // isolated to the wiki stanza — consolidate's memory work is
+        // never blocked by a wiki edge case.
+        // source: packages/memory/src/wiki/maintenance.ts
+        // source: cortex@4883307+ mcp_server/handlers/consolidation/wiki_maintenance.py
+        let wikiResult: WikiMaintenanceResult | { readonly status: string } | null = null;
+        if (args.wiki !== false) {
+          wikiResult = await runConsolidateWikiCycle(
+            deps.store,
+            args.wiki_apply_stubs !== false,
+            args.wiki_apply_classifier_rejects !== false,
+          ).catch((exc) => ({
+            status: `wiki_cycle_failed: ${exc instanceof Error ? exc.message : String(exc)}`,
+          }));
+        }
+
         const enrichedResult = {
           ...result,
           pending_curations: pendingCurations,
           pending_drift:    maintenance.drift,
           pending_coverage: maintenance.coverage,
+          wiki:             wikiResult,
         };
 
         return { content: [{ type: "text" as const, text: JSON.stringify(enrichedResult) }] };
