@@ -25,7 +25,11 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-store.js";
 import { handler as consolidateHandler } from "@agentic/memory/consolidation/handler.js";
-import type { ConsolidationStore, ConsolidationSettings } from "@agentic/memory/consolidation/handler.js";
+import {
+  DEFAULT_CONSOLIDATION_SETTINGS,
+  NULL_EMBEDDING_ENGINE,
+  toConsolidationStore,
+} from "@agentic/memory/consolidation/defaults.js";
 import type { ProfilesStore } from "@agentic/memory/methodology/types.js";
 // Wiki-cycle adapters live in a sibling file to keep this one under
 // the §4.1 file-size limit. Same engine + failure-isolation contract.
@@ -75,150 +79,6 @@ function saveProfiles(profiles: ProfilesStore): void {
   writeFileSync(join(dir, "profiles.json"), JSON.stringify(profiles, null, 2), "utf-8");
 }
 
-// ── ConsolidationStore adapter ────────────────────────────────────────────────
-//
-// Wraps MemoryStoreExt with async wrappers required by consolidation.handler.
-//
-// LSP-VIOLATION CLOSED (#6): all methods previously accessed via escape-hatch
-// `ext["method"]?.() ?? []` now delegate to typed MemoryStoreExt methods.
-// Neither backend silently no-ops anymore.
-//
-// source: packages/memory/src/consolidation/handler.ts::ConsolidationStore
-
-function toConsolidationStore(store: MemoryStoreExt): ConsolidationStore {
-  // source: ADR-0042 — async-when-available pattern for PG/SQLite parity.
-  // PgMemoryStore exposes *Async variants for methods that otherwise call
-  // _runSync() which throws unconditionally in an async context.
-  // SqliteMemoryStore lacks *Async variants — fall back to sync path.
-  const pg = store as unknown as {
-    getAllMemoriesForDecayAsync?(): Promise<Record<string, unknown>[]>;
-    getAllEntitiesAsync?(opts?: { minHeat?: number; includeArchived?: boolean }): Promise<Record<string, unknown>[]>;
-    getAllRelationshipsAsync?(): Promise<Record<string, unknown>[]>;
-    getHotMemoriesAsync?(minHeat?: number, limit?: number, includeBenchmarks?: boolean): Promise<Record<string, unknown>[]>;
-    getMemoriesByStageAsync?(stage: string, limit?: number): Promise<Record<string, unknown>[]>;
-    getEpisodicMemoriesAsync?(domain?: string, directory?: string, limit?: number): Promise<Record<string, unknown>[]>;
-    getSemanticMemoriesAsync?(domain?: string, limit?: number): Promise<Record<string, unknown>[]>;
-    getTransferCandidatesAsync?(limit?: number): Promise<Record<string, unknown>[]>;
-    findCoAccessedPairsAsync?(ids: number[]): Promise<Array<[number, number]>>;
-    insertMemoryAsync?(data: Parameters<MemoryStoreExt["insertMemory"]>[0]): Promise<number>;
-    bumpHeatRawAsync?(id: number, heat: number): Promise<void>;
-    deleteMemoryAsync?(id: number): Promise<boolean>;
-  };
-
-  return {
-    // ── shared / decay ───────────────────────────────────────────────────────
-    getAllMemoriesForDecay: () =>
-      typeof pg.getAllMemoriesForDecayAsync === "function"
-        ? pg.getAllMemoriesForDecayAsync()
-        : Promise.resolve(store.getAllMemoriesForDecay()),
-    getAllEntities: (opts) =>
-      typeof pg.getAllEntitiesAsync === "function"
-        ? pg.getAllEntitiesAsync(opts)
-        : Promise.resolve(store.getAllEntities(opts)),
-    updateEntitiesHeatBatch: (u) => { store.updateEntitiesHeatBatch(u); return Promise.resolve(); },
-    // ── plasticity ───────────────────────────────────────────────────────────
-    getAllRelationships: () =>
-      typeof pg.getAllRelationshipsAsync === "function"
-        ? pg.getAllRelationshipsAsync()
-        : Promise.resolve(store.getAllRelationships()),
-    getHotMemories: (opts) =>
-      typeof pg.getHotMemoriesAsync === "function"
-        ? pg.getHotMemoriesAsync(opts?.minHeat, opts?.limit)
-        : Promise.resolve(store.getHotMemories(opts?.minHeat, opts?.limit)),
-    findCoAccessedPairs: (ids) =>
-      typeof pg.findCoAccessedPairsAsync === "function"
-        ? pg.findCoAccessedPairsAsync([...ids])
-        : Promise.resolve(store.findCoAccessedPairs([...ids])),
-    updateRelationshipsWeightBatch: (u) => { store.updateRelationshipsWeightBatch([...u]); return Promise.resolve(); },
-    // ── pruning ──────────────────────────────────────────────────────────────
-    deleteRelationshipsBatch: (ids) => Promise.resolve(store.deleteRelationshipsBatch([...ids])),
-    archiveEntitiesBatch: (ids) => Promise.resolve(store.archiveEntitiesBatch([...ids])),
-    // ── compression + sleep ──────────────────────────────────────────────────
-    insertArchive: (row) => { store.insertArchive(row); return Promise.resolve(); },
-    updateMemoryCompression: (id, content, embedding, compressionLevel, opts) => {
-      store.updateMemoryCompression(
-        id,
-        content,
-        embedding instanceof Buffer ? embedding : (embedding != null ? Buffer.from(embedding as unknown as ArrayBuffer) : null),
-        compressionLevel,
-        opts,
-      );
-      return Promise.resolve();
-    },
-    // ── CLS ──────────────────────────────────────────────────────────────────
-    getEpisodicMemories: (l) =>
-      typeof pg.getEpisodicMemoriesAsync === "function"
-        ? pg.getEpisodicMemoriesAsync(undefined, undefined, l)
-        : Promise.resolve(store.getEpisodicMemories(undefined, undefined, l)),
-    getSemanticMemories: (l) =>
-      typeof pg.getSemanticMemoriesAsync === "function"
-        ? pg.getSemanticMemoriesAsync(undefined, l)
-        : Promise.resolve(store.getSemanticMemories(undefined, l)),
-    // ── memify ───────────────────────────────────────────────────────────────
-    deleteMemory: (id) =>
-      typeof pg.deleteMemoryAsync === "function"
-        ? pg.deleteMemoryAsync(id).then(() => undefined)
-        : (store.deleteMemory(id), Promise.resolve()),
-    updateMemoryImportance: (id, importance) => { store.updateMemoryImportance(id, importance); return Promise.resolve(); },
-    insertRelationship: (rel) => { store.insertRelationship(rel); return Promise.resolve(); },
-    // ── sleep ────────────────────────────────────────────────────────────────
-    insertMemory: (mem) =>
-      typeof pg.insertMemoryAsync === "function"
-        ? pg.insertMemoryAsync(mem as Parameters<MemoryStoreExt["insertMemory"]>[0])
-        : Promise.resolve(store.insertMemory(mem as Parameters<typeof store.insertMemory>[0])),
-    // ── cascade ──────────────────────────────────────────────────────────────
-    getMemoriesByStage: (s, l) =>
-      typeof pg.getMemoriesByStageAsync === "function"
-        ? pg.getMemoriesByStageAsync(s, l)
-        : Promise.resolve(store.getMemoriesByStage(s, l)),
-    updateMemoryConsolidation: (id, s, h, r, d) => { store.updateMemoryConsolidation(id, s, h, r, d); return Promise.resolve(); },
-    insertStageTransitionsBatch: (t) => { store.insertStageTransitionsBatch(t); return Promise.resolve(); },
-    updateStageEnteredAt: (memoryId, enteredAt) => {
-      store.updateStageEnteredAt(memoryId, enteredAt instanceof Date ? enteredAt.toISOString() : String(enteredAt));
-      return Promise.resolve();
-    },
-    // ── homeostatic ──────────────────────────────────────────────────────────
-    getHomeostaticFactor: (d) => Promise.resolve(store.getHomeostaticFactor(d)),
-    setHomeostaticFactor: (d, f) => { store.setHomeostaticFactor(d, f); return Promise.resolve(); },
-    bumpHeatRaw: (id, heat) =>
-      typeof pg.bumpHeatRawAsync === "function"
-        ? pg.bumpHeatRawAsync(id, heat)
-        : (store.bumpHeatRaw(id, heat), Promise.resolve()),
-    // ── batch connection (no-op: acquireBatch was SQLite-only internal) ───────
-    // source: The acquireBatch pattern was a SQLite-specific internal that
-    // allowed the write gate to reuse a connection. With MemoryStoreExt,
-    // all methods are properly routed to the correct backend.
-    acquireBatch: () => ({
-      execute: async (sql: string, params?: unknown[]) => {
-        void sql; void params;
-        return { rows: [], rowcount: 0 };
-      },
-    }),
-    // ── transfer ─────────────────────────────────────────────────────────────
-    getTransferCandidates: (l) =>
-      typeof pg.getTransferCandidatesAsync === "function"
-        ? pg.getTransferCandidatesAsync(l)
-        : Promise.resolve(store.getTransferCandidates(l)),
-    updateHippocampalDependency: (id, d) => { store.updateHippocampalDependency(id, d); return Promise.resolve(); },
-    // ── logging ──────────────────────────────────────────────────────────────
-    logConsolidation: (e) => { store.logConsolidation(e); return Promise.resolve(); },
-  };
-}
-
-// source: cortex@ed33435 mcp_server/infrastructure/config.py — defaults
-const DEFAULT_CONSOLIDATION_SETTINGS: ConsolidationSettings = {
-  COLD_THRESHOLD:              0.2,  // source: cortex@ed33435 config.py COLD_THRESHOLD default
-  DECAY_FACTOR:                0.95, // source: cortex@ed33435 config.py DECAY_FACTOR default
-  COMPRESSION_GIST_AGE_HOURS:  48,   // source: cortex@ed33435 config.py COMPRESSION_GIST_AGE_HOURS default
-  COMPRESSION_TAG_AGE_HOURS:   168,  // source: cortex@ed33435 config.py COMPRESSION_TAG_AGE_HOURS default (7 days)
-};
-
-// ── ConsolidationEmbeddingEngine (no-op) ──────────────────────────────────────
-
-const NULL_EMBEDDING_ENGINE = {
-  encode: async (_text: string): Promise<number[]> => [],
-  similarity: (_a: number[], _b: number[]): number => 0,
-};
 
 // ── Error envelope helper ─────────────────────────────────────────────────────
 
