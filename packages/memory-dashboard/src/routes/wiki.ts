@@ -53,21 +53,189 @@ function getWikiDir(): string {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
 /**
- * List all markdown files under a directory (non-recursive, top level only).
- * source: cortex@ed33435 mcp_server/handlers/wiki_api.py (list_wiki_pages)
+ * Rich wiki-page metadata the dashboard frontend (wiki.js) consumes.
  *
- * precondition:  wikiDir may or may not exist.
- * postcondition: returns array of relative path strings; empty if dir absent.
+ * Phase B/C (2026-05-18): the previous ``listWikiPages`` was a stub
+ * that returned only top-level ``.md`` filenames as plain strings —
+ * which left the frontend's projects landing, kind tree, search, and
+ * Phase B/C badges to all show empty state because every property
+ * lookup on a string entry was ``undefined``. This shape is what the
+ * frontend has expected since it was first wired.
+ *
+ * source: packages/memory-dashboard/src/static/js/wiki.js — every
+ *   ``p.title``, ``p.kind``, ``p.domain``, ``p.tags``, ``p.maturity``,
+ *   ``p.updated``/``p.created`` access throughout the file.
  */
-function listWikiPages(wikiDir: string): string[] {
-  try {
-    const entries = fs.readdirSync(wikiDir, { withFileTypes: true });
-    return entries
-      .filter((e) => e.isFile() && e.name.endsWith(".md"))
-      .map((e) => e.name);
-  } catch {
-    return [];
+interface DashboardWikiPage {
+  readonly path: string;
+  readonly kind?: string;
+  readonly domain?: string;
+  readonly title?: string;
+  readonly tags?: readonly string[];
+  readonly maturity?: string;
+  readonly status?: string;
+  readonly updated?: string;
+  readonly created?: string;
+}
+
+// Maximum bytes read per page's frontmatter scan. The full body isn't
+// parsed for the listing — only the YAML block at the top — so this
+// cap keeps the recursive walk fast on large wikis. 4 KB is generous
+// even for the most metadata-heavy pages.
+// source: this module — typical wiki frontmatter is < 1 KB; 4x headroom
+const FRONTMATTER_MAX_BYTES = 4096;
+
+/**
+ * Parse a YAML frontmatter block at the top of a markdown file.
+ *
+ * Handles the subset the wiki uses: ``key: value``, ``key: [a, b, c]``,
+ * quoted strings. Returns a flat ``Record<string, string | string[]>``;
+ * non-leading frontmatter is ignored.
+ *
+ * source: this module — minimal YAML for the listing endpoint; the
+ *   wiki package's parseFrontmatter is heavier and not exported via
+ *   the memory subpath map.
+ */
+function parseFrontmatter(text: string): Record<string, string | readonly string[]> {
+  const out: Record<string, string | readonly string[]> = {};
+  if (!text.startsWith("---")) return out;
+  const end = text.indexOf("\n---", "---".length);
+  if (end < 0) return out;
+  const block = text.slice("---".length, end);
+  for (const rawLine of block.split("\n")) {
+    const line = rawLine.replace(/^\s+|\s+$/g, "");
+    if (!line || line.startsWith("#")) continue;
+    const colon = line.indexOf(":");
+    if (colon < 1) continue;
+    const key = line.slice(0, colon).trim();
+    let value = line.slice(colon + 1).trim();
+    if (!key || !value) continue;
+    // Inline list: ``key: [a, b, c]`` or ``key: ["a", 'b']``.
+    if (value.startsWith("[") && value.endsWith("]")) {
+      const items = value.slice(1, -1).split(",")
+        .map((s) => s.trim().replace(/^["']|["']$/g, ""))
+        .filter(Boolean);
+      out[key] = items;
+      continue;
+    }
+    // Strip surrounding quotes if present.
+    if (
+      (value.startsWith('"') && value.endsWith('"')) ||
+      (value.startsWith("'") && value.endsWith("'"))
+    ) {
+      value = value.slice(1, -1);
+    }
+    out[key] = value;
   }
+  return out;
+}
+
+/**
+ * Recursively list every wiki page under ``wikiDir``.
+ *
+ * For each ``.md`` file we read the leading frontmatter (capped at
+ * FRONTMATTER_MAX_BYTES) and combine the explicit fields with the
+ * path-derived ones (kind = first segment, domain = second segment)
+ * + fs mtime/ctime so the frontend has every shape it needs.
+ *
+ * Skips dot-prefixed directories (.generated, .git) and underscore-
+ * prefixed top-level dirs (_schema). Page kinds carried in the path
+ * trump frontmatter — Cortex's wiki layout puts the canonical kind in
+ * the first path segment.
+ *
+ * Phase B/C precondition: this is the function whose pre-existing
+ * single-page-string-only behavior was blocking the entire wiki
+ * frontend. Walking recursively + returning rich shape lets Phase B's
+ * projects landing populate and Phase C's badges have targets.
+ *
+ * source: cortex@ed33435 mcp_server/handlers/wiki_api.py — recursive
+ *   walk; this is the TS port that brings the dashboard to parity.
+ */
+function listWikiPages(wikiDir: string): DashboardWikiPage[] {
+  const pages: DashboardWikiPage[] = [];
+  function walk(absDir: string, relPrefix: string): void {
+    let entries: fs.Dirent<string>[];
+    try {
+      entries = fs.readdirSync(absDir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const e of entries) {
+      // Skip dotfiles, underscore-prefixed special dirs (_schema, _rules).
+      if (e.name.startsWith(".") || e.name.startsWith("_")) continue;
+      const childAbs = path.join(absDir, e.name);
+      const childRel = relPrefix ? `${relPrefix}/${e.name}` : e.name;
+      if (e.isDirectory()) {
+        walk(childAbs, childRel);
+        continue;
+      }
+      if (!e.isFile() || !e.name.endsWith(".md")) continue;
+      pages.push(readPageMetadata(childAbs, childRel));
+    }
+  }
+  walk(wikiDir, "");
+  return pages;
+}
+
+function readPageMetadata(absPath: string, relPath: string): DashboardWikiPage {
+  let head = "";
+  try {
+    const buf = Buffer.alloc(FRONTMATTER_MAX_BYTES);
+    const fd = fs.openSync(absPath, "r");
+    try {
+      const bytesRead = fs.readSync(fd, buf, 0, FRONTMATTER_MAX_BYTES, 0);
+      head = buf.subarray(0, bytesRead).toString("utf8");
+    } finally {
+      fs.closeSync(fd);
+    }
+  } catch {
+    head = "";
+  }
+  const fm = parseFrontmatter(head);
+
+  // Path-derived kind/domain: ``<kind>/<domain>/<slug>.md``. Falls
+  // back to frontmatter when the path has fewer segments.
+  // source: packages/memory/src/wiki/layout.ts — three-segment shape
+  const MIN_SEGMENTS_FOR_KIND   = 2;
+  const MIN_SEGMENTS_FOR_DOMAIN = 3;
+  const parts = relPath.split("/").filter(Boolean);
+  const pathKind   = parts.length >= MIN_SEGMENTS_FOR_KIND   ? parts[0] : undefined;
+  const pathDomain = parts.length >= MIN_SEGMENTS_FOR_DOMAIN ? parts[1] : undefined;
+
+  // mtime/ctime as ISO date strings (no time component — frontmatter
+  // ``last_reviewed`` is per-day; the dashboard list shows the day).
+  let mtime: string | undefined;
+  let ctime: string | undefined;
+  try {
+    const stat = fs.statSync(absPath);
+    mtime = stat.mtime.toISOString().slice(0, "YYYY-MM-DD".length);
+    ctime = stat.birthtime.toISOString().slice(0, "YYYY-MM-DD".length);
+  } catch {
+    /* keep undefined */
+  }
+
+  const result: DashboardWikiPage = {
+    path:     relPath,
+    kind:     valueOrUndefined(fm["kind"]) ?? pathKind,
+    domain:   valueOrUndefined(fm["domain"]) ?? pathDomain,
+    title:    valueOrUndefined(fm["title"]),
+    tags:     arrayOrUndefined(fm["tags"]),
+    maturity: valueOrUndefined(fm["maturity"]),
+    status:   valueOrUndefined(fm["status"]),
+    updated:  valueOrUndefined(fm["last_reviewed"]) ?? valueOrUndefined(fm["updated"]) ?? mtime,
+    created:  valueOrUndefined(fm["created"]) ?? ctime,
+  };
+  return result;
+}
+
+function valueOrUndefined(v: unknown): string | undefined {
+  return typeof v === "string" && v.length > 0 ? v : undefined;
+}
+
+function arrayOrUndefined(v: unknown): string[] | undefined {
+  if (!Array.isArray(v)) return undefined;
+  const arr = v.filter((x): x is string => typeof x === "string" && x.length > 0);
+  return arr.length > 0 ? arr : undefined;
 }
 
 /**
