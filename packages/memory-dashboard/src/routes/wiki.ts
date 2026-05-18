@@ -276,10 +276,49 @@ function readWikiPage(wikiDir: string, relPath: string): Record<string, unknown>
   }
   try {
     const content = fs.readFileSync(resolved, "utf8");
-    return { content, rel_path: cleanRel };
+    // Phase B/C frontend (wiki.js::renderPage) reads ``data.meta`` (the
+    // parsed frontmatter object) and ``data.body`` (the markdown body
+    // without the frontmatter block). Without this split, every page
+    // rendered as title + DRAFT badge + empty body because
+    // ``data.body`` fell back to "".
+    // source: packages/memory-dashboard/src/static/js/wiki.js:888 — ``var body = data.body || ''``
+    const { meta, body } = splitFrontmatterAndBody(content);
+    // ``content`` kept for callers that haven't migrated to the
+    // split shape (none in this codebase, but cheap insurance).
+    return { content, meta, body, rel_path: cleanRel };
   } catch {
     return { error: "not found", rel_path: cleanRel };
   }
+}
+
+/**
+ * Split a markdown file's content into ``{ meta, body }``.
+ *
+ * ``meta`` is the parsed YAML frontmatter (via the listing endpoint's
+ * parseFrontmatter helper), ``body`` is everything after the closing
+ * ``---``. When the file has no frontmatter, ``meta`` is ``{}`` and
+ * ``body`` is the whole content.
+ *
+ * source: packages/memory-dashboard/src/routes/wiki.ts::parseFrontmatter
+ */
+function splitFrontmatterAndBody(content: string): {
+  readonly meta: Record<string, string | readonly string[]>;
+  readonly body: string;
+} {
+  if (!content.startsWith("---")) {
+    return { meta: {}, body: content };
+  }
+  const end = content.indexOf("\n---", "---".length);
+  if (end < 0) {
+    return { meta: {}, body: content };
+  }
+  const meta = parseFrontmatter(content);
+  // Body starts right after the closing ``---`` line (and the newline
+  // that follows it, when present).
+  const afterClose = end + "\n---".length;
+  let bodyStart = afterClose;
+  if (content[bodyStart] === "\n") bodyStart += 1;
+  return { meta, body: content.slice(bodyStart) };
 }
 
 /**
