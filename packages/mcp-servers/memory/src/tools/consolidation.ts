@@ -25,6 +25,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-store.js";
 import { handler as consolidateHandler } from "@agentic/memory/consolidation/handler.js";
+import { writeStamp as writeConsolidateStamp } from "@agentic/memory/hooks/consolidate-background.js";
 import {
   DEFAULT_CONSOLIDATION_SETTINGS,
   NULL_EMBEDDING_ENGINE,
@@ -175,6 +176,12 @@ export function registerConsolidationTools(server: McpServer, deps: Consolidatio
           pending_coverage: maintenance.coverage,
           wiki:             wikiResult,
         };
+
+        // 2026-05-18: write the autonomy stamp so SessionStart's TTL
+        // gate sees this run — manual ``consolidate`` calls now close
+        // the loop the same way the background worker does.
+        // source: cortex@HEAD~ mcp_server/handlers/consolidate.py:handler (stamp block)
+        try { writeConsolidateStamp(); } catch { /* non-fatal */ }
 
         return { content: [{ type: "text" as const, text: JSON.stringify(enrichedResult) }] };
       } catch (err) {

@@ -207,6 +207,10 @@
       "import": "./dist/consolidation/defaults.js",
       "types": "./dist/consolidation/defaults.d.ts"
     },
+    "./hooks/consolidate-background.js": {
+      "import": "./dist/hooks/consolidate-background.js",
+      "types": "./dist/hooks/consolidate-background.d.ts"
+    },
     "./import/backfill-memories.js": {
       "import": "./dist/import/backfill-memories.js",
       "types": "./dist/import/backfill-memories.d.ts"
