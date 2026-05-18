@@ -177,3 +177,88 @@ describe("runWikiMaintenance — failure isolation", () => {
     expect(MAX_PURGES_PER_CYCLE).toBe(500);
   });
 });
+
+// ── G6 / G5 — scope-coverage audit + dashboard pass ────────────────────
+
+describe("runWikiMaintenance — scope-coverage audit", () => {
+  it("reports zero scope gaps when no G6 adapters wired", async () => {
+    const result = await runWikiMaintenance(makeDeps(), {});
+    expect(result.scope_coverage_gaps).toBe(0);
+    expect(result.dashboards.written).toBe(0);
+  });
+
+  it("counts missing scopes per discovered domain", async () => {
+    const result = await runWikiMaintenance(makeDeps({
+      listSubdirs: (dir) => {
+        const subs: Record<string, readonly string[]> = {
+          reference: ["alpha", "beta"],
+          explanation: ["alpha", "beta"],
+        };
+        return subs[dir] ?? [];
+      },
+      pageStat: () => null,            // no anchor pages → every scope missing
+      countSubstantivePages: () => 0,
+    }), {});
+    // 2 domains × 15 canonical scopes = 30 missing.
+    expect(result.scope_coverage_gaps).toBe(30);
+    expect(result.pending_total).toBeGreaterThanOrEqual(30);
+  });
+
+  it("writes per-project dashboards + index when writer is wired", async () => {
+    const writes: Array<{ path: string; body: string }> = [];
+    const result = await runWikiMaintenance(makeDeps({
+      listSubdirs: (dir) => {
+        const subs: Record<string, readonly string[]> = {
+          reference: ["alpha"],
+          explanation: ["alpha"],
+        };
+        return subs[dir] ?? [];
+      },
+      pageStat: () => null,
+      countSubstantivePages: () => 0,
+      fileCoverageRollup: (d) => ({
+        domain: d, sourceRoot: null, sourceFileCount: 0, coveredFileCount: 0, uncoveredFiles: [],
+      }),
+      kindCounts: () => ({}),
+      curationGapCounts: () => ({ totalPages: 0, openGaps: 0 }),
+      writeWikiPage: async (path, body) => { writes.push({ path, body }); return true; },
+    }), {});
+    expect(result.dashboards.written).toBe(1);
+    expect(result.dashboards.projects).toEqual(["alpha"]);
+    const paths = writes.map((w) => w.path);
+    expect(paths).toContain("_dashboards/alpha.md");
+    expect(paths).toContain("_dashboards/_index.md");
+    const dashboardWrite = writes.find((w) => w.path === "_dashboards/alpha.md");
+    expect(dashboardWrite?.body).toContain("alpha — documentation coverage");
+  });
+
+  it("isolates per-project dashboard failures", async () => {
+    let writeCalls = 0;
+    const result = await runWikiMaintenance(makeDeps({
+      listSubdirs: (dir) => {
+        const subs: Record<string, readonly string[]> = {
+          reference: ["alpha", "beta"],
+          explanation: ["alpha", "beta"],
+        };
+        return subs[dir] ?? [];
+      },
+      pageStat: () => null,
+      countSubstantivePages: () => 0,
+      fileCoverageRollup: (d) => ({
+        domain: d, sourceRoot: null, sourceFileCount: 0, coveredFileCount: 0, uncoveredFiles: [],
+      }),
+      kindCounts: () => ({}),
+      curationGapCounts: () => ({ totalPages: 0, openGaps: 0 }),
+      writeWikiPage: async (path) => {
+        writeCalls += 1;
+        // Fail the first per-project write, succeed the rest.
+        if (path === "_dashboards/alpha.md") return false;
+        return true;
+      },
+    }), {});
+    expect(writeCalls).toBeGreaterThan(0);
+    expect(result.dashboards.written).toBe(1); // only beta succeeded
+    expect(result.dashboards.projects).toEqual(["beta"]);
+    expect(result.status).toBe("ok"); // partial-failure doesn't taint status
+  });
+});

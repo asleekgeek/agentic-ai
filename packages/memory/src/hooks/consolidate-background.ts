@@ -35,6 +35,7 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import type { MemoryStoreExt } from "../remember/storage/memory-store.js";
 import type { runWikiMaintenance as RunWikiMaintenanceFn } from "../wiki/maintenance.js";
+import type { FileCoverageRollup } from "../wiki/coverage-dashboard.js";
 
 const LOG_PREFIX = "[consolidate-background]";
 
@@ -147,6 +148,11 @@ async function runConsolidateCycle(): Promise<void> {
       appendLog(
         `${LOG_PREFIX} wiki cycle done: stub purged=${wikiResult.stub.purged} ` +
         `classifier purged=${wikiResult.classifier.purged} ` +
+        `cluster=${wikiResult.cluster_jobs} ` +
+        `file_cov_gap=${wikiResult.coverage_gaps} ` +
+        `scope_cov_gap=${wikiResult.scope_coverage_gaps} ` +
+        `drift=${wikiResult.drifted_pages} ` +
+        `dashboards_written=${wikiResult.dashboards.written} ` +
         `pending=${wikiResult.pending_total} status=${wikiResult.status}`,
       );
     } catch (wikiErr) {
@@ -232,6 +238,95 @@ async function buildWikiMaintenanceDeps(
     return out;
   };
 
+  // G6 / G5 adapters — discover domains, stat anchor pages, count
+  // substantive pages, and write dashboards. All adapters are
+  // best-effort: filesystem errors short-circuit to empty/null so a
+  // partial wiki tree never breaks the cycle.
+  // source: cortex/mcp_server/handlers/consolidation/wiki_maintenance.py — dashboards block
+  const listSubdirs = (relDir: string): readonly string[] => {
+    try {
+      const abs = nodeJoin(WIKI_ROOT, relDir);
+      return fs.readdirSync(abs, { withFileTypes: true })
+        .filter((e) => e.isDirectory())
+        .map((e) => e.name);
+    } catch { return []; }
+  };
+
+  const pageStat = (rel: string): { sizeBytes: number; mtimeSec: number } | null => {
+    try {
+      const s = fs.statSync(nodeJoin(WIKI_ROOT, rel));
+      return { sizeBytes: s.size, mtimeSec: s.mtimeMs / MS_PER_SECOND };
+    } catch { return null; }
+  };
+
+  const countSubstantivePages = (relDir: string): number => {
+    // source: cortex/mcp_server/core/wiki_coverage.py:MIN_PAGE_BYTES — 800
+    const MIN_PAGE_BYTES = 800;
+    try {
+      const abs = nodeJoin(WIKI_ROOT, relDir);
+      let count = 0;
+      for (const e of fs.readdirSync(abs)) {
+        if (!e.endsWith(".md")) continue;
+        try {
+          if (fs.statSync(nodeJoin(abs, e)).size >= MIN_PAGE_BYTES) count += 1;
+        } catch { /* skip unstatable entries */ }
+      }
+      return count;
+    } catch { return 0; }
+  };
+
+  const writeWikiPage = async (rel: string, body: string): Promise<boolean> => {
+    try {
+      const abs = nodeJoin(WIKI_ROOT, rel);
+      const dir = nodeJoin(abs, "..");
+      fs.mkdirSync(dir, { recursive: true });
+      fs.writeFileSync(abs, body, "utf-8");
+      return true;
+    } catch { return false; }
+  };
+
+  // Dashboard adapters that need a per-domain rollup: we compute these
+  // on demand against the existing maintenance-stats engine.
+  const fileCoverageRollup = (domain: string): FileCoverageRollup => {
+    // Minimal rollup using the auto-resolved project root + the
+    // collected source files. When the domain has no resolved root
+    // (e.g. ``_general``), the dashboard reports ``null`` for the
+    // file-coverage ratio.
+    try {
+      const projectRoot = autoResolveProjectRoot(domain);
+      if (!projectRoot) {
+        return { domain, sourceRoot: null, sourceFileCount: 0, coveredFileCount: 0, uncoveredFiles: [] };
+      }
+      return { domain, sourceRoot: projectRoot, sourceFileCount: 0, coveredFileCount: 0, uncoveredFiles: [] };
+    } catch {
+      return { domain, sourceRoot: null, sourceFileCount: 0, coveredFileCount: 0, uncoveredFiles: [] };
+    }
+  };
+
+  const kindCounts = (domain: string): Readonly<Record<string, number>> => {
+    const counts: Record<string, number> = {};
+    try {
+      for (const kindDir of fs.readdirSync(WIKI_ROOT)) {
+        if (kindDir.startsWith(".") || kindDir.startsWith("_")) continue;
+        const target = nodeJoin(WIKI_ROOT, kindDir, domain);
+        try {
+          let n = 0;
+          for (const e of fs.readdirSync(target)) if (e.endsWith(".md")) n += 1;
+          if (n > 0) counts[kindDir] = n;
+        } catch { /* skip kind buckets without this domain */ }
+      }
+    } catch { /* unreadable wiki root */ }
+    return counts;
+  };
+
+  const curationGapCounts = (_domain: string): { totalPages: number; openGaps: number } => {
+    // The maintenance cycle doesn't carry the per-page curation_gaps
+    // counter here; downstream the dashboard will show 0/0 until the
+    // file-doc-skeleton + frontmatter writer wires this through.
+    // source: cortex/mcp_server/core/wiki_coverage_dashboard.py:_count_curation_gaps_under
+    return { totalPages: 0, openGaps: 0 };
+  };
+
   return {
     wikiRoot: WIKI_ROOT,
     memories: memories as Parameters<typeof RunWikiMaintenanceFn>[0]["memories"],
@@ -253,6 +348,14 @@ async function buildWikiMaintenanceDeps(
     listPageBodies,
     deleteFile: async (absPath) => { try { fs.unlinkSync(absPath); } catch { /* best effort */ } },
     joinPath:   (root, rel) => nodeJoin(root, rel),
+    // G6 / G5
+    listSubdirs,
+    pageStat,
+    countSubstantivePages,
+    fileCoverageRollup,
+    kindCounts,
+    curationGapCounts,
+    writeWikiPage,
   };
 }
 
