@@ -180,126 +180,132 @@
       });
     }
 
-    // Group by kind
-    var byKind = {};
+    // \u2500\u2500 Project-first grouping: Domain \u2192 Kind \u2192 Pages \u2500\u2500
+    // The user opens the wiki and sees every project as the top axis;
+    // inside each project, kinds (architecture/services/api/adr/lesson\u2026)
+    // expand to the pages. Replaces the older kind-first layout which
+    // buried project structure under taxonomy.
+    // source: cortex@HEAD~ ui/unified/js/wiki.js (2026-05-18)
+    var byDomain = {};
     filtered.forEach(function(p) {
-      var k = p.kind || 'misc';
-      if (!byKind[k]) byKind[k] = [];
-      byKind[k].push(p);
+      var d = extractDomain(p) || '_general';
+      if (!byDomain[d]) byDomain[d] = [];
+      byDomain[d].push(p);
     });
 
-    var kindKeys = KIND_ORDER.filter(function(k) { return byKind[k]; });
-    Object.keys(byKind).forEach(function(k) {
-      if (kindKeys.indexOf(k) < 0) kindKeys.push(k);
+    var domainKeys = Object.keys(byDomain).sort(function(a, b) {
+      // Push catch-all buckets to the bottom so real projects surface first.
+      var aLow = (a === '_general' || /^\d{4}$/.test(a)) ? 1 : 0;
+      var bLow = (b === '_general' || /^\d{4}$/.test(b)) ? 1 : 0;
+      if (aLow !== bLow) return aLow - bLow;
+      return a.localeCompare(b);
     });
 
-    if (kindKeys.length === 0) {
+    if (domainKeys.length === 0) {
       var emptyMsg = el('div', 'wiki-tree-empty');
       emptyMsg.textContent = searchQuery ? 'No pages match "' + searchQuery + '"' : 'No pages found';
       tree.appendChild(emptyMsg);
       return;
     }
 
-    kindKeys.forEach(function(kind) {
+    domainKeys.forEach(function(domain) {
       var section = el('div', 'wiki-tree-section');
-      var kindPages = byKind[kind];
+      var domainPages = byDomain[domain];
 
-      // Kind header
-      var kindHeader = el('div', 'wiki-tree-kind');
-      var isExpanded = expandedKinds[kind] !== false;
+      // Domain header \u2014 the primary expander.
+      var domHeader = el('div', 'wiki-tree-kind');
+      var domExpanded = expandedDomains[domain] !== false;
 
-      var arrow = el('span', 'wiki-tree-arrow');
-      arrow.textContent = '\u25B6';
-      if (isExpanded) arrow.classList.add('expanded');
+      var domArrow = el('span', 'wiki-tree-arrow');
+      domArrow.textContent = '\u25B6';
+      if (domExpanded) domArrow.classList.add('expanded');
 
-      var label = el('span', 'wiki-tree-kind-label');
-      label.textContent = KIND_LABELS[kind] || kind;
+      var domLabel = el('span', 'wiki-tree-kind-label');
+      domLabel.textContent = domain;
 
-      var count = el('span', 'wiki-tree-count');
-      count.textContent = kindPages.length;
+      var domCount = el('span', 'wiki-tree-count');
+      domCount.textContent = domainPages.length;
 
-      kindHeader.appendChild(arrow);
-      kindHeader.appendChild(label);
-      kindHeader.appendChild(count);
+      domHeader.appendChild(domArrow);
+      domHeader.appendChild(domLabel);
+      domHeader.appendChild(domCount);
 
-      var items = el('div', 'wiki-tree-items');
-      if (!isExpanded) items.classList.add('collapsed');
+      var kindContainer = el('div', 'wiki-tree-items');
+      if (!domExpanded) kindContainer.classList.add('collapsed');
 
-      kindHeader.addEventListener('click', function() {
-        var nowExpanded = items.classList.contains('collapsed');
+      domHeader.addEventListener('click', function() {
+        var nowExpanded = kindContainer.classList.contains('collapsed');
         if (nowExpanded) {
-          items.classList.remove('collapsed');
-          arrow.classList.add('expanded');
-          expandedKinds[kind] = true;
+          kindContainer.classList.remove('collapsed');
+          domArrow.classList.add('expanded');
+          expandedDomains[domain] = true;
         } else {
-          items.classList.add('collapsed');
-          arrow.classList.remove('expanded');
-          expandedKinds[kind] = false;
+          kindContainer.classList.add('collapsed');
+          domArrow.classList.remove('expanded');
+          expandedDomains[domain] = false;
         }
       });
 
-      section.appendChild(kindHeader);
+      section.appendChild(domHeader);
 
-      // Group by domain within kind
-      var byDomain = {};
-      kindPages.forEach(function(p) {
-        var d = extractDomain(p) || '_root';
-        if (!byDomain[d]) byDomain[d] = [];
-        byDomain[d].push(p);
+      // Inside the domain, group by kind.
+      var byKindInDomain = {};
+      domainPages.forEach(function(p) {
+        var k = p.kind || 'misc';
+        if (!byKindInDomain[k]) byKindInDomain[k] = [];
+        byKindInDomain[k].push(p);
       });
 
-      var domainKeys = Object.keys(byDomain).sort();
-      domainKeys.forEach(function(d) {
-        if (d !== '_root' && domainKeys.length > 1) {
-          var domKey = kind + '/' + d;
-          var domExpanded = expandedDomains[domKey] !== false;
-
-          var domHeader = el('div', 'wiki-tree-domain');
-          var domArrow = el('span', 'wiki-tree-arrow wiki-tree-arrow-sm');
-          domArrow.textContent = '\u25B6';
-          if (domExpanded) domArrow.classList.add('expanded');
-
-          var domLabel = el('span', 'wiki-tree-domain-label');
-          domLabel.textContent = d;
-
-          var domCount = el('span', 'wiki-tree-count');
-          domCount.textContent = byDomain[d].length;
-
-          domHeader.appendChild(domArrow);
-          domHeader.appendChild(domLabel);
-          domHeader.appendChild(domCount);
-
-          var domItems = el('div', 'wiki-tree-domain-items');
-          if (!domExpanded) domItems.classList.add('collapsed');
-
-          domHeader.addEventListener('click', function(e) {
-            e.stopPropagation();
-            var nowOpen = domItems.classList.contains('collapsed');
-            if (nowOpen) {
-              domItems.classList.remove('collapsed');
-              domArrow.classList.add('expanded');
-              expandedDomains[domKey] = true;
-            } else {
-              domItems.classList.add('collapsed');
-              domArrow.classList.remove('expanded');
-              expandedDomains[domKey] = false;
-            }
-          });
-
-          items.appendChild(domHeader);
-
-          _renderCollapsedList(byDomain[d]).forEach(function(row) {
-            domItems.appendChild(buildTreeItem(row));
-          });
-          items.appendChild(domItems);
-        } else {
-          _renderCollapsedList(byDomain[d]).forEach(function(row) {
-            items.appendChild(buildTreeItem(row));
-          });
-        }
+      var kindsInOrder = KIND_ORDER.filter(function(k) { return byKindInDomain[k]; });
+      Object.keys(byKindInDomain).forEach(function(k) {
+        if (kindsInOrder.indexOf(k) < 0) kindsInOrder.push(k);
       });
 
-      section.appendChild(items);
+      kindsInOrder.forEach(function(kind) {
+        var kindPages = byKindInDomain[kind];
+        var kindKey = domain + '/' + kind;
+        var kindExpanded = expandedKinds[kindKey] !== false;
+
+        var kindHeader = el('div', 'wiki-tree-domain');
+        var kindArrow = el('span', 'wiki-tree-arrow wiki-tree-arrow-sm');
+        kindArrow.textContent = '\u25B6';
+        if (kindExpanded) kindArrow.classList.add('expanded');
+
+        var kindLabel = el('span', 'wiki-tree-domain-label');
+        kindLabel.textContent = KIND_LABELS[kind] || kind;
+
+        var kindCount = el('span', 'wiki-tree-count');
+        kindCount.textContent = kindPages.length;
+
+        kindHeader.appendChild(kindArrow);
+        kindHeader.appendChild(kindLabel);
+        kindHeader.appendChild(kindCount);
+
+        var kindItems = el('div', 'wiki-tree-domain-items');
+        if (!kindExpanded) kindItems.classList.add('collapsed');
+
+        kindHeader.addEventListener('click', function(e) {
+          e.stopPropagation();
+          var nowOpen = kindItems.classList.contains('collapsed');
+          if (nowOpen) {
+            kindItems.classList.remove('collapsed');
+            kindArrow.classList.add('expanded');
+            expandedKinds[kindKey] = true;
+          } else {
+            kindItems.classList.add('collapsed');
+            kindArrow.classList.remove('expanded');
+            expandedKinds[kindKey] = false;
+          }
+        });
+
+        kindContainer.appendChild(kindHeader);
+        _renderCollapsedList(kindPages).forEach(function(row) {
+          kindItems.appendChild(buildTreeItem(row));
+        });
+        kindContainer.appendChild(kindItems);
+      });
+
+      section.appendChild(kindContainer);
       tree.appendChild(section);
     });
 
@@ -1001,6 +1007,65 @@
     pageHeader.appendChild(actions);
 
     article.appendChild(pageHeader);
+
+    // ── Curation gap banner ──
+    // For file-doc pages produced by the skeleton generator, the
+    // frontmatter carries ``curation_gaps: [...]`` — the canonical
+    // sections that still need a real explanation. Render a visible
+    // banner above the body so the reader sees what's not yet
+    // documented and the in-session LLM has a concrete queue.
+    // Deletion is not curation; visibility is.
+    // source: cortex@HEAD~ ui/unified/js/wiki.js (2026-05-18 — curation-gap banner)
+    var gaps = meta && meta.curation_gaps;
+    if (Array.isArray(gaps) && gaps.length > 0) {
+      // 13 canonical FILE_DOC_SECTIONS — keep in sync with
+      // packages/memory/src/wiki/curation-gaps.ts:FILE_DOC_SECTIONS.
+      // source: packages/memory/src/wiki/curation-gaps.ts
+      var TOTAL_FILE_DOC_SECTIONS = 13;
+      var coveredCount = Math.max(0, TOTAL_FILE_DOC_SECTIONS - gaps.length);
+      var pct = Math.round(100 * coveredCount / TOTAL_FILE_DOC_SECTIONS);
+      var banner = el('aside', 'wiki-curation-banner');
+      banner.style.cssText = (
+        'border:1px solid #b58900;background:rgba(181,137,0,0.08);' +
+        'padding:14px 18px;border-radius:6px;margin:14px 0 18px;' +
+        'font-size:14px;line-height:1.55;'
+      );
+      var summary = el('div', 'wiki-curation-summary');
+      summary.style.cssText = 'margin-bottom:8px;color:#b58900;font-weight:600;';
+      summary.textContent =
+        '⚠ Page ' + pct + '% curated — ' + gaps.length + ' of ' +
+        TOTAL_FILE_DOC_SECTIONS + ' canonical sections are still missing or thin.';
+      banner.appendChild(summary);
+      var listIntro = el('div');
+      listIntro.style.cssText = 'opacity:0.85;margin-bottom:6px;';
+      listIntro.textContent =
+        'The autonomous re-author loop will fill these; a human author can also write them now:';
+      banner.appendChild(listIntro);
+      var ul = el('ul');
+      ul.style.cssText = 'margin:0;padding-left:22px;';
+      var gapLabels = {
+        purpose:            'Purpose — what this file is responsible for',
+        'public-api':       'Public API — semantics of each exported symbol',
+        dependencies:       'Dependencies — why each import is here',
+        callers:            'Callers — which files in the project use this one',
+        behaviour:          'How it works — entry point + main flow',
+        invariants:         'Invariants — what must always be true',
+        'failure-modes':    'What can go wrong — failure modes + symptoms',
+        tests:              'Tests — which test files exercise this',
+        'see-also':         'See also — cross-links to architecture / services / api',
+        'sequence-diagram': 'Sequence diagram — mermaid flow of caller → this file → callees',
+        parameters:         'Parameters — exhaustive table (name, type, required, default, description)',
+        'request-example':  'Request example — curl + headers / JSON-RPC envelope / call site',
+        'response-example': 'Response example — every field annotated, success + error shapes',
+      };
+      gaps.forEach(function(g) {
+        var li = el('li');
+        li.textContent = gapLabels[g] || g;
+        ul.appendChild(li);
+      });
+      banner.appendChild(ul);
+      article.appendChild(banner);
+    }
 
     // Body
     var bodyEl = el('div', 'wiki-body');
