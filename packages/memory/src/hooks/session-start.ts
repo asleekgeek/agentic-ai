@@ -45,6 +45,7 @@ import {
   fetchHotMemories,
   fetchTeamDecisions,
 } from "./db.js";
+import { fetchRecentMemoriesForCuration } from "./curation-fetch.js";
 import {
   buildColdStartMessage,
   buildContext,
@@ -53,8 +54,59 @@ import {
   type SetupResult,
 } from "./session-start-context.js";
 import { loadHookConfig } from "./types.js";
+import { countPendingClusters, type PageMtimeFn } from "../wiki/auto-curator.js";
 
 const LOG_PREFIX = "[session-start-hook]";
+
+// ── Pending wiki curation count ───────────────────────────────────────────
+//
+// The auto-curator (wiki/auto-curator.ts) takes a memory snapshot and
+// reports how many topic clusters warrant a fresh wiki page. The
+// SessionStart preamble surfaces this count so the in-session LLM can
+// pick up the queue without the user asking. Failure here is non-
+// fatal — a missing count must never break the preamble.
+// source: cortex@4883307 mcp_server/hooks/session_start.py:206-263
+
+// source: cortex@4883307 mcp_server/hooks/session_start.py:226 ("LIMIT 500")
+const CURATION_MEM_POOL = 500;
+
+// source: cortex@ed33435 mcp_server/infrastructure/config.py — WIKI_ROOT default
+const SESSION_START_WIKI_ROOT: string =
+  process.env["CORTEX_WIKI_ROOT"] ?? join(homedir(), ".claude", "methodology", "wiki");
+
+// Filesystem-mtime adapter for the curator's skip-already-authored filter.
+// Returns seconds-since-epoch or null when the page is absent. statSync
+// throws on missing — catch and return null so the curator treats the
+// page as eligible.
+// source: cortex@4883307 mcp_server/core/auto_curator.py::is_path_recently_authored
+const SESSION_START_PAGE_MTIME: PageMtimeFn = (absPath: string): number | null => {
+  try {
+    const MS_PER_SECOND = 1000; // source: ECMAScript Date timestamps are ms
+    return statSync(absPath).mtimeMs / MS_PER_SECOND;
+  } catch {
+    return null;
+  }
+};
+
+async function countPendingCurationsSafe(databaseUrl: string): Promise<number> {
+  try {
+    const memories = await fetchRecentMemoriesForCuration(databaseUrl, CURATION_MEM_POOL);
+    if (memories.length === 0) return 0;
+    // CuratorMemorySnapshot is a strict structural subset of CuratorMemory
+    // — missing only the open-ended index signature for arbitrary extra
+    // fields. The two-step ``unknown`` cast is the canonical TS escape
+    // when the strict-mode mismatch is purely about index signatures.
+    return countPendingClusters(
+      memories as unknown as readonly Record<string, unknown>[],
+      {
+        wikiRoot: SESSION_START_WIKI_ROOT,
+        pageMtime: SESSION_START_PAGE_MTIME,
+      },
+    );
+  } catch {
+    return 0;
+  }
+}
 
 // ── Python binary resolution ──────────────────────────────────────────────
 /**
@@ -489,18 +541,20 @@ export async function main(): Promise<void> {
   const anchorIds = new Set(anchors.map((a) => a.id));
 
   // I4 + I3: hot memories and team decisions exclude anchor IDs.
-  const [hot, teamDecisions, checkpoint] = await Promise.all([
+  const [hot, teamDecisions, checkpoint, pendingCurations] = await Promise.all([
     fetchHotMemories(config.databaseUrl, MIN_HEAT, HOT_LIMIT, anchorIds),
     fetchTeamDecisions(config.databaseUrl, anchorIds),
     fetchCheckpoint(config.databaseUrl),
+    countPendingCurationsSafe(config.databaseUrl),
   ]);
 
-  const context = buildContext(anchors, hot, checkpoint, teamDecisions);
+  const context = buildContext(anchors, hot, checkpoint, teamDecisions, pendingCurations);
 
   if (context) {
     process.stdout.write(context + "\n");
     log(
       `Injected ${anchors.length} anchors + ${hot.length} hot memories ` +
+        (pendingCurations > 0 ? `+ ${pendingCurations} pending curations ` : "") +
         `(total: ${memoryCount})`,
     );
   } else {

@@ -399,9 +399,19 @@ export function registerWikiTools(server: McpServer, deps?: WikiToolDeps): void 
   // source: cortex@47b818d mcp_server/handlers/curate_wiki.py
   if (deps?.store) {
     const store = deps.store;
-    // Per-call upper bound on jobs returned. Matches the schema's
-    // ``maximum`` in cortex@47b818d mcp_server/handlers/curate_wiki.py:94.
-    const MAX_JOBS_PER_CALL = 20; // source: cortex@47b818d curate_wiki.py:94 ("maximum": 20)
+    // Per-call upper bound on jobs returned. Cortex@47b818d sets this
+    // to 20 — we raise it to 100. Rationale: each job carries a ~30KB
+    // structured prompt (≤25 memories × ~1200 chars + frontmatter +
+    // instructions); 100 jobs ≈ 3MB, which fits within both the MCP
+    // wire budget and an Opus 4.7 turn. Past 100, pagination is the
+    // right pattern — consolidate's pending_curations stat and the
+    // SessionStart preamble already prod the LLM to keep calling
+    // curate_wiki across sessions, so an arbitrarily low cap throttles
+    // the "document everything automatically" loop without preventing
+    // genuine wire/context blowouts.
+    // source: cortex@47b818d set 20; raised here per user feedback
+    //         2026-05-18 ("why a limit cap?").
+    const MAX_JOBS_PER_CALL = 100; // source: user feedback 2026-05-18 — raised from cortex's 20 to fit MCP wire + Opus 4.7 context
     server.registerTool(
       "curate_wiki",
       {

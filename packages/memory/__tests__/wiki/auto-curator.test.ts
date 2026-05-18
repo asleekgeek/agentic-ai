@@ -9,10 +9,15 @@ import {
   buildAuthoringPrompt,
   buildClusters,
   buildJobs,
+  countPendingClusters,
   extractEntitiesFromContent,
+  filterAuthoredClusters,
+  isPathRecentlyAuthored,
   MAX_MEMORIES_PER_PROMPT,
   MIN_MEMORIES_PER_CLUSTER,
+  SKIP_IF_AUTHORED_WITHIN_DAYS,
   type CuratorMemory,
+  type PageMtimeFn,
 } from "../../src/wiki/auto-curator.js";
 
 // ── extractEntitiesFromContent ────────────────────────────────────────
@@ -308,5 +313,133 @@ describe("module constants", () => {
 
   it("exports MAX_MEMORIES_PER_PROMPT", () => {
     expect(MAX_MEMORIES_PER_PROMPT).toBeGreaterThan(MIN_MEMORIES_PER_CLUSTER);
+  });
+
+  it("exports SKIP_IF_AUTHORED_WITHIN_DAYS as a positive integer", () => {
+    expect(SKIP_IF_AUTHORED_WITHIN_DAYS).toBeGreaterThan(0);
+    expect(Number.isInteger(SKIP_IF_AUTHORED_WITHIN_DAYS)).toBe(true);
+  });
+});
+
+// ── isPathRecentlyAuthored — skip-already-authored filter ─────────────
+// source: cortex@4883307 mcp_server/core/auto_curator.py::is_path_recently_authored
+
+describe("isPathRecentlyAuthored", () => {
+  const SECONDS_PER_DAY = 86400;
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  function fixedMtime(absPath: string, mtime: number | null): PageMtimeFn {
+    return (p) => (p === absPath ? mtime : null);
+  }
+
+  it("returns false when the page does not exist", () => {
+    const mtime = fixedMtime("/wiki/a.md", null);
+    expect(isPathRecentlyAuthored("/wiki/a.md", mtime)).toBe(false);
+  });
+
+  it("returns true when the page exists and was modified within the window", () => {
+    const fiveDaysAgo = nowSec - 5 * SECONDS_PER_DAY;
+    const mtime = fixedMtime("/wiki/a.md", fiveDaysAgo);
+    expect(isPathRecentlyAuthored("/wiki/a.md", mtime, 30)).toBe(true);
+  });
+
+  it("returns false when the page is older than the window", () => {
+    const sixtyDaysAgo = nowSec - 60 * SECONDS_PER_DAY;
+    const mtime = fixedMtime("/wiki/a.md", sixtyDaysAgo);
+    expect(isPathRecentlyAuthored("/wiki/a.md", mtime, 30)).toBe(false);
+  });
+
+  it("uses SKIP_IF_AUTHORED_WITHIN_DAYS as the default window", () => {
+    const oneDayAgo = nowSec - 1 * SECONDS_PER_DAY;
+    const mtime = fixedMtime("/wiki/a.md", oneDayAgo);
+    expect(isPathRecentlyAuthored("/wiki/a.md", mtime)).toBe(true);
+  });
+});
+
+// ── filterAuthoredClusters — composition ──────────────────────────────
+
+describe("filterAuthoredClusters", () => {
+  const SECONDS_PER_DAY = 86400;
+  const nowSec = Math.floor(Date.now() / 1000);
+
+  function makeCluster(suggestedPath: string): {
+    readonly topic: string;
+    readonly domain: string;
+    readonly suggested_kind: string;
+    readonly suggested_path: string;
+    readonly memory_ids: readonly number[];
+    readonly memory_contents: readonly string[];
+    readonly memory_tags: readonly (readonly string[])[];
+    readonly entities: readonly string[];
+    readonly avg_heat: number;
+    readonly earliest_at: string;
+    readonly latest_at: string;
+  } {
+    return {
+      topic: "T", domain: "cortex", suggested_kind: "reference",
+      suggested_path: suggestedPath,
+      memory_ids: [1, 2, 3, 4],
+      memory_contents: ["a", "b", "c", "d"],
+      memory_tags: [[], [], [], []],
+      entities: [],
+      avg_heat: 0.6,
+      earliest_at: "", latest_at: "",
+    } as const;
+  }
+
+  it("drops clusters whose page is fresh (within window)", () => {
+    const fresh = makeCluster("reference/cortex/fresh.md");
+    const stale = makeCluster("reference/cortex/stale.md");
+    const mtime: PageMtimeFn = (p) => {
+      if (p.endsWith("fresh.md")) return nowSec - 5 * SECONDS_PER_DAY;
+      if (p.endsWith("stale.md")) return nowSec - 60 * SECONDS_PER_DAY;
+      return null;
+    };
+    const kept = filterAuthoredClusters([fresh, stale], "/wiki", mtime);
+    expect(kept.map((c) => c.suggested_path)).toEqual(["reference/cortex/stale.md"]);
+  });
+
+  it("keeps clusters whose page does not exist", () => {
+    const c = makeCluster("reference/cortex/missing.md");
+    const mtime: PageMtimeFn = () => null;
+    expect(filterAuthoredClusters([c], "/wiki", mtime)).toEqual([c]);
+  });
+});
+
+// ── countPendingClusters — telemetry entrypoint ───────────────────────
+
+describe("countPendingClusters", () => {
+  function mem(id: number, content: string): CuratorMemory {
+    return {
+      id, content, tags: [], domain: "cortex",
+      effective_heat: 0.6, created_at: "2026-05-17T00:00:00Z",
+    };
+  }
+
+  it("returns 0 for an empty memory pool", () => {
+    expect(countPendingClusters([])).toBe(0);
+  });
+
+  it("returns the cluster count when no skip filter is wired", () => {
+    const memories = Array.from({ length: 4 }, (_, i) =>
+      mem(i + 1, "MemoryStore inserts rows"),
+    );
+    expect(countPendingClusters(memories, { min_memories: 4, min_avg_heat: 0 })).toBe(1);
+  });
+
+  it("applies the skip-already-authored filter when wikiRoot + pageMtime are supplied", () => {
+    const memories = Array.from({ length: 4 }, (_, i) =>
+      mem(i + 1, "MemoryStore inserts rows"),
+    );
+    // Suggested path is reference/cortex/memorystore.md. Mark it fresh.
+    const SECONDS_PER_DAY = 86400;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const mtime: PageMtimeFn = (p) =>
+      p.endsWith("memorystore.md") ? nowSec - 1 * SECONDS_PER_DAY : null;
+    expect(countPendingClusters(memories, {
+      min_memories: 4, min_avg_heat: 0,
+      wikiRoot: "/wiki",
+      pageMtime: mtime,
+    })).toBe(0);
   });
 });

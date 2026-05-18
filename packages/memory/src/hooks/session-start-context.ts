@@ -15,6 +15,18 @@ import { type CheckpointRow, type MemoryRow } from "./types.js";
 // ── Constants ─────────────────────────────────────────────────────────────
 
 const MAX_CONTENT_LENGTH = 120;
+// Display N "next steps" from a checkpoint. Sized to match the checkpoint
+// summary shown in the Cortex preamble — three steps fits the eye-scan
+// budget without overflowing the context block.
+// source: cortex@ed33435 mcp_server/hooks/session_start.py — top-3 next-steps
+const NEXT_STEPS_DISPLAY_LIMIT = 3;
+// Heat-bar rendering: the bar is built from "+" repeated up to N chars.
+// Five chars matches the bar width of the Cortex Python preamble.
+// source: cortex@ed33435 mcp_server/hooks/session_start.py — "+" * min(5, …)
+const HEAT_BAR_MAX_LENGTH = 5;
+// Multiplier mapping the [0,1] heat value to a 0..5 integer for the bar.
+// source: cortex@ed33435 mcp_server/hooks/session_start.py — int(heat * 5)
+const HEAT_BAR_SCALE = 5;
 
 // ── Utilities ─────────────────────────────────────────────────────────────
 
@@ -36,7 +48,7 @@ function formatCheckpointSection(checkpoint: CheckpointRow): string[] {
     : [];
   if (nextSteps.length > 0) {
     lines.push("**Next steps:**");
-    for (const step of nextSteps.slice(0, 3)) {
+    for (const step of nextSteps.slice(0, NEXT_STEPS_DISPLAY_LIMIT)) {
       lines.push(`- ${step}`);
     }
   }
@@ -69,8 +81,12 @@ export function buildContext(
   hot: MemoryRow[],
   checkpoint: CheckpointRow | null,
   teamDecisions: MemoryRow[],
+  pendingCurations: number = 0,
 ): string {
-  if (!anchors.length && !hot.length && !checkpoint && !teamDecisions.length) {
+  if (
+    !anchors.length && !hot.length && !checkpoint &&
+    !teamDecisions.length && !pendingCurations
+  ) {
     return "";
   }
 
@@ -105,10 +121,32 @@ export function buildContext(
     lines.push("### Hot Memories");
     for (const m of hot) {
       const heat = m.heat ?? 0;
-      const heatBar = "+".repeat(Math.min(5, Math.floor(heat * 5)));
+      const heatBar = "+".repeat(Math.min(HEAT_BAR_MAX_LENGTH, Math.floor(heat * HEAT_BAR_SCALE)));
       const domainHint = m.domain ? ` [${m.domain}]` : "";
       lines.push(`- [${heatBar}]${domainHint} ${shorten(m.content)}`);
     }
+    lines.push("");
+  }
+
+  // 2026-05-17: surface pending wiki authoring work to the in-session
+  // LLM. The auto-curator (wiki/handlers/curate-wiki.ts) detects high-
+  // heat topic clusters of PG memories that warrant a curated wiki
+  // page; the in-session LLM (Opus 4.7) is the authoring agent.
+  // Without this nudge the LLM has no way to know there's
+  // documentation work waiting — surfacing it here lets it happen
+  // "without a human asking", per the 2026-05-17 user directive.
+  // source: cortex@4883307 mcp_server/hooks/session_start.py:463-479
+  if (pendingCurations > 0) {
+    lines.push("### Pending Wiki Curation");
+    const plural = pendingCurations === 1 ? "" : "s";
+    lines.push(
+      `Auto-curator detected **${pendingCurations}** topic cluster${plural} of ` +
+      "PG memories warrant a curated wiki page. Call `curate_wiki` to " +
+      "fetch authoring jobs and write the pages via `wiki_write` — " +
+      "each job carries a structured prompt with the cluster's memories " +
+      "and the documentation conventions. No human needs to ask; the " +
+      "curator works queued.",
+    );
     lines.push("");
   }
 

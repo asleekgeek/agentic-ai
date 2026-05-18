@@ -18,7 +18,7 @@
  *         §Tier1Core (record_session_end)
  */
 
-import { existsSync, readFileSync, mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync, mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { homedir } from "node:os";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -27,6 +27,11 @@ import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-sto
 import { handler as consolidateHandler } from "@agentic/memory/consolidation/handler.js";
 import type { ConsolidationStore, ConsolidationSettings } from "@agentic/memory/consolidation/handler.js";
 import type { ProfilesStore } from "@agentic/memory/methodology/types.js";
+import {
+  countPendingClusters,
+  type CuratorMemory,
+  type PageMtimeFn,
+} from "@agentic/memory/wiki/auto-curator.js";
 
 // ── Named constants ───────────────────────────────────────────────────────────
 // source: cortex@ed33435 memory_stats.py:77 — avg_heat rounded to 4 decimal places
@@ -218,6 +223,55 @@ function errorText(tool: string, err: unknown): { content: Array<{ type: "text";
   return { content: [{ type: "text" as const, text: JSON.stringify({ error: `${tool}: ${message}` }) }] };
 }
 
+// ── Pending-curation count for the consolidate stats dict ────────────────────
+//
+// Failure-tolerant adapter: when the curator can't compute (no wiki
+// root, no memories, an unexpected error), we return ``null`` and
+// move on. consolidate must never break because of a curation count.
+// source: cortex@4883307 mcp_server/handlers/consolidate.py:153-172
+
+// source: cortex@ed33435 mcp_server/infrastructure/config.py — WIKI_ROOT default
+const CONSOLIDATE_WIKI_ROOT: string =
+  process.env["CORTEX_WIKI_ROOT"] ??
+  join(homedir(), ".claude", "methodology", "wiki");
+
+// Memory pool size used by the SessionStart helper in Cortex. Matches
+// the curator's default pool so the count is consistent with what
+// curate_wiki returns on a full invocation.
+// source: cortex@4883307 mcp_server/hooks/session_start.py:226 ("LIMIT 500")
+const CONSOLIDATE_MEM_POOL = 500;
+
+// Filesystem-mtime adapter. Returns seconds-since-epoch or null when
+// the file doesn't exist. statSync throws on missing — catch and
+// return null so the curator can treat it as "page absent, eligible".
+// source: cortex@4883307 mcp_server/core/auto_curator.py::is_path_recently_authored
+const SECONDS_DIV: PageMtimeFn = (absPath: string): number | null => {
+  try {
+    const MS_PER_SECOND = 1000; // source: ECMAScript Date timestamps are ms
+    return statSync(absPath).mtimeMs / MS_PER_SECOND;
+  } catch {
+    return null;
+  }
+};
+
+async function countPendingCurationsSafe(store: MemoryStoreExt): Promise<number | null> {
+  try {
+    const storeExt = store as MemoryStoreExt & {
+      getRecentlyAccessedMemoriesAsync?: (limit: number, minAccessCount: number) => Promise<Record<string, unknown>[]>;
+    };
+    const rows = storeExt.getRecentlyAccessedMemoriesAsync
+      ? await storeExt.getRecentlyAccessedMemoriesAsync(CONSOLIDATE_MEM_POOL, 1)
+      : store.getRecentlyAccessedMemories(CONSOLIDATE_MEM_POOL, 1);
+    if (rows.length === 0) return 0;
+    return countPendingClusters(rows as CuratorMemory[], {
+      wikiRoot: CONSOLIDATE_WIKI_ROOT,
+      pageMtime: SECONDS_DIV,
+    });
+  } catch {
+    return null;
+  }
+}
+
 // ── registerConsolidationTools ────────────────────────────────────────────────
 
 /**
@@ -259,7 +313,16 @@ export function registerConsolidationTools(server: McpServer, deps: Consolidatio
             deep:     args.deep,
           },
         );
-        return { content: [{ type: "text" as const, text: JSON.stringify(result) }] };
+
+        // 2026-05-17: surface pending curation count so the SessionStart
+        // preamble and any downstream caller can see how much authoring
+        // work the auto-curator has queued up. Failure is non-fatal — a
+        // missing curation count must never break consolidate itself.
+        // source: cortex@4883307 mcp_server/handlers/consolidate.py:153-172
+        const pendingCurations = await countPendingCurationsSafe(deps.store);
+        const enrichedResult = { ...result, pending_curations: pendingCurations };
+
+        return { content: [{ type: "text" as const, text: JSON.stringify(enrichedResult) }] };
       } catch (err) {
         return errorText("consolidate", err);
       }

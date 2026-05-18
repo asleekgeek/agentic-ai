@@ -39,12 +39,14 @@
 import {
   buildClusters,
   buildJobs,
+  filterAuthoredClusters,
   MAX_MEMORIES_PER_PROMPT,
   MIN_AVG_HEAT_FOR_PAGE,
   MIN_MEMORIES_PER_CLUSTER,
   type CuratorMemory,
   type CurationCluster,
   type CurationJob,
+  type PageMtimeFn,
 } from "../auto-curator.js";
 
 // source: cortex@47b818d mcp_server/handlers/curate_wiki.py — defaults
@@ -112,6 +114,14 @@ export interface CurateWikiDeps {
   readonly getRecentlyAccessedMemories: (limit: number) => Promise<CuratorMemory[]>;
   readonly getRecentMemories?: (limit: number) => Promise<CuratorMemory[]>;
   readonly listMdPages: (root: string) => Promise<string[]>;
+  /**
+   * Filesystem mtime adapter — returns mtime in seconds for the wiki
+   * page at absPath, or null when missing. When omitted, the handler
+   * skips the "recently authored" filter (useful in tests).
+   *
+   * source: cortex@4883307 mcp_server/core/auto_curator.py — filesystem-mtime check
+   */
+  readonly pageMtime?: PageMtimeFn;
   /** Override for current-date injection in tests. Returns YYYY-MM-DD. */
   readonly today?: () => string;
 }
@@ -272,11 +282,18 @@ export async function handler(
     };
   }
 
-  const clusters: CurationCluster[] = buildClusters(memories, {
+  const rawClusters: CurationCluster[] = buildClusters(memories, {
     ...(args.domain != null ? { domain: args.domain } : {}),
     min_memories: minMemories,
     min_avg_heat: minAvgHeat,
   });
+
+  // Skip clusters whose suggested page already exists and is fresh.
+  // The filter runs only when a pageMtime adapter is wired — tests
+  // typically omit it. source: cortex@4883307 mcp_server/core/auto_curator.py
+  const clusters: CurationCluster[] = deps.pageMtime
+    ? filterAuthoredClusters(rawClusters, deps.wikiRoot, deps.pageMtime)
+    : rawClusters;
 
   const relPaths = await deps.listMdPages(deps.wikiRoot);
   const existingPages = scanExistingPages(relPaths);

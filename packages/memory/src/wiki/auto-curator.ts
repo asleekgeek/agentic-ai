@@ -32,6 +32,20 @@ export const MIN_AVG_HEAT_FOR_PAGE = 0.3;
 export const MIN_ENTITY_FREQ_FOR_TOPIC = 3;
 export const MAX_MEMORIES_PER_PROMPT = 25;
 
+// 2026-05-17: how recent counts as "already authored" — skip re-curating
+// a cluster whose suggested path was written within this window. 30
+// days is the heuristic floor; clusters with substantial new content
+// after that window get re-curated to update the page.
+// source: cortex@4883307 mcp_server/core/auto_curator.py:79
+export const SKIP_IF_AUTHORED_WITHIN_DAYS = 30;
+
+// Seconds in a day, for the mtime-age comparison.
+// source: 86400 = 24 * 60 * 60 (SI definition)
+const SECONDS_PER_DAY = 86400;
+// Convert JS Date.now()/getmtime milliseconds to seconds.
+// source: ECMAScript spec — Date timestamps are milliseconds
+const MS_PER_SECOND = 1000;
+
 // Entity-extraction caps. The slug length matches the wiki-path
 // convention (kind/<domain>/<slug>.md) and the memory-body cap keeps the
 // prompt under the model context budget.
@@ -78,6 +92,93 @@ export interface CurationJob {
   readonly prompt: string;
   /** Paths for [[wiki-links]]. */
   readonly related_pages: readonly string[];
+}
+
+/**
+ * Provider for file-mtime lookups. Returns mtime in **seconds** since
+ * epoch, or ``null`` when the file does not exist. Implementations
+ * typically wrap ``fs.statSync().mtimeMs / 1000``.
+ *
+ * The auto-curator stays pure-logic by accepting this as an injected
+ * dependency rather than calling ``fs`` directly. The handler wires
+ * the real ``fs`` adapter; tests wire a deterministic stub.
+ */
+export type PageMtimeFn = (absPath: string) => number | null;
+
+/**
+ * Return true when the wiki page at ``absPath`` exists and was
+ * modified within the last ``withinDays`` days. Skip-already-authored
+ * filter for the curator: a cluster whose page is fresh shouldn't be
+ * re-suggested. The check is mtime-based, so hand-edits protect a
+ * page from re-curation the same way fresh authoring does.
+ *
+ * source: cortex@4883307 mcp_server/core/auto_curator.py::is_path_recently_authored
+ */
+export function isPathRecentlyAuthored(
+  absPath: string,
+  pageMtime: PageMtimeFn,
+  withinDays: number = SKIP_IF_AUTHORED_WITHIN_DAYS,
+): boolean {
+  const mtimeSec = pageMtime(absPath);
+  if (mtimeSec == null) return false;
+  const nowSec = Date.now() / MS_PER_SECOND;
+  const ageSec = nowSec - mtimeSec;
+  return ageSec < withinDays * SECONDS_PER_DAY;
+}
+
+/**
+ * Filter out clusters whose suggested page exists and was authored
+ * within ``withinDays`` days. Auto-curator's pure-logic core stays
+ * I/O-free — the caller injects ``pageMtime`` (typically a wrapper
+ * over fs.statSync) and the wiki root.
+ *
+ * source: cortex@4883307 mcp_server/core/auto_curator.py::build_clusters
+ *         (the in-line filter; we extract it to a standalone fn so
+ *         buildClusters remains pure).
+ */
+export function filterAuthoredClusters(
+  clusters: readonly CurationCluster[],
+  wikiRoot: string,
+  pageMtime: PageMtimeFn,
+  withinDays: number = SKIP_IF_AUTHORED_WITHIN_DAYS,
+): CurationCluster[] {
+  return clusters.filter((c) => {
+    const abs = joinPath(wikiRoot, c.suggested_path);
+    return !isPathRecentlyAuthored(abs, pageMtime, withinDays);
+  });
+}
+
+// Local path-join — pure logic, deliberately no node:path import.
+// Forward slashes only; wiki paths are POSIX-shaped per layout.ts.
+function joinPath(...parts: readonly string[]): string {
+  return parts
+    .map((p, i) => (i === 0 ? p.replace(/\/+$/, "") : p.replace(/^\/+|\/+$/g, "")))
+    .filter((p) => p.length > 0)
+    .join("/");
+}
+
+/**
+ * Count clusters that would yield a fresh authoring job.
+ *
+ * Cheap-to-call summary for the SessionStart preamble and the
+ * consolidate stats. Uses the same defaults as buildClusters so the
+ * count matches what curate_wiki returns on full invocation.
+ *
+ * When ``pageMtime`` is omitted, no skip filter runs — the count is
+ * the raw cluster count. Tests use that path.
+ *
+ * source: cortex@4883307 mcp_server/core/auto_curator.py::count_pending_clusters
+ */
+export function countPendingClusters(
+  memories: readonly CuratorMemory[],
+  opts: ClusterOpts & {
+    readonly wikiRoot?: string;
+    readonly pageMtime?: PageMtimeFn;
+  } = {},
+): number {
+  const clusters = buildClusters(memories, opts);
+  if (!opts.wikiRoot || !opts.pageMtime) return clusters.length;
+  return filterAuthoredClusters(clusters, opts.wikiRoot, opts.pageMtime).length;
 }
 
 // ── Topic identification ────────────────────────────────────────────────
