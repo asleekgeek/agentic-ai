@@ -187,6 +187,10 @@
       "import": "./dist/wiki/stub-detector.js",
       "types": "./dist/wiki/stub-detector.d.ts"
     },
+    "./wiki/curation-gaps.js": {
+      "import": "./dist/wiki/curation-gaps.js",
+      "types": "./dist/wiki/curation-gaps.d.ts"
+    },
     "./wiki/project-roots.js": {
       "import": "./dist/wiki/project-roots.js",
       "types": "./dist/wiki/project-roots.d.ts"
