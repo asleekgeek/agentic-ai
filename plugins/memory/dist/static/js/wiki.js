@@ -8,6 +8,20 @@
   var searchQuery = '';
   var expandedKinds = {};
   var expandedDomains = {};
+  // Phase B: project-scoped browsing.
+  //   null   → projects landing (lists every known project as a card)
+  //   <name> → that project's wiki view (tree + content filtered to it)
+  //
+  // The breadcrumb above the content area lets the reader hop back to
+  // the projects landing in one click — required UX per user feedback
+  // 2026-05-18 ("if we have a button accessing a specific project then
+  // we should also be able to come back to the landing page of the
+  // wiki with ease").
+  var currentProject = null;
+  // Label used as the "all projects" pseudo-domain when a page has no
+  // domain frontmatter and no second path segment to extract from.
+  var DOMAIN_ROOT_LABEL = '_root';
+  var DOMAIN_GENERAL_LABEL = '_general';
 
   var KIND_ORDER = ['adr', 'spec', 'lesson', 'convention', 'note', 'guide', 'domain', 'entity', 'index', 'misc'];
   var KIND_LABELS = {
@@ -139,10 +153,14 @@
     var savedScroll = tree.scrollTop;
     tree.innerHTML = '';
 
-    var filtered = pages;
+    // Phase B: scope the tree to the current project first, then apply
+    // the search filter. The search bar continues to search within the
+    // visible scope only — searching "decision" inside a project doesn't
+    // surface decisions from other projects.
+    var filtered = scopedPages();
     if (searchQuery) {
       var q = searchQuery.toLowerCase();
-      filtered = pages.filter(function(p) {
+      filtered = filtered.filter(function(p) {
         return (p.title || '').toLowerCase().indexOf(q) >= 0 ||
                (p.path || '').toLowerCase().indexOf(q) >= 0 ||
                ((p.tags || []).join(' ')).toLowerCase().indexOf(q) >= 0 ||
@@ -370,11 +388,134 @@
     }, 0);
   }
 
-  // ── Welcome Panel ──
-  function showWelcome() {
+  // ── Projects (Phase B) ──
+
+  // Returns the page list scoped to the current project. When
+  // currentProject is null, returns all pages.
+  function scopedPages() {
+    if (!currentProject) return pages;
+    return pages.filter(function(p) { return extractDomain(p) === currentProject; });
+  }
+
+  // Aggregate pages into { name, pageCount, kindCounts, lastUpdated } per project.
+  // The DOMAIN_ROOT_LABEL ("_root") bucket gathers pages whose path doesn't
+  // expose a project segment — typically index pages at the top of a kind tree.
+  function getProjects() {
+    var byProject = {};
+    pages.forEach(function(p) {
+      var name = extractDomain(p) || DOMAIN_ROOT_LABEL;
+      if (!byProject[name]) {
+        byProject[name] = { name: name, pageCount: 0, kindCounts: {}, lastUpdated: '' };
+      }
+      var entry = byProject[name];
+      entry.pageCount += 1;
+      var k = p.kind || 'misc';
+      entry.kindCounts[k] = (entry.kindCounts[k] || 0) + 1;
+      var ts = p.updated || p.created || '';
+      if (ts > entry.lastUpdated) entry.lastUpdated = ts;
+    });
+    return Object.keys(byProject)
+      .map(function(k) { return byProject[k]; })
+      .sort(function(a, b) {
+        // Real projects first; "_root"/"_general" go to the bottom.
+        var aIsPlaceholder = a.name === DOMAIN_ROOT_LABEL || a.name === DOMAIN_GENERAL_LABEL;
+        var bIsPlaceholder = b.name === DOMAIN_ROOT_LABEL || b.name === DOMAIN_GENERAL_LABEL;
+        if (aIsPlaceholder !== bIsPlaceholder) return aIsPlaceholder ? 1 : -1;
+        // Then by page count desc.
+        if (b.pageCount !== a.pageCount) return b.pageCount - a.pageCount;
+        return a.name.localeCompare(b.name);
+      });
+  }
+
+  function projectDisplayName(name) {
+    if (name === DOMAIN_ROOT_LABEL) return 'Uncategorised';
+    if (name === DOMAIN_GENERAL_LABEL) return 'General';
+    return name;
+  }
+
+  function enterProject(name) {
+    currentProject = name;
+    activePath = '';
+    // Reset the sidebar's expansion state so the user sees a clean tree
+    // scoped to the new project; they'd otherwise see whatever was open
+    // for the "all projects" view.
+    expandedKinds = {};
+    expandedDomains = {};
+    rebuildTree();
+    showWelcome();
+  }
+
+  function exitProject() {
+    currentProject = null;
+    activePath = '';
+    expandedKinds = {};
+    expandedDomains = {};
+    rebuildTree();
+    showWelcome();
+  }
+
+  // ── Breadcrumb (Phase B) ──
+  // Always rendered at the top of wiki-main. "Wiki" is always clickable
+  // and returns to the projects landing. When inside a project the
+  // breadcrumb shows "Wiki › <project>" with the page title appended
+  // when a specific page is loaded.
+  function buildBreadcrumb(currentPageTitle) {
+    // Class ``wiki-navbar`` (not ``wiki-breadcrumb``) — the existing
+    // ``wiki-breadcrumb`` CSS targets the small-caps centred page-header
+    // taxonomy strip inside the article. This nav bar lives above
+    // wiki-main and needs different styling (left-aligned, clickable
+    // buttons, hover state).
+    var bar = el('div', 'wiki-navbar');
+
+    var home = el('button', 'wiki-navbar-link');
+    home.type = 'button';
+    home.textContent = 'Wiki';
+    home.title = 'All projects';
+    home.addEventListener('click', function() { exitProject(); });
+    bar.appendChild(home);
+
+    if (currentProject) {
+      var sep1 = el('span', 'wiki-navbar-sep');
+      sep1.textContent = '›';
+      bar.appendChild(sep1);
+
+      var projBtn = el('button', 'wiki-navbar-link');
+      projBtn.type = 'button';
+      projBtn.textContent = projectDisplayName(currentProject);
+      projBtn.title = 'Project landing';
+      projBtn.addEventListener('click', function() {
+        // Stay in the project, but show its welcome panel.
+        activePath = '';
+        showWelcome();
+      });
+      bar.appendChild(projBtn);
+    }
+
+    if (currentPageTitle) {
+      var sep2 = el('span', 'wiki-navbar-sep');
+      sep2.textContent = '›';
+      bar.appendChild(sep2);
+
+      var title = el('span', 'wiki-navbar-current');
+      title.textContent = currentPageTitle;
+      bar.appendChild(title);
+    }
+
+    return bar;
+  }
+
+  // ── Projects Landing (Phase B) ──
+  // Replaces the kind-grid welcome when currentProject is null. Shows
+  // every project as a clickable card with its page count and kind
+  // breakdown. Below the grid, the existing "Recently Updated" list
+  // surfaces the freshest pages across all projects so the user can
+  // jump directly when they remember a specific page.
+  function showProjectsLanding() {
     var main = document.getElementById('wiki-main');
     if (!main) return;
     main.innerHTML = '';
+
+    main.appendChild(buildBreadcrumb(null));
 
     var wrap = el('div', 'wiki-welcome');
 
@@ -382,15 +523,156 @@
     var title = el('h1', 'wiki-welcome-title');
     title.textContent = 'Knowledge Base';
     var subtitle = el('p', 'wiki-welcome-subtitle');
-    subtitle.textContent = pages.length + ' pages across ' + countKinds() + ' categories';
+    var projects = getProjects();
+    subtitle.textContent =
+      pages.length + ' pages across ' + projects.length +
+      (projects.length === 1 ? ' project' : ' projects');
     header.appendChild(title);
     header.appendChild(subtitle);
     wrap.appendChild(header);
 
-    // Kind breakdown
+    if (projects.length === 0) {
+      var emptyHint = el('p', 'wiki-welcome-empty');
+      emptyHint.textContent =
+        'No projects yet. Call curate_wiki and wiki_write to author pages.';
+      wrap.appendChild(emptyHint);
+    } else {
+      var sectionTitle = el('h2', 'wiki-welcome-section-title');
+      sectionTitle.textContent = 'Projects';
+      wrap.appendChild(sectionTitle);
+
+      var grid = el('div', 'wiki-projects-grid');
+      projects.forEach(function(proj) {
+        var card = el('button', 'wiki-project-card');
+        card.type = 'button';
+        card.title = 'Open ' + projectDisplayName(proj.name);
+        card.addEventListener('click', function() { enterProject(proj.name); });
+
+        var name = el('div', 'wiki-project-card-name');
+        name.textContent = projectDisplayName(proj.name);
+        card.appendChild(name);
+
+        var count = el('div', 'wiki-project-card-count');
+        count.textContent = proj.pageCount + (proj.pageCount === 1 ? ' page' : ' pages');
+        card.appendChild(count);
+
+        var kinds = el('div', 'wiki-project-card-kinds');
+        KIND_ORDER.forEach(function(k) {
+          if (!proj.kindCounts[k]) return;
+          var chip = el('span', 'wiki-project-card-kind');
+          chip.textContent = (KIND_LABELS[k] || k) + ' ' + proj.kindCounts[k];
+          kinds.appendChild(chip);
+        });
+        Object.keys(proj.kindCounts).forEach(function(k) {
+          if (KIND_ORDER.indexOf(k) >= 0) return;
+          var chip = el('span', 'wiki-project-card-kind');
+          chip.textContent = (KIND_LABELS[k] || k) + ' ' + proj.kindCounts[k];
+          kinds.appendChild(chip);
+        });
+        card.appendChild(kinds);
+
+        if (proj.lastUpdated) {
+          var stamp = el('div', 'wiki-project-card-stamp');
+          stamp.textContent = 'Updated ' + proj.lastUpdated;
+          card.appendChild(stamp);
+        }
+
+        grid.appendChild(card);
+      });
+      wrap.appendChild(grid);
+    }
+
+    // Recently updated across all projects.
+    var sorted = pages.slice().sort(function(a, b) {
+      return (b.updated || b.created || '').localeCompare(a.updated || a.created || '');
+    });
+    if (sorted.length > 0) {
+      var recentSection = el('div', 'wiki-welcome-section');
+      var recentTitle = el('h2', 'wiki-welcome-section-title');
+      recentTitle.textContent = 'Recently Updated';
+      recentSection.appendChild(recentTitle);
+
+      var recentList = el('div', 'wiki-welcome-list');
+      sorted.slice(0, 10).forEach(function(p) {
+        var row = el('div', 'wiki-welcome-list-item');
+        row.addEventListener('click', function() {
+          // Loading a page from the global list also enters its project
+          // so the sidebar matches what the user is viewing.
+          var domain = extractDomain(p);
+          if (domain && domain !== currentProject) {
+            currentProject = domain;
+            expandedKinds = {};
+            expandedDomains = {};
+            rebuildTree();
+          }
+          loadPage(p.path);
+        });
+
+        var rowTitle = el('span', 'wiki-welcome-list-title');
+        rowTitle.textContent = p.title || p.path;
+
+        var rowMeta = el('span', 'wiki-welcome-list-meta');
+        var parts = [];
+        if (p.kind) parts.push(p.kind);
+        var pd = extractDomain(p);
+        if (pd) parts.push(projectDisplayName(pd));
+        if (p.updated || p.created) parts.push(p.updated || p.created);
+        rowMeta.textContent = parts.join(' · ');
+
+        row.appendChild(rowTitle);
+        row.appendChild(rowMeta);
+        recentList.appendChild(row);
+      });
+      recentSection.appendChild(recentList);
+      wrap.appendChild(recentSection);
+    }
+
+    main.appendChild(wrap);
+  }
+
+  // ── Welcome Panel ──
+  function showWelcome() {
+    // Phase B: when no specific project is active, the landing is the
+    // projects grid. Inside a project we keep the existing kind-grid
+    // welcome but filtered to that project's pages.
+    if (!currentProject) {
+      showProjectsLanding();
+      return;
+    }
+    showProjectWelcome();
+  }
+
+  // Renamed from showWelcome (Phase B). Renders the per-project landing:
+  // breadcrumb, header, kind grid, recently updated — all filtered to
+  // currentProject so the page counts and recent list match the sidebar.
+  function showProjectWelcome() {
+    var main = document.getElementById('wiki-main');
+    if (!main) return;
+    main.innerHTML = '';
+
+    main.appendChild(buildBreadcrumb(null));
+
+    var inScope = scopedPages();
+
+    var wrap = el('div', 'wiki-welcome');
+
+    var header = el('div', 'wiki-welcome-header');
+    var title = el('h1', 'wiki-welcome-title');
+    title.textContent = projectDisplayName(currentProject);
+    var subtitle = el('p', 'wiki-welcome-subtitle');
+    // Use scoped page count and kind count, not the global totals.
+    var kindsHere = {};
+    inScope.forEach(function(p) { kindsHere[p.kind || 'misc'] = true; });
+    subtitle.textContent =
+      inScope.length + ' pages across ' + Object.keys(kindsHere).length + ' categories';
+    header.appendChild(title);
+    header.appendChild(subtitle);
+    wrap.appendChild(header);
+
+    // Kind breakdown — scoped to the current project.
     var kindGrid = el('div', 'wiki-welcome-kinds');
     var byKind = {};
-    pages.forEach(function(p) {
+    inScope.forEach(function(p) {
       var k = p.kind || 'misc';
       byKind[k] = (byKind[k] || 0) + 1;
     });
@@ -424,8 +706,8 @@
     });
     wrap.appendChild(kindGrid);
 
-    // Recent pages
-    var sorted = pages.slice().sort(function(a, b) {
+    // Recent pages \u2014 scoped to the current project.
+    var sorted = inScope.slice().sort(function(a, b) {
       return (b.updated || b.created || '').localeCompare(a.updated || a.created || '');
     });
 
@@ -445,7 +727,7 @@
       var rowMeta = el('span', 'wiki-welcome-list-meta');
       var parts = [];
       if (p.kind) parts.push(p.kind);
-      if (p.domain) parts.push(p.domain);
+      // Inside a project the project name is redundant \u2014 drop it.
       if (p.updated || p.created) parts.push(p.updated || p.created);
       rowMeta.textContent = parts.join(' \u00B7 ');
 
@@ -456,8 +738,8 @@
     recentSection.appendChild(recentList);
     wrap.appendChild(recentSection);
 
-    // Core Knowledge (stable pages)
-    var stablePages = pages.filter(function(p) {
+    // Core Knowledge (stable pages) \u2014 scoped to the current project.
+    var stablePages = inScope.filter(function(p) {
       return p.maturity === 'stable';
     });
     if (stablePages.length > 0) {
@@ -491,6 +773,18 @@
   // ── Page Loading ──
   function loadPage(path) {
     activePath = path;
+    // Phase B: when the user opens a page from the "All Projects"
+    // landing the sidebar still shows every project's pages. Switch
+    // the project scope so the breadcrumb and sidebar agree with what
+    // the reader is now viewing.
+    if (!currentProject) {
+      var landing = pages.filter(function(p) { return p.path === path; })[0];
+      var domain = landing ? extractDomain(landing) : null;
+      if (domain && domain !== DOMAIN_ROOT_LABEL && domain !== DOMAIN_GENERAL_LABEL) {
+        currentProject = domain;
+        rebuildTree();
+      }
+    }
     // Update active state without rebuilding the entire tree
     var tree = document.getElementById('wiki-tree');
     if (tree) {
@@ -533,18 +827,26 @@
     var body = data.body || '';
     var dbRow = (pmeta && pmeta.db_row) || null;
 
+    // Phase B: interactive breadcrumb at the top of the page view so the
+    // reader can hop back to the project landing or "All Projects" in
+    // one click. Replaces the previous static kind/domain breadcrumb.
+    main.appendChild(buildBreadcrumb(meta.title || data.path));
+
     var article = el('article', 'wiki-article');
 
     // Page header
     var pageHeader = el('header', 'wiki-page-header');
 
-    // Breadcrumb
-    var breadcrumb = el('div', 'wiki-breadcrumb');
-    var crumbs = [];
-    if (meta.kind) crumbs.push(KIND_LABELS[meta.kind] || meta.kind);
-    if (meta.domain) crumbs.push(meta.domain);
-    breadcrumb.innerHTML = crumbs.map(function(c) { return '<span>' + esc(c) + '</span>'; }).join('<span class="wiki-breadcrumb-sep">/</span>');
-    pageHeader.appendChild(breadcrumb);
+    // Inline kind/domain hint kept for visual density (the breadcrumb
+    // above already provides navigation; this row provides taxonomy).
+    var taxRow = el('div', 'wiki-page-taxonomy');
+    var taxParts = [];
+    if (meta.kind) taxParts.push(KIND_LABELS[meta.kind] || meta.kind);
+    if (meta.domain) taxParts.push(meta.domain);
+    if (taxParts.length > 0) {
+      taxRow.innerHTML = taxParts.map(function(c) { return '<span>' + esc(c) + '</span>'; }).join('<span class="wiki-page-taxonomy-sep">/</span>');
+      pageHeader.appendChild(taxRow);
+    }
 
     // Title
     var titleRow = el('div', 'wiki-title-row');
