@@ -34,9 +34,9 @@
  * source: Wegner (1987) Transactive Memory Systems.
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, join as pathJoin, basename, dirname } from "node:path";
+import { join, basename, dirname } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import {
@@ -46,7 +46,6 @@ import {
   fetchHotMemories,
   fetchTeamDecisions,
 } from "./db.js";
-import { fetchRecentMemoriesForCuration } from "./curation-fetch.js";
 import {
   buildColdStartMessage,
   buildContext,
@@ -55,147 +54,16 @@ import {
   type SetupResult,
 } from "./session-start-context.js";
 import { loadHookConfig } from "./types.js";
-import { countPendingClusters, type PageMtimeFn } from "../wiki/auto-curator.js";
 import {
-  computeWikiMaintenanceStats,
-  defaultExtractDomain,
-} from "../wiki/maintenance-stats.js";
-import { autoResolveProjectRoot } from "../wiki/project-roots.js";
-import { collectSourceFiles } from "../codebase-analysis/handlers/codebase-analyze-helpers.js";
+  countPendingCurationsSafe,
+  countPendingMaintenanceSafe,
+} from "./session-start-maintenance.js";
 
 const LOG_PREFIX = "[session-start-hook]";
 
-// ── Pending wiki curation count ───────────────────────────────────────────
-//
-// The auto-curator (wiki/auto-curator.ts) takes a memory snapshot and
-// reports how many topic clusters warrant a fresh wiki page. The
-// SessionStart preamble surfaces this count so the in-session LLM can
-// pick up the queue without the user asking. Failure here is non-
-// fatal — a missing count must never break the preamble.
-// source: cortex@4883307 mcp_server/hooks/session_start.py:206-263
-
-// source: cortex@4883307 mcp_server/hooks/session_start.py:226 ("LIMIT 500")
-const CURATION_MEM_POOL = 500;
-
-// source: cortex@ed33435 mcp_server/infrastructure/config.py — WIKI_ROOT default
-const SESSION_START_WIKI_ROOT: string =
-  process.env["CORTEX_WIKI_ROOT"] ?? join(homedir(), ".claude", "methodology", "wiki");
-
-// Filesystem-mtime adapter for the curator's skip-already-authored filter.
-// Returns seconds-since-epoch or null when the page is absent. statSync
-// throws on missing — catch and return null so the curator treats the
-// page as eligible.
-// source: cortex@4883307 mcp_server/core/auto_curator.py::is_path_recently_authored
-const SESSION_START_PAGE_MTIME: PageMtimeFn = (absPath: string): number | null => {
-  try {
-    const MS_PER_SECOND = 1000; // source: ECMAScript Date timestamps are ms
-    return statSync(absPath).mtimeMs / MS_PER_SECOND;
-  } catch {
-    return null;
-  }
-};
-
-async function countPendingCurationsSafe(databaseUrl: string): Promise<number> {
-  try {
-    const memories = await fetchRecentMemoriesForCuration(databaseUrl, CURATION_MEM_POOL);
-    if (memories.length === 0) return 0;
-    // CuratorMemorySnapshot is a strict structural subset of CuratorMemory
-    // — missing only the open-ended index signature for arbitrary extra
-    // fields. The two-step ``unknown`` cast is the canonical TS escape
-    // when the strict-mode mismatch is purely about index signatures.
-    return countPendingClusters(
-      memories as unknown as readonly Record<string, unknown>[],
-      {
-        wikiRoot: SESSION_START_WIKI_ROOT,
-        pageMtime: SESSION_START_PAGE_MTIME,
-      },
-    );
-  } catch {
-    return 0;
-  }
-}
-
-// ── Pending drift + coverage counts (Phase C) ────────────────────────────
-//
-// Same failure-tolerant contract as countPendingCurationsSafe; any
-// error returns zeros and the preamble continues. Uses the
-// maintenance-stats engine so the numbers match the consolidate tool
-// + dashboard cards.
-//
-// source: packages/memory/src/wiki/maintenance-stats.ts
-
-// POSIX-style join for wiki rel paths.
-function joinWikiPath(root: string, rel: string): string {
-  if (!rel) return root;
-  if (rel.startsWith("/")) return rel;
-  return root.replace(/\/+$/, "") + "/" + rel.replace(/^\/+/, "");
-}
-
-// Walk a wiki directory and return rel-paths of every ``.md`` file.
-function listMdRelPaths(root: string): string[] {
-  const out: string[] = [];
-  function walk(absDir: string, prefix: string): void {
-    let entries;
-    try { entries = readdirSync(absDir, { withFileTypes: true }); } catch { return; }
-    for (const e of entries) {
-      if (e.name.startsWith(".")) continue;
-      const next = prefix ? `${prefix}/${e.name}` : e.name;
-      if (e.isDirectory()) walk(pathJoin(absDir, e.name), next);
-      else if (e.isFile() && e.name.endsWith(".md")) out.push(next);
-    }
-  }
-  walk(root, "");
-  return out;
-}
-
-function readWikiPageBody(root: string, rel: string): string | null {
-  try { return readFileSync(joinWikiPath(root, rel), "utf-8"); } catch { return null; }
-}
-
-function projectFileMtimeFn(projectRoot: string, rel: string): number | null {
-  try {
-    const MS_PER_SECOND = 1000; // source: ECMAScript Date timestamps are ms
-    return statSync(pathJoin(projectRoot, rel)).mtimeMs / MS_PER_SECOND;
-  } catch {
-    return null;
-  }
-}
-
-// Cap source files walked per project at SessionStart. Past this the
-// coverage count is an underestimate; the preamble nudge still fires
-// when the queue is non-empty, which is the load-bearing property.
-// source: this module — SessionStart latency budget
-const SESSION_START_COVERAGE_MAX_FILES = 5000;
-
-interface MaintenanceCountsLocal {
-  readonly drift: number;
-  readonly coverage: number;
-}
-
-async function countPendingMaintenanceSafe(): Promise<MaintenanceCountsLocal> {
-  try {
-    const FILE_KB = 100; // source: codebase_analyze max_file_size_kb default
-    const KB = 1024;     // source: IEC 80000-13 — 1 KiB = 1024 bytes
-    const stats = await computeWikiMaintenanceStats(
-      {
-        wikiRoot:        SESSION_START_WIKI_ROOT,
-        listMdPages:     async (root) => listMdRelPaths(root),
-        readPage:        async (root, rel) => readWikiPageBody(root, rel),
-        pageMtime:       SESSION_START_PAGE_MTIME,
-        projectRootFor:  autoResolveProjectRoot,
-        listSourceFiles: async (root, maxFiles) =>
-          collectSourceFiles(root, null, maxFiles, FILE_KB * KB)
-            .map((p) => p.startsWith(root) ? p.slice(root.length + 1) : p),
-        fileMtime:       projectFileMtimeFn,
-        extractDomain:   defaultExtractDomain,
-      },
-      { maxCoverageFiles: SESSION_START_COVERAGE_MAX_FILES },
-    );
-    return { drift: stats.totalDrift, coverage: stats.totalCoverage };
-  } catch {
-    return { drift: 0, coverage: 0 };
-  }
-}
+// Wiki backlog counts (curation + drift + coverage) live in
+// session-start-maintenance.ts so this file stays under §4.1.
+// source: ./session-start-maintenance.ts
 
 // ── Python binary resolution ──────────────────────────────────────────────
 /**
@@ -563,36 +431,63 @@ function maybeBackgroundConsolidate(): void {
   }
 }
 
+// Compiled worker filename for the native TS ingest-codebase background
+// process (G11). Sibling of session-start.js in the dist tree.
+// source: packages/memory/src/hooks/ingest-codebase-background.ts
+const INGEST_WORKER_FILENAME = "ingest-codebase-background.js";
+
+function resolveIngestWorkerPath(): string | null {
+  try {
+    const here = fileURLToPath(import.meta.url);
+    const candidate = join(dirname(here), INGEST_WORKER_FILENAME);
+    if (existsSync(candidate)) return candidate;
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Spawn background ingest_codebase when the graph is stale.
  *
  * Detached — returns immediately. No ordering assumption between
  * parent session and child ingest process (Lamport I2 above).
  *
+ * G11 (2026-05-18): the worker is now a native TS process. The
+ * previous implementation spawned the Python module
+ * ``mcp_server.hooks.ingest_codebase_background`` literally, which
+ * silently no-op'd on installs without Cortex's Python runtime.
+ *
  * source: cortex@ed33435 mcp_server/hooks/session_start.py:506-565 (_maybe_background_reanalyze)
+ * source: packages/memory/src/hooks/ingest-codebase-background.ts
  */
 function maybeBackgroundReanalyze(): void {
+  if (process.env["CORTEX_INGEST_BACKGROUND"] === "off") {
+    log("background ingest disabled (CORTEX_INGEST_BACKGROUND=off)");
+    return;
+  }
   try {
-    const pluginRoot = config.pluginRoot;
-    if (!pluginRoot) return;
-
-    const launcherPath = join(pluginRoot, "scripts", "launcher.py");
-    if (!existsSync(launcherPath)) return;
-
+    const workerPath = resolveIngestWorkerPath();
+    if (!workerPath) {
+      log("background pipeline reanalysis skipped: worker file not found (run a build?)");
+      return;
+    }
     const logDir = join(homedir(), ".claude", "methodology");
-    const logPath = join(logDir, "pipeline_reanalyze.log");
-
-    // Detach: fire-and-forget. The spawned process connects to DB independently.
+    if (!existsSync(logDir)) {
+      try { mkdirSync(logDir, { recursive: true }); } catch { /* best effort */ }
+    }
+    const logFile = join(logDir, "ingest_codebase_background.log");
     const child = spawn(
-      PYTHON_BIN,
-      [launcherPath, "mcp_server.hooks.ingest_codebase_background", config.projectRoot],
+      process.execPath,
+      [workerPath, config.projectRoot],
       {
         detached: true,
         stdio: ["ignore", "ignore", "ignore"],
+        env: process.env,
       },
     );
     child.unref();
-    log(`background pipeline reanalysis spawned → ${logPath}`);
+    log(`background pipeline reanalysis spawned (worker pid ${child.pid ?? "?"} → ${logFile})`);
   } catch (err) {
     log(`background pipeline reanalysis skipped: ${String(err)}`);
   }
