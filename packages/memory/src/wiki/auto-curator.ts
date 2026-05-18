@@ -21,7 +21,15 @@
  * store and the wiki writer.
  *
  * source: cortex@47b818d mcp_server/core/auto_curator.py
+ * source: cortex@HEAD~ mcp_server/core/auto_curator.py (2026-05-18 — task-record sections)
  */
+
+import {
+  formatPrompt,
+  kindSpecificSections,
+  memoriesBlock,
+  relatedBlock,
+} from "./prompt-sections.js";
 
 // 2026-05-17: thresholds tuned to mirror the cluster-quality bar of the
 // hand-authored pages from this session. Below these, a cluster doesn't
@@ -30,7 +38,9 @@
 export const MIN_MEMORIES_PER_CLUSTER = 4;
 export const MIN_AVG_HEAT_FOR_PAGE = 0.3;
 export const MIN_ENTITY_FREQ_FOR_TOPIC = 3;
-export const MAX_MEMORIES_PER_PROMPT = 25;
+// Re-exported from prompt-sections so existing callers see the same value.
+// source: prompt-sections.ts — canonical home for prompt-budget constants
+export { MAX_MEMORIES_PER_PROMPT } from "./prompt-sections.js";
 
 // 2026-05-17: how recent counts as "already authored" — skip re-curating
 // a cluster whose suggested path was written within this window. 30
@@ -51,8 +61,6 @@ const MS_PER_SECOND = 1000;
 // prompt under the model context budget.
 // source: cortex@47b818d mcp_server/core/auto_curator.py:_slugify default
 const SLUG_MAX_LEN = 60;
-// source: cortex@47b818d mcp_server/core/auto_curator.py:307 (content[:1200])
-const MEMORY_BODY_PROMPT_CAP = 1200;
 // source: cortex@47b818d mcp_server/core/auto_curator.py:107 (top 8 entities)
 const TOP_ENTITIES_PER_CLUSTER = 8;
 // source: cortex@47b818d mcp_server/core/auto_curator.py:_find_related_pages return slice
@@ -393,7 +401,7 @@ function kindDir(kind: string): string {
 
 // ── Authoring-prompt construction ──────────────────────────────────────
 
-// source: cortex@47b818d mcp_server/core/auto_curator.py::WIKI_AUTHORING_PROMPT
+// source: cortex@HEAD~ mcp_server/core/auto_curator.py:WIKI_AUTHORING_PROMPT (2026-05-18)
 const WIKI_AUTHORING_PROMPT = `You are Opus 4.7 authoring a single wiki page for the persistent-memory MCP server.
 
 You are given a topic-cohesive cluster of PG memories (tool events, decisions, lessons, notes) plus the suggested wiki path and any existing related wiki pages for cross-linking.
@@ -401,6 +409,8 @@ You are given a topic-cohesive cluster of PG memories (tool events, decisions, l
 # Your task
 
 Author **one** curated wiki page in Markdown that follows the documentation conventions below. The page must be substantive (target 8-15 KB), with structure, prose, diagrams, and citations. Do **not** produce a mechanical template. Do **not** dump raw memory content; synthesise.
+
+The wiki is the durable record of how this project works AND of every task done on it. Pages of kind \`adr\` are the canonical task-record format — every completed task gets one, structured so a future reader can reconstruct: what triggered the work, what constraints applied, how it was solved, what was delivered, and what it enables. Pages of kind \`reference\` / \`explanation\` cover stable scopes (architecture, services, api, data-flow, operations) so a reader opening the wiki cold can understand the codebase end-to-end.
 
 # Output format
 
@@ -421,33 +431,25 @@ audience: [developer, ...]
 ---
 \`\`\`
 
-# Required structural sections (in this order)
+# Required structural sections
 
-1. **# <title>** — H1 matching frontmatter title.
-2. **Lead paragraph** — one paragraph that says what the page is and why a reader should care.
-3. **Sections explaining the topic**:
-   - Use \`\`\`mermaid fences for flowcharts, sequence diagrams, state diagrams when the topic involves dataflow or state transitions.
-   - Use tables for taxonomies, parameter lists, comparisons.
-   - Use \`\`\` fences with language for code snippets.
-   - Cite specific source files with full paths.
-4. **## Why this design and not the alternatives** — explain the architectural choice. What was considered, what was rejected, why.
-5. **## What can go wrong** — failure modes the next reader should know about, with concrete symptoms.
-6. **## See also** — cross-links to related pages using \`[[wiki/path]]\` notation, plus specific source files.
-7. **## Primary sources** — if the topic touches research literature, cite the actual papers with full citations.
+{kind_specific_sections}
 
 # Conventions
 
 - Write authoritative declarative prose. No filler ("It's worth noting that..."). State facts directly.
 - When a number is given, name its source (e.g. "p50 latency 90ms — measured in benchmarks/longmemeval/run_benchmark.py").
 - When the topic has biological inspiration, name the paper that motivated the design.
-- Don't repeat what's already linked elsewhere — link to it.
+- Don't repeat what's already in [[reference/{domain}/architecture-overview]] — link to it.
 - Each diagram must add information that the table or prose cannot convey efficiently.
 - No phrases like "in this section we will" — just say it.
+- Mandatory elements means *constraints*, not steps. A constraint says "MUST honour X"; a step says "did X".
 
 # The cluster
 
 **Topic**: {topic}
 **Suggested wiki path**: {suggested_path}
+**Suggested kind**: {kind}
 **Domain**: {domain}
 **Memory count**: {n_memories}
 **Top entities in cluster**: {entities}
@@ -463,10 +465,6 @@ audience: [developer, ...]
 
 Author the wiki page now. Output only the Markdown body, frontmatter first.
 `;
-
-function formatPrompt(template: string, vars: Readonly<Record<string, string | number>>): string {
-  return template.replace(/\{(\w+)\}/g, (_, k: string) => String(vars[k] ?? `{${k}}`));
-}
 
 /**
  * Construct the structured prompt for an LLM to author the cluster's page.
@@ -486,33 +484,17 @@ export function buildAuthoringPrompt(
   today: string = "",
 ): string {
   const todayStr = today || new Date().toISOString().slice(0, "YYYY-MM-DD".length);
-  const capped = cluster.memory_contents.slice(0, MAX_MEMORIES_PER_PROMPT);
-  const memBlocks: string[] = [];
-  capped.forEach((content, idx) => {
-    const tags = cluster.memory_tags[idx] ?? [];
-    let head = content.slice(0, MEMORY_BODY_PROMPT_CAP).trimEnd();
-    if (content.length > MEMORY_BODY_PROMPT_CAP) {
-      head += "\n...[memory truncated, full content available via recall]";
-    }
-    const tagStr = tags.length ? tags.join(", ") : "(no tags)";
-    memBlocks.push(`### Memory ${idx + 1} (tags: ${tagStr})\n\n${head}`);
-  });
-  const memoriesBlock = memBlocks.length ? memBlocks.join("\n\n") : "(none — cluster filtered out)";
-
-  const relatedBlock = relatedPages.length
-    ? relatedPages.map((p) => `- [[${p}]]`).join("\n")
-    : "(none yet — this is a fresh topic)";
-
   return formatPrompt(WIKI_AUTHORING_PROMPT, {
-    kind:               cluster.suggested_kind,
-    domain:             cluster.domain,
-    today:              todayStr,
-    topic:              cluster.topic,
-    suggested_path:     cluster.suggested_path,
-    n_memories:         cluster.memory_ids.length,
-    entities:           cluster.entities.slice(0, TOP_ENTITIES_PER_CLUSTER).join(", ") || "(none extracted)",
-    related_pages_block: relatedBlock,
-    memories_block:      memoriesBlock,
+    kind:                    cluster.suggested_kind,
+    domain:                  cluster.domain,
+    today:                   todayStr,
+    topic:                   cluster.topic,
+    suggested_path:          cluster.suggested_path,
+    n_memories:              cluster.memory_ids.length,
+    entities:                cluster.entities.slice(0, TOP_ENTITIES_PER_CLUSTER).join(", ") || "(none extracted)",
+    related_pages_block:     relatedBlock(relatedPages),
+    memories_block:          memoriesBlock(cluster.memory_contents, cluster.memory_tags),
+    kind_specific_sections:  kindSpecificSections(cluster.suggested_kind),
   });
 }
 
