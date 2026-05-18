@@ -242,26 +242,43 @@ function arrayOrUndefined(v: unknown): string[] | undefined {
  * Read a wiki page by relative path.
  * source: cortex@ed33435 mcp_server/handlers/wiki_api.py (read_wiki_page)
  *
- * precondition:  relPath is a relative filename (no directory traversal).
+ * precondition:  relPath is a wiki-relative path (subdirectories allowed,
+ *                must not escape wikiDir via .. or absolute components).
  * postcondition: returns { content, rel_path } or { error }.
- * FAILS_ON: relPath contains ".." or absolute path components.
+ * FAILS_ON: relPath escapes wikiDir after path.resolve normalisation.
+ *
+ * Phase B/C (2026-05-18): the previous check ``basename(p) === p`` only
+ * allowed top-level files and rejected every wiki page in a
+ * ``<kind>/<domain>/<slug>.md`` subdir — the natural layout for any
+ * real wiki. Every page click in the UI returned "invalid path" and
+ * showed "Page not found" in the main pane. Replaced with a
+ * normalize-then-prefix-check that allows subdirectories while still
+ * rejecting traversal (CWE-22).
  */
 function readWikiPage(wikiDir: string, relPath: string): Record<string, unknown> {
-  // Security: reject traversal (CWE-22)
-  const safe = path.basename(relPath);
-  if (!safe || safe.startsWith(".") || safe !== relPath.replace(/^\/+/, "")) {
+  // Reject absolute paths and explicit ``..`` segments before any
+  // filesystem access. The post-resolve prefix check below is the
+  // load-bearing guard; this is a fast early-out.
+  if (!relPath || relPath.startsWith("/") || relPath.includes("\0")) {
     return { error: "invalid path" };
   }
-  const full = path.join(wikiDir, safe);
-  const resolved = path.resolve(full);
-  if (!resolved.startsWith(path.resolve(wikiDir))) {
+  const cleanRel = relPath.replace(/^\.\/+/, "").replace(/^\/+/, "");
+  if (cleanRel.split("/").some((seg) => seg === "" || seg === "..")) {
+    return { error: "invalid path" };
+  }
+  const wikiAbs = path.resolve(wikiDir);
+  const resolved = path.resolve(wikiAbs, cleanRel);
+  // Resolved path must stay inside wikiDir. Compare with a trailing
+  // separator to avoid the ``/wiki`` vs ``/wiki-other`` prefix
+  // collision attack (CWE-22).
+  if (resolved !== wikiAbs && !resolved.startsWith(wikiAbs + path.sep)) {
     return { error: "path traversal rejected" };
   }
   try {
     const content = fs.readFileSync(resolved, "utf8");
-    return { content, rel_path: safe };
+    return { content, rel_path: cleanRel };
   } catch {
-    return { error: "not found", rel_path: safe };
+    return { error: "not found", rel_path: cleanRel };
   }
 }
 

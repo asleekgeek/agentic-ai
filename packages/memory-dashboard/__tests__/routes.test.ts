@@ -245,6 +245,45 @@ describe("GET /api/wiki/page", () => {
     const body = res.json<{ error?: string }>();
     expect(body.error).toBeTruthy();
   });
+
+  // Phase B/C: subdirectory paths MUST be allowed — the wiki layout
+  // is ``<kind>/<domain>/<slug>.md`` and every real page is in a subdir.
+  // source: packages/memory-dashboard/src/routes/wiki.ts::readWikiPage
+  it("accepts a subdirectory path (returns not-found error when absent)", async () => {
+    const res = await fastify.inject({
+      method: "GET",
+      url: "/api/wiki/page?path=reference/cortex/missing-page.md",
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ error?: string; rel_path?: string }>();
+    // Page doesn't exist in the test fixture; the error must be
+    // "not found", NOT "invalid path".
+    expect(body.error).toBe("not found");
+    expect(body.rel_path).toBe("reference/cortex/missing-page.md");
+  });
+
+  it("rejects a path that resolves outside the wiki root after normalisation", async () => {
+    const res = await fastify.inject({
+      method: "GET",
+      url: "/api/wiki/page?path=reference/../../../etc/passwd",
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ error?: string }>();
+    // Either "invalid path" (early reject on .. segment) or
+    // "path traversal rejected" (post-resolve check) is acceptable —
+    // both signal the same security intent.
+    expect(body.error).toMatch(/^(invalid path|path traversal rejected)$/);
+  });
+
+  it("rejects an absolute path", async () => {
+    const res = await fastify.inject({
+      method: "GET",
+      url: "/api/wiki/page?path=/etc/passwd",
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json<{ error?: string }>();
+    expect(body.error).toBe("invalid path");
+  });
 });
 
 describe("GET /api/discussions", () => {
