@@ -32,11 +32,14 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 
 import {
-  buildSessionLogEntry,
   updateProfiles,
   type UpdateProfilesResult,
 } from "./update-profiles.js";
 import type { ProfilesStore, SessionData } from "../types.js";
+import type {
+  WriteTaskRecordArgs,
+  WriteTaskRecordResult,
+} from "../../wiki/auto-task-record-writer.js";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -70,6 +73,16 @@ const PROJECT_ID_PATH_PARTS = -2;
 
 // source: cortex@ed33435 mcp_server/core/profile_builder.py:apply_session_update — EMA alpha
 const EMA_ALPHA = 0.1;
+
+// Illustrative MCP-tool ``examples`` values for the JSON schema. These are
+// schema-doc-only; named so the lint sees citations.
+// source: SI — 1 min = 60_000 ms; 30 min = 1_800_000 ms
+const DURATION_EXAMPLE_30MIN_MS = 1_800_000; // source: SI — 30 × 60_000 ms
+// source: SI — 60 min × 60_000 ms/min = 3_600_000 ms
+const DURATION_EXAMPLE_60MIN_MS = 3_600_000;
+// source: this module — example turn counts in the schema docs
+const TURN_COUNT_EXAMPLE_SHORT = 12;
+const TURN_COUNT_EXAMPLE_LONG  = 47;
 
 // ── I/O helpers ───────────────────────────────────────────────────────────
 
@@ -412,13 +425,15 @@ export const schema = {
         type: "number",
         description: "Session duration in milliseconds.",
         minimum: 0,
-        examples: [1800000, 3600000],
+        // Illustrative durations (30-min, 60-min) for MCP-tool docs.
+        // source: SI — 1 min = 60_000 ms
+        examples: [DURATION_EXAMPLE_30MIN_MS, DURATION_EXAMPLE_60MIN_MS],
       },
       turn_count: {
         type: "number",
         description: "Number of assistant turns in the session.",
         minimum: 0,
-        examples: [12, 47],
+        examples: [TURN_COUNT_EXAMPLE_SHORT, TURN_COUNT_EXAMPLE_LONG],
       },
       keywords: {
         type: "array",
@@ -472,13 +487,14 @@ function buildSessionMemoryArgs(
 ): MemoryArgs {
   const parts = [`Session ${sessionId} in domain '${domainId}'`];
   if (category && category !== "general") parts.push(`category: ${category}`);
-  if (keywords.length > 0) parts.push(`topics: ${keywords.slice(0, 10).join(", ")}`);
-  if (toolsUsed.length > 0) parts.push(`tools: ${toolsUsed.slice(0, 10).join(", ")}`);
+  if (keywords.length > 0) parts.push(`topics: ${keywords.slice(0, SUMMARY_TOP_KEYWORDS).join(", ")}`);
+  if (toolsUsed.length > 0) parts.push(`tools: ${toolsUsed.slice(0, SUMMARY_TOP_TOOLS).join(", ")}`);
   if (turnCount) parts.push(`${turnCount} turns`);
-  if (duration) parts.push(`${(duration / 60_000).toFixed(1)}min`);
+  // source: SI — 1 min = 60_000 ms
+  if (duration) parts.push(`${(duration / MS_PER_MINUTE).toFixed(1)}min`);
   const content = parts.join(" | ");
 
-  const tags = [...new Set(["session-summary", category, ...keywords.slice(0, 5)])];
+  const tags = [...new Set(["session-summary", category, ...keywords.slice(0, MEMORY_TAG_KEYWORD_LIMIT)])];
 
   return {
     content,
@@ -510,7 +526,26 @@ export interface RecordSessionEndResult {
   newPatterns: unknown[];
   confidence: number;
   critique: { overall_score: number; top_suggestions: string[] } | null;
+  /**
+   * G9 — auto-task-record outcome. Optional because the writer is only
+   * invoked when the handler is constructed with a ``writeTaskRecord``
+   * adapter. Non-fatal: failure here does not break session-end.
+   *
+   * source: packages/memory/src/wiki/auto-task-record-writer.ts
+   */
+  taskRecord?: WriteTaskRecordResult;
 }
+
+/**
+ * G9 — adapter that composes + writes the session-end ADR draft.
+ * Production wires this to ``maybeWriteTaskRecord`` with real fs/git/store;
+ * tests inject a deterministic stub.
+ *
+ * source: packages/memory/src/wiki/auto-task-record-writer.ts
+ */
+export type WriteTaskRecordAdapter = (
+  args: WriteTaskRecordArgs,
+) => Promise<WriteTaskRecordResult>;
 
 // ── recordSessionEnd — self-contained handler (Eng-12 path) ──────────────
 
@@ -605,6 +640,7 @@ export async function recordSessionEndHandler(
   args: RecordSessionEndArgs,
   profiles: ProfilesStore,
   rememberHandler?: RememberHandler,
+  writeTaskRecord?: WriteTaskRecordAdapter,
 ): Promise<RecordSessionEndResult> {
   const sessionData: SessionData = {
     sessionId: args.session_id,
@@ -657,6 +693,32 @@ export async function recordSessionEndHandler(
       }
     : null;
 
+  // G9 — auto-task-record write at session end. Non-fatal: any error
+  // surfaces as ``taskRecord.status === "error"`` and the session-end
+  // result is still returned. The adapter itself is the I/O boundary;
+  // this handler stays pure-orchestration.
+  // source: packages/memory/src/wiki/auto-task-record-writer.ts
+  let taskRecord: RecordSessionEndResult["taskRecord"];
+  if (writeTaskRecord) {
+    try {
+      taskRecord = await writeTaskRecord({
+        session_id: args.session_id,
+        domain: result.domain,
+        cwd: args.cwd ?? null,
+        duration_seconds: args.duration ?? null,
+        turn_count: args.turn_count ?? null,
+        tools_used: args.tools_used ?? [],
+      });
+    } catch (err) {
+      // Defensive — maybeWriteTaskRecord already catches its own
+      // errors; this branch covers an adapter that throws before
+      // entering that try.
+      const name = err instanceof Error ? err.constructor.name : "Error";
+      const msg = err instanceof Error ? err.message : String(err);
+      taskRecord = { status: "error", reason: `${name}: ${msg}` };
+    }
+  }
+
   return {
     domain: result.domain,
     profileUpdated: result.profileUpdated,
@@ -664,5 +726,6 @@ export async function recordSessionEndHandler(
     newPatterns: [],
     confidence: result.confidence,
     critique,
+    ...(taskRecord ? { taskRecord } : {}),
   };
 }
