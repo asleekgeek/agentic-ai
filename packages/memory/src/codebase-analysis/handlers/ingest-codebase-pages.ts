@@ -78,9 +78,26 @@ export function writeProcessPages(
 ): string[] {
   /**
    * Create wiki reference pages for each process. Returns paths written.
+   *
+   * 2026-05-17 (user feedback "the wiki is still far from being curated
+   * documentation"): processes with zero symbols-in-flow produce a
+   * 268-byte stub that carries no information. When the AST graph is
+   * empty (the common case until ``analyze_codebase`` has been run for
+   * a project) EVERY process page is empty — 1215 stubs in one audit,
+   * 100% of reference/codebase/. Filter them out: a Process page
+   * without symbols has nothing to document.
+   *
+   * source: cortex@83a6834 mcp_server/handlers/ingest_codebase_pages.py:54-85
    */
   const written: string[] = [];
+  let skippedEmpty = 0;
   for (const proc of processes) {
+    const symbols = (proc["symbols"] as unknown[]) ?? [];
+    const symbolCount = (proc["symbol_count"] as number) ?? symbols.length;
+    if (symbolCount === 0) {
+      skippedEmpty += 1;
+      continue;
+    }
     try {
       const [relPath, markdown] = renderProcessPage(proc);
       const fullPath = join(wikiRoot, relPath);
@@ -90,6 +107,15 @@ export function writeProcessPages(
     } catch {
       // best-effort
     }
+  }
+  if (skippedEmpty > 0) {
+    // Logger pattern in this package is a structured console.info so
+    // operators running the MCP server can grep for the marker.
+    // source: cortex@83a6834 logger.info("skipped %d empty process pages")
+    // eslint-disable-next-line no-console -- operator-facing audit line, intentional
+    console.info(
+      `[ingest-codebase-pages] skipped ${skippedEmpty} empty process pages (symbol_count=0)`,
+    );
   }
   return written;
 }
