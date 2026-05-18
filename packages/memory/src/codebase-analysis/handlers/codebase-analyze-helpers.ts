@@ -69,28 +69,38 @@ function* _walkDir(root: string): Generator<string> {
   }
 }
 
-export function collectSourceFiles(
+/** Return true iff ``path`` is a source file we should keep. */
+function _fileMatches(
+  path: string,
+  langFilter: ReadonlySet<string> | null,
+  maxBytes: number,
+): boolean {
+  const ext = path.slice(path.lastIndexOf(".")).toLowerCase();
+  const lang = EXT_TO_LANG[ext];
+  if (!lang) return false;
+  if (langFilter && !langFilter.has(lang)) return false;
+  try {
+    const st = statSync(path);
+    if (st.size > maxBytes) return false;
+  } catch {
+    return false;
+  }
+  return true;
+}
+
+/**
+ * Bounded-candidate walk: take ``maxFiles * CANDIDATE_MULTIPLIER`` paths
+ * then sort for deterministic ordering. See ADR-0045 §R2.
+ *
+ * source: cortex@2f42428 mcp_server/handlers/codebase_analyze_helpers.py::_collect_bounded
+ */
+function _collectBounded(
   root: string,
-  languages: string[] | null | undefined,
+  langFilter: ReadonlySet<string> | null,
   maxFiles: number,
   maxBytes: number,
 ): string[] {
-  /**
-   * Walk directory and collect source files matching language filters.
-   *
-   * Preconditions:
-   *   - `root` is an existing directory.
-   *   - `maxFiles > 0` and `maxBytes > 0`.
-   *
-   * Postconditions:
-   *   - Returns at most `maxFiles` paths.
-   *   - Peak memory footprint is O(maxFiles * CANDIDATE_MULTIPLIER) paths,
-   *     not O(tree_size) — see ADR-0045 §R2.
-   */
-  const langFilter = languages && languages.length > 0 ? new Set(languages) : null;
   const candidateCap = Math.max(maxFiles * CANDIDATE_MULTIPLIER, maxFiles);
-
-  // Collect bounded candidate set
   const candidates: string[] = [];
   for (const p of _walkDir(root)) {
     candidates.push(p);
@@ -101,19 +111,62 @@ export function collectSourceFiles(
   const files: string[] = [];
   for (const p of candidates) {
     if (files.length >= maxFiles) break;
-    const ext = p.slice(p.lastIndexOf(".")).toLowerCase();
-    const lang = EXT_TO_LANG[ext];
-    if (!lang) continue;
-    if (langFilter && !langFilter.has(lang)) continue;
-    try {
-      const st = statSync(p);
-      if (st.size > maxBytes) continue;
-    } catch {
-      continue;
-    }
-    files.push(p);
+    if (_fileMatches(p, langFilter, maxBytes)) files.push(p);
   }
   return files;
+}
+
+/**
+ * Walk the entire tree, filter, then sort. Memory O(filteredCount).
+ *
+ * source: cortex@2f42428 mcp_server/handlers/codebase_analyze_helpers.py::_collect_unbounded
+ */
+function _collectUnbounded(
+  root: string,
+  langFilter: ReadonlySet<string> | null,
+  maxBytes: number,
+): string[] {
+  const survivors: string[] = [];
+  for (const p of _walkDir(root)) {
+    if (_fileMatches(p, langFilter, maxBytes)) survivors.push(p);
+  }
+  survivors.sort();
+  return survivors;
+}
+
+export function collectSourceFiles(
+  root: string,
+  languages: string[] | null | undefined,
+  maxFiles: number,
+  maxBytes: number,
+): string[] {
+  /**
+   * Walk directory and collect source files matching language filters.
+   *
+   * Preconditions:
+   *   - ``root`` is an existing directory.
+   *   - ``maxBytes > 0``.
+   *   - ``maxFiles`` may be any integer; ``<= 0`` means "no limit"
+   *     and processes every matching file in the tree.
+   *
+   * Postconditions:
+   *   - When ``maxFiles > 0``: returns at most ``maxFiles`` paths;
+   *     peak memory is O(maxFiles * CANDIDATE_MULTIPLIER) paths
+   *     (ADR-0045 §R2). On a 10M-file monorepo with maxFiles=5000
+   *     we hold at most 50K paths during the sort.
+   *   - When ``maxFiles <= 0``: returns every matching path; peak
+   *     memory is O(filteredCount) — we never materialise the whole
+   *     tree, only the post-filter survivors.
+   *   - Each returned path is a regular file whose extension maps to
+   *     a known language (and satisfies ``languages`` if supplied),
+   *     and whose size is ``<= maxBytes``.
+   *
+   * source: cortex@2f42428 mcp_server/handlers/codebase_analyze_helpers.py::collect_source_files
+   */
+  const langFilter =
+    languages && languages.length > 0 ? new Set(languages) : null;
+  if (maxFiles <= 0) return _collectUnbounded(root, langFilter, maxBytes);
+  return _collectBounded(root, langFilter, maxFiles, maxBytes);
 }
 
 // ── Hash-based change detection ───────────────────────────────────────────

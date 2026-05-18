@@ -37,12 +37,13 @@ import { launchDashboard } from "@agentic/memory-dashboard/launcher";
 const MIN_IMPORTANCE_DEFAULT = 0.3;
 const TOP_SYMBOLS_DEFAULT    = 50;
 const TOP_PROCESSES_DEFAULT  = 10;
-// source: cortex@ed33435 mcp_server/handlers/codebase_analyze.py — default/max values
-// NOTE: Python Cortex uses 500 as default because callers always pass max_files explicitly.
-// For our zero-config UX the default is the safety cap so users don't silently hit a wall
-// on first use. source: 2026-05-08 UX decision — prefer generous default over Python parity.
-const MAX_FILES_DEFAULT        = 50000; // source: zero-config UX default = safety cap (see note above)
-const MAX_FILES_MAX            = 50000; // source: cortex codebase_analyze.py — max_files upper bound
+// source: cortex@2f42428 mcp_server/handlers/codebase_analyze.py — max_files semantics
+// Cortex 2026-05-12 fix(#25): 0 (default) means "no limit — process every matching
+// file in the tree". Positive values cap the walk via _collectBounded (preserves
+// ADR-0045 §R2 streaming). The previous default of 500 truncated real codebases
+// at the cap; ai-architect-prd-builder and ai-prd hit 5000 exactly during full-
+// scale bootstrap, silently dropping files from the knowledge graph.
+const MAX_FILES_DEFAULT        = 0; // source: cortex@2f42428 codebase_analyze.py:96 — default 0 = unbounded
 const MAX_FILE_SIZE_KB_DEFAULT = 100;   // source: cortex codebase_analyze.py — max_file_size_kb default
 const MAX_FILE_SIZE_KB_MAX     = 4096;  // source: standard 4MB upper bound (also in EXEMPT_PATTERN)
 
@@ -146,8 +147,9 @@ export function registerIngestTools(server: McpServer, deps?: IngestDeps): void 
       inputSchema: {
         directory:        z.string().optional().describe("Root directory to analyze"),
         languages:        z.array(z.string()).optional().describe("Restrict to specific languages"),
-        // source: cortex@ed33435 mcp_server/handlers/codebase_analyze.py — default max_files
-        max_files:        z.number().int().min(1).max(MAX_FILES_MAX).default(MAX_FILES_DEFAULT).describe("Max files to process"),
+        // source: cortex@2f42428 mcp_server/handlers/codebase_analyze.py — max_files semantics
+        // 0 (default) = no limit. Positive values cap the walk.
+        max_files:        z.number().int().min(0).default(MAX_FILES_DEFAULT).describe("Max files to process (0 = no limit)"),
         // source: cortex@ed33435 mcp_server/handlers/codebase_analyze.py — default max_file_size_kb
         max_file_size_kb: z.number().int().min(1).max(MAX_FILE_SIZE_KB_MAX).default(MAX_FILE_SIZE_KB_DEFAULT).describe("Skip files larger than this KB"),
         incremental:      z.boolean().default(true).describe("Only reprocess changed files"),
