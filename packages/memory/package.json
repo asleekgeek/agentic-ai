@@ -211,6 +211,10 @@
       "import": "./dist/hooks/consolidate-background.js",
       "types": "./dist/hooks/consolidate-background.d.ts"
     },
+    "./wiki/domain-coverage.js": {
+      "import": "./dist/wiki/domain-coverage.js",
+      "types": "./dist/wiki/domain-coverage.d.ts"
+    },
     "./import/backfill-memories.js": {
       "import": "./dist/import/backfill-memories.js",
       "types": "./dist/import/backfill-memories.d.ts"

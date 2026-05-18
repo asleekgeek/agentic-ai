@@ -29,6 +29,14 @@
   //   maintenanceByProject[name] = { drift: N, coverage: N, projectRoot: <path|null> }
   // null = not yet fetched; {} = fetched but empty.
   var maintenanceByProject = null;
+  // G6 / G12 — per-domain scope coverage from /api/wiki/projects.
+  //   projectCoverageByDomain[domain] = {
+  //     scope_covered, scope_total, scope_coverage_ratio,
+  //     missing_scopes, file_coverage_ratio
+  //   }
+  // null = not yet fetched; {} = fetched but empty.
+  // source: cortex@HEAD~ mcp_server/server/http_standalone_wiki.py:serve_wiki_projects
+  var projectCoverageByDomain = null;
 
   var KIND_ORDER = ['adr', 'spec', 'lesson', 'convention', 'note', 'guide', 'domain', 'entity', 'index', 'misc'];
   var KIND_LABELS = {
@@ -100,6 +108,10 @@
         // cards render with placeholder badges first, then update
         // when /api/wiki/maintenance returns.
         fetchMaintenanceStats();
+        // G6 / G12: fetch the per-project scope-coverage audit so the
+        // welcome grid shows ``scope X/15`` badges.
+        // source: cortex@HEAD~ mcp_server/server/http_standalone_wiki.py
+        fetchProjectCoverage();
       })
       .catch(function(err) {
         console.warn('[cortex] Wiki list fetch error:', err.message);
@@ -434,6 +446,37 @@
       });
   }
 
+  // ── Project coverage stats (G6 / G12) ──
+  // Fetches /api/wiki/projects (server-side scope-coverage audit) and
+  // merges the per-domain ratios + missing_scopes into
+  // ``projectCoverageByDomain``. The welcome grid renders coverage
+  // chips from this map; missing or zero means the card shows nothing
+  // extra. Failure is non-fatal.
+  // source: cortex@HEAD~ mcp_server/server/http_standalone_wiki.py:serve_wiki_projects
+  function fetchProjectCoverage() {
+    fetch('/api/wiki/projects')
+      .then(function(r) { return r.ok ? r.json() : null; })
+      .then(function(data) {
+        if (!data || !Array.isArray(data.projects)) return;
+        var map = {};
+        data.projects.forEach(function(p) {
+          map[p.domain] = {
+            scope_covered:        Number(p.scope_covered || 0),
+            scope_total:          Number(p.scope_total || 0),
+            scope_coverage_ratio: typeof p.scope_coverage_ratio === 'number' ? p.scope_coverage_ratio : null,
+            missing_scopes:       Array.isArray(p.missing_scopes) ? p.missing_scopes : [],
+            file_coverage_ratio:  typeof p.file_coverage_ratio === 'number' ? p.file_coverage_ratio : null,
+          };
+        });
+        projectCoverageByDomain = map;
+        if (!currentProject && visible) showProjectsLanding();
+      })
+      .catch(function(err) {
+        console.warn('[cortex] Wiki projects fetch error:', err && err.message);
+        projectCoverageByDomain = {};
+      });
+  }
+
   // ── Projects (Phase B) ──
 
   // Returns the page list scoped to the current project. When
@@ -616,6 +659,26 @@
           kinds.appendChild(chip);
         });
         card.appendChild(kinds);
+
+        // G6 / G12: scope-coverage badge. Shows ``scope X/Y (Z%)``
+        // plus the first three missing scope names so the user sees
+        // the work the autonomous loop has queued up. Hidden when the
+        // /api/wiki/projects fetch hasn't completed yet or the project
+        // has no scope-coverage data (e.g. _general bucket).
+        var pcov = projectCoverageByDomain ? projectCoverageByDomain[proj.name] : null;
+        if (pcov && pcov.scope_total > 0) {
+          var covRow = el('div', 'wiki-project-card-coverage');
+          covRow.style.cssText = 'font-size:11px;margin-top:6px;opacity:0.85;';
+          var pct = pcov.scope_coverage_ratio !== null
+            ? Math.round(pcov.scope_coverage_ratio * 100)
+            : 0;
+          var parts = ['scope: ' + pcov.scope_covered + '/' + pcov.scope_total + ' (' + pct + '%)'];
+          if (pcov.missing_scopes && pcov.missing_scopes.length) {
+            parts.push('missing: ' + pcov.missing_scopes.slice(0, 3).join(', ') + (pcov.missing_scopes.length > 3 ? '…' : ''));
+          }
+          covRow.textContent = parts.join(' · ');
+          card.appendChild(covRow);
+        }
 
         // Phase C: maintenance badges. Show "drift N" / "coverage N"
         // when the maintenance fetch has returned a positive count

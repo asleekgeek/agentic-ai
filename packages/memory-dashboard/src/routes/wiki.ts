@@ -33,6 +33,7 @@ import {
 import { autoResolveProjectRoot } from "@agentic/memory/wiki/project-roots.js";
 import { collectSourceFiles } from "@agentic/memory/codebase-analysis/handlers/codebase-analyze-helpers.js";
 import type { PageMtimeFn } from "@agentic/memory/wiki/auto-curator.js";
+import { serveWikiProjects } from "./wiki-projects.js";
 
 // ── Named constants ───────────────────────────────────────────────────────────
 const HTTP_400 = 400; // source: RFC 7231 §6.5.1 — Bad Request
@@ -553,6 +554,30 @@ export async function registerWikiRoutes(fastify: FastifyInstance): Promise<void
       return reply.status(HTTP_500).send({ error: err instanceof Error ? err.constructor.name : "UnknownError" }); // source: RFC 7231 §6.6 — 500 Internal Server Error
     }
   });
+
+  /**
+   * GET /api/wiki/projects
+   *
+   * Project-organized wiki index for the welcome grid. Walks
+   * ``<wiki>/<kind>/<domain>/*.md``, groups by domain, then layers
+   * the G6 scope-coverage audit + file-coverage audit on top so the
+   * UI can render coverage badges per project.
+   *
+   * Response: ``{ projects: [{ domain, page_total,
+   *   page_counts_by_kind, scope_covered, scope_total,
+   *   scope_coverage_ratio, missing_scopes, file_covered,
+   *   file_total, file_coverage_ratio }] }``.
+   *
+   * source: cortex@HEAD~ mcp_server/server/http_standalone_wiki.py:serve_wiki_projects (2026-05-18)
+   */
+  fastify.get("/api/wiki/projects", async (_req, reply) => {
+    try {
+      const projects = await serveWikiProjects(getWikiDir());
+      return reply.send({ projects });
+    } catch (err) {
+      return reply.status(HTTP_500).send({ error: err instanceof Error ? err.constructor.name : "UnknownError" }); // source: RFC 7231 §6.6 — 500 Internal Server Error
+    }
+  });
 }
 
 // ── Maintenance-stats glue for the dashboard ────────────────────────────
@@ -645,3 +670,4 @@ async function computeMaintenanceStatsForDashboard(): Promise<ReturnType<typeof 
     { maxCoverageFiles: DASHBOARD_COVERAGE_MAX_FILES },
   );
 }
+
