@@ -13,7 +13,7 @@
  * source: packages/memory/src/wiki/storage/wiki-store.ts (filesystem primitives)
  */
 
-import { mkdirSync, writeFileSync, rmSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync, statSync, readFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { homedir } from "node:os";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -27,7 +27,8 @@ import { handler as wikiReindexHandler } from "@agentic/memory/wiki/handlers/wik
 import { handler as wikiPurgeHandler } from "@agentic/memory/wiki/handlers/wiki-purge.js";
 import { handler as wikiVerifyHandler } from "@agentic/memory/wiki/handlers/wiki-verify.js";
 import { handler as curateWikiHandler } from "@agentic/memory/wiki/handlers/curate-wiki.js";
-import type { CuratorMemory } from "@agentic/memory/wiki/auto-curator.js";
+import type { CuratorMemory, PageMtimeFn } from "@agentic/memory/wiki/auto-curator.js";
+import { collectSourceFiles as codebaseCollectSourceFiles } from "@agentic/memory/codebase-analysis/handlers/codebase-analyze-helpers.js";
 import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-store.js";
 import {
   readPage as fsReadPage,
@@ -103,6 +104,62 @@ async function asyncDeleteFile(absPath: string): Promise<void> {
 // source: ADR-0046 Phase 2 — AP symbol verification deferred until AP graph is live
 // source: docs/ADR/0046-change-impact-analysis.md §Phase 2
 const AP_ENABLED = false;
+
+// Phase C — fs adapters for source-drift + file-coverage.
+// Failure isolation: every call to fs is wrapped so an ENOENT or
+// permission error returns null/[] and the curator treats the page or
+// file as "not present, not stale", never throwing through the MCP
+// surface.
+// source: packages/memory/src/wiki/{source-drift,file-coverage}.ts
+
+// File-size cap for the coverage scan. Mirrors codebase-analyze's
+// default (100 KB) since the same predicate filters here.
+// source: cortex@2f42428 codebase_analyze.py — max_file_size_kb default = 100
+// source: IEC 80000-13 — 1 kibibyte = 1024 bytes
+const FILE_SIZE_KB_DEFAULT = 100; // source: cortex@2f42428 codebase_analyze.py
+const BYTES_PER_KB = 1024; // source: IEC 80000-13:2008 §21-12
+const MAX_FILE_BYTES = FILE_SIZE_KB_DEFAULT * BYTES_PER_KB;
+
+// Wiki-page mtime adapter. Resolves seconds-since-epoch or null on
+// ENOENT. Used by the recently-authored skip filter and the drift
+// scanner's page-mtime side.
+const mtimeAdapter: PageMtimeFn = (absPath: string): number | null => {
+  try {
+    const MS_PER_SECOND = 1000; // source: ECMAScript Date timestamps are ms
+    return statSync(absPath).mtimeMs / MS_PER_SECOND;
+  } catch {
+    return null;
+  }
+};
+
+// Project-rooted mtime adapter for source-drift. Resolves relative
+// citation paths against the supplied project root. Returns null on
+// ENOENT or when projectRoot is absent.
+function makeProjectMtime(projectRoot: string | undefined): PageMtimeFn | undefined {
+  if (!projectRoot) return undefined;
+  return (relPath: string): number | null => {
+    try {
+      const MS_PER_SECOND = 1000; // source: ECMAScript Date timestamps are ms
+      return statSync(join(projectRoot, relPath)).mtimeMs / MS_PER_SECOND;
+    } catch {
+      return null;
+    }
+  };
+}
+
+// Project-rooted file reader for file-coverage prompts.
+function makeProjectReader(
+  projectRoot: string | undefined,
+): ((projectRoot: string, relPath: string) => string | null) | undefined {
+  if (!projectRoot) return undefined;
+  return (_pr: string, relPath: string): string | null => {
+    try {
+      return readFileSync(join(projectRoot, relPath), "utf-8");
+    } catch {
+      return null;
+    }
+  };
+}
 
 // ── Error envelope helper ─────────────────────────────────────────────────────
 
@@ -429,6 +486,27 @@ export function registerWikiTools(server: McpServer, deps?: WikiToolDeps): void 
           min_avg_heat:     z.number().min(0).max(1).optional().describe("Minimum cluster average heat."),
           recent_only:      z.boolean().optional().describe("Use recently-accessed memories only (default true)."),
           memory_pool_size: z.number().int().min(1).optional().describe("Memory pool size to draw from."),
+          // Phase C — drift + coverage. Opt-in via these flags; both
+          // require project_root to resolve relative citation paths.
+          // source: packages/memory/src/wiki/{source-drift,file-coverage}.ts
+          include_drift: z.boolean().optional().describe(
+            "Phase C: also emit refresh jobs for pages whose cited " +
+            "source files have mtimes later than the page mtime " +
+            "(requires project_root).",
+          ),
+          include_file_coverage: z.boolean().optional().describe(
+            "Phase C: also emit authoring jobs for source files that " +
+            "have no wiki page yet under reference/<domain>/<slug>.md " +
+            "(requires project_root + domain).",
+          ),
+          project_root: z.string().optional().describe(
+            "Absolute path to the project root. Used by Phase C to " +
+            "resolve relative citations and walk for uncovered files.",
+          ),
+          max_files: z.number().int().min(0).optional().describe(
+            "Max source files scanned for coverage. 0 (default) = " +
+            "unbounded; matches codebase_analyze.",
+          ),
         },
       },
       async (args) => {
@@ -462,6 +540,19 @@ export function registerWikiTools(server: McpServer, deps?: WikiToolDeps): void 
             getRecentlyAccessedMemories: getRecent,
             getRecentMemories:           getRecentByHeat,
             listMdPages:                 asyncListPages,
+            // Phase C adapters — only used when args.include_drift /
+            // args.include_file_coverage are true and project_root is
+            // supplied. Failure isolation: each adapter swallows fs
+            // errors and returns null/[] so a single missing file
+            // never breaks the whole tool call.
+            // source: packages/memory/src/wiki/{source-drift,file-coverage}.ts
+            readPage:        asyncReadPage,
+            pageMtime:       mtimeAdapter,
+            sourceFileMtime: makeProjectMtime(args.project_root),
+            readSourceFile:  makeProjectReader(args.project_root),
+            listSourceFiles: async (projectRoot, maxFiles) =>
+              codebaseCollectSourceFiles(projectRoot, null, maxFiles, MAX_FILE_BYTES)
+                .map((abs) => abs.startsWith(projectRoot) ? abs.slice(projectRoot.length + 1) : abs),
           });
           return { content: [{ type: "text" as const, text: JSON.stringify(response) }] };
         } catch (err) {

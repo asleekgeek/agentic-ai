@@ -171,3 +171,195 @@ describe("curate-wiki handler", () => {
     expect(res.jobs[0].related_pages).not.toContain("reference/cortex/memorystore");
   });
 });
+
+// ── Phase C: drift + coverage integration ─────────────────────────────
+
+describe("curate-wiki handler — Phase C (drift + coverage)", () => {
+  const nowSec = Math.floor(Date.now() / 1000);
+  const SECONDS_PER_DAY = 86400;
+
+  function memWithEntity(id: number): CuratorMemory {
+    return {
+      id,
+      content: "MemoryStore handles row writes",
+      tags: ["wiki"],
+      domain: "cortex",
+      effective_heat: 0.6,
+      created_at: "2026-05-17T00:00:00Z",
+    };
+  }
+
+  it("returns drift_jobs and coverage_jobs as empty by default", async () => {
+    const memories = Array.from({ length: 4 }, (_, i) => memWithEntity(i + 1));
+    const res = await handler(
+      { min_memories: 4, min_avg_heat: 0 },
+      {
+        wikiRoot: "/tmp/wiki",
+        getRecentlyAccessedMemories: async () => memories,
+        listMdPages: async () => [],
+        today: () => "2026-05-18",
+      },
+    );
+    if ("error" in res) throw new Error("unexpected error");
+    expect(res.drift_jobs).toEqual([]);
+    expect(res.coverage_jobs).toEqual([]);
+    expect(res.total_drifted).toBe(0);
+    expect(res.total_coverage_gap).toBe(0);
+  });
+
+  it("emits a drift job when a cited source is newer than the page", async () => {
+    const drifted = "reference/cortex/memorystore.md";
+    const res = await handler(
+      {
+        include_drift: true,
+        project_root: "/repo",
+        min_memories: 4,
+        min_avg_heat: 0,
+      },
+      {
+        wikiRoot: "/tmp/wiki",
+        getRecentlyAccessedMemories: async () => [memWithEntity(1), memWithEntity(2), memWithEntity(3), memWithEntity(4)],
+        listMdPages: async () => [drifted],
+        readPage: async () => "title\nsource: src/store.ts\nbody",
+        pageMtime: () => nowSec - 20 * SECONDS_PER_DAY,
+        sourceFileMtime: () => nowSec, // src/store.ts modified just now
+        today: () => "2026-05-18",
+      },
+    );
+    if ("error" in res) throw new Error("unexpected error");
+    expect(res.drift_jobs).toHaveLength(1);
+    expect(res.drift_jobs[0].page_path).toBe(drifted);
+    expect(res.drift_jobs[0].cited_sources_drifted).toEqual(["src/store.ts"]);
+    expect(res.drift_jobs[0].prompt).toContain("source: src/store.ts");
+    expect(res.total_drifted).toBe(1);
+  });
+
+  it("does NOT emit drift jobs when include_drift is false", async () => {
+    const res = await handler(
+      { include_drift: false, project_root: "/repo", min_memories: 4, min_avg_heat: 0 },
+      {
+        wikiRoot: "/tmp/wiki",
+        getRecentlyAccessedMemories: async () => [memWithEntity(1), memWithEntity(2), memWithEntity(3), memWithEntity(4)],
+        listMdPages: async () => ["reference/cortex/foo.md"],
+        readPage: async () => "source: src/store.ts",
+        pageMtime: () => 1,
+        sourceFileMtime: () => nowSec,
+        today: () => "2026-05-18",
+      },
+    );
+    if ("error" in res) throw new Error("unexpected error");
+    expect(res.drift_jobs).toEqual([]);
+  });
+
+  it("does NOT emit drift jobs when project_root is missing", async () => {
+    const res = await handler(
+      { include_drift: true, min_memories: 4, min_avg_heat: 0 },
+      {
+        wikiRoot: "/tmp/wiki",
+        getRecentlyAccessedMemories: async () => [memWithEntity(1), memWithEntity(2), memWithEntity(3), memWithEntity(4)],
+        listMdPages: async () => ["reference/cortex/foo.md"],
+        readPage: async () => "source: src/store.ts",
+        pageMtime: () => 1,
+        sourceFileMtime: () => nowSec,
+        today: () => "2026-05-18",
+      },
+    );
+    if ("error" in res) throw new Error("unexpected error");
+    expect(res.drift_jobs).toEqual([]);
+    expect(res.total_drifted).toBe(0);
+  });
+
+  it("emits a coverage job for a source file with no wiki page", async () => {
+    const res = await handler(
+      {
+        include_file_coverage: true,
+        project_root: "/repo",
+        domain: "agentic-ai",
+        min_memories: 4,
+        min_avg_heat: 0,
+      },
+      {
+        wikiRoot: "/tmp/wiki",
+        getRecentlyAccessedMemories: async () =>
+          Array.from({ length: 4 }, (_, i) => ({ ...memWithEntity(i + 1), domain: "agentic-ai" })),
+        listMdPages: async () => [], // no pages exist
+        listSourceFiles: async () => ["src/foo.ts", "src/bar.ts"],
+        readSourceFile: () => "export const x = 1;",
+        today: () => "2026-05-18",
+      },
+    );
+    if ("error" in res) throw new Error("unexpected error");
+    expect(res.coverage_jobs).toHaveLength(2);
+    expect(res.coverage_jobs[0].source_file).toBe("src/foo.ts");
+    expect(res.coverage_jobs[0].suggested_path).toBe("reference/agentic-ai/foo.md");
+    expect(res.coverage_jobs[0].prompt).toContain("export const x = 1;");
+    expect(res.total_coverage_gap).toBe(2);
+  });
+
+  it("does NOT emit coverage jobs when domain is missing", async () => {
+    const res = await handler(
+      { include_file_coverage: true, project_root: "/repo", min_memories: 4, min_avg_heat: 0 },
+      {
+        wikiRoot: "/tmp/wiki",
+        getRecentlyAccessedMemories: async () => [memWithEntity(1), memWithEntity(2), memWithEntity(3), memWithEntity(4)],
+        listMdPages: async () => [],
+        listSourceFiles: async () => ["src/foo.ts"],
+        readSourceFile: () => "body",
+        today: () => "2026-05-18",
+      },
+    );
+    if ("error" in res) throw new Error("unexpected error");
+    expect(res.coverage_jobs).toEqual([]);
+  });
+
+  it("skips coverage for files whose wiki page already exists", async () => {
+    const res = await handler(
+      {
+        include_file_coverage: true,
+        project_root: "/repo",
+        domain: "agentic-ai",
+        min_memories: 4,
+        min_avg_heat: 0,
+      },
+      {
+        wikiRoot: "/tmp/wiki",
+        getRecentlyAccessedMemories: async () =>
+          Array.from({ length: 4 }, (_, i) => ({ ...memWithEntity(i + 1), domain: "agentic-ai" })),
+        listMdPages: async () => ["reference/agentic-ai/foo.md"],
+        listSourceFiles: async () => ["src/foo.ts", "src/bar.ts"],
+        readSourceFile: () => "body",
+        today: () => "2026-05-18",
+      },
+    );
+    if ("error" in res) throw new Error("unexpected error");
+    expect(res.coverage_jobs.map((j) => j.source_file)).toEqual(["src/bar.ts"]);
+  });
+
+  it("instructions mention drift + coverage when jobs are present", async () => {
+    const res = await handler(
+      {
+        include_drift: true,
+        include_file_coverage: true,
+        project_root: "/repo",
+        domain: "agentic-ai",
+        min_memories: 4,
+        min_avg_heat: 0,
+      },
+      {
+        wikiRoot: "/tmp/wiki",
+        getRecentlyAccessedMemories: async () =>
+          Array.from({ length: 4 }, (_, i) => ({ ...memWithEntity(i + 1), domain: "agentic-ai" })),
+        listMdPages: async () => ["reference/agentic-ai/drifted.md"],
+        readPage: async () => "source: src/store.ts",
+        pageMtime: () => nowSec - 30 * SECONDS_PER_DAY,
+        sourceFileMtime: () => nowSec,
+        listSourceFiles: async () => ["src/foo.ts"],
+        readSourceFile: () => "body",
+        today: () => "2026-05-18",
+      },
+    );
+    if ("error" in res) throw new Error("unexpected error");
+    expect(res.instructions).toContain("Drift refresh");
+    expect(res.instructions).toContain("Coverage");
+  });
+});

@@ -48,6 +48,15 @@ import {
   type CurationJob,
   type PageMtimeFn,
 } from "../auto-curator.js";
+import {
+  auditWikiDrift,
+  buildDriftRefreshPrompt,
+  type DriftVerdict,
+} from "../source-drift.js";
+import {
+  buildCoverageJobs,
+  computeCoverageGap,
+} from "../file-coverage.js";
 
 // source: cortex@47b818d mcp_server/handlers/curate_wiki.py — defaults
 // for limit, recent_only, memory_pool_size.
@@ -70,6 +79,27 @@ export interface CurateWikiArgs {
   readonly min_avg_heat?: number;
   readonly recent_only?: boolean;
   readonly memory_pool_size?: number;
+  // Phase C: re-authoring of drifted pages.
+  // When true, scan every wiki page for cited source files whose
+  // mtimes are later than the page mtime, and emit a refresh job for
+  // each. Skipped when no project_root is provided (we can't resolve
+  // relative citations without it).
+  // source: packages/memory/src/wiki/source-drift.ts
+  readonly include_drift?: boolean;
+  // Phase C: file-coverage authoring for legacy code.
+  // When true, walk project_root for source files that have no wiki
+  // page yet under reference/<domain>/<slug>.md and emit an authoring
+  // job for each. Skipped when no project_root or no domain.
+  // source: packages/memory/src/wiki/file-coverage.ts
+  readonly include_file_coverage?: boolean;
+  // Project root (absolute path) used by both Phase C modes to resolve
+  // relative citations and walk for uncovered files. Required for
+  // those modes; ignored otherwise.
+  readonly project_root?: string;
+  // Cap on the number of source files scanned for coverage. 0 (the
+  // default) means unbounded — match codebase_analyze's contract
+  // (cortex@2f42428).
+  readonly max_files?: number;
 }
 
 export interface CurationJobPayload {
@@ -87,6 +117,27 @@ export interface CurationJobPayload {
   readonly prompt: string;
 }
 
+// Phase C: a single drift-refresh job sent to the LLM. Distinct shape
+// from CurationJobPayload because drift jobs carry the existing page
+// body, not a memory cluster.
+export interface DriftJobPayload {
+  readonly kind: "drift";
+  readonly page_path: string;
+  readonly cited_sources_drifted: readonly string[];
+  readonly newest_source_mtime: number | null;
+  readonly page_mtime: number | null;
+  readonly prompt: string;
+}
+
+// Phase C: a single coverage-gap job sent to the LLM.
+export interface CoverageJobPayload {
+  readonly kind: "coverage";
+  readonly source_file: string;
+  readonly project_name: string;
+  readonly suggested_path: string;
+  readonly prompt: string;
+}
+
 export interface CurateWikiResult {
   readonly jobs: readonly CurationJobPayload[];
   readonly total_clusters_eligible: number;
@@ -94,6 +145,14 @@ export interface CurateWikiResult {
   readonly memory_pool_size: number;
   readonly domain_filter: string;
   readonly instructions: string;
+  // Phase C: drift + coverage jobs. Empty arrays when the
+  // corresponding include_* flag is false or the required adapter
+  // isn't wired.
+  readonly drift_jobs: readonly DriftJobPayload[];
+  readonly coverage_jobs: readonly CoverageJobPayload[];
+  // Counters for the SessionStart preamble + consolidate stats.
+  readonly total_drifted: number;
+  readonly total_coverage_gap: number;
 }
 
 export type CurateWikiResponse = CurateWikiResult | { readonly error: string };
@@ -124,6 +183,36 @@ export interface CurateWikiDeps {
   readonly pageMtime?: PageMtimeFn;
   /** Override for current-date injection in tests. Returns YYYY-MM-DD. */
   readonly today?: () => string;
+  // ── Phase C adapters ──
+  // All optional — when missing, the corresponding Phase C feature is
+  // skipped and the response carries empty drift_jobs / coverage_jobs
+  // with total_* = 0. Production wires real fs calls; tests wire
+  // deterministic stubs.
+  /**
+   * Read a wiki page's full body for the drift-refresh prompt.
+   * Returns null when the page can't be read.
+   * source: packages/memory/src/wiki/source-drift.ts — drift uses page body
+   */
+  readonly readPage?: (root: string, relPath: string) => Promise<string | null>;
+  /**
+   * Mtime adapter scoped to PROJECT_ROOT (not wiki root). Resolves
+   * relative citations like ``packages/foo/bar.ts`` against the
+   * project tree. Returns seconds-since-epoch or null on ENOENT.
+   * source: packages/memory/src/wiki/source-drift.ts — citation mtime check
+   */
+  readonly sourceFileMtime?: PageMtimeFn;
+  /**
+   * Walk the project tree, return relative source-file paths. Caller
+   * applies the maxFiles cap; 0 / negative means unbounded.
+   * source: packages/memory/src/wiki/file-coverage.ts — coverage scan
+   */
+  readonly listSourceFiles?: (projectRoot: string, maxFiles: number) => Promise<string[]>;
+  /**
+   * Read a project source file's body for the coverage-authoring
+   * prompt. Returns null on read failure.
+   * source: packages/memory/src/wiki/file-coverage.ts — coverage prompt body
+   */
+  readonly readSourceFile?: (projectRoot: string, relPath: string) => string | null;
 }
 
 // ── Existing-page topic index ───────────────────────────────────────────
@@ -220,33 +309,66 @@ function serialiseJob(job: CurationJob): CurationJobPayload {
   };
 }
 
-function instructionsForLlm(nJobs: number, nEligible: number): string {
-  if (nJobs === 0) {
+function instructionsForLlm(
+  nJobs: number,
+  nEligible: number,
+  nDrift: number = 0,
+  nGap: number = 0,
+): string {
+  if (nJobs === 0 && nDrift === 0 && nGap === 0) {
     return (
       `No curation jobs returned. ${nEligible} clusters were eligible. ` +
       "If you expected jobs, relax min_memories or min_avg_heat, or pass " +
       "recent_only=false."
     );
   }
-  return (
-    `Auto-curator returned ${nJobs} job(s) (of ${nEligible} eligible clusters). ` +
-    "For each job in order:\n" +
-    "  1. Read `prompt` — it contains the cluster's memories and the " +
-    "authoring conventions.\n" +
-    "  2. Author the page in Markdown following the conventions " +
-    "(frontmatter → lead → sections with diagrams → 'why this not " +
-    "alternatives' → 'what can go wrong' → 'see also' → primary " +
-    "sources).\n" +
-    "  3. Write the page via `wiki_write(path=<job.suggested_path>, " +
-    "content=<your authored Markdown>, tags=['wiki', 'llm-authored', " +
-    "<topic>, <domain>])`.\n" +
-    "  4. Call `curate_wiki` again to fetch the next batch when this " +
-    "batch is done.\n" +
-    "Do not skip the structure — the conventions are how readers find " +
-    "what they need across pages. Do not dump raw memory content; " +
-    "synthesise. Each page should be 8-15 KB of substantive authored " +
-    "prose, not a template."
+
+  const lines: string[] = [];
+  if (nJobs > 0) {
+    lines.push(
+      `Auto-curator returned ${nJobs} cluster job(s) (of ${nEligible} eligible).`,
+      "For each cluster job in order:",
+      "  1. Read `prompt` — cluster's memories + authoring conventions.",
+      "  2. Author the page in Markdown following the conventions " +
+      "(frontmatter → lead → sections with diagrams → 'why this not " +
+      "alternatives' → 'what can go wrong' → 'see also' → primary sources).",
+      "  3. Write via `wiki_write(path=<job.suggested_path>, " +
+      "content=<markdown>, tags=['wiki', 'llm-authored', <topic>, <domain>])`.",
+    );
+  }
+  if (nDrift > 0) {
+    lines.push(
+      "",
+      `Drift refresh: ${nDrift} page(s) cite source files that have ` +
+      "changed since the page mtime. For each entry in `drift_jobs`:",
+      "  1. Read `prompt` — it carries the existing body + the drifted ",
+      "     source paths.",
+      "  2. Decide per section: same code → keep; drifted code → rewrite; ",
+      "     invalidated → drop.",
+      "  3. Write via `wiki_write(path=<job.page_path>, ",
+      "     content=<markdown>, mode='replace', tags=[…])`.",
+    );
+  }
+  if (nGap > 0) {
+    lines.push(
+      "",
+      `Coverage: ${nGap} source file(s) have no wiki page yet. For each ` +
+      "entry in `coverage_jobs`:",
+      "  1. Read `prompt` — it carries the file body + frontmatter spec.",
+      "  2. Author a reference page describing what the file does.",
+      "  3. Write via `wiki_write(path=<job.suggested_path>, ",
+      "     content=<markdown>, tags=['wiki', 'llm-authored', 'reference', ",
+      "     <project>])`.",
+    );
+  }
+  lines.push(
+    "",
+    "Call `curate_wiki` again when this batch is done. The ",
+    "recently-authored skip filter prevents re-suggestions of pages you ",
+    "just wrote. Do not dump raw memory content; synthesise. Each page ",
+    "should be 6–15 KB of substantive authored prose, not a template.",
   );
+  return lines.join("\n");
 }
 
 /**
@@ -271,6 +393,12 @@ export async function handler(
 
   const memories = await fetchMemoryPool(deps, recentOnly, memoryPoolSize, minMemories);
 
+  // Phase C: drift + coverage are always reported (even when no
+  // memories exist), since they don't need a memory pool to operate.
+  const relPaths = await deps.listMdPages(deps.wikiRoot);
+  const today = (deps.today ?? defaultToday)();
+  const phaseC = await computePhaseCJobs(args, deps, relPaths, today, limit);
+
   if (memories.length === 0) {
     return {
       jobs: [],
@@ -278,7 +406,14 @@ export async function handler(
       returned: 0,
       memory_pool_size: 0,
       domain_filter: args.domain ?? "(all)",
-      instructions: "No memories available to curate. Use `remember` to seed.",
+      instructions: phaseC.totalGap + phaseC.totalDrift > 0
+        ? `No memory clusters, but ${phaseC.totalDrift} drifted page(s) and ` +
+          `${phaseC.totalGap} uncovered file(s) need attention.`
+        : "No memories available to curate. Use `remember` to seed.",
+      drift_jobs: phaseC.driftJobs,
+      coverage_jobs: phaseC.coverageJobs,
+      total_drifted: phaseC.totalDrift,
+      total_coverage_gap: phaseC.totalGap,
     };
   }
 
@@ -295,9 +430,7 @@ export async function handler(
     ? filterAuthoredClusters(rawClusters, deps.wikiRoot, deps.pageMtime)
     : rawClusters;
 
-  const relPaths = await deps.listMdPages(deps.wikiRoot);
   const existingPages = scanExistingPages(relPaths);
-  const today = (deps.today ?? defaultToday)();
   const jobs = buildJobs(clusters, existingPages, today);
   const selected = jobs.slice(0, limit);
   const payload = selected.map(serialiseJob);
@@ -308,8 +441,142 @@ export async function handler(
     returned: payload.length,
     memory_pool_size: memories.length,
     domain_filter: args.domain ?? "(all)",
-    instructions: instructionsForLlm(payload.length, clusters.length),
+    instructions: instructionsForLlm(
+      payload.length,
+      clusters.length,
+      phaseC.totalDrift,
+      phaseC.totalGap,
+    ),
+    drift_jobs: phaseC.driftJobs,
+    coverage_jobs: phaseC.coverageJobs,
+    total_drifted: phaseC.totalDrift,
+    total_coverage_gap: phaseC.totalGap,
   };
+}
+
+// ── Phase C composition helper ──────────────────────────────────────────
+
+/**
+ * Compute Phase C jobs (drift + coverage) bounded by ``limit``.
+ *
+ * Returns empty arrays + zero counts when:
+ *   - the corresponding include_* flag is false,
+ *   - no project_root is provided,
+ *   - or the required adapter (pageMtime/sourceFileMtime/readPage/
+ *     listSourceFiles/readSourceFile) isn't wired.
+ *
+ * source: this module — Phase C composition root for source-drift +
+ *   file-coverage.
+ */
+async function computePhaseCJobs(
+  args: CurateWikiArgs,
+  deps: CurateWikiDeps,
+  relPaths: readonly string[],
+  today: string,
+  limit: number,
+): Promise<{
+  readonly driftJobs: readonly DriftJobPayload[];
+  readonly coverageJobs: readonly CoverageJobPayload[];
+  readonly totalDrift: number;
+  readonly totalGap: number;
+}> {
+  const projectRoot = args.project_root;
+  const driftJobs = await computeDriftJobs(args, deps, relPaths, projectRoot, limit);
+  const coverageJobs = await computeCoverageJobs(args, deps, relPaths, projectRoot, today, limit);
+  return {
+    driftJobs:    driftJobs.jobs,
+    coverageJobs: coverageJobs.jobs,
+    totalDrift:   driftJobs.total,
+    totalGap:     coverageJobs.total,
+  };
+}
+
+async function computeDriftJobs(
+  args: CurateWikiArgs,
+  deps: CurateWikiDeps,
+  relPaths: readonly string[],
+  projectRoot: string | undefined,
+  limit: number,
+): Promise<{ readonly jobs: DriftJobPayload[]; readonly total: number }> {
+  if (
+    !args.include_drift ||
+    !projectRoot ||
+    !deps.sourceFileMtime ||
+    !deps.pageMtime ||
+    !deps.readPage
+  ) {
+    return { jobs: [], total: 0 };
+  }
+  // Read each page (with mtime + body) so the drift scanner has both
+  // signals it needs.
+  const scanPages = [];
+  for (const rel of relPaths) {
+    const mt = deps.pageMtime(joinWiki(deps.wikiRoot, rel));
+    const body = await deps.readPage(deps.wikiRoot, rel);
+    scanPages.push({ path: rel, mtimeSeconds: mt, content: body ?? "" });
+  }
+  const report = auditWikiDrift(scanPages, deps.sourceFileMtime);
+  const jobs: DriftJobPayload[] = [];
+  for (const v of report.driftedPages.slice(0, limit)) {
+    const body = (await deps.readPage(deps.wikiRoot, v.pagePath)) ?? "";
+    jobs.push(buildDriftJobPayload(v, body));
+  }
+  return { jobs, total: report.totalDrifted };
+}
+
+async function computeCoverageJobs(
+  args: CurateWikiArgs,
+  deps: CurateWikiDeps,
+  relPaths: readonly string[],
+  projectRoot: string | undefined,
+  today: string,
+  limit: number,
+): Promise<{ readonly jobs: CoverageJobPayload[]; readonly total: number }> {
+  if (
+    !args.include_file_coverage ||
+    !projectRoot ||
+    !args.domain ||
+    !deps.listSourceFiles ||
+    !deps.readSourceFile
+  ) {
+    return { jobs: [], total: 0 };
+  }
+  // Narrow once so the closure below sees a non-undefined readSourceFile
+  // — the deps-shape check above already proved both are wired.
+  const readSourceFile = deps.readSourceFile;
+  const sourceFiles = await deps.listSourceFiles(projectRoot, args.max_files ?? 0);
+  const gaps = computeCoverageGap(sourceFiles, args.domain, relPaths);
+  const reader = (rel: string): string | null => readSourceFile(projectRoot, rel);
+  const jobs = buildCoverageJobs(gaps.slice(0, limit), reader, today);
+  return {
+    jobs: jobs.map((j): CoverageJobPayload => ({
+      kind:           "coverage",
+      source_file:    j.gap.sourceFile,
+      project_name:   j.gap.projectName,
+      suggested_path: j.gap.suggestedPath,
+      prompt:         j.prompt,
+    })),
+    total: gaps.length,
+  };
+}
+
+function buildDriftJobPayload(v: DriftVerdict, body: string): DriftJobPayload {
+  return {
+    kind:                  "drift",
+    page_path:             v.pagePath,
+    cited_sources_drifted: v.resolvedSources,
+    newest_source_mtime:   v.newestSourceMtime,
+    page_mtime:            v.pageMtimeSeconds,
+    prompt:                buildDriftRefreshPrompt(v, body),
+  };
+}
+
+// Local path-join for wiki root + rel — POSIX slashes only, mirrors
+// the layout-relative paths the wiki uses.
+function joinWiki(root: string, rel: string): string {
+  if (!rel) return root;
+  if (rel.startsWith("/")) return rel;
+  return root.replace(/\/+$/, "") + "/" + rel.replace(/^\/+/, "");
 }
 
 // ── MCP schema (mirrors Cortex curate_wiki.schema) ─────────────────────

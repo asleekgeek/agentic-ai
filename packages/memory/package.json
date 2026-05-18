@@ -167,6 +167,14 @@
       "import": "./dist/wiki/auto-curator.js",
       "types": "./dist/wiki/auto-curator.d.ts"
     },
+    "./wiki/source-drift.js": {
+      "import": "./dist/wiki/source-drift.js",
+      "types": "./dist/wiki/source-drift.d.ts"
+    },
+    "./wiki/file-coverage.js": {
+      "import": "./dist/wiki/file-coverage.js",
+      "types": "./dist/wiki/file-coverage.d.ts"
+    },
     "./wiki/storage/wiki-store.js": {
       "import": "./dist/wiki/storage/wiki-store.js",
       "types": "./dist/wiki/storage/wiki-store.d.ts"
@@ -218,6 +226,10 @@
     "./codebase-analysis/handlers/codebase-analyze.js": {
       "import": "./dist/codebase-analysis/handlers/codebase-analyze.js",
       "types": "./dist/codebase-analysis/handlers/codebase-analyze.d.ts"
+    },
+    "./codebase-analysis/handlers/codebase-analyze-helpers.js": {
+      "import": "./dist/codebase-analysis/handlers/codebase-analyze-helpers.js",
+      "types": "./dist/codebase-analysis/handlers/codebase-analyze-helpers.d.ts"
     },
     "./codebase-analysis/handlers/seed-project.js": {
       "import": "./dist/codebase-analysis/handlers/seed-project.js",
