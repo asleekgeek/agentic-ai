@@ -294,10 +294,44 @@ export interface DomainRegistry {
 
 let _registry: DomainRegistry | null = null;
 
+/**
+ * Plausible parent directories for the user's git repos. Probed in
+ * order; the first directory that exists wins. Without this fallback
+ * the registry returns zero repos on systems where the user keeps
+ * source under ``~/Documents/Developments`` instead of
+ * ``~/Developments`` — a real layout in production today.
+ *
+ * source: cortex@HEAD~ mcp_server/shared/domain_mapping.py:_candidate_dev_roots (2026-05-18)
+ */
+function candidateDevRoots(): string[] {
+  const cands: string[] = [];
+  const env = process.env["CORTEX_DEV_ROOT"];
+  if (env) cands.push(env);
+  const home = homedir();
+  cands.push(
+    join(home, "Developments"),
+    join(home, "Documents", "Developments"),
+    join(home, "dev"),
+    join(home, "code"),
+  );
+  return cands.filter((c) => existsSync(c));
+}
+
 function buildRegistry(): DomainRegistry {
   if (_registry) return _registry;
-  const devRoot = join(homedir(), "Developments");
-  const repos = discoverRepos(devRoot);
+  // Scan every candidate dev root so the registry works regardless of
+  // whether the user keeps repos at ``~/Developments`` or
+  // ``~/Documents/Developments``. Dedupe by fsPath so a repo discovered
+  // under multiple roots (symlinks, alt mounts) only appears once.
+  const repos: RepoInfo[] = [];
+  const seen = new Set<string>();
+  for (const devRoot of candidateDevRoots()) {
+    for (const r of discoverRepos(devRoot)) {
+      if (seen.has(r.fsPath)) continue;
+      seen.add(r.fsPath);
+      repos.push(r);
+    }
+  }
   const nameToCanonical = groupRepos(repos);
   const slugIndex = buildSlugIndex(repos);
   const fragmentIndex = buildFragmentIndex(repos, nameToCanonical);
