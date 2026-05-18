@@ -58,6 +58,12 @@ const MIN_BEHAVIOUR     = 400; // source: cortex wiki_curation_gaps.py:102 (Cura
 const MIN_INVARIANTS    = 80;  // source: cortex wiki_curation_gaps.py:112 (CurationSection.invariants)
 const MIN_FAILURE_MODES = 120; // source: cortex wiki_curation_gaps.py:122 (CurationSection.failure-modes)
 const MIN_TESTS         = 80;  // source: cortex wiki_curation_gaps.py:132 (CurationSection.tests)
+// New 2026-05-18 sections — the four below need higher-substance content
+// because they're the surfaces a reader leans on most when integrating.
+const MIN_SEQUENCE_DIAGRAM = 120; // source: cortex wiki_curation_gaps.py:155 (sequence-diagram)
+const MIN_PARAMETERS       = 120; // source: cortex wiki_curation_gaps.py:170 (parameters)
+const MIN_REQUEST_EXAMPLE  = 120; // source: cortex wiki_curation_gaps.py:189 (request-example)
+const MIN_RESPONSE_EXAMPLE = 120; // source: cortex wiki_curation_gaps.py:211 (response-example)
 
 /**
  * Sections every file-doc must cover. The list is deliberately stable —
@@ -146,6 +152,76 @@ export const FILE_DOC_SECTIONS: readonly CurationSection[] = [
     description:
       "Which test files exercise this file. Path + brief on what " +
       "each test covers.",
+  },
+  // ── 2026-05-18 expansion ──────────────────────────────────────────
+  {
+    name: "sequence-diagram",
+    heading: "## Sequence diagram",
+    probes: [
+      "## Sequence diagram",
+      "## Flow diagram",
+      "## Sequence",
+      "```mermaid\nsequenceDiagram",
+    ],
+    minCharsUnderHeading: MIN_SEQUENCE_DIAGRAM,
+    description:
+      "A `mermaid` sequence diagram of the typical call flow involving " +
+      "this file — caller → this file → callees → return. Render with " +
+      "```mermaid sequenceDiagram fences. For files that participate in " +
+      "no sequence (pure data types, constants), explicitly write " +
+      "\"Not applicable — this file participates in no sequence flow\" " +
+      "and explain why.",
+  },
+  {
+    name: "parameters",
+    heading: "## Parameters",
+    probes: ["## Parameters", "## Arguments", "## Options"],
+    minCharsUnderHeading: MIN_PARAMETERS,
+    description:
+      "Exhaustive table of every parameter exposed by this file's " +
+      "public entry points. Columns: name | type | required | default | " +
+      "description. For files with no external parameter surface " +
+      "(internal helpers, pure data), write \"Not applicable — this " +
+      "file exposes no external parameters.\"",
+  },
+  {
+    name: "request-example",
+    heading: "## Request example",
+    probes: [
+      "## Request example",
+      "## Example request",
+      "## Request",
+      "## Invocation example",
+    ],
+    minCharsUnderHeading: MIN_REQUEST_EXAMPLE,
+    description:
+      "A concrete request example — for HTTP handlers, the full curl " +
+      "command including headers (Content-Type, Authorization, custom " +
+      "headers); for MCP tools, the JSON-RPC envelope with `method` and " +
+      "`params`; for library functions, the call site as it would appear " +
+      "in client code. Show headers explicitly — never omit them. For " +
+      "files that don't sit on a request boundary, write \"Not applicable " +
+      "— this file is not invoked directly by callers; see [[Callers]] " +
+      "for the call chain.\"",
+  },
+  {
+    name: "response-example",
+    heading: "## Response example",
+    probes: [
+      "## Response example",
+      "## Example response",
+      "## Response",
+      "## Return value",
+    ],
+    minCharsUnderHeading: MIN_RESPONSE_EXAMPLE,
+    description:
+      "A concrete response example showing every field the caller " +
+      "receives — JSON for HTTP / MCP, return-value structure for " +
+      "library functions. Each non-obvious field annotated with one " +
+      "line explaining what it means. Include both success and the " +
+      "most common error shape if applicable. For files that produce " +
+      "no response surface, write \"Not applicable — this file does " +
+      "not produce a response artifact.\"",
   },
 ];
 

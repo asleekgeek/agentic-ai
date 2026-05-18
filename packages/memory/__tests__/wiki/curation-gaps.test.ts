@@ -82,12 +82,14 @@ describe("gapReport", () => {
   });
 
   it("computes completion_pct rounded to two decimals", () => {
-    // Cover exactly one section out of 8 → 0.13 (rounded).
+    // Cover exactly one section → expected pct = round(1/N, 2) where
+    // N = FILE_DOC_SECTIONS.length (12 after the 2026-05-18 expansion).
     const longProse = "x ".repeat(300);
     const body = "## Purpose\n\n" + longProse + "\n";
     const report = gapReport(body);
     expect(report.covered_sections).toBe(1);
-    expect(report.completion_pct).toBeCloseTo(0.13, 2);
+    const expectedPct = Math.round(100 / FILE_DOC_SECTIONS.length) / 100;
+    expect(report.completion_pct).toBeCloseTo(expectedPct, 2);
   });
 });
 
