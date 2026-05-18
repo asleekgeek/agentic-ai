@@ -15,6 +15,7 @@ import { describe, expect, it, beforeAll } from "vitest";
 import {
   collectAllDiscoveries,
   heatForTags,
+  isTransientSeedRoot,
   stageConfigs,
   stageDocs,
   stageEntryPoints,
@@ -171,5 +172,39 @@ describe("collectAllDiscoveries", () => {
     const discoveries = collectAllDiscoveries("/nonexistent/path/xyz/12345", 65536);
     // Structural summary is always returned
     expect(discoveries.length).toBeGreaterThanOrEqual(1);
+  });
+});
+
+// ── isTransientSeedRoot — guard against pytest fixtures + agent worktrees ─────
+// source: cortex@0623b30 — "refuse transient roots (worktrees, pytest fixtures, deps/)"
+describe("isTransientSeedRoot", () => {
+  it("returns true for a pytest temp fixture root", () => {
+    expect(isTransientSeedRoot("/private/var/folders/kf/abc/pytest-of-cdeust/pytest-3/test_seed0/repo-a")).toBe(true);
+  });
+
+  it("returns true for the short-form pytest marker", () => {
+    expect(isTransientSeedRoot("/tmp/pytest-of-runner/test_seed/x")).toBe(true);
+  });
+
+  it("returns true for a macOS private var folders path", () => {
+    expect(isTransientSeedRoot("/private/var/folders/kf/xyz/T/pytest-fixture")).toBe(true);
+  });
+
+  it("returns true for a /var/folders path (Linux equivalent)", () => {
+    expect(isTransientSeedRoot("/var/folders/abc/scratch")).toBe(true);
+  });
+
+  it("returns true for a per-agent claude worktree", () => {
+    expect(isTransientSeedRoot("/Users/cdeust/repo/.claude/worktrees/agent-a0ceb782")).toBe(true);
+  });
+
+  it("returns false for a normal project root", () => {
+    expect(isTransientSeedRoot("/Users/cdeust/Documents/Developments/agentic-ai")).toBe(false);
+  });
+
+  it("returns false for a path that merely mentions worktrees in a non-claude location", () => {
+    // Only ``.claude/worktrees/`` is rejected — a project literally named
+    // ``worktrees`` at the top level is still allowed.
+    expect(isTransientSeedRoot("/Users/cdeust/projects/worktrees-research")).toBe(false);
   });
 });

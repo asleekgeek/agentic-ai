@@ -91,13 +91,43 @@ const CI_FILES: readonly string[] = [
 ];
 
 // source: cortex@ed33435 mcp_server/handlers/seed_project_constants.py:73-98
+// source: cortex@0623b30 — added .claude, worktrees, deps, vendor, third_party,
+//         external. Per-agent git worktrees and vendored third-party trees
+//         are transient/non-authored and would otherwise yield duplicate
+//         stub pages in the wiki.
 const IGNORE_DIRS: ReadonlySet<string> = new Set([
   ".git", ".hg", ".svn",
   "node_modules", "__pycache__", ".mypy_cache", ".pytest_cache",
   ".ruff_cache", ".venv", "venv", "env", ".env",
   "dist", "build", "target", "out", ".next", ".nuxt",
   "coverage", ".coverage", "htmlcov", "site-packages", ".tox", ".nox",
+  ".claude", "worktrees", "deps", "vendor", "third_party", "external",
 ]);
+
+// Path-fragment predicate complementing IGNORE_DIRS. Returns True if the
+// absolute path looks like a pytest temp fixture root or a transient agent
+// worktree — both should be silently rejected by seed_project before any
+// pages are generated, otherwise the wiki accumulates entries like
+// ``Spec: Entry point: .claude/worktrees/agent-a0ceb782/...`` that point at
+// paths gone by the next test run.
+// source: cortex@0623b30 mcp_server/handlers/seed_project_constants.py:115-138
+const TEST_FIXTURE_PATH_MARKERS: readonly string[] = [
+  "pytest-of-",
+  "/private/var/folders/",
+  "/var/folders/",
+  ".claude/worktrees/",
+];
+
+/**
+ * Return true when ``absPath`` is a known transient/test/worktree root that
+ * ``seed_project`` should refuse to operate on. Used at handler entry so
+ * test runs and worktree creation never pollute the wiki with stub pages.
+ *
+ * source: cortex@0623b30 mcp_server/handlers/seed_project_constants.py::is_transient_seed_root
+ */
+export function isTransientSeedRoot(absPath: string): boolean {
+  return TEST_FIXTURE_PATH_MARKERS.some((marker) => absPath.includes(marker));
+}
 
 // source: cortex@ed33435 mcp_server/handlers/seed_project_constants.py:100-118
 const EXT_MAP: Readonly<Record<string, string>> = {

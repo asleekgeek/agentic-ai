@@ -20,7 +20,7 @@
 
 import { existsSync } from "node:fs";
 import { basename, resolve as resolvePath } from "node:path";
-import { collectAllDiscoveries, heatForTags } from "../file-scanner.js";
+import { collectAllDiscoveries, heatForTags, isTransientSeedRoot } from "../file-scanner.js";
 import type { MemoryStore } from "../../remember/storage/memory-store.js";
 import type { MemoryInsertData } from "../../remember/types.js";
 
@@ -201,6 +201,19 @@ export async function handler(
 
   if (!existsSync(root)) {
     return { seeded: false, reason: `directory not found: ${root}` };
+  }
+
+  // 2026-05-17 (user feedback): refuse to seed transient roots —
+  // ``.claude/worktrees/agent-*``, pytest temp fixtures
+  // (``/private/var/folders/.../pytest-of-*``), and other ephemeral
+  // paths. Seeding them produced wiki pages titled
+  // ``Spec: Entry point: .claude/worktrees/agent-a0ceb782/...`` and
+  // ``Spec: Project structure: repo-a`` from fixture runs — both
+  // noise that lives forever in the wiki because the underlying path
+  // is gone by the next test run.
+  // source: cortex@0623b30 mcp_server/handlers/seed_project.py:182-194
+  if (isTransientSeedRoot(root)) {
+    return { seeded: false, reason: `transient_root_refused: ${root}` };
   }
 
   const allDiscoveries = collectAllDiscoveries(root, maxBytes);
