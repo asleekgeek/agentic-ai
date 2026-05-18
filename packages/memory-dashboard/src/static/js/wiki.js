@@ -1079,7 +1079,19 @@
       _ensureMermaid().then(function (mermaid) {
         if (!mermaid) return;
         try {
-          mermaid.run({ querySelector: '.wiki-mermaid', suppressErrors: false });
+          // After mermaid finishes rendering, attach a lens button to
+          // every diagram so a reader can pop it into a full-viewport
+          // overlay with zoom + pan controls. ``mermaid.run`` returns
+          // a Promise in v10+; attaching the buttons after it resolves
+          // guarantees the SVGs exist.
+          // source: cortex@HEAD~ ui/unified/js/wiki.js (2026-05-18)
+          var p = mermaid.run({ querySelector: '.wiki-mermaid', suppressErrors: false });
+          if (p && typeof p.then === 'function') {
+            p.then(function() { _attachMermaidLenses(bodyEl); }).catch(function() {});
+          } else {
+            // v9 / older — best-effort retry.
+            setTimeout(function() { _attachMermaidLenses(bodyEl); }, 50);
+          }
         } catch (e) { /* mermaid optional; swallow failures */ }
       });
     }
@@ -1276,6 +1288,201 @@
       })
       .catch(function () { return null; });
     return _mermaidPromise;
+  }
+
+  // ── Mermaid lens (zoom + pan overlay) ──
+  // After mermaid renders each ``.wiki-mermaid`` div, attach a lens
+  // button that opens the diagram in a full-viewport overlay with
+  // scroll-zoom + drag-pan + keyboard shortcuts.
+  // source: cortex@HEAD~ ui/unified/js/wiki.js (2026-05-18)
+  function _attachMermaidLenses(scope) {
+    var diagrams = scope.querySelectorAll('.wiki-mermaid');
+    diagrams.forEach(function(diagramEl) {
+      if (diagramEl.dataset.lensAttached === '1') return;
+      if (!diagramEl.querySelector('svg')) return;
+      diagramEl.dataset.lensAttached = '1';
+      diagramEl.style.position = 'relative';
+      var btn = document.createElement('button');
+      btn.className = 'wiki-mermaid-lens';
+      btn.title = 'Open diagram (zoom + pan)';
+      btn.setAttribute('aria-label', 'Open diagram in full-viewport viewer');
+      btn.style.cssText = (
+        'position:absolute;top:8px;right:8px;z-index:2;' +
+        'width:32px;height:32px;border-radius:6px;' +
+        'border:1px solid rgba(218,165,32,0.4);' +
+        'background:rgba(20,20,20,0.85);color:#daa520;' +
+        'cursor:pointer;display:flex;align-items:center;' +
+        'justify-content:center;font-size:16px;line-height:1;' +
+        'transition:background 0.15s;'
+      );
+      btn.innerHTML = (
+        '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" ' +
+        'stroke="currentColor" stroke-width="2" stroke-linecap="round" ' +
+        'stroke-linejoin="round">' +
+        '<circle cx="11" cy="11" r="8"/>' +
+        '<line x1="21" y1="21" x2="16.65" y2="16.65"/>' +
+        '<line x1="11" y1="8" x2="11" y2="14"/>' +
+        '<line x1="8" y1="11" x2="14" y2="11"/>' +
+        '</svg>'
+      );
+      btn.addEventListener('mouseenter', function() {
+        btn.style.background = 'rgba(40,40,40,0.95)';
+      });
+      btn.addEventListener('mouseleave', function() {
+        btn.style.background = 'rgba(20,20,20,0.85)';
+      });
+      btn.addEventListener('click', function(ev) {
+        ev.preventDefault();
+        ev.stopPropagation();
+        _openMermaidLens(diagramEl);
+      });
+      diagramEl.appendChild(btn);
+    });
+  }
+
+  // Singleton modal — created on first open, reused thereafter.
+  var _lensModal = null;
+  var _lensState = { scale: 1, tx: 0, ty: 0, dragging: false, dragX: 0, dragY: 0 };
+
+  function _ensureLensModal() {
+    if (_lensModal) return _lensModal;
+    var overlay = document.createElement('div');
+    overlay.className = 'wiki-mermaid-lens-overlay';
+    overlay.style.cssText = (
+      'position:fixed;inset:0;background:rgba(0,0,0,0.92);' +
+      'z-index:9999;display:none;cursor:grab;' +
+      'align-items:center;justify-content:center;'
+    );
+    var stage = document.createElement('div');
+    stage.className = 'wiki-mermaid-lens-stage';
+    stage.style.cssText = (
+      'transform-origin:center center;transition:transform 0.05s linear;' +
+      'will-change:transform;user-select:none;'
+    );
+    overlay.appendChild(stage);
+
+    var toolbar = document.createElement('div');
+    toolbar.className = 'wiki-mermaid-lens-toolbar';
+    toolbar.style.cssText = (
+      'position:absolute;top:18px;right:18px;display:flex;gap:8px;' +
+      'background:rgba(20,20,20,0.92);padding:8px 10px;border-radius:8px;' +
+      'border:1px solid rgba(218,165,32,0.3);'
+    );
+    function ctrlBtn(label, title, onClick) {
+      var b = document.createElement('button');
+      b.textContent = label;
+      b.title = title;
+      b.style.cssText = (
+        'background:transparent;border:1px solid rgba(218,165,32,0.4);' +
+        'color:#daa520;width:32px;height:32px;border-radius:4px;' +
+        'cursor:pointer;font-size:16px;font-family:monospace;'
+      );
+      b.addEventListener('click', function(ev) {
+        ev.stopPropagation();
+        onClick();
+      });
+      return b;
+    }
+    var btnIn = ctrlBtn('+', 'Zoom in', function() { _lensZoom(1.25); });
+    var btnOut = ctrlBtn('−', 'Zoom out', function() { _lensZoom(0.8); });
+    var btnReset = ctrlBtn('⟲', 'Reset zoom / pan', _lensReset);
+    var btnClose = ctrlBtn('×', 'Close (Esc)', _lensClose);
+    btnClose.style.color = '#ff6b6b';
+    btnClose.style.borderColor = 'rgba(255,107,107,0.4)';
+    toolbar.appendChild(btnOut);
+    toolbar.appendChild(btnIn);
+    toolbar.appendChild(btnReset);
+    toolbar.appendChild(btnClose);
+    overlay.appendChild(toolbar);
+
+    var hint = document.createElement('div');
+    hint.textContent = 'Drag to pan · scroll to zoom · Esc to close';
+    hint.style.cssText = (
+      'position:absolute;bottom:18px;left:50%;transform:translateX(-50%);' +
+      'color:rgba(218,165,32,0.7);font-size:12px;font-family:monospace;'
+    );
+    overlay.appendChild(hint);
+
+    overlay.addEventListener('wheel', function(ev) {
+      ev.preventDefault();
+      var delta = -ev.deltaY;
+      _lensZoom(delta > 0 ? 1.1 : 0.9);
+    }, { passive: false });
+
+    overlay.addEventListener('mousedown', function(ev) {
+      if (ev.target.closest('.wiki-mermaid-lens-toolbar')) return;
+      _lensState.dragging = true;
+      _lensState.dragX = ev.clientX - _lensState.tx;
+      _lensState.dragY = ev.clientY - _lensState.ty;
+      overlay.style.cursor = 'grabbing';
+    });
+    window.addEventListener('mousemove', function(ev) {
+      if (!_lensState.dragging) return;
+      _lensState.tx = ev.clientX - _lensState.dragX;
+      _lensState.ty = ev.clientY - _lensState.dragY;
+      _lensApply();
+    });
+    window.addEventListener('mouseup', function() {
+      if (_lensState.dragging) {
+        _lensState.dragging = false;
+        overlay.style.cursor = 'grab';
+      }
+    });
+
+    overlay.addEventListener('click', function(ev) {
+      if (ev.target === overlay) _lensClose();
+    });
+    window.addEventListener('keydown', function(ev) {
+      if (_lensModal && overlay.style.display !== 'none') {
+        if (ev.key === 'Escape') _lensClose();
+        else if (ev.key === '+' || ev.key === '=') _lensZoom(1.25);
+        else if (ev.key === '-' || ev.key === '_') _lensZoom(0.8);
+        else if (ev.key === '0') _lensReset();
+      }
+    });
+
+    document.body.appendChild(overlay);
+    _lensModal = { overlay: overlay, stage: stage };
+    return _lensModal;
+  }
+
+  function _lensApply() {
+    if (!_lensModal) return;
+    var s = _lensState;
+    _lensModal.stage.style.transform =
+      'translate(' + s.tx + 'px,' + s.ty + 'px) scale(' + s.scale + ')';
+  }
+
+  function _lensZoom(factor) {
+    _lensState.scale = Math.max(0.25, Math.min(8, _lensState.scale * factor));
+    _lensApply();
+  }
+
+  function _lensReset() {
+    // Default 1.5× so the diagram is readable on first open.
+    _lensState.scale = 1.5;
+    _lensState.tx = 0;
+    _lensState.ty = 0;
+    _lensApply();
+  }
+
+  function _lensClose() {
+    if (_lensModal) _lensModal.overlay.style.display = 'none';
+  }
+
+  function _openMermaidLens(diagramEl) {
+    var modal = _ensureLensModal();
+    var svg = diagramEl.querySelector('svg');
+    if (!svg) return;
+    // Clone so the inline diagram stays untouched.
+    var clone = svg.cloneNode(true);
+    clone.removeAttribute('width');
+    clone.removeAttribute('height');
+    clone.style.cssText = 'max-width:90vw;max-height:88vh;display:block;';
+    modal.stage.innerHTML = '';
+    modal.stage.appendChild(clone);
+    _lensReset();
+    modal.overlay.style.display = 'flex';
   }
 
   // ── Markdown Renderer ──
