@@ -317,3 +317,122 @@ function joinWikiPath(root: string, rel: string): string {
   if (rel.startsWith("/")) return rel;
   return root.replace(/\/+$/, "") + "/" + rel.replace(/^\/+/, "");
 }
+
+// ── G12 composition helper (used by curate-wiki.ts handler) ───────────
+
+/**
+ * Bundle of arg fields the G12 branches read. Pulled out so the
+ * handler can forward a slice of its CurateWikiArgs without depending
+ * on the handler's full shape.
+ */
+export interface G12ComposeArgs {
+  readonly domain?: string;
+  readonly include_scope_coverage?: boolean;
+  readonly scope_coverage_jobs_max?: number;
+  readonly include_reauthor?: boolean;
+  readonly reauthor_jobs_max?: number;
+  readonly project_root?: string;
+  readonly today: string;
+}
+
+/**
+ * Bundle of dep fields the G12 branches read. Optional everywhere —
+ * a missing required adapter just short-circuits the branch to empty
+ * arrays.
+ */
+export interface G12ComposeDeps {
+  readonly wikiRoot: string;
+  readonly listSubdirs?: ScopeCoverageDeps["listSubdirs"];
+  readonly pageStat?: ScopeCoverageDeps["auditAdapters"]["pageStat"];
+  readonly countSubstantivePages?: ScopeCoverageDeps["auditAdapters"]["countSubstantivePages"];
+  readonly readWikiPageBody?: ScopeCoverageDeps["readWikiPageBody"];
+  readonly sourceRootResolver?: ScopeCoverageDeps["sourceRootResolver"];
+  readonly readPage?: ReauthorBranchDeps["readPage"];
+  readonly pageMtime?: ReauthorBranchDeps["pageMtime"];
+  readonly sourceFileMtime?: ReauthorBranchDeps["sourceFileMtime"];
+  readonly listMdPages?: ReauthorBranchDeps["listMdPages"];
+}
+
+export interface G12BranchResult {
+  readonly scopeJobs: readonly ScopeCoverageJobPayload[];
+  readonly reauthorJobs: readonly ReauthorJobPayload[];
+  readonly summary: readonly DomainCoverageSummary[];
+}
+
+/**
+ * Compute the G12 scope-coverage + reauthor branches.
+ *
+ * Both short-circuit when their include_* flag is false or the
+ * required adapters aren't wired. The handler picks the right deps
+ * shape from its unified CurateWikiDeps and forwards.
+ *
+ * source: cortex@HEAD~ mcp_server/handlers/curate_wiki.py (2026-05-18)
+ */
+export async function computeG12Branches(
+  args: G12ComposeArgs,
+  deps: G12ComposeDeps,
+  memories: readonly CuratorMemory[],
+  existingPagesByTopic: ReadonlyMap<string, readonly string[]>,
+): Promise<G12BranchResult> {
+  let scopeJobs: readonly ScopeCoverageJobPayload[] = [];
+  let summary: readonly DomainCoverageSummary[] = [];
+  if (deps.listSubdirs && deps.pageStat && deps.countSubstantivePages) {
+    const scopeDeps: ScopeCoverageDeps = {
+      wikiRoot: deps.wikiRoot,
+      listSubdirs: deps.listSubdirs,
+      auditAdapters: {
+        pageStat: deps.pageStat,
+        countSubstantivePages: deps.countSubstantivePages,
+      },
+      ...(deps.readWikiPageBody ? { readWikiPageBody: deps.readWikiPageBody } : {}),
+      ...(deps.sourceRootResolver ? { sourceRootResolver: deps.sourceRootResolver } : {}),
+    };
+    const scopeResult = computeScopeCoverageJobs(
+      {
+        ...(args.domain !== undefined ? { domain: args.domain } : {}),
+        ...(args.include_scope_coverage !== undefined ? { include_scope_coverage: args.include_scope_coverage } : {}),
+        ...(args.scope_coverage_jobs_max !== undefined ? { scope_coverage_jobs_max: args.scope_coverage_jobs_max } : {}),
+        today: args.today,
+      },
+      scopeDeps,
+      memories,
+      existingPagesByTopic,
+    );
+    scopeJobs = scopeResult.jobs;
+    summary = scopeResult.summary;
+  }
+
+  let reauthorJobs: readonly ReauthorJobPayload[] = [];
+  if (
+    deps.listSubdirs && deps.pageStat && deps.countSubstantivePages &&
+    deps.readPage && deps.pageMtime && deps.sourceFileMtime &&
+    deps.listMdPages && deps.readWikiPageBody && deps.sourceRootResolver
+  ) {
+    const reauthorDeps: ReauthorBranchDeps = {
+      wikiRoot: deps.wikiRoot,
+      listSubdirs: deps.listSubdirs,
+      auditAdapters: {
+        pageStat: deps.pageStat,
+        countSubstantivePages: deps.countSubstantivePages,
+      },
+      readWikiPageBody: deps.readWikiPageBody,
+      sourceRootResolver: deps.sourceRootResolver,
+      pageMtime: deps.pageMtime,
+      sourceFileMtime: deps.sourceFileMtime,
+      readPage: deps.readPage,
+      listMdPages: deps.listMdPages,
+    };
+    reauthorJobs = await computeReauthorJobs(
+      {
+        ...(args.domain !== undefined ? { domain: args.domain } : {}),
+        ...(args.include_reauthor !== undefined ? { include_reauthor: args.include_reauthor } : {}),
+        ...(args.reauthor_jobs_max !== undefined ? { reauthor_jobs_max: args.reauthor_jobs_max } : {}),
+        ...(args.project_root !== undefined ? { project_root: args.project_root } : {}),
+        today: args.today,
+      },
+      reauthorDeps,
+    );
+  }
+
+  return { scopeJobs, reauthorJobs, summary };
+}

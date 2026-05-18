@@ -57,6 +57,19 @@ import {
   buildCoverageJobs,
   computeCoverageGap,
 } from "../file-coverage.js";
+import {
+  computeG12Branches,
+  type DomainCoverageSummary,
+  type G12BranchResult,
+  type ReauthorJobPayload,
+  type ScopeCoverageJobPayload,
+} from "./curate-wiki-scope.js";
+import { instructionsForLlm } from "./curate-wiki-instructions.js";
+import type {
+  AuditDomainAdapters,
+  ListSubdirsFn,
+} from "../domain-coverage.js";
+import type { SourceRootResolverFn, ReadWikiPageBodyFn } from "../reauthor-jobs.js";
 
 // source: cortex@47b818d mcp_server/handlers/curate_wiki.py — defaults
 // for limit, recent_only, memory_pool_size.
@@ -100,6 +113,23 @@ export interface CurateWikiArgs {
   // default) means unbounded — match codebase_analyze's contract
   // (cortex@2f42428).
   readonly max_files?: number;
+  // ── Scope-coverage axis (G6 / G12) ──
+  // When true, audit every domain against the 15 canonical scopes
+  // (architecture / services / api / data-flow / operations / decisions
+  // / ...) and emit one authoring job per missing scope. Sorted by
+  // structural primacy. Defaults to false to keep the wire stable;
+  // callers in autonomous mode (consolidate-background) pass true.
+  // source: cortex@HEAD~ mcp_server/handlers/curate_wiki.py — include_coverage (2026-05-18)
+  readonly include_scope_coverage?: boolean;
+  readonly scope_coverage_jobs_max?: number;
+  // ── Drift re-author axis (G12) ──
+  // When true, scan every wiki page for source-citation drift and
+  // emit a structured re-author job (WIKI_REAUTHOR_PROMPT) for each
+  // drifted page. Distinct from the older ``include_drift`` axis
+  // which emits per-source-file drift refresh jobs.
+  // source: cortex@HEAD~ mcp_server/handlers/curate_wiki.py — include_reauthor (2026-05-18)
+  readonly include_reauthor?: boolean;
+  readonly reauthor_jobs_max?: number;
 }
 
 export interface CurationJobPayload {
@@ -153,6 +183,13 @@ export interface CurateWikiResult {
   // Counters for the SessionStart preamble + consolidate stats.
   readonly total_drifted: number;
   readonly total_coverage_gap: number;
+  // G12 — scope-coverage + reauthor channels. Empty when the
+  // corresponding include_* flag is false or the required adapters
+  // aren't wired.
+  // source: cortex@HEAD~ mcp_server/handlers/curate_wiki.py (2026-05-18)
+  readonly scope_coverage_jobs: readonly ScopeCoverageJobPayload[];
+  readonly reauthor_jobs: readonly ReauthorJobPayload[];
+  readonly domain_coverage_summary: readonly DomainCoverageSummary[];
 }
 
 export type CurateWikiResponse = CurateWikiResult | { readonly error: string };
@@ -213,6 +250,39 @@ export interface CurateWikiDeps {
    * source: packages/memory/src/wiki/file-coverage.ts — coverage prompt body
    */
   readonly readSourceFile?: (projectRoot: string, relPath: string) => string | null;
+  // ── G12 adapters (scope-coverage + reauthor) ──
+  // All optional. When unwired the corresponding branch short-circuits
+  // and the response carries empty arrays.
+  /**
+   * Subdir lister keyed on wiki ``<kind>`` directory. Returns project
+   * names found directly under that kind bucket.
+   * source: packages/memory/src/wiki/domain-coverage.ts:listDomains
+   */
+  readonly listSubdirs?: ListSubdirsFn;
+  /**
+   * Stat adapter for ``<wiki>/<kind>/<domain>/<anchor>.md`` candidates.
+   * Returns {sizeBytes, mtimeSec} or null.
+   * source: packages/memory/src/wiki/domain-coverage.ts:auditDomain
+   */
+  readonly pageStat?: AuditDomainAdapters["pageStat"];
+  /**
+   * Count substantive ``.md`` pages under a wiki subdirectory.
+   * source: packages/memory/src/wiki/domain-coverage.ts:auditDomain
+   */
+  readonly countSubstantivePages?: AuditDomainAdapters["countSubstantivePages"];
+  /**
+   * Synchronous wiki-page body reader for the reauthor branch. Returns
+   * null when the page can't be read.
+   * source: packages/memory/src/wiki/reauthor-jobs.ts:ReadWikiPageBodyFn
+   */
+  readonly readWikiPageBody?: ReadWikiPageBodyFn;
+  /**
+   * Resolve a domain to its source-tree root. Returns null when the
+   * domain has no checked-out tree (the reauthor branch still works
+   * against memory + existing page).
+   * source: packages/memory/src/wiki/reauthor-jobs.ts:SourceRootResolverFn
+   */
+  readonly sourceRootResolver?: SourceRootResolverFn;
 }
 
 // ── Existing-page topic index ───────────────────────────────────────────
@@ -309,67 +379,8 @@ function serialiseJob(job: CurationJob): CurationJobPayload {
   };
 }
 
-function instructionsForLlm(
-  nJobs: number,
-  nEligible: number,
-  nDrift: number = 0,
-  nGap: number = 0,
-): string {
-  if (nJobs === 0 && nDrift === 0 && nGap === 0) {
-    return (
-      `No curation jobs returned. ${nEligible} clusters were eligible. ` +
-      "If you expected jobs, relax min_memories or min_avg_heat, or pass " +
-      "recent_only=false."
-    );
-  }
-
-  const lines: string[] = [];
-  if (nJobs > 0) {
-    lines.push(
-      `Auto-curator returned ${nJobs} cluster job(s) (of ${nEligible} eligible).`,
-      "For each cluster job in order:",
-      "  1. Read `prompt` — cluster's memories + authoring conventions.",
-      "  2. Author the page in Markdown following the conventions " +
-      "(frontmatter → lead → sections with diagrams → 'why this not " +
-      "alternatives' → 'what can go wrong' → 'see also' → primary sources).",
-      "  3. Write via `wiki_write(path=<job.suggested_path>, " +
-      "content=<markdown>, tags=['wiki', 'llm-authored', <topic>, <domain>])`.",
-    );
-  }
-  if (nDrift > 0) {
-    lines.push(
-      "",
-      `Drift refresh: ${nDrift} page(s) cite source files that have ` +
-      "changed since the page mtime. For each entry in `drift_jobs`:",
-      "  1. Read `prompt` — it carries the existing body + the drifted ",
-      "     source paths.",
-      "  2. Decide per section: same code → keep; drifted code → rewrite; ",
-      "     invalidated → drop.",
-      "  3. Write via `wiki_write(path=<job.page_path>, ",
-      "     content=<markdown>, mode='replace', tags=[…])`.",
-    );
-  }
-  if (nGap > 0) {
-    lines.push(
-      "",
-      `Coverage: ${nGap} source file(s) have no wiki page yet. For each ` +
-      "entry in `coverage_jobs`:",
-      "  1. Read `prompt` — it carries the file body + frontmatter spec.",
-      "  2. Author a reference page describing what the file does.",
-      "  3. Write via `wiki_write(path=<job.suggested_path>, ",
-      "     content=<markdown>, tags=['wiki', 'llm-authored', 'reference', ",
-      "     <project>])`.",
-    );
-  }
-  lines.push(
-    "",
-    "Call `curate_wiki` again when this batch is done. The ",
-    "recently-authored skip filter prevents re-suggestions of pages you ",
-    "just wrote. Do not dump raw memory content; synthesise. Each page ",
-    "should be 6–15 KB of substantive authored prose, not a template.",
-  );
-  return lines.join("\n");
-}
+// instructionsForLlm lives in curate-wiki-instructions.ts to keep this
+// file under §4.1. The handler imports it below.
 
 /**
  * Build authoring jobs from PG memory clusters.
@@ -396,8 +407,37 @@ export async function handler(
   // Phase C: drift + coverage are always reported (even when no
   // memories exist), since they don't need a memory pool to operate.
   const relPaths = await deps.listMdPages(deps.wikiRoot);
+  const existingPagesByTopic = scanExistingPages(relPaths);
   const today = (deps.today ?? defaultToday)();
   const phaseC = await computePhaseCJobs(args, deps, relPaths, today, limit);
+
+  // G12 — scope-coverage + reauthor branches. Both short-circuit when
+  // their include_* flag is false or required adapters aren't wired.
+  const g12 = await computeG12Branches(
+    {
+      ...(args.domain !== undefined ? { domain: args.domain } : {}),
+      ...(args.include_scope_coverage !== undefined ? { include_scope_coverage: args.include_scope_coverage } : {}),
+      ...(args.scope_coverage_jobs_max !== undefined ? { scope_coverage_jobs_max: args.scope_coverage_jobs_max } : {}),
+      ...(args.include_reauthor !== undefined ? { include_reauthor: args.include_reauthor } : {}),
+      ...(args.reauthor_jobs_max !== undefined ? { reauthor_jobs_max: args.reauthor_jobs_max } : {}),
+      ...(args.project_root !== undefined ? { project_root: args.project_root } : {}),
+      today,
+    },
+    {
+      wikiRoot: deps.wikiRoot,
+      ...(deps.listSubdirs ? { listSubdirs: deps.listSubdirs } : {}),
+      ...(deps.pageStat ? { pageStat: deps.pageStat } : {}),
+      ...(deps.countSubstantivePages ? { countSubstantivePages: deps.countSubstantivePages } : {}),
+      ...(deps.readWikiPageBody ? { readWikiPageBody: deps.readWikiPageBody } : {}),
+      ...(deps.sourceRootResolver ? { sourceRootResolver: deps.sourceRootResolver } : {}),
+      ...(deps.readPage ? { readPage: deps.readPage } : {}),
+      ...(deps.pageMtime ? { pageMtime: deps.pageMtime } : {}),
+      ...(deps.sourceFileMtime ? { sourceFileMtime: deps.sourceFileMtime } : {}),
+      ...(deps.listMdPages ? { listMdPages: deps.listMdPages } : {}),
+    },
+    memories,
+    existingPagesByTopic,
+  );
 
   if (memories.length === 0) {
     return {
@@ -406,14 +446,19 @@ export async function handler(
       returned: 0,
       memory_pool_size: 0,
       domain_filter: args.domain ?? "(all)",
-      instructions: phaseC.totalGap + phaseC.totalDrift > 0
-        ? `No memory clusters, but ${phaseC.totalDrift} drifted page(s) and ` +
-          `${phaseC.totalGap} uncovered file(s) need attention.`
+      instructions: g12HasWork(phaseC, g12)
+        ? `No memory clusters, but ${phaseC.totalDrift} drifted page(s), ` +
+          `${phaseC.totalGap} uncovered file(s), ${g12.scopeJobs.length} ` +
+          `missing-scope page(s), and ${g12.reauthorJobs.length} ` +
+          `drifted-page rewrite(s) need attention.`
         : "No memories available to curate. Use `remember` to seed.",
       drift_jobs: phaseC.driftJobs,
       coverage_jobs: phaseC.coverageJobs,
       total_drifted: phaseC.totalDrift,
       total_coverage_gap: phaseC.totalGap,
+      scope_coverage_jobs: g12.scopeJobs,
+      reauthor_jobs: g12.reauthorJobs,
+      domain_coverage_summary: g12.summary,
     };
   }
 
@@ -430,8 +475,7 @@ export async function handler(
     ? filterAuthoredClusters(rawClusters, deps.wikiRoot, deps.pageMtime)
     : rawClusters;
 
-  const existingPages = scanExistingPages(relPaths);
-  const jobs = buildJobs(clusters, existingPages, today);
+  const jobs = buildJobs(clusters, existingPagesByTopic, today);
   const selected = jobs.slice(0, limit);
   const payload = selected.map(serialiseJob);
 
@@ -441,17 +485,32 @@ export async function handler(
     returned: payload.length,
     memory_pool_size: memories.length,
     domain_filter: args.domain ?? "(all)",
-    instructions: instructionsForLlm(
-      payload.length,
-      clusters.length,
-      phaseC.totalDrift,
-      phaseC.totalGap,
-    ),
+    instructions: instructionsForLlm({
+      nJobs: payload.length,
+      nEligible: clusters.length,
+      nDrift: phaseC.totalDrift,
+      nGap: phaseC.totalGap,
+      nScopeCoverage: g12.scopeJobs.length,
+      nReauthor: g12.reauthorJobs.length,
+    }),
     drift_jobs: phaseC.driftJobs,
     coverage_jobs: phaseC.coverageJobs,
     total_drifted: phaseC.totalDrift,
     total_coverage_gap: phaseC.totalGap,
+    scope_coverage_jobs: g12.scopeJobs,
+    reauthor_jobs: g12.reauthorJobs,
+    domain_coverage_summary: g12.summary,
   };
+}
+
+// G12 branch composition lives in curate-wiki-scope.ts (computeG12Branches).
+// This file delegates so curate-wiki.ts stays under §4.1.
+
+function g12HasWork(
+  phaseC: { readonly totalDrift: number; readonly totalGap: number },
+  g12: G12BranchResult,
+): boolean {
+  return phaseC.totalDrift + phaseC.totalGap + g12.scopeJobs.length + g12.reauthorJobs.length > 0;
 }
 
 // ── Phase C composition helper ──────────────────────────────────────────
