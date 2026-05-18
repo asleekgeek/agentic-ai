@@ -23,6 +23,10 @@ export const ADR_STATUSES = [
 
 export type AdrStatus = typeof ADR_STATUSES[number];
 
+// ADR slug / filename zero-padding width. ADR-0042 not ADR-42.
+// source: cortex/mcp_server/core/wiki_pages.py — adr_number padding width
+const ADR_NUMBER_WIDTH = 4;
+
 export interface PageDocument {
   readonly frontmatter: Readonly<Record<string, unknown>>;
   readonly body: string;
@@ -65,6 +69,16 @@ function stripInlineList(value: string): string[] {
 
 /**
  * Parse a page's frontmatter + body. Tolerant of missing frontmatter.
+ *
+ * Handles two YAML list forms:
+ *
+ *   - Inline:  ``tags: [a, b, c]``
+ *   - Block:   ``tags:\n  - a\n  - b``
+ *
+ * Block-style is required for ``curation_gaps`` and other multi-value
+ * metadata the file-doc skeletons emit.
+ *
+ * source: cortex@HEAD~ mcp_server/core/wiki_pages.py:parse_page (2026-05-18)
  */
 export function parsePage(text: string): PageDocument {
   if (!text.startsWith("---\n") && !text.startsWith("---\r\n")) {
@@ -77,23 +91,52 @@ export function parsePage(text: string): PageDocument {
 
   const fm: Record<string, unknown> = {};
   let bodyStart = lines.length;
+  let idx = 1;
 
-  for (let idx = 1; idx < lines.length; idx++) {
-    const line = lines[idx];
-    if (!line) continue;
+  while (idx < lines.length) {
+    const line = lines[idx] ?? "";
     if (line.trim() === "---") {
       bodyStart = idx + 1;
       break;
     }
-    if (!line.includes(":")) continue;
+    if (!line.includes(":")) { idx += 1; continue; }
     const colonIdx = line.indexOf(":");
     const key = line.slice(0, colonIdx).trim();
     const raw = line.slice(colonIdx + 1).trim();
+
+    // Block-list detection: a key with no value followed by indented
+    // ``  - item`` lines collects into a list.
+    if (raw === "") {
+      const items: string[] = [];
+      let j = idx + 1;
+      while (j < lines.length) {
+        const peek = lines[j] ?? "";
+        if (peek.trim() === "---") break;
+        const stripped = peek.replace(/^\s+/, "");
+        const isIndented = peek.startsWith(" ") || peek.startsWith("\t");
+        if (isIndented && stripped.startsWith("- ")) {
+          items.push(stripped.slice(2).trim().replace(/^["']|["']$/g, ""));
+          j += 1;
+          continue;
+        }
+        break;
+      }
+      if (items.length > 0) {
+        fm[key] = items;
+        idx = j;
+        continue;
+      }
+      fm[key] = "";
+      idx += 1;
+      continue;
+    }
+
     if (raw.startsWith("[") && raw.endsWith("]")) {
       fm[key] = stripInlineList(raw);
     } else {
       fm[key] = raw;
     }
+    idx += 1;
   }
 
   let bodyLines = lines.slice(bodyStart);
@@ -136,14 +179,14 @@ export function buildAdr(args: BuildAdrArgs): string {
   }
   const fm: Record<string, unknown> = {
     kind: "adr",
-    number: String(args.number).padStart(4, "0"),
+    number: String(args.number).padStart(ADR_NUMBER_WIDTH, "0"),
     title: args.title,
     status,
     created: nowIso(),
     tags: args.tags ?? ["adr"],
   };
   const body =
-    `# ADR-${String(args.number).padStart(4, "0")}: ${args.title}\n\n` +
+    `# ADR-${String(args.number).padStart(ADR_NUMBER_WIDTH, "0")}: ${args.title}\n\n` +
     `## Status\n\n${status}\n\n` +
     `## Context\n\n${args.context}\n\n` +
     `## Decision\n\n${args.decision}\n\n` +
@@ -222,10 +265,17 @@ export function buildNote(args: BuildNoteArgs): string {
   return renderPage({ frontmatter: fm, body: `# ${args.title}\n\n${args.body}\n` });
 }
 
+// Maturity thresholds calibrated on Cortex's curated-page distribution:
+// pages with N sources accumulate independent corroboration → maturity.
+// source: cortex/mcp_server/core/wiki_pages.py:maturity_label
+const MATURITY_STABLE_SOURCES   = 8;
+const MATURITY_REVIEWED_SOURCES = 4;
+const MATURITY_DRAFT_SOURCES    = 2;
+
 export function maturityLabel(sourceCount: number): string {
-  if (sourceCount >= 8) return "stable";
-  if (sourceCount >= 4) return "reviewed";
-  if (sourceCount >= 2) return "draft";
+  if (sourceCount >= MATURITY_STABLE_SOURCES)   return "stable";
+  if (sourceCount >= MATURITY_REVIEWED_SOURCES) return "reviewed";
+  if (sourceCount >= MATURITY_DRAFT_SOURCES)    return "draft";
   return "stub";
 }
 
@@ -376,15 +426,16 @@ export function buildIndex(pagePaths: readonly string[]): string {
   type Entry = { kind: string; domain: string; filename: string; path: string };
   const entries: Entry[] = [];
 
+  // Layout: ``<kind>/<domain>/<filename>.md`` or ``<kind>/<filename>.md``.
+  // source: cortex/mcp_server/core/wiki_pages.py — index_page path layout
+  const MIN_PARTS_FOR_DOMAIN = 3;
   for (const p of pagePaths) {
     const parts = p.split("/");
     const kind = parts[0];
     if (!kind || !(PAGE_KINDS as readonly string[]).includes(kind)) continue;
-    if (parts.length >= 3) {
-      entries.push({ kind, domain: parts[1] ?? "_general", filename: parts[parts.length - 1]?.replace(/\.md$/, "") ?? "", path: p });
-    } else {
-      entries.push({ kind, domain: "_general", filename: parts[parts.length - 1]?.replace(/\.md$/, "") ?? "", path: p });
-    }
+    const filename = (parts[parts.length - 1] ?? "").replace(/\.md$/, "");
+    const domain = parts.length >= MIN_PARTS_FOR_DOMAIN ? (parts[1] ?? "_general") : "_general";
+    entries.push({ kind, domain, filename, path: p });
   }
 
   const total = entries.length;
@@ -393,9 +444,9 @@ export function buildIndex(pagePaths: readonly string[]): string {
 
   const tree: Record<string, Record<string, Array<[string, string]>>> = {};
   for (const { kind, domain, filename, path } of entries) {
-    if (!tree[domain]) tree[domain] = {};
-    if (!tree[domain]![kind]) tree[domain]![kind] = [];
-    tree[domain]![kind]!.push([filename, path]);
+    const byDomain = tree[domain] ?? (tree[domain] = {});
+    const byKind = byDomain[kind] ?? (byDomain[kind] = []);
+    byKind.push([filename, path]);
   }
 
   const lines = [
@@ -412,7 +463,7 @@ export function buildIndex(pagePaths: readonly string[]): string {
   });
 
   for (const domain of sortedDomains) {
-    const kinds = tree[domain]!;
+    const kinds = tree[domain] ?? {};
     const pageCount = Object.values(kinds).reduce((s, ps) => s + ps.length, 0);
     const label = domain === "_general" ? "Global" : domain.replace(/-/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
     lines.push(`## ${label} (${pageCount} pages)`);

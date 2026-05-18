@@ -355,11 +355,12 @@ export function classifyMemory(
 
   // Tag-based fast-path.
   //
-  // ADR-2244 Phase 6/6.2: extended to include the new modern-kind shape
-  // tags (runbook/playbook/tutorial/getting-started/how-to/howto/rfc/
-  // proposal/journal) plus the auto-gen producer markers (code-reference/
-  // codebase) so codebase_analyze output is admitted by the gate and the
-  // provenance facet downstream marks it as auto-generated.
+  // 2026-05-18: ``code-reference`` / ``codebase`` removed — those are
+  // audit tags and were rejected at Gate -1, so listing them here was
+  // dead code and a footgun. The wiki documents code structurally
+  // through scope pages (architecture / services / api / data-flow per
+  // project), not via per-file dumps.
+  // source: cortex@HEAD~ mcp_server/core/wiki_classifier.py:_classify_to_legacy_kind (2026-05-18)
   const EXPLICIT_KNOWLEDGE_TAGS = new Set([
     // Legacy knowledge tags.
     "decision", "adr", "architecture", "spec", "design", "lesson",
@@ -367,9 +368,6 @@ export function classifyMemory(
     // ADR-2244 modern-kind shape tags.
     "runbook", "playbook", "tutorial", "getting-started",
     "how-to", "howto", "rfc", "proposal", "journal",
-    // Auto-gen producer markers — bypass positive score because the
-    // producer has already filtered to high-signal content.
-    "code-reference", "codebase",
   ]);
   let hasExplicitTag = false;
   for (const tag of tagSetPre) {
