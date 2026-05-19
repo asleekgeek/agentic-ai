@@ -96,6 +96,13 @@ export interface DashboardWriteResult {
   readonly projects: readonly string[];
 }
 
+export interface HeadlessAuthoringSummary {
+  readonly drains_attempted: number;
+  readonly drains_filled: number;
+  readonly drains_failed: number;
+  readonly duration_ms: number;
+}
+
 export interface WikiMaintenanceResult {
   readonly stub: WikiMaintenanceAxisResult;
   readonly classifier: WikiMaintenanceAxisResult;
@@ -107,6 +114,8 @@ export interface WikiMaintenanceResult {
   readonly scope_coverage_gaps: number;
   /** Per-project dashboards regenerated this cycle (G5). */
   readonly dashboards: DashboardWriteResult;
+  /** Headless authoring drain — pages actually written this cycle. */
+  readonly headless_authoring: HeadlessAuthoringSummary;
   readonly pending_total: number;
   readonly status: string;
 }
@@ -421,6 +430,34 @@ export async function runWikiMaintenance(
     }
   }
 
+  // Headless authoring drain — the actuator that actually calls
+  // ``claude -p`` and writes pages. Gated by env so it only fires when
+  // the operator opts in (the worker spawns ``claude`` per page; that
+  // hits the user's Claude subscription quota). Disabled by default so
+  // ``runWikiMaintenance`` stays fast for the consolidate hot path.
+  // Enable with ``CORTEX_HEADLESS_AUTHORING=on``.
+  // source: cortex/mcp_server/handlers/consolidation/headless_authoring.py
+  //   + user direction 2026-05-19 — "the grooming agent was not writing"
+  let headless: HeadlessAuthoringSummary = {
+    drains_attempted: 0, drains_filled: 0, drains_failed: 0, duration_ms: 0,
+  };
+  if (process.env["CORTEX_HEADLESS_AUTHORING"] === "on") {
+    try {
+      const { runHeadlessAuthoringCycle } = await import("./headless-authoring.js");
+      const cycle = runHeadlessAuthoringCycle({ wikiRoot: deps.wikiRoot });
+      headless = {
+        drains_attempted: cycle.drains_attempted,
+        drains_filled: cycle.drains_filled,
+        drains_failed: cycle.drains_failed,
+        duration_ms: cycle.duration_ms,
+      };
+    } catch (exc) {
+      if (status === "ok") {
+        status = `headless_authoring_error: ${exc instanceof Error ? exc.message : String(exc)}`;
+      }
+    }
+  }
+
   return {
     stub,
     classifier,
@@ -430,6 +467,7 @@ export async function runWikiMaintenance(
     drifted_pages,
     scope_coverage_gaps: scopeOutcome.scope_coverage_gaps,
     dashboards: scopeOutcome.dashboards,
+    headless_authoring: headless,
     pending_total: cluster_jobs + coverage_gaps + drifted_pages + scopeOutcome.scope_coverage_gaps,
     status,
   };
