@@ -900,6 +900,30 @@
     main.appendChild(wrap);
   }
 
+  // ── Wiki-link resolution ──
+  // Map a ``[[target]]`` to a concrete loadable path or null.
+  // Resolution hierarchy: exact match → ``.md`` suffix → suffix-of
+  // (some authors write ``[[reference/cortex/foo]]`` when the
+  // canonical path is ``reference/cortex/foo-bar``).
+  // source: this module — fix observed against unresolved [[…]] links (2026-05-19)
+  function resolveWikiLinkTarget(target) {
+    if (!target || !pages || pages.length === 0) return null;
+    var clean = String(target).replace(/^\/+|\/+$/g, '');
+    var withMd = /\.md$/.test(clean) ? clean : clean + '.md';
+    for (var i = 0; i < pages.length; i++) {
+      if (pages[i].path === clean || pages[i].path === withMd) return pages[i].path;
+    }
+    // Suffix-of fallback — strict ``.md``-suffix path comparison.
+    var bare = clean.replace(/\.md$/, '');
+    var matches = pages.filter(function(p) {
+      var pBare = p.path.replace(/\.md$/, '');
+      return pBare === bare ||
+             pBare.indexOf(bare + '/') === 0 ||
+             pBare.indexOf('/' + bare) === pBare.length - bare.length - 1;
+    });
+    return matches.length > 0 ? matches[0].path : null;
+  }
+
   // ── Page Loading ──
   function loadPage(path) {
     activePath = path;
@@ -1081,10 +1105,11 @@
     // source: cortex@HEAD~ ui/unified/js/wiki.js (2026-05-18 — curation-gap banner)
     var gaps = meta && meta.curation_gaps;
     if (Array.isArray(gaps) && gaps.length > 0) {
-      // 13 canonical FILE_DOC_SECTIONS — keep in sync with
-      // packages/memory/src/wiki/curation-gaps.ts:FILE_DOC_SECTIONS.
-      // source: packages/memory/src/wiki/curation-gaps.ts
-      var TOTAL_FILE_DOC_SECTIONS = 13;
+      // FILE_DOC_SECTIONS.length + 1 (see-also is canonical but lives
+      // outside the FILE_DOC_SECTIONS array; the skeleton always emits
+      // it). Currently 13 file sections + 1 see-also = 14.
+      // source: packages/memory/src/wiki/curation-gaps.ts:FILE_DOC_SECTIONS
+      var TOTAL_FILE_DOC_SECTIONS = 14;
       var coveredCount = Math.max(0, TOTAL_FILE_DOC_SECTIONS - gaps.length);
       var pct = Math.round(100 * coveredCount / TOTAL_FILE_DOC_SECTIONS);
       var banner = el('aside', 'wiki-curation-banner');
@@ -1116,7 +1141,8 @@
         'failure-modes':    'What can go wrong — failure modes + symptoms',
         tests:              'Tests — which test files exercise this',
         'see-also':         'See also — cross-links to architecture / services / api',
-        'sequence-diagram': 'Sequence diagram — mermaid flow of caller → this file → callees',
+        'sequence-diagram': 'Sequence diagram — mermaid sequenceDiagram of caller → this file → callees',
+        'flow-diagram':     'Flow diagram — mermaid flowchart of branches / lifecycle / decision tree',
         parameters:         'Parameters — exhaustive table (name, type, required, default, description)',
         'request-example':  'Request example — curl + headers / JSON-RPC envelope / call site',
         'response-example': 'Response example — every field annotated, success + error shapes',
@@ -1179,11 +1205,31 @@
     // the body is visible immediately, citations appear when loaded.
     applyAcademicPasses(bodyEl, meta);
 
-    // Wire internal wiki links
+    // Wire internal wiki links. ``[[path]]`` references render as
+    // ``.wiki-link`` spans with a data-path attribute. Resolution
+    // hierarchy:
+    //   1. Exact match against the loaded page set.
+    //   2. ``path.md`` match (some authors omit the extension).
+    //   3. Suffix match (the LLM sometimes writes
+    //      ``[[reference/cortex/foo]]`` when the canonical path is
+    //      ``reference/cortex/foo-bar``).
+    //   4. Token-based filter — load the tree filtered to the token
+    //      so the reader still lands somewhere useful instead of a
+    //      404.
+    // source: this module — fix observed against unresolved [[…]] links (2026-05-19)
     bodyEl.querySelectorAll('.wiki-link').forEach(function(link) {
+      link.style.cursor = 'pointer';
       link.addEventListener('click', function() {
-        var target = link.getAttribute('data-path');
-        if (target) loadPage(target);
+        var target = link.getAttribute('data-path') || '';
+        if (!target) return;
+        var resolved = resolveWikiLinkTarget(target);
+        if (resolved) { loadPage(resolved); return; }
+        // No match — filter the tree on the bare token so the reader
+        // sees what IS authored under that name.
+        searchQuery = String(target.split('/').pop() || target);
+        var search = document.querySelector('.wiki-search');
+        if (search) search.value = searchQuery;
+        rebuildTree();
       });
     });
 
@@ -1775,6 +1821,21 @@
 
     // Images ![alt](url)
     s = s.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" class="wiki-img" loading="lazy">');
+
+    // Wiki-link [[path]] or [[path|label]] — MUST run BEFORE the
+    // standard [text](url) handler so the inner ``[…]`` doesn't get
+    // swallowed first. ``path`` may already carry a ``.md`` suffix
+    // (LLM-authored pages do); we strip it when constructing data-path
+    // so click resolution doesn't need to match both forms.
+    // source: cortex@ed33435 ui/unified/js/wiki.js — render_wiki_link
+    s = s.replace(/\[\[([^\]|]+)(?:\|([^\]]+))?\]\]/g, function(match, target, label) {
+      var raw = String(target || '').trim();
+      var disp = (label || raw).trim();
+      var dataPath = raw.replace(/\.md$/, '');
+      var bracketed = '[[' + raw + ']]';
+      return '<span class="wiki-link" data-path="' + dataPath +
+             '" title="' + bracketed + '">' + disp + '</span>';
+    });
 
     // Links [text](url)
     s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, function(match, text, url) {

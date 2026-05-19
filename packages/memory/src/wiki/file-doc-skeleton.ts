@@ -39,6 +39,11 @@ const DEFAULT_TAGS: readonly string[] = [
 const IMPORT_INSPECT_LINES = 200; // _extract_imports — splitlines()[:200]
 const IMPORT_SAMPLE_CAP    = 20;  // _extract_imports — list(seen)[:20]
 const SYMBOL_SAMPLE_CAP    = 25;  // _extract_symbols — [:25]
+// Top-N exports the skeleton seeds into the diagram scaffolds.
+// Beyond 5, the diagram becomes unreadable on screen; the LLM picks
+// up the rest in the re-author pass.
+// source: this module — visual readability bound on mermaid diagrams
+const SYMBOLS_PER_DIAGRAM_SEED = 5;
 
 // ── Language detection ────────────────────────────────────────────────
 
@@ -218,6 +223,90 @@ export function buildFileDoc(args: BuildFileDocArgs): string {
       "automatically. The curation step is to write what each " +
       "one does._\n\n" + apiLines;
   }
+
+  // Pre-seed a mermaid sequenceDiagram scaffold so the LLM has a
+  // concrete starting point instead of a blank heading. The diagram
+  // names the file's exported entry points so even the seed shape is
+  // grounded in the actual code; the re-author pass adds the real
+  // edges.
+  // source: this module — user direction "be thorough; cover everything"
+  if (symbols.length > 0) {
+    const seq: string[] = [
+      "```mermaid",
+      "sequenceDiagram",
+      `  participant Caller`,
+      `  participant File as ${args.relSourcePath}`,
+      ...symbols.slice(0, SYMBOLS_PER_DIAGRAM_SEED).map((s) =>
+        `  Caller->>File: ${s}(...)`,
+      ),
+      ...symbols.slice(0, SYMBOLS_PER_DIAGRAM_SEED).map((s) =>
+        `  File-->>Caller: <return from ${s}>`,
+      ),
+      "```",
+      "",
+      missingMarker(
+        "replace the placeholder edges above with the actual call " +
+        "flow — caller name, intermediate collaborators, return shape",
+      ),
+    ];
+    autoPopulated["sequence-diagram"] = seq.join("\n");
+
+    // Flow-diagram seed: branches per exported entry point. Useful for
+    // any file with multiple top-level decisions.
+    const flow: string[] = [
+      "```mermaid",
+      "flowchart TD",
+      `  Entry["Caller invokes ${args.relSourcePath}"]`,
+    ];
+    symbols.slice(0, SYMBOLS_PER_DIAGRAM_SEED).forEach((s, idx) => {
+      flow.push(`  Entry --> S${idx}["${s}"]`);
+      flow.push(`  S${idx} --> Done`);
+    });
+    flow.push("```");
+    flow.push("");
+    flow.push(missingMarker(
+      "replace the placeholder branches with the actual decision " +
+      "tree — error paths, retry loops, downstream calls",
+    ));
+    autoPopulated["flow-diagram"] = flow.join("\n");
+  }
+
+  // Parameter / request / response example scaffolds — empty tables
+  // and code fences with placeholders so the LLM has a structural
+  // template instead of starting from zero.
+  // source: this module — user direction "be thorough; cover everything"
+  autoPopulated["parameters"] =
+    "| name | type | required | default | description |\n" +
+    "|------|------|----------|---------|-------------|\n" +
+    "| _placeholder_ | _type_ | _yes/no_ | _default_ | " +
+    missingMarker("describe every parameter the public entry points accept") +
+    " |\n\n" +
+    "_If this file exposes no external parameters, replace the table with:_ " +
+    `"Not applicable — \`${args.relSourcePath}\` exposes no external parameters."`;
+
+  autoPopulated["request-example"] =
+    "```bash\n" +
+    "# Replace with the actual invocation shape for this file:\n" +
+    "#   HTTP   → curl -H \"Content-Type: application/json\" -X POST <url> -d '{...}'\n" +
+    "#   MCP    → JSON-RPC envelope with `method` + `params`\n" +
+    "#   Lib    → call site as it would appear in client code\n" +
+    "```\n\n" +
+    missingMarker(
+      "swap the placeholder for the real invocation — show every " +
+      "header / param the caller must set",
+    );
+
+  autoPopulated["response-example"] =
+    "```json\n" +
+    "{\n" +
+    "  \"status\": \"<success | error>\",\n" +
+    "  \"_note\": \"replace this stub with the actual response shape\"\n" +
+    "}\n" +
+    "```\n\n" +
+    missingMarker(
+      "show both the success and most common error response; " +
+      "annotate every non-obvious field",
+    );
 
   const gaps: string[] = [];
   const bodyParts: string[] = [];

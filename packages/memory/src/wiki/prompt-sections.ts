@@ -61,19 +61,31 @@ export const ADR_TASK_RECORD_SECTIONS =
  * source: cortex@HEAD~ mcp_server/core/auto_curator.py:_GENERIC_STRUCTURE_SECTIONS (2026-05-18)
  */
 export const GENERIC_STRUCTURE_SECTIONS =
-`For kind = \`reference\` / \`explanation\` / other: the body should follow this conventional shape:
+`For kind = \`reference\` / \`explanation\` / other: the body MUST carry every section below. A wiki page is only useful if it covers everything a reader could need; missing sections create stale documentation nobody maintains.
 
 1. **# <title>** — H1 matching frontmatter title.
 2. **Lead paragraph** — one paragraph saying what the page is and why a reader should care.
-3. **Sections explaining the topic**:
-   - Use \`\`\`mermaid\`\`\` fences for flowcharts, sequence diagrams, state diagrams when the topic involves dataflow or state transitions.
-   - Use tables for taxonomies, parameter lists, comparisons.
-   - Use \`\`\` fences with language for code snippets.
-   - Cite specific source files with full paths (e.g. \`\`packages/memory/src/wiki/predictive-coding-gate.ts\`\`).
-4. **## Why this design and not the alternatives** — explain the architectural choice. What was considered, what was rejected, why.
-5. **## What can go wrong** — failure modes the next reader should know about, with concrete symptoms.
-6. **## See also** — cross-links to related pages using \`[[wiki/path]]\` notation, plus specific source files.
-7. **## Primary sources** — if the topic touches research literature, cite the actual papers with full citations.
+3. **## Architecture** — where this fits in the layer model. Cite the directories that map to each layer.
+4. **## Sequence diagram** — a \`\`\`mermaid sequenceDiagram\`\`\` showing the typical call flow (caller → this subject → callees → return). MANDATORY — write "Not applicable — this is a pure data type, no sequence flow exists" and explain why when the subject really has no sequence. Do not skip the heading.
+5. **## Flow diagram** — a \`\`\`mermaid flowchart\`\`\` (TB or LR) for any branching logic, lifecycle, or state machine. For tree-shaped data, render the tree as a flowchart. MANDATORY — same fallback rule as sequence diagram.
+6. **## Public surface** — every exported symbol / endpoint / CLI flag with semantic + stability flag. Use a table.
+7. **## Parameters** — exhaustive table (name | type | required | default | description) for every public entry point. Write "Not applicable" only when the subject exposes no parameter surface.
+8. **## Request example** — concrete example: curl + headers for HTTP, JSON-RPC envelope for MCP, call site for library. Show headers explicitly; never elide.
+9. **## Response example** — every field annotated; include both success and the most common error shape.
+10. **## How it works** — walk-through of the internal logic. Quote short representative source snippets with full paths (e.g. \`\`packages/memory/src/wiki/predictive-coding-gate.ts:42\`\`).
+11. **## Invariants** — what must always be true. Layer-boundary contracts, thread-safety, idempotency.
+12. **## What can go wrong** — failure modes with concrete symptoms the reader will recognise in a stack trace or log.
+13. **## Why this design and not the alternatives** — what was considered, what was rejected, why.
+14. **## Performance characteristics** — latency / throughput / memory footprint where measured. Cite the benchmark file or measurement date.
+15. **## Tests** — which test files exercise this and what each covers.
+16. **## See also** — cross-links to related pages using \`[[wiki/path]]\` notation, plus specific source files. Use the actual canonical paths the wiki tree contains.
+17. **## Primary sources** — paper citations, RFCs, upstream documentation. Cite the full reference, not "the docs."
+
+Conventions, non-negotiable:
+- Every section heading appears even when the content is "Not applicable" — empty sections are the curation surface that lets the autonomous loop fill them in. Hiding a heading hides the gap.
+- Tables and diagrams beat prose for anything enumerable or structural.
+- Cite source paths with line numbers for any specific behaviour. "It's in the code" is not a citation.
+- \`\`\`mermaid\`\`\` fences must specify a diagram type (sequenceDiagram / flowchart / classDiagram / stateDiagram / erDiagram).
 `;
 
 /**

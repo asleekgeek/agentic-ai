@@ -54,9 +54,21 @@ describe("buildFileDoc — frontmatter", () => {
       domain: "demo",
       today: TODAY,
     });
-    // With no imports + no symbols, every FILE_DOC_SECTIONS entry
-    // surfaces as a gap, plus the trailing ``see-also``.
-    for (const s of FILE_DOC_SECTIONS) expect(out).toContain(`  - ${s.name}`);
+    // Sections the skeleton seeds with template content (parameters /
+    // request-example / response-example) do NOT appear in the gap
+    // list because they have starter scaffolds. Every other canonical
+    // section + the trailing ``see-also`` must surface as a gap.
+    // source: file-doc-skeleton.ts — auto-populated sections skip the
+    //   missing marker; their placeholder content passes the
+    //   minCharsUnderHeading threshold.
+    const ALWAYS_PRESEEDED = new Set(["parameters", "request-example", "response-example"]);
+    for (const s of FILE_DOC_SECTIONS) {
+      if (ALWAYS_PRESEEDED.has(s.name)) {
+        expect(out).not.toMatch(new RegExp("- " + s.name + "$", "m"));
+      } else {
+        expect(out).toContain(`  - ${s.name}`);
+      }
+    }
     expect(out).toContain("  - see-also");
   });
 });

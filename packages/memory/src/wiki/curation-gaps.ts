@@ -61,6 +61,7 @@ const MIN_TESTS         = 80;  // source: cortex wiki_curation_gaps.py:132 (Cura
 // New 2026-05-18 sections — the four below need higher-substance content
 // because they're the surfaces a reader leans on most when integrating.
 const MIN_SEQUENCE_DIAGRAM = 120; // source: cortex wiki_curation_gaps.py:155 (sequence-diagram)
+const MIN_FLOW_DIAGRAM     = 120; // source: this module — flow-diagram parity with sequence threshold
 const MIN_PARAMETERS       = 120; // source: cortex wiki_curation_gaps.py:170 (parameters)
 const MIN_REQUEST_EXAMPLE  = 120; // source: cortex wiki_curation_gaps.py:189 (request-example)
 const MIN_RESPONSE_EXAMPLE = 120; // source: cortex wiki_curation_gaps.py:211 (response-example)
@@ -159,7 +160,6 @@ export const FILE_DOC_SECTIONS: readonly CurationSection[] = [
     heading: "## Sequence diagram",
     probes: [
       "## Sequence diagram",
-      "## Flow diagram",
       "## Sequence",
       "```mermaid\nsequenceDiagram",
     ],
@@ -171,6 +171,27 @@ export const FILE_DOC_SECTIONS: readonly CurationSection[] = [
       "no sequence (pure data types, constants), explicitly write " +
       "\"Not applicable — this file participates in no sequence flow\" " +
       "and explain why.",
+  },
+  {
+    name: "flow-diagram",
+    heading: "## Flow diagram",
+    probes: [
+      "## Flow diagram",
+      "## Flowchart",
+      "## State diagram",
+      "## Decision tree",
+      "```mermaid\nflowchart",
+      "```mermaid\nstateDiagram",
+    ],
+    minCharsUnderHeading: MIN_FLOW_DIAGRAM,
+    description:
+      "A `mermaid flowchart` (or stateDiagram for state machines) that " +
+      "renders the branching logic, lifecycle, or decision tree this " +
+      "file owns. Caller-side gates → which branch fires → which " +
+      "downstream collaborator → return path. For tree-shaped data, " +
+      "render the tree itself. For files with no branching (pure " +
+      "constants, linear pass-throughs), write \"Not applicable — no " +
+      "branching logic\" and explain why.",
   },
   {
     name: "parameters",
