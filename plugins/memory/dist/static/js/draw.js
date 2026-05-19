@@ -2,7 +2,25 @@
 // Large glowing circles, bright cyan edges, neural network aesthetic
 (function() {
   var animFrame = 0;
-  (function tick() { animFrame++; requestAnimationFrame(tick); })();
+  // Drive the animation only while the tab is visible. Modern browsers
+  // already throttle RAF in background tabs, but every recovery from
+  // hidden → visible triggers a burst of catch-up frames that can
+  // visibly stutter the canvas. Explicit pause/resume keeps the
+  // animation deterministic and stops the loop from accumulating
+  // wasted work when no one is watching.
+  // source: this module — fix observed against tab-switch hang (2026-05-19)
+  var _rafId = null;
+  function tick() { animFrame++; _rafId = requestAnimationFrame(tick); }
+  function _start() { if (_rafId == null) tick(); }
+  function _stop() {
+    if (_rafId != null) { cancelAnimationFrame(_rafId); _rafId = null; }
+  }
+  _start();
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden) _stop(); else _start();
+    });
+  }
 
   JUG._draw = {};
   JUG._draw.animFrame = function() { return animFrame; };

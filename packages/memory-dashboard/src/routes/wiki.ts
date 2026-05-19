@@ -34,6 +34,7 @@ import { autoResolveProjectRoot } from "@agentic/memory/wiki/project-roots.js";
 import { collectSourceFiles } from "@agentic/memory/codebase-analysis/handlers/codebase-analyze-helpers.js";
 import type { PageMtimeFn } from "@agentic/memory/wiki/auto-curator.js";
 import { serveWikiProjects } from "./wiki-projects.js";
+import { getOrCompute as cacheGetOrCompute, invalidate as invalidateWikiCache } from "./wiki-list-cache.js";
 
 // ── Named constants ───────────────────────────────────────────────────────────
 const HTTP_400 = 400; // source: RFC 7231 §6.5.1 — Bad Request
@@ -362,7 +363,11 @@ export async function registerWikiRoutes(fastify: FastifyInstance): Promise<void
    */
   fastify.get("/api/wiki/list", async (_req, reply) => {
     try {
-      const pages = listWikiPages(getWikiDir());
+      // Cache the walk — listWikiPages is synchronous fs over 14k+
+      // pages and blocks the event loop when called per-request.
+      // source: packages/memory-dashboard/src/routes/wiki-list-cache.ts
+      const wikiDir = getWikiDir();
+      const pages = cacheGetOrCompute(wikiDir, "list", () => listWikiPages(wikiDir));
       return reply.send({ pages });
     } catch (err) {
       return reply.status(HTTP_500).send({ error: err instanceof Error ? err.constructor.name : "UnknownError" }); // source: RFC 7231 §6.6 — 500 Internal Server Error; error class name only to avoid leaking internals (CWE-209)
@@ -436,7 +441,14 @@ export async function registerWikiRoutes(fastify: FastifyInstance): Promise<void
       const relPath = req.body.rel_path ?? "";
       const body = req.body.body ?? "";
       if (!relPath) return reply.status(HTTP_400).send({ error: "rel_path required" }); // source: RFC 7231 §6.5.1 — 400 Bad Request
-      return reply.send(saveWikiPage(getWikiDir(), relPath, body));
+      const wikiDir = getWikiDir();
+      const result = saveWikiPage(wikiDir, relPath, body);
+      // Invalidate the page-list / projects / maintenance caches so
+      // the new content surfaces on the next fetch without waiting
+      // for the TTL.
+      // source: packages/memory-dashboard/src/routes/wiki-list-cache.ts
+      invalidateWikiCache(wikiDir);
+      return reply.send(result);
     } catch (err) {
       return reply.status(HTTP_500).send({ error: err instanceof Error ? err.constructor.name : "UnknownError" }); // source: RFC 7231 §6.6 — 500 Internal Server Error; error class name only to avoid leaking internals (CWE-209)
     }
@@ -536,8 +548,15 @@ export async function registerWikiRoutes(fastify: FastifyInstance): Promise<void
   // source: packages/memory/src/wiki/maintenance-stats.ts
   fastify.get("/api/wiki/maintenance", async (_req, reply) => {
     try {
-      const stats = await computeMaintenanceStatsForDashboard();
-      const perProject = Array.from(stats.perProject.entries())
+      // Cache the heavy maintenance audit (drift + coverage walks 10k
+      // source files per project) so concurrent browser tab-focus
+      // refreshes don't pile up on the event loop.
+      // source: packages/memory-dashboard/src/routes/wiki-list-cache.ts
+      const wikiDir = getWikiDir();
+      const cached: Awaited<ReturnType<typeof computeMaintenanceStatsForDashboard>> =
+        await cacheGetOrCompute(wikiDir, "maintenance",
+          () => computeMaintenanceStatsForDashboard()) as Awaited<ReturnType<typeof computeMaintenanceStatsForDashboard>>;
+      const perProject = Array.from(cached.perProject.entries())
         .map(([name, p]) => ({
           name,
           drift:        p.drift,
@@ -545,9 +564,9 @@ export async function registerWikiRoutes(fastify: FastifyInstance): Promise<void
           project_root: p.projectRoot,
         }));
       return reply.send({
-        total_drift:    stats.totalDrift,
-        total_coverage: stats.totalCoverage,
-        total_pages:    stats.totalPages,
+        total_drift:    cached.totalDrift,
+        total_coverage: cached.totalCoverage,
+        total_pages:    cached.totalPages,
         per_project:    perProject,
       });
     } catch (err) {
@@ -572,7 +591,13 @@ export async function registerWikiRoutes(fastify: FastifyInstance): Promise<void
    */
   fastify.get("/api/wiki/projects", async (_req, reply) => {
     try {
-      const projects = await serveWikiProjects(getWikiDir());
+      // Cache the project-roll-up — serveWikiProjects walks every
+      // ``<kind>/<domain>/*.md`` and runs the scope audit.
+      // source: packages/memory-dashboard/src/routes/wiki-list-cache.ts
+      const wikiDir = getWikiDir();
+      const projects: Awaited<ReturnType<typeof serveWikiProjects>> =
+        await cacheGetOrCompute(wikiDir, "projects",
+          () => serveWikiProjects(wikiDir)) as Awaited<ReturnType<typeof serveWikiProjects>>;
       return reply.send({ projects });
     } catch (err) {
       return reply.status(HTTP_500).send({ error: err instanceof Error ? err.constructor.name : "UnknownError" }); // source: RFC 7231 §6.6 — 500 Internal Server Error

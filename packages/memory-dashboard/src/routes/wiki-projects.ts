@@ -13,8 +13,9 @@
 import fs from "node:fs";
 import path from "node:path";
 import {
-  auditAllDomains,
+  auditDomains,
   coverageRatio,
+  isPlausibleDomain,
   missingScopes,
   type AuditDomainAdapters,
   type ListSubdirsFn,
@@ -129,9 +130,23 @@ export async function serveWikiProjects(wikiDir: string): Promise<readonly Proje
     pageStat: pageStatForProjects(wikiDir),
     countSubstantivePages: countSubstantivePagesForProjects(wikiDir),
   };
-  const listSubdirs = listSubdirsForProjects(wikiDir);
-  const coverages = auditAllDomains(listSubdirs, auditAdapters);
+
+  // Audit-by-aggregation: every domain that has at least one page in
+  // the walk gets a coverage audit, not only the ones that appear under
+  // ≥2 kind directories. The 2-kind heuristic in ``listDomains`` is the
+  // cortex-parity default, but for the welcome grid it surfaced 19 of
+  // 26 real projects as ``scope=0/0`` because their pages live under a
+  // single kind bucket. Using the page-walk's domain set instead means
+  // every project the user actually has gets coverage stats.
+  // source: this module — fix observed against live wiki (2026-05-19)
+  const pageBearingDomains = [...pagesByDomain.keys()].filter(isPlausibleDomain).sort();
+  const coverages = auditDomains(pageBearingDomains, auditAdapters);
   const coverageByDomain = new Map(coverages.map((c) => [c.domain, c]));
+  // Keep the type import live — ListSubdirsFn is part of the adapter
+  // contract callers still construct via listSubdirsForProjects when
+  // they want the multi-kind listDomains path.
+  void (null as unknown as ListSubdirsFn | undefined);
+  void listSubdirsForProjects;
 
   const allDomains = new Set<string>();
   for (const d of pagesByDomain.keys()) allDomains.add(d);

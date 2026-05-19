@@ -2301,6 +2301,26 @@
     return lines.join('\n');
   }
 
+  // ── Tab-visibility refresh ──
+  // When the user switches away from the visualizer tab and back, the
+  // cached badges may be stale (background consolidate cycle landed
+  // new dashboards, drift counts moved, etc.). Re-fire the lightweight
+  // stat fetches on every transition from hidden → visible. Failure
+  // is non-fatal — the existing badges keep their previous values.
+  // The server-side cache (wiki-list-cache.ts, 30s TTL) absorbs
+  // duplicate calls so this never costs more than one full walk per
+  // half-minute regardless of how often the user toggles tabs.
+  // source: this module — fix observed against live tab-switch hang (2026-05-19)
+  if (typeof document !== 'undefined' && document.addEventListener) {
+    document.addEventListener('visibilitychange', function() {
+      if (document.hidden) return;
+      if (visible) {
+        try { fetchMaintenanceStats(); } catch (e) { /* non-fatal */ }
+        try { fetchProjectCoverage(); } catch (e) { /* non-fatal */ }
+      }
+    });
+  }
+
   // ── Init ──
   document.addEventListener('DOMContentLoaded', init);
 })();

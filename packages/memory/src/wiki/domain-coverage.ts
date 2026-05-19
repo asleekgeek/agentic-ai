@@ -234,9 +234,30 @@ export function listDomains(listSubdirs: ListSubdirsFn): string[] {
 }
 
 /**
- * Sweep every discovered domain. Returns coverage rolls sorted by
+ * Audit every supplied domain. Returns coverage rolls sorted by
  * missing-count desc so the most under-documented projects surface
  * first.
+ *
+ * Caller controls how the domain list is discovered — pass
+ * ``listDomains(listSubdirs)`` for the cortex-parity 2-kind threshold,
+ * or pass any custom list (e.g. discovered via page-aggregation walk)
+ * to audit a broader set.
+ *
+ * source: this module — discovery decoupled from audit (2026-05-19)
+ */
+export function auditDomains(
+  domains: readonly string[],
+  adapters: AuditDomainAdapters,
+  opts: AuditDomainOpts = {},
+): DomainCoverage[] {
+  const out = domains.map((d) => auditDomain(d, adapters, opts));
+  out.sort((a, b) => missingCount(b) - missingCount(a));
+  return out;
+}
+
+/**
+ * Sweep every domain ``listDomains`` discovers (≥2 kind directories).
+ * Thin wrapper around ``auditDomains`` for the cortex-parity path.
  *
  * source: cortex/mcp_server/core/wiki_coverage.py:audit_all_domains
  */
@@ -245,7 +266,5 @@ export function auditAllDomains(
   adapters: AuditDomainAdapters,
   opts: AuditDomainOpts = {},
 ): DomainCoverage[] {
-  const out = listDomains(listSubdirs).map((d) => auditDomain(d, adapters, opts));
-  out.sort((a, b) => missingCount(b) - missingCount(a));
-  return out;
+  return auditDomains(listDomains(listSubdirs), adapters, opts);
 }
