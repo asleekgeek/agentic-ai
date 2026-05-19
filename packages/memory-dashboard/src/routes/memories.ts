@@ -207,6 +207,15 @@ export interface MemoriesRouteDeps {
  * precondition:  fastify instance is not yet started.
  * postcondition: two routes registered.
  */
+// In-memory cache for /api/memories/facets — the full-table aggregate
+// fires on every Knowledge / Board open and is independent of the
+// individual page fetch. TTL bounded so the chip counts stay roughly
+// fresh; absolute correctness for chip counts isn't required (they
+// drive filter buttons, not data integrity).
+// source: this module — observed against live UI lag (2026-05-19)
+const FACETS_CACHE_TTL_MS = 30_000;
+let _facetsCache: { value: unknown; storedAt: number } | null = null;
+
 export async function registerMemoriesRoutes(
   fastify: FastifyInstance,
   deps: MemoriesRouteDeps,
@@ -424,6 +433,10 @@ export async function registerMemoriesRoutes(
    */
   fastify.get("/api/memories/facets", async (_req, reply) => {
     try {
+      const now = Date.now();
+      if (_facetsCache && now - _facetsCache.storedAt < FACETS_CACHE_TTL_MS) {
+        return reply.send(_facetsCache.value);
+      }
       // Q1: per-domain counts (sorted desc), capped at DOMAIN_LIMIT.
       // source: cortex@ed33435 mcp_server/handlers/memories_facets.py:Q1
       interface DomainRow { dom: string; c: number; }
@@ -461,7 +474,7 @@ export async function registerMemoriesRoutes(
 
       // Canonical response shape from Python source.
       // source: cortex@ed33435 mcp_server/handlers/memories_facets.py — payload dict
-      return reply.send({
+      const payload = {
         total: n("total"),
         domains: domainRows.map((r) => ({ name: r.dom, count: Number(r.c) })),
         stages: {
@@ -480,7 +493,9 @@ export async function registerMemoriesRoutes(
         global:    n("n_global"),
         protected: n("n_protected"),
         hot:       n("n_hot"),
-      });
+      };
+      _facetsCache = { value: payload, storedAt: now };
+      return reply.send(payload);
     } catch (err) {
       return reply.status(HTTP_500).send({ error: err instanceof Error ? err.constructor.name : "UnknownError" }); // source: RFC 7231 §6.6 — 500 Internal Server Error; error class name only to avoid leaking internals (CWE-209)
     }

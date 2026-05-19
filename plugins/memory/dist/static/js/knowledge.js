@@ -14,7 +14,15 @@
 
   // Paged-fetch state. Reset on every show()/filter change. Each page
   // after the first is gated on a genuine user scroll.
-  var PAGE_LIMIT = 50;
+  // Raised from 50 to 10000 so all memories load in one round-trip on typical
+  // corpora. Server-side PAGE_LIMIT_MAX was removed concurrently.
+  // source: 2026-05-08 user feedback — "knowledge and board not showing all nodes"
+  // Default first-page size: 200 cards renders in ~50ms in the browser
+  // and the JSON payload is ~250 KB, vs 10000 = 11 MB + 10k DOM nodes
+  // that visibly froze the UI. Subsequent pages stream in via the
+  // existing IntersectionObserver scroll sentinel.
+  // source: this module — observed against live 70k-memory store (2026-05-19)
+  var PAGE_LIMIT = 200;
   var memoriesAccum = [];          // accumulated rows across pages
   var seenIds = Object.create(null);
   var nextCursor = null;

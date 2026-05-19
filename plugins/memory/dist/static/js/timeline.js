@@ -13,7 +13,15 @@
 
   // Paged-fetch state. ONE page on open, all subsequent pages gated
   // on actual user scroll.
-  var BOARD_PAGE_LIMIT = 100;
+  // Raised from 100 to 10000 so all memories load in one round-trip on typical
+  // corpora. Server-side PAGE_LIMIT_MAX was removed concurrently.
+  // source: 2026-05-08 user feedback — "knowledge and board not showing all nodes"
+  // Default first-page size: 200 cards per kanban column renders fast
+  // and the JSON payload is ~250 KB, vs 10000 = 11 MB + 10k DOM nodes
+  // that visibly froze the UI. Subsequent pages stream in via the
+  // scroll-gated _boardFetchPage flow.
+  // source: this module — observed against live 70k-memory store (2026-05-19)
+  var BOARD_PAGE_LIMIT = 200;
   var boardAccum = [];
   var boardSeenIds = Object.create(null);
   var boardCursor = null;
@@ -86,12 +94,20 @@
     }
     if (JUG.state.selectedId) highlightMemory(JUG.state.selectedId);
 
-    // 60s poll for live updates: refetch the first page (heat may have
-    // shifted, new memories landed). Cheap because the page is paged.
-    if (!window._boardPollInterval) {
-      window._boardPollInterval = setInterval(function() {
+    // Live-update refresh — only fires on user-visible transitions
+    // (board re-shown, tab returning from hidden). The previous design
+    // polled every 60s regardless, which on a 70k-memory store with the
+    // old 10k page limit pegged the event loop and wiped any accumulated
+    // pagination state in flight. Visibility-driven refresh keeps the
+    // data fresh when the user is actually looking and stays silent
+    // otherwise.
+    // source: this module — observed against tab-switch hang (2026-05-19)
+    if (!window._boardVisibilityHook) {
+      window._boardVisibilityHook = true;
+      document.addEventListener('visibilitychange', function() {
+        if (document.hidden) return;
         if (visible && document.querySelector('.kb-board')) _boardResetAndFetch();
-      }, 60000);
+      });
     }
   }
 
