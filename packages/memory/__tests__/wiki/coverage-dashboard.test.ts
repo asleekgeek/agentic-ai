@@ -11,7 +11,7 @@ import {
   renderDashboardIndex,
   type DashboardAdapters,
 } from "../../src/wiki/coverage-dashboard.js";
-import { MIN_PAGE_BYTES } from "../../src/wiki/scopes.js";
+import { MIN_PAGE_BYTES, SCOPES } from "../../src/wiki/scopes.js";
 
 const NOW = 1_700_000_000;
 const FRESH = NOW - 30 * 86400;
@@ -43,9 +43,11 @@ describe("renderDashboard", () => {
     expect(out).toContain("authored_by: wiki-coverage-dashboard-v1");
   });
 
-  it("renders a scoreboard with 0/15 when nothing exists", () => {
+  it("renders a scoreboard with 0/<total> when nothing exists", () => {
     const out = renderDashboard("demo", emptyAdapters("demo"));
-    expect(out).toMatch(/Canonical slots filled:\*\* 0\/15/);
+    // Asserts against the live SCOPES count so adding new canonical
+    // scopes can't silently break this test.
+    expect(out).toContain(`Canonical slots filled:** 0/${SCOPES.length}`);
   });
 
   it("marks scopes covered when their anchor exists", () => {
@@ -58,7 +60,7 @@ describe("renderDashboard", () => {
     };
     const out = renderDashboard("demo", adapters);
     // Scoreboard reflects the one covered slot.
-    expect(out).toMatch(/Canonical slots filled:\*\* 1\/15/);
+    expect(out).toContain(`Canonical slots filled:** 1/${SCOPES.length}`);
     // Architecture row shows the anchor link.
     expect(out).toContain("[`reference/demo/architecture-overview.md`]");
     expect(out).toContain("✅ filled");

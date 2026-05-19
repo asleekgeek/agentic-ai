@@ -11,7 +11,7 @@ import {
   type ReauthorBranchDeps,
   type ScopeCoverageDeps,
 } from "../../src/wiki/handlers/curate-wiki-scope.js";
-import { MIN_PAGE_BYTES } from "../../src/wiki/scopes.js";
+import { MIN_PAGE_BYTES, SCOPES } from "../../src/wiki/scopes.js";
 
 const NOW = 1_700_000_000;
 const FRESH = NOW - 30 * 86400;
@@ -125,7 +125,9 @@ describe("computeScopeCoverageJobs", () => {
     );
     expect(result.summary[0]?.domain).toBe("demo");
     expect(result.summary[0]?.covered).toBe(1);
-    expect(result.summary[0]?.missing).toBe(14); // 15 total scopes − 1 covered
+    // SCOPES.length − 1 covered (architecture). Asserts against the
+    // live constant so adding new scopes can't silently break the test.
+    expect(result.summary[0]?.missing).toBe(SCOPES.length - 1);
     expect(result.summary[0]?.missing_scopes).not.toContain("architecture");
   });
 });

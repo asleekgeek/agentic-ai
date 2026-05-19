@@ -29,39 +29,23 @@ export const DEFAULT_MAX_AGE_DAYS = 90;
 
 // ── Scope type ─────────────────────────────────────────────────────────
 
-/**
- * One structural documentation scope.
- *
- * - ``anchorFilenames`` — wiki-relative filenames (without the domain
- *   segment) the coverage scan looks for. First substantive match
- *   counts as coverage.
- * - ``directories`` — wiki subtrees where pages of this scope live.
- * - ``suggestedKind`` — wiki ``kind`` frontmatter value the LLM should
- *   author missing anchor pages under.
- *
- * source: cortex/mcp_server/core/wiki_coverage.py:Scope
- */
-export interface Scope {
-  readonly name: string;
-  readonly title: string;
-  readonly description: string;
-  readonly anchorFilenames: readonly string[];
-  readonly directories: readonly string[];
-  readonly suggestedKind: string;
-}
+// Re-exported from scopes-types.ts to keep this file's surface stable
+// while letting scopes-guides.ts depend on the type without an import
+// cycle. source: ./scopes-types.ts
+export type { Scope } from "./scopes-types.js";
+import type { Scope as _ScopeT } from "./scopes-types.js";
+import { GUIDE_SCOPES } from "./scopes-guides.js";
 
-// ── Scope catalogue ────────────────────────────────────────────────────
+// ── Cortex-parity scopes ───────────────────────────────────────────────
 
 /**
- * Canonical scopes, ordered by structural primacy.
- *
- * Adding/removing a scope is a deliberate policy edit, not an emergent
- * property of tag drift. The list is hand-curated against Cortex's
- * 15-scope catalogue.
+ * The original 15 cortex-parity scopes covering reference + explanation
+ * + ADR/PRD + onboarding. Composed with ``GUIDE_SCOPES`` below to form
+ * the full SCOPES catalogue.
  *
  * source: cortex@4883307 mcp_server/core/wiki_coverage.py:96-343 (SCOPES)
  */
-export const SCOPES: readonly Scope[] = [
+const CORTEX_SCOPES: readonly _ScopeT[] = [
   {
     name: "product-overview",
     title: "Product overview",
@@ -236,6 +220,18 @@ export const SCOPES: readonly Scope[] = [
 ];
 
 /**
+ * Full canonical catalogue: cortex-parity scopes concatenated with
+ * the 26 guide-shaped scopes (Diátaxis how-to + tutorial, setup +
+ * operating, security, contribution, extensibility, reference
+ * helpers). Adding a scope is a deliberate policy edit, not an
+ * emergent property of tag drift.
+ *
+ * source: cortex@4883307 mcp_server/core/wiki_coverage.py:96-343
+ * source: ./scopes-guides.ts — Diátaxis + operations + governance
+ */
+export const SCOPES: readonly _ScopeT[] = [...CORTEX_SCOPES, ...GUIDE_SCOPES];
+
+/**
  * Lower bound on substantive pages before a no-anchor scope (decisions,
  * prd) is considered covered. The ``decisions`` scope is covered when
  * any substantive ADR exists.
@@ -251,7 +247,7 @@ export const COVERAGE_THRESHOLDS: Readonly<Record<string, number>> = {
  *
  * source: cortex/mcp_server/core/wiki_coverage.py:_suggested_path_for
  */
-export function suggestedPathFor(scope: Scope, domain: string): string {
+export function suggestedPathFor(scope: _ScopeT, domain: string): string {
   const primaryDir = scope.directories[0] ?? "reference";
   const filename = scope.anchorFilenames[0] ?? `${scope.name}.md`;
   return `${primaryDir}/${domain}/${filename}`;

@@ -13,6 +13,7 @@ import {
 } from "../../src/wiki/maintenance.js";
 import type { MaintenanceStatsDeps } from "../../src/wiki/maintenance-stats.js";
 import type { WikiPurgeDeps } from "../../src/wiki/handlers/wiki-purge.js";
+import { SCOPES } from "../../src/wiki/scopes.js";
 
 function joinPath(root: string, rel: string): string {
   if (!rel) return root;
@@ -199,9 +200,12 @@ describe("runWikiMaintenance — scope-coverage audit", () => {
       pageStat: () => null,            // no anchor pages → every scope missing
       countSubstantivePages: () => 0,
     }), {});
-    // 2 domains × 15 canonical scopes = 30 missing.
-    expect(result.scope_coverage_gaps).toBe(30);
-    expect(result.pending_total).toBeGreaterThanOrEqual(30);
+    // 2 domains × SCOPES.length canonical scopes. Asserting against the
+    // live constant means new scopes added to the catalogue can't
+    // silently break the count contract.
+    const expectedGaps = 2 * SCOPES.length;
+    expect(result.scope_coverage_gaps).toBe(expectedGaps);
+    expect(result.pending_total).toBeGreaterThanOrEqual(expectedGaps);
   });
 
   it("writes per-project dashboards + index when writer is wired", async () => {
