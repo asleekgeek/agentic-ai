@@ -8,7 +8,7 @@
   <img src="https://img.shields.io/badge/Node-20.x_·_22.x-339933.svg" alt="Node 20/22">
   <img src="https://img.shields.io/badge/Plugins-4-8A2BE2" alt="4 plugins">
   <img src="https://img.shields.io/badge/MCP_Tools-87+-orange" alt="87+ MCP tools">
-  <img src="https://img.shields.io/badge/Tests-3500+_passing-brightgreen" alt="Tests">
+  <img src="https://img.shields.io/badge/Tests-3870_passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/Cortex_LoCoMo-MRR_0.851-success" alt="LoCoMo MRR 0.851">
   <img src="https://img.shields.io/badge/Audit-0_critical_·_0_high-success" alt="Security audit clean">
 </p>
@@ -31,7 +31,7 @@ Claude Code is powerful in one session and amnesiac the next. It can reason abou
 
 **agentic-ai** is the four projects merged into one TypeScript monorepo with a single Claude Code marketplace install. One `pnpm` command builds everything. One `/plugin install` enables any of the four capabilities. The MCP servers are wired against the unified TS/Rust outputs, not the original separate repos. The Cortex retrieval pipeline runs end-to-end in TypeScript and **exceeds the Python baseline** on the LoCoMo benchmark (MRR 0.851 vs 0.696, hit-rate 98.5% vs 95.9%).
 
-**4 plugins. 87+ MCP tools across them. 3500+ tests. Real-subprocess parity verification against every source repo. `pnpm audit --prod` clean.**
+**4 plugins. 87+ MCP tools across them. 3870 tests. Real-subprocess parity verification against every source repo. `pnpm audit --prod` clean.**
 
 ---
 
@@ -85,6 +85,29 @@ Persistent memory for Claude Code with biological consolidation, intent-aware re
 - SQLite by default; PostgreSQL + pgvector when `DATABASE_URL` is set (Cortex's production stack)
 - Cross-encoder reranking via FlashRank ONNX (`Xenova/ms-marco-MiniLM-L-12-v2`) — **score parity with Python flashrank verified within 1e-7** on 5 (query, passage) pairs
 - 41 published-paper citations covering every numeric constant
+
+**Autonomous wiki grooming** — every consolidate cycle (background worker + manual MCP call) audits and maintains the wiki without a human in the loop:
+
+- **41 canonical scopes per project** spanning Diátaxis quadrants (tutorial / how-to / reference / explanation) plus configuration / local-development / testing / debugging / logging / observability / performance / security / secrets-management / access-control / contributing / coding-standards / release-process / changelog / roadmap / plugins-extensions / accessibility / localization / glossary / examples / migration-guides / integration-guides / recipes / troubleshooting. Every missing scope surfaces as a coverage gap the autonomous loop fills via `curate_wiki`.
+- **Three-source authoring jobs** — `curate_wiki` returns up to five orthogonal streams (cluster / file-coverage / drift-refresh / scope-coverage / structured-reauthor) with one canonical wire shape (`job_type` discriminator). Coverage jobs sorted by structural primacy (architecture → services → api → data-flow → operations → decisions).
+- **Three-axis wiki purge** — stub (majority placeholder markers) / shallow (<500 prose chars) / classifier-reject, with `max_purges` cap so a buggy rule change can't wipe the wiki in one cycle.
+- **Auto task-record ADR at session end** — every substantive session (≥1 commit OR ≥2 memories + ≥5 tools) writes a draft ADR carrying the Entry / Mandatory elements / How / Result / Serves contract. Lifecycle = `draft`; the re-author loop refines it next session.
+- **File-doc skeletons emit diagram scaffolds** — every new file-doc page ships with `mermaid sequenceDiagram` (caller → file → callees) + `mermaid flowchart TD` (branches per exported symbol) + markdown parameter tables + curl/JSON-RPC request/response code-fence skeletons. The LLM fills the placeholders; the structure is always present.
+- **Per-project coverage dashboards** regenerated every cycle at `wiki/_dashboards/<domain>.md` + `_dashboards/_index.md` — covered/missing slot scoreboard, pages-by-kind breakdown, uncovered-source-files list.
+- **Curation-gap banner** on every file-doc page — surfaces the canonical sections the page is still missing (purpose / public-api / sequence-diagram / flow-diagram / parameters / request-example / response-example / behaviour / invariants / failure-modes / tests / dependencies / callers / see-also). Visibility, not deletion, is the curation strategy.
+- **Drift detection** — every page's cited source files are mtime-watched; pages whose code has moved get queued for structured re-authoring with the canonical WIKI_REAUTHOR_PROMPT.
+
+### `memory-dashboard` — web visualizer
+
+A localhost web UI (`:3458`) over the memory store + wiki: Graph / Knowledge / Wiki / Board / Pipeline tabs.
+
+- **Project-first wiki tree** — Domain → Kind → Pages (real projects float to the top; `_general` / year buckets trail).
+- **Welcome grid with scope-coverage badges** — every project card shows `scope: X/41 (Y%)` and the first three missing scopes; honest coverage instead of hidden gaps.
+- **Mermaid lens** — every rendered diagram gets a magnifier button opening it in a full-viewport overlay with mouse-wheel zoom, drag-pan, keyboard shortcuts (`+` / `-` / `0` / Esc).
+- **`[[wiki-link]]` rendering** with exact → `.md`-suffix → suffix-of resolution; unresolved targets fall back to filtering the tree on the bare token (never a 404).
+- **Server-side caching** — `/api/wiki/list` (1.15s → 26ms warm, 44×), `/api/wiki/projects` (490ms → 1.3ms warm, 370×), `/api/memories/facets` (143ms → 1.1ms warm, 130×). TTL+mtime-aware; `POST /api/wiki/save` invalidates immediately.
+- **Tab-visibility resilience** — `requestAnimationFrame` pauses on `visibilitychange=hidden`; refresh fires on visible-return without restarting pagination. Board's 60s poll replaced with visibility-driven refresh.
+- **Sane page defaults** — Knowledge + Board fetch 200 cards (was 10,000 = 11MB / 10k DOM nodes that froze the UI); infinite scroll streams the rest.
 
 ### `codebase` — codebase intelligence (Rust binary wrapped)
 
@@ -152,7 +175,7 @@ Every port was verified against its source repo via **real-subprocess execution*
 |---|---|
 | `pnpm build` | clean across every package |
 | `pnpm typecheck` | clean across every package |
-| `pnpm test` | 3500+ passing |
+| `pnpm test` | 3870 passing |
 | `pnpm layer-check` | 0 violations on 636 files (Clean Architecture dependency rule) |
 | `pnpm source-citation-check` | every `≥3 sig-digit` numeric constant cites a paper / benchmark / measurement |
 | `pnpm audit --prod` | 0 critical · 0 high · 0 moderate · 0 low |
