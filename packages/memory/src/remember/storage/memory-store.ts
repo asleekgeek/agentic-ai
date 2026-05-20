@@ -270,6 +270,26 @@ export interface MemoryStore {
 
   /** Async linkMemoryEntity — safe on both backends. */
   linkMemoryEntityAsync?(memoryId: number, entityId: number): Promise<void>;
+
+  /**
+   * Idempotent UPSERT for wiki pointer memories keyed by ``source``.
+   * Deletes the prior row with the same source then inserts a fresh
+   * one with content + tags + domain. Wiki pointer memories must be
+   * deterministic (one per page) so the entity graph stays aligned
+   * with what's on disk.
+   *
+   * Optional because only PG implements it today (SQLite users can
+   * fall through without breaking — the wiki grooming features are
+   * primarily exercised on the PG production stack).
+   *
+   * source: cortex@HEAD~ mcp_server/infrastructure/pg_store.py:upsert_pointer_memory_by_source
+   */
+  upsertPointerMemoryBySource?(args: {
+    source: string;
+    content: string;
+    tags: readonly string[];
+    domain?: string;
+  }): Promise<number>;
 }
 
 // ── MemoryStoreExt — behavioral-subtyping extension ──────────────────────────

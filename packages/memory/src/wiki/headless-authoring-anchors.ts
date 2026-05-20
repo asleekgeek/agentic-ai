@@ -200,6 +200,13 @@ const TITLE_MAP: Readonly<Record<string, string>> = {
   "examples":         "Examples & sample code",
 };
 
+async function registerAnchorPointer(wikiRoot: string, pagePath: string, body: string): Promise<void> {
+  try {
+    const { registerPointerMemory } = await import("./headless-authoring-pointer.js");
+    await registerPointerMemory(wikiRoot, pagePath, body);
+  } catch { /* best effort */ }
+}
+
 function writeAnchorPage(
   wikiRoot: string,
   domain: string,
@@ -228,6 +235,9 @@ function writeAnchorPage(
     `---\n\n`;
   try {
     fs.writeFileSync(pagePath, fm + bodyMarkdown.trim() + "\n", "utf-8");
+    // Register PG pointer memory so retrieval sees it. Best-effort.
+    // source: cortex@HEAD~ headless_authoring.py:_register_pointer_memory
+    void registerAnchorPointer(wikiRoot, pagePath, bodyMarkdown);
     return pagePath;
   } catch { return null; }
 }

@@ -34,7 +34,7 @@
  * source: Wegner (1987) Transactive Memory Systems.
  */
 
-import { existsSync, mkdirSync, readdirSync, statSync } from "node:fs";
+import { existsSync, mkdirSync, openSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, basename, dirname } from "node:path";
 import { spawn, spawnSync } from "node:child_process";
@@ -461,6 +461,73 @@ function resolveIngestWorkerPath(): string | null {
  * source: cortex@ed33435 mcp_server/hooks/session_start.py:506-565 (_maybe_background_reanalyze)
  * source: packages/memory/src/hooks/ingest-codebase-background.ts
  */
+/**
+ * Spawn the persistent wiki-grooming daemon iff no live one exists.
+ *
+ * Lock semantics live in ``grooming-background.ts`` (PID file at
+ * ``~/.claude/methodology/.grooming.pid`` + process-exit cleanup).
+ * Here we only check liveness and start a detached subprocess on a
+ * cold machine. The daemon survives across sessions — subsequent
+ * SessionStart calls find it alive and skip spawning.
+ *
+ * Failure is silent: if the daemon can't be spawned (missing module,
+ * permission error) the session opens normally; autonomous grooming
+ * just doesn't happen until the next session attempts again.
+ *
+ * Env gate: ``CORTEX_GROOMING_DAEMON=off`` disables.
+ *
+ * source: cortex@HEAD~ mcp_server/hooks/session_start.py:_maybe_spawn_grooming_daemon (2026-05-19)
+ */
+function maybeSpawnGroomingDaemon(): void {
+  if (process.env["CORTEX_GROOMING_DAEMON"] === "off") {
+    log("grooming daemon disabled (CORTEX_GROOMING_DAEMON=off)");
+    return;
+  }
+  try {
+    // Inline the PID-file check rather than importing the daemon
+    // module so we don't pull in its heavy imports on every session.
+    const groomingPidPath = join(homedir(), ".claude", "methodology", ".grooming.pid");
+    if (existsSync(groomingPidPath)) {
+      try {
+        const pid = Number.parseInt(readFileSync(groomingPidPath, "utf-8").trim(), 10);
+        if (Number.isFinite(pid)) {
+          try {
+            process.kill(pid, 0);
+            log(`grooming daemon already running (pid=${pid})`);
+            return;
+          } catch { /* dead pid file — proceed to spawn */ }
+        }
+      } catch { /* unreadable pid file — proceed to spawn */ }
+    }
+
+    // Locate the compiled grooming-background.js next to this hook.
+    const here = fileURLToPath(import.meta.url);
+    const workerPath = join(dirname(here), "grooming-background.js");
+    if (!existsSync(workerPath)) {
+      log(`grooming daemon worker missing: ${workerPath}`);
+      return;
+    }
+
+    const logDir = join(homedir(), ".claude", "methodology");
+    mkdirSync(logDir, { recursive: true });
+    const logFile = join(logDir, "grooming.log");
+    const out = (() => {
+      try { return existsSync(logFile) ? openSync(logFile, "a") : openSync(logFile, "w"); }
+      catch { return "ignore" as const; }
+    })();
+
+    const child = spawn("node", [workerPath], {
+      detached: true,
+      stdio: ["ignore", out, out],
+      env: process.env,
+    });
+    child.unref();
+    log(`grooming daemon spawned (pid=${child.pid ?? "?"}) → ${logFile}`);
+  } catch (err) {
+    log(`grooming daemon spawn skipped: ${String(err)}`);
+  }
+}
+
 function maybeBackgroundReanalyze(): void {
   if (process.env["CORTEX_INGEST_BACKGROUND"] === "off") {
     log("background ingest disabled (CORTEX_INGEST_BACKGROUND=off)");
@@ -606,6 +673,13 @@ export async function main(): Promise<void> {
   // human in the loop.
   // source: cortex/mcp_server/hooks/session_start.py:580-700
   maybeBackgroundConsolidate();
+
+  // Persistent grooming daemon — separate from consolidate because
+  // wiki authoring is light & should run continuously, while
+  // consolidate is heavy & periodic. Spawn iff no live daemon
+  // (PID-file gate at ~/.claude/methodology/.grooming.pid).
+  // source: cortex@HEAD~ mcp_server/hooks/session_start.py:_maybe_spawn_grooming_daemon (2026-05-19)
+  maybeSpawnGroomingDaemon();
 
   // Attempt DB connection via countMemories.
   const memoryCount = await countMemories(config.databaseUrl);

@@ -251,6 +251,40 @@ export class PgMemoryStore implements MemoryStoreExt {
     return row.id;
   }
 
+  /**
+   * Idempotent UPSERT for wiki pointer memories keyed by ``source``.
+   *
+   * Deletes any existing memory with the same ``source`` (typically
+   * ``wiki://<rel-path>``) then inserts a fresh row with the current
+   * content + embedding. Bypasses the predictive-coding merge gate
+   * used by ``remember.handler`` — wiki pointer memories must be
+   * deterministic (one per page) so the entity graph stays aligned
+   * with what's on disk.
+   *
+   * source: cortex@HEAD~ mcp_server/infrastructure/pg_store.py:upsert_pointer_memory_by_source (2026-05-19)
+   *   — "the grooming agent was rewriting pages on disk but never
+   *      registering pointer memories in PG, so spreading activation
+   *      couldn't see wiki content at all."
+   */
+  async upsertPointerMemoryBySource(args: {
+    source: string;
+    content: string;
+    tags: readonly string[];
+    domain?: string;
+  }): Promise<number> {
+    return this.runAsync(async (client) => {
+      await client.query("DELETE FROM memories WHERE source = $1", [args.source]);
+      return this._insertMemoryOnClient(client, {
+        content: args.content,
+        tags: [...args.tags],
+        source: args.source,
+        domain: args.domain ?? "",
+        is_protected: true,
+        heat: 1.0, // source: cortex pg_store.py:upsert_pointer_memory_by_source — heat=1.0
+      });
+    });
+  }
+
   getMemory(_memoryId: number): MemoryItem | null {
     return this._runSync(async (c) => this._getMemoryOnClient(c, _memoryId));
   }

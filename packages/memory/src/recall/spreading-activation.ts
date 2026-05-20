@@ -217,6 +217,51 @@ export function mapEntityActivationToMemories(
   return Array.from(memoryScores.entries()).sort((a, b) => b[1] - a[1]);
 }
 
+// Stub floor for the groomedness multiplier. Wiki pages where stub_score
+// approaches 1.0 still get this minimum weight (so the gate never zeroes
+// out genuinely on-topic candidates). 0.4 was the value that landed the
+// recall@1 +1.4pp / MRR +0.9pp / subgraph_f1 +0.4pp lift in the
+// 2026-05-19 halo eval (n=999 stratified sample).
+// source: cortex@HEAD~ mcp_server/core/spreading_activation.py:groomedness_multiplier
+const DEFAULT_STUB_FLOOR = 0.4;
+
+/**
+ * Return a [stub_floor, 1.0] weight expressing how groomed a memory is.
+ *
+ * Wiki-derived memories that are still skeleton/stub pages add
+ * entity-graph noise — they have real entity references but no real
+ * explanation. Multiplying their SA activation by this factor demotes
+ * them before the RRF blend so direct-file seeds keep precedence over
+ * half-formed wiki neighbours.
+ *
+ * Returns 1.0 for non-wiki memories (no ``wiki`` tag) and for fully-
+ * groomed wiki pages. Descends linearly to ``stubFloor`` as
+ * ``stub_score`` approaches 1.0.
+ *
+ * source: cortex@HEAD~ mcp_server/core/spreading_activation.py:groomedness_multiplier
+ *   — n=999 halo eval, 2026-05-19: file-basename R@5 dropped 6.3 pp and
+ *   MRR 7.0 pp after the wiki autonomy added ~14 k skeleton pages.
+ *   symbol-cluster (mature wiki anchors) stayed flat. Conclusion:
+ *   new pages dilute strict-containment seeds with under-developed
+ *   neighbours; gating SA activation by groomedness recovers that.
+ */
+export function groomednessMultiplier(
+  content: string,
+  tags: readonly string[] | null | undefined,
+  stubFloor: number = DEFAULT_STUB_FLOOR,
+): number {
+  if (tags && !tags.includes("wiki")) return 1.0;
+  if (!content) return 1.0;
+  // Lazy require to avoid a hard dependency at module-load time when
+  // the wiki subtree isn't part of the build. ``require`` instead of
+  // dynamic import because this function is sync.
+  // eslint-disable-next-line @typescript-eslint/no-require-imports
+  const stubMod = require("../wiki/stub-detector.js") as { stubScore: (s: string) => number };
+  const score = stubMod.stubScore(content);
+  if (score <= 0.0) return 1.0;
+  return Math.max(stubFloor, 1.0 - (1.0 - stubFloor) * score);
+}
+
 /**
  * Resolve query terms to entity IDs using case-insensitive matching.
  *

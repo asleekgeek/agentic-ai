@@ -329,18 +329,54 @@ export async function spreadingActivationExpand(
   if (!sa || sa.length === 0) return candidates;
 
   const existingIds = new Set<number>(candidates.map((c) => c.memory_id));
-  const expanded: Candidate[] = [...candidates];
 
-  // Append SA-discovered memories not already in the candidate pool.
+  // Pre-fetch SA-injected memories so groomedness can be computed once
+  // and reused for both the append order AND the RRF rank vector.
+  // source: cortex@HEAD~ mcp_server/core/recall_pipeline.py:spreading_activation_expand (2026-05-19)
+  const fetched = new Map<number, Record<string, unknown>>();
   for (const [mid] of sa) {
-    if (existingIds.has(mid)) continue;
+    if (existingIds.has(mid) || fetched.has(mid)) continue;
     if (typeof store.getMemory !== "function") continue;
-    let mem: Record<string, unknown> | null;
     try {
-      mem = await store.getMemory(mid);
-    } catch {
-      continue;
+      const mem = await store.getMemory(mid);
+      if (mem) fetched.set(mid, mem);
+    } catch { /* skip */ }
+  }
+
+  // Re-rank SA results by activation × groomedness so wiki pages still
+  // in skeleton/stub state demote below well-formed neighbours BEFORE
+  // both the append order and the RRF rank assignment.
+  // Env gate ``CORTEX_DISABLE_GROOMEDNESS_GATE=1`` disables the gate.
+  // source: cortex@HEAD~ mcp_server/core/recall_pipeline.py:spreading_activation_expand (2026-05-19)
+  //   n=999 halo eval: recall@1 +1.4pp, MRR +0.9pp, subgraph_f1 +0.4pp
+  let orderedSa: Array<[number, number]> = sa;
+  if (process.env["CORTEX_DISABLE_GROOMEDNESS_GATE"] !== "1") {
+    const infoByMid = new Map<number, { content: string; tags: readonly string[] }>();
+    for (const c of candidates) {
+      const tags = Array.isArray(c.tags) ? c.tags : (typeof c.tags === "string" ? [c.tags] : []);
+      infoByMid.set(c.memory_id, { content: c.content ?? "", tags });
     }
+    for (const [mid, mem] of fetched) {
+      const tagsRaw = mem["tags"];
+      const tags: readonly string[] = Array.isArray(tagsRaw)
+        ? (tagsRaw as string[])
+        : (typeof tagsRaw === "string" ? [tagsRaw] : []);
+      infoByMid.set(mid, { content: (mem["content"] as string | undefined) ?? "", tags });
+    }
+    // Lazy import — sibling module, type-safe.
+    const { groomednessMultiplier } = await import("./spreading-activation.js");
+    const weighted: Array<[number, number]> = sa.map(([mid, act]) => {
+      const info = infoByMid.get(mid) ?? { content: "", tags: [] };
+      return [mid, act * groomednessMultiplier(info.content, info.tags)];
+    });
+    weighted.sort((a, b) => b[1] - a[1]);
+    orderedSa = weighted;
+  }
+
+  const expanded: Candidate[] = [...candidates];
+  for (const [mid] of orderedSa) {
+    if (existingIds.has(mid)) continue;
+    const mem = fetched.get(mid);
     if (!mem) continue;
     expanded.push({
       memory_id: mid,
@@ -356,7 +392,7 @@ export async function spreadingActivationExpand(
   }
 
   const mechRanks = new Map<number, number>(
-    sa.map(([mid], rank) => [mid, rank]),
+    orderedSa.map(([mid], rank) => [mid, rank]),
   );
   return rrfBlend(expanded, mechRanks, blendBeta);
 }

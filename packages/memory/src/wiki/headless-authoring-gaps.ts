@@ -315,8 +315,25 @@ export function drainAllGapsOnPage(
   if (filledGaps.length > 0) {
     const remaining = gaps.filter((g) => !filledGaps.includes(g));
     rewritePage(pagePath, newBody, remaining);
+    // Register the freshly-groomed body as a PG pointer memory so
+    // spreading activation can see it. Fire-and-forget: a PG hiccup
+    // never breaks the disk rewrite. Wiki root inferred from the
+    // page path's parent chain.
+    // source: cortex@HEAD~ headless_authoring.py:_register_pointer_memory
+    void registerPointerMemoryForPage(pagePath, newBody);
   }
   return results;
+}
+
+async function registerPointerMemoryForPage(pagePath: string, body: string): Promise<void> {
+  try {
+    const { registerPointerMemory } = await import("./headless-authoring-pointer.js");
+    // Walk up the path until we hit a "wiki" directory; that's the root.
+    let dir = path.dirname(pagePath);
+    while (dir !== "/" && path.basename(dir) !== "wiki") dir = path.dirname(dir);
+    const wikiRoot = dir === "/" ? path.dirname(pagePath) : dir;
+    await registerPointerMemory(wikiRoot, pagePath, body);
+  } catch { /* best effort */ }
 }
 
 // ── Page-with-gaps scanner ────────────────────────────────────────────
