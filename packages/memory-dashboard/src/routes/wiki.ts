@@ -685,7 +685,7 @@ async function computeMaintenanceStatsForDashboard(): Promise<ReturnType<typeof 
     {
       wikiRoot:        getWikiDir(),
       listMdPages:     async (root) => listMdRelPathsForDashboard(root),
-      readPage:        async (root, rel) => readWikiPageBody(root, rel),
+      readPage:        async (root: string, rel: string) => readWikiPageBody(root, rel),
       pageMtime:       dashboardPageMtime,
       projectRootFor:  autoResolveProjectRoot,
       listSourceFiles: dashboardListSourceFiles,
