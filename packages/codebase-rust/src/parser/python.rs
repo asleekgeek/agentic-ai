@@ -22,6 +22,12 @@ const TS_FUNCTION_DEF: &str = "function_definition";
 const TS_CLASS_DEF: &str = "class_definition";
 const TS_IMPORT_STMT: &str = "import_statement";
 const TS_IMPORT_FROM: &str = "import_from_statement";
+// source: Spike B' BUG #13 — tree-sitter-python gives `from __future__ import
+// X` its own node kind (Python treats __future__ specially because it must
+// appear before any other code). Without this constant the dispatcher in
+// extract_top_level fell through `_ => {}` and silently dropped every
+// future-import in the corpus.
+const TS_FUTURE_IMPORT: &str = "future_import_statement";
 const TS_DECORATED_DEF: &str = "decorated_definition";
 const TS_EXPRESSION_STMT: &str = "expression_statement";
 const TS_ASSIGNMENT: &str = "assignment";
@@ -107,6 +113,10 @@ fn extract_top_level(
             TS_CLASS_DEF => extract_class(ctx, child, scope),
             TS_IMPORT_STMT => extract_import(ctx, child, scope),
             TS_IMPORT_FROM => extract_import_from(ctx, child, scope),
+            // source: Spike B' BUG #13 — route __future__ imports through the
+            // same emit path. They have no module_name field (module is
+            // implicitly __future__), so extract_future_import hardcodes it.
+            TS_FUTURE_IMPORT => extract_future_import(ctx, child, scope),
             TS_DECORATED_DEF => extract_decorated(ctx, child, scope, enclosing_class),
             TS_EXPRESSION_STMT => {
                 // Check for module-level constant assignments
@@ -204,6 +214,14 @@ fn extract_class(ctx: &mut ExtractCtx, node: Node, scope: &str) {
     let qn = qual(scope, &name);
     let visibility = python_visibility(&name);
 
+    // source: Spike B' BUG #9 — emit base-class names as a CSV property on
+    // the Struct node so the resolver can later look them up in the symbol
+    // index and produce resolved Extends_Struct_Struct edges. We collect them
+    // here BEFORE calling extract_base_classes (which still emits Extends
+    // refs that the indexer drops — kept only for downstream code that
+    // greps for them).
+    let bases_csv = collect_base_names(ctx.source, node);
+
     ctx.nodes.push(ExtractedNode {
         label: LABEL_STRUCT.to_string(),
         name: name.clone(),
@@ -211,7 +229,7 @@ fn extract_class(ctx: &mut ExtractCtx, node: Node, scope: &str) {
         start_line: node.start_position().row as u64 + 1,
         end_line: node.end_position().row as u64 + 1,
         visibility,
-        properties: vec![],
+        properties: vec![("bases".to_string(), bases_csv)],
     });
     ctx.refs.push(ExtractedRef {
         kind: "Defines".to_string(),
@@ -219,13 +237,37 @@ fn extract_class(ctx: &mut ExtractCtx, node: Node, scope: &str) {
         to_qualified_name: qn.clone(),
     });
 
-    // Extract base classes (superclass_list is the "superclasses" field)
+    // Extract base classes (superclass_list is the "superclasses" field).
+    // These Extends refs are still emitted for backward compatibility but
+    // the indexer drops them — the property above is the source of truth.
     extract_base_classes(ctx, node, &qn);
 
     // Recurse into class body for methods and nested classes
     if let Some(body) = node.child_by_field_name("body") {
         extract_top_level(ctx, body, &qn, Some(&qn));
     }
+}
+
+/// Returns comma-separated base-class names (`identifier` and `attribute`
+/// children of the superclasses field). Attribute access like `typing.NamedTuple`
+/// is preserved verbatim — the resolver looks up by the last segment.
+fn collect_base_names(source: &str, class_node: Node) -> String {
+    let superclasses = match class_node.child_by_field_name("superclasses") {
+        Some(s) => s,
+        None => return String::new(),
+    };
+    let mut names = Vec::new();
+    let mut cursor = superclasses.walk();
+    for child in superclasses.children(&mut cursor) {
+        let kind = child.kind();
+        if kind == "identifier" || kind == "attribute" {
+            let text = node_text(source, child);
+            if !text.is_empty() {
+                names.push(text);
+            }
+        }
+    }
+    names.join(",")
 }
 
 fn extract_base_classes(ctx: &mut ExtractCtx, class_node: Node, class_qn: &str) {
@@ -302,6 +344,46 @@ fn extract_import(ctx: &mut ExtractCtx, node: Node, scope: &str) {
             let path = name_node.map(|n| node_text(ctx.source, n).replace('.', "::")).unwrap_or_default();
             let alias = alias_node.map(|n| node_text(ctx.source, n)).unwrap_or_default();
             emit_import(ctx, scope, &path, &alias, false, node);
+        }
+    }
+}
+
+/// Handles `from __future__ import X [as Y][, Z ...]`. Tree-sitter-python
+/// gives this its own node kind (`future_import_statement`) distinct from
+/// the generic `import_from_statement`, so it needs its own routing — see
+/// BUG #13. The module name is implicit (always `__future__`). Imported
+/// names appear as direct identifier/dotted_name/aliased_import children.
+fn extract_future_import(ctx: &mut ExtractCtx, node: Node, scope: &str) {
+    let module_name = "__future__".to_string();
+    let mut cursor = node.walk();
+    for child in node.children(&mut cursor) {
+        match child.kind() {
+            "identifier" | "dotted_name" => {
+                let name = node_text(ctx.source, child);
+                // Skip the literal `__future__` token if tree-sitter emits it
+                // as an identifier child (depends on grammar version).
+                if name == "__future__" || name.is_empty() {
+                    continue;
+                }
+                let full_path = format!("{module_name}::{name}");
+                emit_import(ctx, scope, &full_path, "", false, node);
+            }
+            "aliased_import" => {
+                let name_node = child.child_by_field_name("name");
+                let alias_node = child.child_by_field_name("alias");
+                let name = name_node
+                    .map(|n| node_text(ctx.source, n))
+                    .unwrap_or_default();
+                let alias = alias_node
+                    .map(|n| node_text(ctx.source, n))
+                    .unwrap_or_default();
+                if name.is_empty() {
+                    continue;
+                }
+                let full_path = format!("{module_name}::{name}");
+                emit_import(ctx, scope, &full_path, &alias, false, node);
+            }
+            _ => {}
         }
     }
 }
@@ -455,10 +537,14 @@ fn extract_single_call_site(ctx: &mut ExtractCtx, node: Node, caller_qn: &str) {
     if callee.is_empty() {
         return;
     }
-    // Skip method calls (x.foo()) for now — same as Rust parser scope
-    if callee.contains('.') {
-        return;
-    }
+    // source: Spike B' BUG #10 fix. Previously skipped any callee containing
+    // '.' as a known limitation, which dropped every method call (self.foo,
+    // module.func, obj.attr) — the bulk of real Python call edges. We now
+    // emit a CallSite node for every call_expression regardless of whether
+    // the callee is a bare identifier or an attribute access. The resolver
+    // decides whether it can resolve the target; unresolved targets stay as
+    // call_sites with no Calls edge until BUG #11 is also fixed (see
+    // resolver.rs resolve_calls).
     let line = node.start_position().row as u64 + 1;
     let col = node.start_position().column as u64;
     // Chained calls (f()()) share start_byte because the outer call's

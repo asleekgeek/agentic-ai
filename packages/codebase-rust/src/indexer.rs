@@ -324,7 +324,7 @@ fn index_single_file(
     let lang = Language::from_extension(ext)
         .ok_or_else(|| format!("unsupported file extension: {ext}"))?;
     let parsed = parser::parse_file(&source, rel_path, lang)?;
-    insert_parsed_nodes(store, &parsed.nodes, label_by_qn)?;
+    insert_parsed_nodes(store, &parsed.nodes, label_by_qn, lang.as_str())?;
     insert_parsed_edges(store, &parsed.refs, label_by_qn)?;
     Ok(())
 }
@@ -337,6 +337,7 @@ fn insert_parsed_nodes(
     store: &GraphStore,
     nodes: &[parser::ExtractedNode],
     label_by_qn: &mut HashMap<String, String>,
+    language: &str,
 ) -> Result<(), String> {
     // Group nodes by label so we can bulk-insert each label's batch in one
     // (or a few, chunked) Cypher CREATE ..., ..., ... statements.
@@ -357,7 +358,7 @@ fn insert_parsed_nodes(
             continue;
         }
         label_by_qn.insert(node.qualified_name.clone(), node.label.clone());
-        let props = build_node_properties(node);
+        let props = build_node_properties(node, language);
         by_label.entry(node.label.clone()).or_default().push(props);
     }
     for (label, count) in &dropped_dups {
@@ -373,7 +374,11 @@ fn insert_parsed_nodes(
 
 /// Builds the full property list for a node, mapping ExtractedNode fields
 /// to the schema columns defined in graph_store.rs node_table_ddl().
-fn build_node_properties(node: &parser::ExtractedNode) -> Vec<(String, String)> {
+///
+/// source: Spike B' BUG #5 fix — `language` is appended for every
+/// symbol-bearing label (anything that isn't File / Directory) so consumers
+/// can filter by language without re-parsing.
+fn build_node_properties(node: &parser::ExtractedNode, language: &str) -> Vec<(String, String)> {
     let mut props = vec![("id".to_string(), cypher_str(&node.qualified_name))];
     if has_name_col(&node.label) {
         props.push(("name".to_string(), cypher_str(&node.name)));
@@ -389,7 +394,20 @@ fn build_node_properties(node: &parser::ExtractedNode) -> Vec<(String, String)> 
         props.push(("visibility".to_string(), cypher_str(&node.visibility)));
     }
     append_label_properties(&mut props, node);
+    if has_language_col(&node.label) {
+        props.push(("language".to_string(), cypher_str(language)));
+    }
     props
+}
+
+/// True for every symbol-bearing node label (everything carrying source-code
+/// semantics). File and Directory are excluded — they cross language boundaries.
+fn has_language_col(label: &str) -> bool {
+    matches!(
+        label,
+        "Function" | "Method" | "Struct" | "Enum" | "Variant" | "Trait"
+            | "Field" | "Constant" | "TypeAlias" | "Import" | "CallSite"
+    )
 }
 
 /// Maps parser extra properties to schema columns by label.
@@ -416,6 +434,11 @@ fn append_label_properties(props: &mut Vec<(String, String)>, node: &parser::Ext
         }
         "TypeAlias" => {
             props.push(("target_type".to_string(), cypher_str(&find("target_type"))));
+        }
+        // source: Spike B' BUG #9 — bases CSV emitted by parser/python.rs
+        // for class/struct/trait/enum nodes; consumed by resolver.resolve_extends.
+        "Struct" | "Enum" | "Trait" => {
+            props.push(("bases".to_string(), cypher_str(&find("bases"))));
         }
         "Import" => {
             props.push(("path".to_string(), cypher_str(&find("path"))));
@@ -456,10 +479,28 @@ fn insert_parsed_edges(
             Some(t) => t,
             None => continue,
         };
+        // source: Spike B' BUG #4 — structural edges (Defines_*, HasMethod_*,
+        // HasField_*, HasVariant_*) now carry (confidence=1.0,
+        // resolution_method="direct-ast") so downstream consumers see uniform
+        // provenance across structural and resolution edges. The column
+        // schema for these tables was added in graph_store.rs::rel_table_ddl
+        // via is_structural_provenance_rel().
+        let props: Vec<(String, String)> = if table_name.starts_with("Defines_")
+            || table_name.starts_with("HasMethod_")
+            || table_name.starts_with("HasField_")
+            || table_name.starts_with("HasVariant_")
+        {
+            vec![
+                ("confidence".to_string(), "1.0".to_string()),
+                ("resolution_method".to_string(), cypher_str("direct-ast")),
+            ]
+        } else {
+            Vec::new()
+        };
         by_table.entry(table_name).or_default().push((
             edge_ref.from_qualified_name.clone(),
             edge_ref.to_qualified_name.clone(),
-            Vec::new(),
+            props,
         ));
     }
     for (table, edges) in &by_table {
@@ -493,10 +534,18 @@ fn resolve_defines_table(
     to_qn: &str,
     label_by_qn: &HashMap<String, String>,
 ) -> Option<String> {
-    let from_label = lookup_label_among(from_qn, label_by_qn, &["File", "Module"])?;
+    // source: Spike B' BUG #12 fix — added Function/Method to from-candidates
+    // and CallSite to to-candidates. Previously the parser-emitted
+    // `Defines: Function → CallSite` edges were silently dropped here because
+    // the whitelist excluded both endpoints. CallSite nodes were orphans.
+    let from_label = lookup_label_among(
+        from_qn,
+        label_by_qn,
+        &["File", "Module", "Function", "Method"],
+    )?;
     let to_candidates = &[
         "Function", "Struct", "Enum", "Trait", "Constant",
-        "TypeAlias", "Module", "Import",
+        "TypeAlias", "Module", "Import", "CallSite",
     ];
     let to_label = lookup_label_among(to_qn, label_by_qn, to_candidates)?;
     let table = format!("Defines_{from_label}_{to_label}");

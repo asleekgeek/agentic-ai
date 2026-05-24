@@ -427,11 +427,25 @@ pub const REL_TABLES: &[(&str, &str, &str)] = &[
     ("Calls_Function_Method", NODE_FUNCTION, NODE_METHOD),
     ("Calls_Method_Function", NODE_METHOD, NODE_FUNCTION),
     ("Calls_Method_Method", NODE_METHOD, NODE_METHOD),
+    // source: Spike B' BUG #12 fix — the parser emits a Defines edge from
+    // Function/Method to a CallSite (parser/python.rs:485) but no rel table
+    // existed for it, so every insert silently dropped. CallSite nodes were
+    // orphans in the graph. Adding these tables restores the linkage.
+    ("Defines_Function_CallSite", NODE_FUNCTION, NODE_CALL_SITE),
+    ("Defines_Method_CallSite", NODE_METHOD, NODE_CALL_SITE),
+    // CallSite → callee — emitted by resolver when the callee resolves.
+    ("Calls_CallSite_Function", NODE_CALL_SITE, NODE_FUNCTION),
+    ("Calls_CallSite_Method", NODE_CALL_SITE, NODE_METHOD),
+    ("Calls_CallSite_StdlibSymbol", NODE_CALL_SITE, NODE_STDLIB_SYMBOL),
     // Implements — source: stages/stage-3b.md §2, §3
     ("Implements_Struct_Trait", NODE_STRUCT, NODE_TRAIT),
     ("Implements_Enum_Trait", NODE_ENUM, NODE_TRAIT),
     // Extends — source: stages/stage-3b.md §2, §3
     ("Extends_Trait_Trait", NODE_TRAIT, NODE_TRAIT),
+    // source: Spike B' BUG #9 fix — Python class inheritance (Cortex uses
+    // Struct label for Python classes); resolved by resolve_extends.
+    ("Extends_Struct_Struct", NODE_STRUCT, NODE_STRUCT),
+    ("Extends_Enum_Enum", NODE_ENUM, NODE_ENUM),
     // Uses — source: stages/stage-3b.md §2, §3
     ("Uses_Function_Struct", NODE_FUNCTION, NODE_STRUCT),
     ("Uses_Function_Enum", NODE_FUNCTION, NODE_ENUM),
@@ -478,31 +492,52 @@ fn node_table_ddl() -> Vec<String> {
         ddl_node(NODE_DIRECTORY, "id STRING, path STRING, name STRING"),
         ddl_node(NODE_FILE, "id STRING, path STRING, name STRING, extension STRING, size_bytes INT64"),
         ddl_node(NODE_MODULE, "id STRING, name STRING, qualified_name STRING"),
+        // source: Spike B' BUG #5 fix — every symbol-bearing node gets a
+        // `language` STRING column populated by the indexer from the file's
+        // extension (python/rust/typescript). Previously every symbol came
+        // back with `language: None` in the JSON dump.
         ddl_node(NODE_FUNCTION,
             "id STRING, name STRING, qualified_name STRING, \
-             start_line INT64, end_line INT64, visibility STRING, is_async BOOLEAN"),
+             start_line INT64, end_line INT64, visibility STRING, is_async BOOLEAN, \
+             language STRING"),
         ddl_node(NODE_METHOD,
             "id STRING, name STRING, qualified_name STRING, \
              start_line INT64, end_line INT64, visibility STRING, is_async BOOLEAN, \
-             receiver_type STRING"),
+             receiver_type STRING, language STRING"),
+        // source: Spike B' BUG #9 fix — `bases STRING` column carries a CSV
+        // of unresolved base-class names emitted by the parser. The resolver
+        // reads this in resolve_extends, looks each name up in the symbol
+        // index, and emits the resolved Extends_X_Y edges. Indexer can't
+        // route Extends refs directly because their to_qualified_name is a
+        // raw NAME (e.g., "Animal"), not a QN — name→QN resolution happens
+        // server-side in the resolver pass after all nodes are indexed.
         ddl_node(NODE_STRUCT,
             "id STRING, name STRING, qualified_name STRING, \
-             start_line INT64, end_line INT64, visibility STRING"),
+             start_line INT64, end_line INT64, visibility STRING, language STRING, \
+             bases STRING"),
         ddl_node(NODE_ENUM,
             "id STRING, name STRING, qualified_name STRING, \
-             start_line INT64, end_line INT64, visibility STRING"),
-        ddl_node(NODE_VARIANT, "id STRING, name STRING, qualified_name STRING"),
+             start_line INT64, end_line INT64, visibility STRING, language STRING, \
+             bases STRING"),
+        ddl_node(NODE_VARIANT,
+            "id STRING, name STRING, qualified_name STRING, language STRING"),
         ddl_node(NODE_TRAIT,
             "id STRING, name STRING, qualified_name STRING, \
-             start_line INT64, end_line INT64, visibility STRING"),
+             start_line INT64, end_line INT64, visibility STRING, language STRING, \
+             bases STRING"),
         ddl_node(NODE_FIELD,
-            "id STRING, name STRING, type_annotation STRING, visibility STRING"),
+            "id STRING, name STRING, type_annotation STRING, visibility STRING, \
+             language STRING"),
         ddl_node(NODE_CONSTANT,
-            "id STRING, name STRING, qualified_name STRING, type_annotation STRING"),
+            "id STRING, name STRING, qualified_name STRING, type_annotation STRING, \
+             language STRING"),
         ddl_node(NODE_TYPE_ALIAS,
-            "id STRING, name STRING, qualified_name STRING, target_type STRING"),
-        ddl_node(NODE_IMPORT, "id STRING, path STRING, alias STRING, is_glob BOOLEAN"),
-        ddl_node(NODE_CALL_SITE, "id STRING, callee_name STRING, line INT64, col INT64"),
+            "id STRING, name STRING, qualified_name STRING, target_type STRING, \
+             language STRING"),
+        ddl_node(NODE_IMPORT,
+            "id STRING, path STRING, alias STRING, is_glob BOOLEAN, language STRING"),
+        ddl_node(NODE_CALL_SITE,
+            "id STRING, callee_name STRING, line INT64, col INT64, language STRING"),
         // 3c Community + Process — source: stages/stage-3c.md §4.1
         ddl_node(NODE_COMMUNITY,
             "id STRING, name STRING, algorithm STRING, \
@@ -534,6 +569,22 @@ fn is_resolution_rel(name: &str) -> bool {
         || name.starts_with("Uses_")
 }
 
+/// Structural edges from the parser (Defines, HasMethod, HasField,
+/// HasVariant) are ground-truth AST facts. After Spike B' BUG #4 fix
+/// they also carry confidence + resolution_method so downstream
+/// consumers see uniform provenance across all edge kinds — structural
+/// edges default to (1.0, "direct-ast") at insert time.
+///
+/// source: Spike B' BUG #4 — audited ap_graph.json had confidence/reason
+/// = None on all 67,427 edges including structural ones. Adding the
+/// columns + populating defaults at emit time fixes that uniformly.
+fn is_structural_provenance_rel(name: &str) -> bool {
+    name.starts_with("Defines_")
+        || name.starts_with("HasMethod_")
+        || name.starts_with("HasField_")
+        || name.starts_with("HasVariant_")
+}
+
 fn is_entrypoint_rel(name: &str) -> bool {
     name.starts_with("EntryPointOf_")
 }
@@ -546,8 +597,12 @@ fn rel_table_ddl() -> Vec<String> {
     REL_TABLES
         .iter()
         .map(|(name, from, to)| {
-            if is_resolution_rel(name) {
-                // source: stages/stage-3b.md §2 — confidence + resolution_method
+            if is_resolution_rel(name) || is_structural_provenance_rel(name) {
+                // resolution_rel: stages/stage-3b.md §2.
+                // structural_provenance: Spike B' BUG #4 — Defines/HasMethod
+                // now also carry (confidence, resolution_method) populated
+                // by the indexer as (1.0, "direct-ast") for ground-truth
+                // AST facts.
                 format!(
                     "CREATE REL TABLE IF NOT EXISTS {name}(\
                      FROM {from} TO {to}, \
@@ -623,15 +678,25 @@ const COLS_FILE: ColTypes = &[
     ("name", LogicalType::String), ("extension", LogicalType::String),
     ("size_bytes", LogicalType::Int64),
 ];
-const COLS_NAMED_QN: ColTypes = &[
+// source: Spike B' BUG #5 + #9 — every symbol-bearing label gets a
+// `language` String column; Struct/Enum/Trait additionally gain `bases`.
+// Module intentionally has no language (it's a logical aggregation, not
+// source); it still uses COLS_MODULE which keeps the pre-Spike-B' shape.
+const COLS_MODULE: ColTypes = &[
     ("id", LogicalType::String), ("name", LogicalType::String),
     ("qualified_name", LogicalType::String),
+];
+const COLS_VARIANT: ColTypes = &[
+    ("id", LogicalType::String), ("name", LogicalType::String),
+    ("qualified_name", LogicalType::String),
+    ("language", LogicalType::String),
 ];
 const COLS_FUNCTION: ColTypes = &[
     ("id", LogicalType::String), ("name", LogicalType::String),
     ("qualified_name", LogicalType::String),
     ("start_line", LogicalType::Int64), ("end_line", LogicalType::Int64),
     ("visibility", LogicalType::String), ("is_async", LogicalType::Bool),
+    ("language", LogicalType::String),
 ];
 const COLS_METHOD: ColTypes = &[
     ("id", LogicalType::String), ("name", LogicalType::String),
@@ -639,35 +704,43 @@ const COLS_METHOD: ColTypes = &[
     ("start_line", LogicalType::Int64), ("end_line", LogicalType::Int64),
     ("visibility", LogicalType::String), ("is_async", LogicalType::Bool),
     ("receiver_type", LogicalType::String),
+    ("language", LogicalType::String),
 ];
 const COLS_TYPEDECL: ColTypes = &[
     ("id", LogicalType::String), ("name", LogicalType::String),
     ("qualified_name", LogicalType::String),
     ("start_line", LogicalType::Int64), ("end_line", LogicalType::Int64),
     ("visibility", LogicalType::String),
+    ("language", LogicalType::String),
+    ("bases", LogicalType::String),
 ];
 const COLS_FIELD: ColTypes = &[
     ("id", LogicalType::String), ("name", LogicalType::String),
     ("type_annotation", LogicalType::String),
     ("visibility", LogicalType::String),
+    ("language", LogicalType::String),
 ];
 const COLS_CONSTANT: ColTypes = &[
     ("id", LogicalType::String), ("name", LogicalType::String),
     ("qualified_name", LogicalType::String),
     ("type_annotation", LogicalType::String),
+    ("language", LogicalType::String),
 ];
 const COLS_TYPE_ALIAS: ColTypes = &[
     ("id", LogicalType::String), ("name", LogicalType::String),
     ("qualified_name", LogicalType::String),
     ("target_type", LogicalType::String),
+    ("language", LogicalType::String),
 ];
 const COLS_IMPORT: ColTypes = &[
     ("id", LogicalType::String), ("path", LogicalType::String),
     ("alias", LogicalType::String), ("is_glob", LogicalType::Bool),
+    ("language", LogicalType::String),
 ];
 const COLS_CALL_SITE: ColTypes = &[
     ("id", LogicalType::String), ("callee_name", LogicalType::String),
     ("line", LogicalType::Int64), ("col", LogicalType::Int64),
+    ("language", LogicalType::String),
 ];
 const COLS_COMMUNITY: ColTypes = &[
     ("id", LogicalType::String), ("name", LogicalType::String),
@@ -689,7 +762,8 @@ fn node_column_types(label: &str) -> Result<ColTypes, String> {
     match label {
         NODE_DIRECTORY => Ok(COLS_DIRECTORY),
         NODE_FILE => Ok(COLS_FILE),
-        NODE_MODULE | NODE_VARIANT => Ok(COLS_NAMED_QN),
+        NODE_MODULE => Ok(COLS_MODULE),
+        NODE_VARIANT => Ok(COLS_VARIANT),
         NODE_FUNCTION => Ok(COLS_FUNCTION),
         NODE_METHOD => Ok(COLS_METHOD),
         NODE_STRUCT | NODE_ENUM | NODE_TRAIT => Ok(COLS_TYPEDECL),
@@ -707,7 +781,7 @@ fn node_column_types(label: &str) -> Result<ColTypes, String> {
 /// Returns the declared property schema for an edge table. Empty for
 /// untyped rel tables. source: rel_table_ddl() in this module.
 fn edge_column_types(rel_table: &str) -> ColTypes {
-    if is_resolution_rel(rel_table) {
+    if is_resolution_rel(rel_table) || is_structural_provenance_rel(rel_table) {
         &[
             ("confidence", LogicalType::Double),
             ("resolution_method", LogicalType::String),
