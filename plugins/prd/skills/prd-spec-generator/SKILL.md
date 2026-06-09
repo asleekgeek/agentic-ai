@@ -121,7 +121,7 @@ Every response from `start_pipeline` and `submit_action_result` has this shape:
 }
 ```
 
-**Execute:** Call the **automatised-pipeline MCP** tool named `tool_name` with `arguments` exactly as provided. The tool prefix is `mcp__<server-key>__<tool_name>` where `<server-key>` is the registration key in your project's `.mcp.json` for the automatised-pipeline server. The default registration key is `ai-architect` (per the automatised-pipeline plugin's `.mcp.json`), so the prefix is typically `mcp__ai-architect__<tool_name>` or, when installed via marketplace, `mcp__plugin_<plugin_id>_ai-architect__<tool_name>`. Inspect your `.mcp.json` to confirm.
+**Execute:** Call the **automatised-pipeline MCP** tool named `tool_name` with `arguments` exactly as provided. The tool prefix is `mcp__<server-key>__<tool_name>` where `<server-key>` is the registration key in your project's `.mcp.json` for the automatised-pipeline server. The default registration key is `automatised-pipeline` (per the automatised-pipeline plugin's `.mcp.json`), so the prefix is `mcp__plugin_automatised-pipeline_automatised-pipeline__<tool_name>`. Inspect your `.mcp.json` to confirm.
 
 **If the automatised-pipeline MCP is not registered in your project**, submit a tool_result with `success: false`. The pipeline will halt with a `failed` action; the user must register the dependency before re-running.
 
