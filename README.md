@@ -6,7 +6,7 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-blue.svg" alt="MIT License"></a>
   <img src="https://img.shields.io/badge/TypeScript-5.6+-3178c6.svg" alt="TypeScript 5.6+">
   <img src="https://img.shields.io/badge/Node-20.x_·_22.x-339933.svg" alt="Node 20/22">
-  <img src="https://img.shields.io/badge/Plugins-4-8A2BE2" alt="4 plugins">
+  <img src="https://img.shields.io/badge/Plugins-3-8A2BE2" alt="3 plugins">
   <img src="https://img.shields.io/badge/MCP_Tools-87+-orange" alt="87+ MCP tools">
   <img src="https://img.shields.io/badge/Tests-3870_passing-brightgreen" alt="Tests">
   <img src="https://img.shields.io/badge/Cortex_LoCoMo-MRR_0.851-success" alt="LoCoMo MRR 0.851">
@@ -18,58 +18,55 @@
 </p>
 
 <p align="center">
-  <strong>This monorepo unifies four projects:</strong><br>
+  <strong>This monorepo ships three plugins:</strong><br>
   <a href="https://github.com/cdeust/Cortex">Cortex</a> — persistent memory with biological consolidation<br>
-  <a href="https://github.com/cdeust/automatised-pipeline">automatised-pipeline</a> — Rust codebase-intelligence graph<br>
   <a href="https://github.com/cdeust/zetetic-team-subagents">zetetic-team-subagents</a> — 97 reasoning patterns + 19 team agents<br>
-  <a href="https://github.com/cdeust/prd-spec-generator">prd-spec-generator</a> — stateless PRD reducer with multi-judge verification
+  <a href="https://github.com/cdeust/prd-spec-generator">prd-spec-generator</a> — stateless PRD reducer with multi-judge verification<br>
+  Codebase intelligence ships separately as the canonical Rust plugin <a href="https://github.com/cdeust/automatised-pipeline">automatised-pipeline</a> (<code>automatised-pipeline@automatised-pipeline-marketplace</code>).
 </p>
 
 ---
 
 Claude Code is powerful in one session and amnesiac the next. It can reason about a function but not the call graph it sits in. It can draft a PRD but not measure whether the PRD is actionable. Each of these problems has a project; each project has its own install, its own update path, its own MCP server, its own bug-report surface.
 
-**agentic-ai** is the four projects merged into one TypeScript monorepo with a single Claude Code marketplace install. One `pnpm` command builds everything. One `/plugin install` enables any of the four capabilities. The MCP servers are wired against the unified TS/Rust outputs, not the original separate repos. The Cortex retrieval pipeline runs end-to-end in TypeScript and **exceeds the Python baseline** on the LoCoMo benchmark (MRR 0.851 vs 0.696, hit-rate 98.5% vs 95.9%).
+**agentic-ai** merges these projects into one TypeScript monorepo with a single Claude Code marketplace install. One `pnpm` command builds everything. One `/plugin install` enables any capability. The MCP servers are wired against the unified TS outputs, not the original separate repos. The Cortex retrieval pipeline runs end-to-end in TypeScript and **exceeds the Python baseline** on the LoCoMo benchmark (MRR 0.851 vs 0.696, hit-rate 98.5% vs 95.9%). Codebase intelligence is no longer bundled here — it ships as the standalone Rust plugin `automatised-pipeline@automatised-pipeline-marketplace`.
 
-**4 plugins. 87+ MCP tools across them. 3870 tests. Real-subprocess parity verification against every source repo. `pnpm audit --prod` clean.**
+**3 plugins. 64+ MCP tools across them. 3870 tests. Real-subprocess parity verification against every source repo. `pnpm audit --prod` clean.**
 
 ---
 
 ## Getting Started
 
-Install all four plugins from inside Claude Code:
+Install the plugins from inside Claude Code:
 
 ```text
 /plugin marketplace add cdeust/agentic-ai
 /plugin install memory@agentic-ai
-/plugin install codebase@agentic-ai
 /plugin install reasoning@agentic-ai
 /plugin install prd@agentic-ai
 ```
 
-Restart Claude Code. `/mcp` should show four servers connected:
+Restart Claude Code. `/mcp` should show three servers connected:
 
 | MCP server name | Plugin | What it provides |
 |---|---|---|
 | `memory` | `memory@agentic-ai` | persistent memory across sessions (45+ tools) |
-| `codebase` | `codebase@agentic-ai` | codebase graph + semantic search (23 tools) |
 | `reasoning` | `reasoning@agentic-ai` | 97 reasoning patterns + 19 specialist agents (2 tools + 63 skills) |
 | `prd` | `prd@agentic-ai` | 9-file PRD pipeline with multi-judge verification (17 tools) |
 
+For codebase graph + semantic search (23 tools), install the standalone Rust plugin separately: `/plugin marketplace add cdeust/automatised-pipeline` then `/plugin install automatised-pipeline@automatised-pipeline-marketplace`.
+
 Install only the plugins you want — they're independent. No monorepo checkout, no extra build, no `pnpm install` on the user's side.
 
-The four MCP server names are deliberately chosen to NOT collide with the standalone source repos' server names (`cortex`, `ai-architect`, `prd-gen`, `reasoning`). If you have any of [`cortex@cortex-plugins`](https://github.com/cdeust/Cortex), [`automatised-pipeline@automatised-pipeline-marketplace`](https://github.com/cdeust/automatised-pipeline), or [`prd-spec-generator@prd-spec-generator-marketplace`](https://github.com/cdeust/prd-spec-generator) installed, both can coexist — Claude Code routes tool calls to the right server because the names differ.
+The MCP server names are deliberately chosen to NOT collide with the standalone source repos' server names (`cortex`, `prd-gen`, `reasoning`). If you have either of [`cortex@cortex-plugins`](https://github.com/cdeust/Cortex) or [`prd-spec-generator@prd-spec-generator-marketplace`](https://github.com/cdeust/prd-spec-generator) installed, both can coexist — Claude Code routes tool calls to the right server because the names differ.
 
 ### What each plugin does on its first launch
 
 | Plugin | First-launch path | Subsequent launches |
 |---|---|---|
 | `memory` | runs `npm install --omit=dev` once to fetch native bindings (better-sqlite3, onnxruntime-node, @xenova/transformers, pg, sqlite-vec) | exec `node dist/index.js` immediately |
-| `codebase` | downloads the prebuilt `automatised-pipeline-<os>-<arch>` binary from the latest GitHub Release (`codebase-v*` tag), caches it under `bin/` | exec the cached binary immediately |
 | `reasoning` | exec `node dist/index.js` immediately — no native deps | same |
 | `prd` | runs `npm install --omit=dev` once to fetch `ajv` | exec `node dist/index.js` immediately |
-
-The codebase plugin's Rust binary download targets four platforms: `darwin-arm64`, `darwin-x86_64`, `linux-x86_64`, `linux-aarch64`. On unsupported platforms or when the host is offline, it falls back to building from the vendored Cargo source under `src-rust/` (requires Rust toolchain; one-shot 2-5 min build, then exec).
 
 `.claude-plugin/marketplace.json` at the repo root drives discovery. Each plugin's `.claude-plugin/plugin.json` declares its `mcpServers` inline — no additional client-side configuration is needed.
 
@@ -109,14 +106,16 @@ A localhost web UI (`:3458`) over the memory store + wiki: Graph / Knowledge / W
 - **Tab-visibility resilience** — `requestAnimationFrame` pauses on `visibilitychange=hidden`; refresh fires on visible-return without restarting pagination. Board's 60s poll replaced with visibility-driven refresh.
 - **Sane page defaults** — Knowledge + Board fetch 200 cards (was 10,000 = 11MB / 10k DOM nodes that froze the UI); infinite scroll streams the rest.
 
-### `codebase` — codebase intelligence (Rust binary wrapped)
+### codebase intelligence — now standalone
 
-The `automatised-pipeline` Rust binary (crate `ai-architect-mcp`) indexes Rust / Python / TypeScript codebases into a LadybugDB property graph. Resolves imports + call chains, detects communities via Leiden, traces execution flows from entry points. BM25 + TF-IDF + RRF hybrid search.
+Codebase intelligence is **no longer bundled in this marketplace.** The two legacy MCPs (ai-architect-mcp, codebase-analysis) were rebuilt from scratch as a single Rust plugin, [`automatised-pipeline`](https://github.com/cdeust/automatised-pipeline), shipped from its own marketplace. Install it separately:
 
-- **23 MCP tools** (`index_codebase`, `query_graph`, `get_symbol`, `impact_analysis`, `semantic_diff`, …)
-- Strategy: wrap the Rust binary as a subprocess; never re-implement
-- All 23 tools have real-subprocess round-trip parity tests against the binary
-- 6 Zod schema drifts in the TS adapter were closed against `tool_schemas.rs` ground truth
+```text
+/plugin marketplace add cdeust/automatised-pipeline
+/plugin install automatised-pipeline@automatised-pipeline-marketplace
+```
+
+It indexes Rust / Python / TypeScript codebases into a property graph (imports + call chains, community detection, execution-flow tracing, hybrid search) and exposes 23 MCP tools under `mcp__plugin_automatised-pipeline_automatised-pipeline__*` (`index_codebase`, `query_graph`, `get_symbol`, `get_impact`, `verify_semantic_diff`, …).
 
 ### `reasoning` — 97 genius patterns + 19 team agents (port of zetetic-team-subagents)
 
@@ -138,11 +137,11 @@ Stateless reducer that turns a feature description into a 9-file PRD. Multi-judg
 
 ## How It Works
 
-The core idea: every plugin's MCP server is a thin composition root over a domain layer that's pure logic. The four plugins share infrastructure (SqliteMemoryStore, recall pipeline, EmbeddingEngine, reasoning patterns) without depending on each other's MCP boundaries.
+The core idea: every plugin's MCP server is a thin composition root over a domain layer that's pure logic. The plugins share infrastructure (SqliteMemoryStore, recall pipeline, EmbeddingEngine, reasoning patterns) without depending on each other's MCP boundaries.
 
 ```
 <plugin-root>/.claude-plugin/plugin.json   ← Anthropic plugin manifest (mcpServers inline)
-<plugin-root>/scripts/launch.sh            ← First-launch native-dep installer (memory, prd, codebase)
+<plugin-root>/scripts/launch.sh            ← First-launch native-dep installer (memory, prd)
 <plugin-root>/dist/index.js                ← esbuild bundle (committed; ships with `git clone`)
        │
        ▼
@@ -152,7 +151,7 @@ packages/<domain>/src/...                  ← Domain logic, bundled into dist/ 
 packages/core/src/ports/...                ← Ports/adapters interfaces
 ```
 
-`<plugin-root>` is `plugins/memory/`, `plugins/codebase/`, `plugins/prd/`, or `packages/reasoning/` (the reasoning plugin's source root is the workspace package itself, since it ships agents/, skills/, commands/, hooks/, scripts/setup.sh alongside the MCP bundle).
+`<plugin-root>` is `plugins/memory/`, `plugins/prd/`, or `packages/reasoning/` (the reasoning plugin's source root is the workspace package itself, since it ships agents/, skills/, commands/, hooks/, scripts/setup.sh alongside the MCP bundle).
 
 When you `/plugin install`, Claude Code reads the marketplace manifest, resolves the plugin's inline `mcpServers` field, and starts the matching MCP server as a stdio JSON-RPC subprocess. The MCP server wires SQLite (or PostgreSQL when configured) + the embedding engine + the LLM client + the reasoning patterns through dependency injection at startup. Tool calls land in the same domain code paths a unit test exercises.
 
@@ -187,10 +186,9 @@ Every port was verified against its source repo via **real-subprocess execution*
 
 ```
 agentic-ai/
-├── .claude-plugin/marketplace.json  Canonical Anthropic marketplace manifest (4 plugins)
+├── .claude-plugin/marketplace.json  Canonical Anthropic marketplace manifest (3 plugins)
 ├── plugins/
 │   ├── memory/                      Cortex plugin: dist/index.js + scripts/launch.sh + package.json (native deps)
-│   ├── codebase/                    automatised-pipeline plugin: src-rust/ (Cargo source) + scripts/launch.sh
 │   └── prd/                         prd-spec-generator plugin: dist/index.js + scripts/launch.sh + package.json (ajv)
 ├── packages/
 │   ├── core/                        Pure domain types + ports (no I/O)

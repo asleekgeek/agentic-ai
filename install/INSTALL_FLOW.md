@@ -36,12 +36,12 @@ separate plugins were.
 
 **What actually happens:** Claude Code fetches `.claude-plugin/marketplace.json` from
 `github.com/cdeust/agentic-ai` and registers it locally. The user now has a local
-registry of 4 available plugins.
+registry of 3 available plugins.
 
 **What the user should see:**
 ```
 Marketplace 'agentic-ai-marketplace' added.
-4 plugins available: memory, codebase, reasoning, prd
+3 plugins available: memory, reasoning, prd
 Run /plugin list agentic-ai to see details.
 ```
 
@@ -53,7 +53,7 @@ Run /plugin list agentic-ai to see details.
 - `marketplace.json` parse error: invalid JSON in the manifest
   → Diagnosis: `jq . .claude-plugin/marketplace.json` in the local repo
 
-**Proactive surface:** The marketplace listing should immediately show all 4 plugins
+**Proactive surface:** The marketplace listing should immediately show all 3 plugins
 with one-line descriptions so the user can decide what to install without reading docs.
 
 ---
@@ -64,7 +64,7 @@ with one-line descriptions so the user can decide what to install without readin
 /plugin list agentic-ai
 ```
 
-**What the user expects:** A list of 4 plugins with descriptions.
+**What the user expects:** A list of 3 plugins with descriptions.
 
 **What should appear:**
 ```
@@ -73,10 +73,6 @@ Plugins from agentic-ai-marketplace (cdeust/agentic-ai):
   memory     v3.14.8    Persistent memory across sessions (47 MCP tools)
              Category: productivity | Runtime: cli, cowork
              Requires: PostgreSQL 15+ with pgvector (cli) or SQLite (cowork)
-
-  codebase   v0.0.4     Codebase intelligence: call graphs, impact analysis (23 MCP tools)
-             Category: development | Runtime: cli
-             Requires: Rust toolchain for first-run compilation
 
   reasoning  v2.13.1    97 genius reasoning patterns + 19 team agents (61 skills, 25 commands)
              Category: research | Runtime: cli, cowork
@@ -143,24 +139,18 @@ the current Claude Code plugin install protocol.
 **Open question OQ-2:** Does Claude Code support interactive prompts during plugin install?
 If not, the default must be SQLite (cowork) mode, with CLI mode as opt-in.
 
-### 3b. Install codebase (automatised-pipeline)
+### 3b. Codebase intelligence — install separately
+
+Codebase intelligence is no longer bundled in this marketplace. It ships as the
+canonical Rust plugin `automatised-pipeline` from its own marketplace:
 
 ```
-/plugin install codebase@agentic-ai
+/plugin marketplace add cdeust/automatised-pipeline
+/plugin install automatised-pipeline@automatised-pipeline-marketplace
 ```
 
-**What could go wrong:**
-
-| Failure | Symptom | Diagnosis |
-|---|---|---|
-| Rust not installed | `MCP server 'ai-architect' failed to start: cargo: command not found` | Install Rust: `curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs \| sh` |
-| First-run compilation | Long pause (2–5 min) with no feedback | Normal; binary is being compiled. Claude Code should show a progress indicator. |
-| Compilation fails | `error[E0xxx]: ...` | Check `cargo build --release` output manually |
-
-**Open question OQ-3:** Does the MCP server start process have a timeout? A 5-minute
-compile will exceed most MCP startup timeouts. The recommended mitigation is to
-pre-build the binary as part of a `postInstall` script. Currently no `postInstall` is
-declared in `codebase/plugin.json`. The implementer should add one.
+The standalone plugin ships a prebuilt binary per platform (no first-run Rust
+compile), which removes the former OQ-3 startup-timeout risk entirely.
 
 ### 3c. Install reasoning (zetetic-team-subagents)
 
@@ -218,7 +208,7 @@ skills and commands.
 **What the user should see (verification):**
 ```
 Plugins reloaded.
-Active MCP servers: cortex (47 tools), ai-architect (23 tools), prd-gen (17 tools), memory (N tools)
+Active MCP servers: memory (47 tools), prd (17 tools), reasoning (N tools)
 Active hooks: [list]
 ```
 
@@ -227,7 +217,6 @@ Active hooks: [list]
 1. Run `/mcp` or equivalent to list active MCP tools.
    Expected prefixes:
    - `mcp__plugin_memory_cortex__*` (47 tools: recall, remember, query_methodology, etc.)
-   - `mcp__plugin_codebase_ai-architect__*` (23 tools: index_codebase, query_graph, etc.)
    - `mcp__plugin_prd_prd-gen__*` (17 tools: start_pipeline, generate_prd, etc.)
    - `mcp__plugin_reasoning_memory__*` (N tools: from zetetic memory server, if installed)
 
@@ -268,16 +257,9 @@ Then: `/skill run cortex-recall "test"` — should return the stored memory.
 
 ### codebase
 
-First use requires indexing:
-```
-mcp__plugin_codebase_ai-architect__index_codebase { "path": "." }
-```
-This may take 30–120 seconds for a large repo.
-
-**Open question OQ-6:** Is `index_codebase` called automatically on first install, or
-does the user have to call it manually? If manual, the first-run experience is a blank
-graph with no discoverable next action. The install flow should print:
-"To index your current codebase, call: `mcp__plugin_codebase_ai-architect__index_codebase { \"path\": \".\" }`"
+Codebase intelligence ships separately as `automatised-pipeline@automatised-pipeline-marketplace`
+(see Step 3b). Its first-run indexing and tool surface are documented in that plugin's
+own README.
 
 ### reasoning
 
@@ -314,10 +296,8 @@ The following information must appear WITHOUT the user needing to diagnose:
 | # | Information | Where to surface it |
 |---|---|---|
 | 1 | `memory` requires PostgreSQL OR cowork mode | `marketplace.json` runtime_notes + install step confirmation |
-| 2 | `codebase` requires Rust + long first-compile | `marketplace.json` runtime_notes + README first-run section |
 | 3 | `reasoning` requires postInstall to complete successfully | Explicit success/failure message from postInstall |
 | 4 | `prd` requires Node.js 18+ | `marketplace.json` runtime_notes |
-| 5 | `codebase` requires manual `index_codebase` call before any tools work | README + install confirmation message |
 | 6 | MCP tool prefix format | `/reload-plugins` output should list active tools with their full prefixes |
 | 7 | `${CLAUDE_PLUGIN_ROOT}` must be set at hook runtime (not just MCP spawn time) | Internal implementation concern; surfaced only if hooks fail |
 
@@ -329,10 +309,8 @@ The following information must appear WITHOUT the user needing to diagnose:
 |---|---|---|
 | OQ-1 | Does `/plugin list` surface `runtime_notes` from marketplace.json? | High — hidden dependencies |
 | OQ-2 | Does Claude Code support interactive prompts during install? (default cowork mode for memory) | High — PostgreSQL friction |
-| OQ-3 | Does the MCP startup have a timeout that would kill cargo build? | High — codebase first-run |
 | OQ-4 | Is `CLAUDE_PLUGIN_ROOT` set during `postInstall` command execution? | Critical — reasoning hooks never install |
 | OQ-5 | What is the exact MCP tool prefix format after plugin install? | Medium — discoverability |
-| OQ-6 | Is `index_codebase` called automatically or must the user trigger it? | Medium — codebase first-run UX |
 | OQ-7 | Where does `prd` write output files, and is it configurable? | Medium — prd first-run UX |
 
 OQ-4 is the most critical: if `CLAUDE_PLUGIN_ROOT` is not exported to the postInstall

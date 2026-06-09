@@ -1,8 +1,0 @@
-{
-  "name": "@agentic/plugin-codebase",
-  "version": "0.1.0",
-  "private": true,
-  "type": "module",
-  "description": "Codebase intelligence plugin. Full TypeScript port of automatised-pipeline 0.0.9. PostgreSQL backend, Louvain+C2 community detection, hybrid PG-FTS+TF-IDF+RRF search. 23 MCP tools. No Rust binary required.",
-  "license": "MIT"
-}

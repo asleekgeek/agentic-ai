@@ -5,7 +5,7 @@
     "email": "admin@ai-architect.tools"
   },
   "metadata": {
-    "description": "Agentic AI — four plugins for Claude Code: persistent memory (Cortex, ported to TS), codebase intelligence (Rust binary kept as subprocess), genius reasoning (zetetic team), and PRD generation. All four share one install / one update path.",
+    "description": "Agentic AI — three plugins for Claude Code: persistent memory (Cortex, ported to TS), genius reasoning (zetetic team), and PRD generation. They share one install / one update path. Codebase intelligence ships separately as the canonical Rust plugin automatised-pipeline@automatised-pipeline-marketplace.",
     "version": "2026.05",
     "homepage": "https://github.com/cdeust/agentic-ai",
     "repository": "https://github.com/cdeust/agentic-ai"
@@ -34,31 +34,6 @@
         "cortex"
       ],
       "category": "productivity"
-    },
-    {
-      "name": "codebase",
-      "source": "./plugins/codebase/",
-      "description": "Codebase intelligence — Full TypeScript port of automatised-pipeline 0.0.9. Indexes Rust/Python/TypeScript/JavaScript into a PostgreSQL code-intelligence graph (shared cortex_agentic DB). Resolves imports + call chains, Louvain+C2 community detection, BFS process tracing, hybrid PG-FTS+TF-IDF+RRF search. 23 MCP tools. No Rust binary required — pure Node.js.",
-      "version": "0.1.0",
-      "author": {
-        "name": "Clement Deust",
-        "email": "admin@ai-architect.tools"
-      },
-      "homepage": "https://github.com/cdeust/agentic-ai",
-      "repository": "https://github.com/cdeust/agentic-ai",
-      "license": "MIT",
-      "keywords": [
-        "mcp",
-        "claude-code",
-        "typescript",
-        "codebase-intelligence",
-        "property-graph",
-        "call-graph",
-        "community-detection",
-        "louvain",
-        "postgresql"
-      ],
-      "category": "development"
     },
     {
       "name": "reasoning",
