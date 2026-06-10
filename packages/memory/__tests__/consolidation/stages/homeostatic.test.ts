@@ -58,8 +58,13 @@ describe("runHomeostaticCycle", () => {
   });
 
   it("equilibrium: no scaling when mean ≈ 0.4 and bimodality low", async () => {
-    // Unimodal distribution centered at 0.4
-    const heats = Array.from({ length: 100 }, () => 0.4 + (Math.random() - 0.5) * 0.05);
+    // Deterministic symmetric grid: 10 values mirrored around 0.4 (±0.0225),
+    // repeated 10x. Mean is exactly 0.4 → factorNew = 1.0 → factor_stable.
+    // A random draw here is flaky: equilibrium requires mean within ±0.5% of
+    // target (Turrigiano tolerance), but the mean of 100 uniform(±0.025)
+    // samples has σ ≈ 0.0014 → ~17% of draws land outside ±0.002.
+    // Discrete uniform on 10 points keeps Sarle's b ≈ 0.563 < 0.7 (unimodal).
+    const heats = Array.from({ length: 100 }, (_, i) => 0.4 + ((i % 10) - 4.5) * 0.005);
     const mems = makeMems(heats);
     const store = makeStore();
     const result = await runHomeostaticCycle(store, mems);
