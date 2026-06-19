@@ -24,7 +24,9 @@
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
+import { readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import type { LlmClient } from "@agentic/core";
 import { AnthropicLlmClient } from "@agentic/memory/infrastructure/anthropic-llm-client.js";
 import { SqliteNarrativeAdapter } from "@agentic/memory/narrative/handlers/sqlite-narrative-adapter.js";
@@ -49,10 +51,19 @@ import { registerIngestTools } from "./tools/ingest.js";
 import { registerNavigationTools } from "./tools/navigation.js";
 
 // ── Server identity ───────────────────────────────────────────────────────────
+// Version is read from package.json at runtime — single source of truth — so the
+// advertised serverInfo.version, package.json, and the .mcpb manifest never drift.
+// dist/index.js sits one level under the package root, so ../package.json resolves
+// to this package's manifest both in-repo and inside a packed .mcpb bundle.
+// source: package.json (authoritative version); replaces the previously hardcoded
+//   "0.2.0" which had drifted from package.json "0.3.0" (found during AC1 probe).
+const pkg = JSON.parse(
+  readFileSync(join(dirname(fileURLToPath(import.meta.url)), "..", "package.json"), "utf8"),
+) as { name: string; version: string };
 
 const server = new McpServer({
-  name: "@agentic/mcp-server-memory",
-  version: "0.2.0",
+  name: pkg.name,
+  version: pkg.version,
 });
 
 // ── LLM client ────────────────────────────────────────────────────────────────
