@@ -20,6 +20,9 @@ importers:
       '@typescript-eslint/parser':
         specifier: ^8.0.0
         version: 8.59.1(eslint@9.39.4)(typescript@5.9.3)
+      esbuild:
+        specifier: 0.28.0
+        version: 0.28.0
       eslint:
         specifier: ^9.0.0
         version: 9.39.4
@@ -544,8 +547,6 @@ importers:
         version: 5.9.3
 
   packages/reasoning: {}
-
-  plugins/codebase: {}
 
   plugins/memory:
     dependencies:
