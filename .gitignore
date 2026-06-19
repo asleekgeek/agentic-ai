@@ -5,6 +5,8 @@ node_modules/
 dist/
 build/
 *.tsbuildinfo
+# .mcpb Desktop Extension bundles — built per-platform in CI (~150 MB each), never committed
+packages/mcp-servers/memory/dist-mcpb/
 # Rust build dir (codebase-rust)
 target/
 
