@@ -16,11 +16,21 @@ name: release-memory-mcpb
 #
 # Triggers:
 #   - workflow_dispatch: produces downloadable artifacts (for install-testing in Claude Desktop)
+#   - pull_request touching the memory bundle (paths below): builds the full matrix to validate
+#     all platforms BEFORE merge; uploads artifacts only — create-release is skipped (not a
+#     memory-v tag) and the Release-upload step is tag-gated, so no Release is cut on a PR
 #   - push of a `memory-v*` tag: cuts a GitHub Release with all per-platform bundles attached
 #     (separate tag namespace so it never collides with release.yml, which fires on `v*`)
 
 on:
   workflow_dispatch: {}
+  pull_request:
+    paths:
+      - 'packages/mcp-servers/memory/**'
+      - 'packages/memory/**'
+      - 'packages/core/**'
+      - 'packages/memory-dashboard/**'
+      - '.github/workflows/release-memory-mcpb.yml'
   push:
     tags:
       - 'memory-v*'
