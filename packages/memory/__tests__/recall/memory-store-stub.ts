@@ -47,10 +47,28 @@ export function makeSeedMemory(
 
 // ── Stub implementation ────────────────────────────────────────────────────
 
+// ── Entity/relationship types for relation-walk tests ─────────────────────
+
+export interface StubEntity {
+  id: number;
+  name: string;
+  entity_type?: string;
+}
+
+export interface StubRelationship {
+  target_name?: string;
+  relationship_type?: string;
+  weight?: number;
+}
+
 export class InMemoryStore implements MemoryStore {
   private readonly memories: Map<number, MemoryItem>;
   private rules: unknown[] = [];
   private triggers: unknown[] = [];
+  // entity_id → list of entities; used by getEntitiesForMemory
+  private memoryEntities: Map<number, StubEntity[]> = new Map();
+  // entity_id → outgoing relationships; used by getRelationshipsForEntity
+  private entityRelationships: Map<number, StubRelationship[]> = new Map();
   public accessLog: Array<{ id: number; type: "access" | "replay" }> = [];
   public relationshipLog: Array<{ a: string; b: string; lr: number }> = [];
 
@@ -68,6 +86,16 @@ export class InMemoryStore implements MemoryStore {
 
   addMemory(mem: MemoryItem): void {
     this.memories.set(mem.id, mem);
+  }
+
+  /** Register entities linked to a memory (for relation-walk tests). */
+  setMemoryEntities(memoryId: number, entities: StubEntity[]): void {
+    this.memoryEntities.set(memoryId, entities);
+  }
+
+  /** Register outgoing relationships for an entity (for relation-walk tests). */
+  setEntityRelationships(entityId: number, rels: StubRelationship[]): void {
+    this.entityRelationships.set(entityId, rels);
   }
 
   async searchByVector(
@@ -164,6 +192,23 @@ export class InMemoryStore implements MemoryStore {
     learningRate: number,
   ): Promise<void> {
     this.relationshipLog.push({ a: entityA, b: entityB, lr: learningRate });
+  }
+
+  // ── Relation-walk methods (MEM-G4) ────────────────────────────────────────
+  // source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_entity_neighbors
+
+  async getEntitiesForMemory(
+    memoryId: number,
+  ): Promise<Array<{ id: number; name: string; entity_type?: string }>> {
+    return this.memoryEntities.get(memoryId) ?? [];
+  }
+
+  async getRelationshipsForEntity(
+    entityId: number,
+    _direction: "outgoing",
+    limit: number,
+  ): Promise<Array<{ target_name?: string; relationship_type?: string; weight?: number }>> {
+    return (this.entityRelationships.get(entityId) ?? []).slice(0, limit);
   }
 }
 

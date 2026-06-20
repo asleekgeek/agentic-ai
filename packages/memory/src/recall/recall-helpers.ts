@@ -9,8 +9,9 @@
  * source: cortex@ed33435 mcp_server/handlers/recall_helpers.py
  */
 
-import type { MemoryItem } from "./types.js";
+import type { MemoryItem, RelatedNeighbors, VersionNeighbor, EntityNeighborGroup } from "./types.js";
 import type { RecallSettings } from "./recall-handler.js";
+import type { MemoryStore } from "./port.js";
 import { QueryIntent } from "./types.js";
 
 // ── Constants ──────────────────────────────────────────────────────────────
@@ -480,6 +481,159 @@ export async function injectTriggeredMemories<T extends { memory_id: number }>(
   }
 
   return injected.length > 0 ? [...injected, ...results] : results;
+}
+
+// ── Inline relation-walk (MEM-G4) ─────────────────────────────────────────
+//
+// Port of: cortex@6fbf723d mcp_server/handlers/recall_helpers.py
+//   _version_neighbors, _entity_neighbors, inline_related_neighbors
+//
+// Semantic: for each recalled memory, inline a ONE-HOP walk over:
+//   (a) the supersession version chain (supersedes_id / superseded_by_id)
+//   (b) the entity relationship graph (outgoing, one hop)
+//
+// max_entities / max_neighbors / GIST_CHARS are response-budget fanout caps,
+// NOT algorithmic constants. They shape payload size only.
+//   source: cortex@6fbf723d recall_helpers.py (comment block above inline_related_neighbors):
+//     "max_entities / max_neighbors are response-budget fanout caps (cf.
+//      core/response_budget.py), NOT algorithmic constants"
+//   _GIST_CHARS = 160 — source: cortex@6fbf723d recall_helpers.py:_GIST_CHARS = 160
+
+/** Preview length for inlined neighbor content.
+ *  source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_GIST_CHARS = 160 */
+const RELATED_GIST_CHARS = 160; // source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_GIST_CHARS = 160
+
+/** Max entities per memory for the one-hop entity walk.
+ *  source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:inline_related_neighbors(max_entities=3) */
+const RELATED_MAX_ENTITIES = 3; // source: cortex@6fbf723d recall_helpers.py — response-budget cap, not algorithmic
+
+/** Max neighbors per entity for the one-hop entity walk.
+ *  source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:inline_related_neighbors(max_neighbors=5) */
+const RELATED_MAX_NEIGHBORS = 5; // source: cortex@6fbf723d recall_helpers.py — response-budget cap, not algorithmic
+
+/**
+ * Supersession-chain neighbors of a memory (item-1 edges), if any.
+ *
+ * Pre:  store implements getMemory; memoryId is a valid integer.
+ * Post: returns at most 2 version neighbors (supersedes + superseded_by),
+ *       each with a gist capped at RELATED_GIST_CHARS chars.
+ *       Returns [] when the memory row has no supersession fields.
+ *
+ * source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_version_neighbors
+ */
+async function versionNeighbors(
+  memoryId: number,
+  store: Pick<MemoryStore, "getMemory">,
+): Promise<VersionNeighbor[]> {
+  const row = await store.getMemory(memoryId);
+  if (!row) return [];
+  const out: VersionNeighbor[] = [];
+  const r = row as unknown as Record<string, unknown>;
+  const PAIRS: Array<[string, string]> = [
+    ["supersedes", "supersedes_id"],
+    ["superseded_by", "superseded_by_id"],
+  ];
+  for (const [edge, key] of PAIRS) {
+    const nid = r[key];
+    if (!nid) continue;
+    const neighbor = await store.getMemory(Number(nid));
+    if (neighbor) {
+      out.push({
+        memory_id: Number(nid),
+        edge,
+        gist: String(neighbor.content ?? "").slice(0, RELATED_GIST_CHARS),
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * One-hop entity relationship neighbors for a memory's top entities.
+ *
+ * Pre:  store implements getEntitiesForMemory and getRelationshipsForEntity;
+ *       memoryId is a valid integer.
+ * Post: returns at most maxEntities groups, each with at most maxNeighbors
+ *       outgoing relationship entries (weight-ranked by the store).
+ *       Returns [] when entity subsystem is unavailable.
+ *
+ * source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_entity_neighbors
+ */
+async function entityNeighbors(
+  memoryId: number,
+  store: MemoryStore,
+  maxEntities: number,
+  maxNeighbors: number,
+): Promise<EntityNeighborGroup[]> {
+  // Capture the optional port methods as bound locals after the guard so the
+  // non-undefined narrowing persists across await/iteration (TS resets control
+  // flow analysis on object-property access through awaits) without a non-null
+  // assertion; bind preserves `this` for class-based store implementations.
+  const getEntitiesForMemory = store.getEntitiesForMemory?.bind(store);
+  const getRelationshipsForEntity = store.getRelationshipsForEntity?.bind(store);
+  if (!getEntitiesForMemory || !getRelationshipsForEntity) {
+    return [];
+  }
+  let entities: Array<{ id: number; name: string; entity_type?: string }>;
+  try {
+    entities = (await getEntitiesForMemory(memoryId)).slice(0, maxEntities);
+  } catch {
+    return [];
+  }
+  const out: EntityNeighborGroup[] = [];
+  for (const ent of entities) {
+    let rels: Array<{ target_name?: string; relationship_type?: string; weight?: number }>;
+    try {
+      rels = await getRelationshipsForEntity(ent.id, "outgoing", maxNeighbors);
+    } catch {
+      rels = [];
+    }
+    if (rels.length === 0) continue;
+    out.push({
+      entity: ent.name,
+      neighbors: rels.map((r) => ({
+        name: r.target_name,
+        relationship_type: r.relationship_type,
+        weight: r.weight,
+      })),
+    });
+  }
+  return out;
+}
+
+/**
+ * Attach a one-hop relation walk to each recalled memory, in place.
+ *
+ * Pre:  results is the post-capping, post-ordering list of recalled memories;
+ *       store implements getMemory (version walk) and optionally
+ *       getEntitiesForMemory + getRelationshipsForEntity (entity walk).
+ * Post: each result in ``results`` has a ``related`` field set to
+ *       ``{ versions, entities }``. The versions field lists supersession
+ *       chain neighbors; the entities field lists outgoing entity-graph
+ *       neighbors. When a subsystem is unavailable, its list is [].
+ *       The original ranking order is preserved; no dedup of neighbors
+ *       vs results is required (neighbors are annotations, not ranking entries).
+ *
+ * Invariant: results.length is unchanged; only the ``related`` annotation
+ *            is added to each entry.
+ *
+ * source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:inline_related_neighbors
+ */
+export async function inlineRelatedNeighbors(
+  results: Array<{ memory_id: number; related?: RelatedNeighbors }>,
+  store: MemoryStore,
+): Promise<void> {
+  // precondition: results is bounded by max_results (already capped upstream)
+  // postcondition: each result.related = { versions: [...], entities: [...] }
+  for (const mem of results) {
+    const mid = mem.memory_id;
+    if (mid == null) continue;
+    const [versions, entities] = await Promise.all([
+      versionNeighbors(mid, store),
+      entityNeighbors(mid, store, RELATED_MAX_ENTITIES, RELATED_MAX_NEIGHBORS),
+    ]);
+    mem.related = { versions, entities };
+  }
 }
 
 // ── buildEnhancements ─────────────────────────────────────────────────────

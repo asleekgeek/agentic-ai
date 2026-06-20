@@ -43,7 +43,7 @@ import {
   extractHeatSignal,
   fuseSignals,
 } from "./multi-signal-fusion.js";
-import { filterLowSignal } from "./recall-helpers.js";
+import { filterLowSignal, inlineRelatedNeighbors } from "./recall-helpers.js";
 import type { EmbeddingEngine, MemoryStore } from "./port.js";
 import { classifyQueryIntent, computeRetrievalWeights } from "./query-intent.js";
 import { applyRules } from "./rules.js";
@@ -294,11 +294,13 @@ export async function recallHandler(
 
   // source: cortex@bc0ae4f mcp_server/handlers/recall.py (max_results=10, min_heat=0.05 — empirical defaults)
   // source: cortex@f425157 mcp_server/handlers/recall.py (include_low_signal default=False)
+  // source: cortex@6fbf723d mcp_server/handlers/recall.py (include_related default=False)
   const {
     query,
     max_results = DEFAULT_MAX_RESULTS,
     min_heat = DEFAULT_MIN_HEAT,
     include_low_signal = false,
+    include_related = false,
   } = args;
 
   // 1. Intent classification
@@ -523,6 +525,13 @@ export async function recallHandler(
         settings.STRATEGIC_BOTTOM_FRACTION,
       )
     : capped;
+
+  // 15. Inline relation-walk when include_related=true (MEM-G4).
+  //     When false (default), ordered is untouched — byte-identical to pre-MEM-G4 path.
+  //     source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:inline_related_neighbors
+  if (include_related) {
+    await inlineRelatedNeighbors(ordered, store);
+  }
 
   // 11. Co-activation Hebbian learning (side effect).
   //     CORTEX_ABLATE_CO_ACTIVATION=1 → skip.

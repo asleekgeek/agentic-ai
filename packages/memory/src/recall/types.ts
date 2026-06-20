@@ -68,9 +68,53 @@ export const RecallRequestSchema = z.object({
   // raw memory feed.
   // source: cortex@f425157 mcp_server/handlers/recall.py — include_low_signal default=False
   include_low_signal: z.boolean().default(false),
+  // Default false: when true, inline a one-hop relation walk per recalled
+  // memory: ``related.versions`` (supersession-chain neighbors) and
+  // ``related.entities`` (directly related entities via the knowledge graph).
+  // A cheap mid-tier enrichment between flat recall and the full context
+  // assembler. OFF in all benchmark loaders — never touches benchmarked scores.
+  // source: cortex@6fbf723d mcp_server/handlers/recall.py — include_related default=False
+  // source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:inline_related_neighbors
+  include_related: z.boolean().optional().default(false),
 });
 
 export type RecallRequest = z.infer<typeof RecallRequestSchema>;
+
+// ── Inline relation-walk types (MEM-G4) ───────────────────────────────────
+// source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_version_neighbors
+// source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_entity_neighbors
+// source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:inline_related_neighbors
+
+export const VersionNeighborSchema = z.object({
+  memory_id: z.number().int(),
+  // "supersedes" | "superseded_by"
+  edge: z.string(),
+  // first 160 chars of neighbor content
+  // source: cortex@6fbf723d recall_helpers.py:_GIST_CHARS = 160
+  gist: z.string(),
+});
+
+export type VersionNeighbor = z.infer<typeof VersionNeighborSchema>;
+
+export const EntityNeighborGroupSchema = z.object({
+  entity: z.string(),
+  neighbors: z.array(
+    z.object({
+      name: z.string().optional(),
+      relationship_type: z.string().optional(),
+      weight: z.number().optional(),
+    }),
+  ),
+});
+
+export type EntityNeighborGroup = z.infer<typeof EntityNeighborGroupSchema>;
+
+export const RelatedNeighborsSchema = z.object({
+  versions: z.array(VersionNeighborSchema),
+  entities: z.array(EntityNeighborGroupSchema),
+});
+
+export type RelatedNeighbors = z.infer<typeof RelatedNeighborsSchema>;
 
 // ── Single result entry ────────────────────────────────────────────────────
 
@@ -86,6 +130,9 @@ export const RecallResultSchema = z.object({
   importance: z.number().default(DEFAULT_IMPORTANCE),
   surprise: z.number().default(0.0),
   recency_boost: z.number().default(0.0),
+  // Present only when include_related=true (MEM-G4).
+  // source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:inline_related_neighbors
+  related: RelatedNeighborsSchema.optional(),
 });
 
 export type RecallResult = z.infer<typeof RecallResultSchema>;

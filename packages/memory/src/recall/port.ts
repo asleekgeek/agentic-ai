@@ -153,6 +153,48 @@ export interface MemoryStore {
    * source: cortex@bc0ae4f mcp_server/core/recall_pipeline.py:336-368
    */
   getEntityByName?(name: string): Promise<{ id: number; name: string } | null>;
+
+  // ── Relation-walk methods (MEM-G4: inline_related_neighbors) ──────────────
+  // source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_entity_neighbors
+  // source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_version_neighbors
+
+  /**
+   * Get all entities extracted from a specific memory.
+   *
+   * Returns up to max_entities entities ranked by weight/relevance.
+   * Used by the relation-walk (include_related=true) to seed the entity hop.
+   *
+   * Returns empty array if the entities subsystem is unavailable or
+   * no entities are linked to the memory.
+   *
+   * source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_entity_neighbors
+   *   calls store.get_entities_for_memory(memory_id)
+   */
+  getEntitiesForMemory?(memoryId: number): Promise<Array<{
+    id: number;
+    name: string;
+    entity_type?: string;
+  }>>;
+
+  /**
+   * Get outgoing relationships for an entity (one-hop walk).
+   *
+   * Returns neighbor entries ranked by weight descending.
+   * ``direction`` is always "outgoing" in the Python source
+   * (cortex@6fbf723d recall_helpers.py:_entity_neighbors).
+   *
+   * source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_entity_neighbors
+   *   calls store.get_relationships_for_entity(ent["id"], direction="outgoing", limit=max_neighbors)
+   */
+  getRelationshipsForEntity?(
+    entityId: number,
+    direction: "outgoing",
+    limit: number,
+  ): Promise<Array<{
+    target_name?: string;
+    relationship_type?: string;
+    weight?: number;
+  }>>;
 }
 
 // ── EmbeddingEngine port ───────────────────────────────────────────────────

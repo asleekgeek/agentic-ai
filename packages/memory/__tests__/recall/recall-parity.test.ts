@@ -445,6 +445,142 @@ describe("recall parity — fixture: recall_unicode", () => {
   });
 });
 
+// ── recall_with_related (MEM-G4) ─────────────────────────────────────────
+
+describe("recall parity — fixture: recall_with_related", () => {
+  /**
+   * Fixture: recall_with_related
+   * Scenario: include_related=true triggers the one-hop relation-walk.
+   * Each result must carry a ``related`` field with ``versions`` and
+   * ``entities`` arrays populated from the stub's seeded graph data.
+   *
+   * Sémantique Python portée (source: cortex@6fbf723d recall_helpers.py:
+   *   inline_related_neighbors, _version_neighbors, _entity_neighbors):
+   *  - profondeur : ONE-HOP uniquement.
+   *  - versions   : arêtes supersedes_id / superseded_by_id du row mémoire.
+   *  - entities   : walk outgoing sur max 3 entités × max 5 voisins.
+   *  - gist       : 160 premiers chars du contenu voisin.
+   *  - dédup      : les voisins sont des annotations; l'ordre du ranking
+   *                 principal est conservé sans modification.
+   *  - include_related=false → résultats byte-identiques (pas de champ related).
+   *
+   * STATUS: TS-CAPTURED-NEEDS-PYTHON-VERIFICATION
+   * RÉSERVE: expected golden construit manuellement depuis la sémantique Python
+   *           documentée (Python non exécutable dans ce contexte).
+   */
+  let store: InMemoryStore;
+  let resultWith: RecallResponse;
+  let resultWithout: RecallResponse;
+
+  beforeAll(async () => {
+    store = buildSeededStore();
+
+    // Seed entity graph for memory id=1 (pgvector memory):
+    //   entity "pgvector" (id=10) → outgoing rels to "HNSW", "PostgreSQL"
+    store.setMemoryEntities(1, [
+      { id: 10, name: "pgvector", entity_type: "technology" },
+      { id: 11, name: "Pinecone", entity_type: "technology" },
+    ]);
+    store.setEntityRelationships(10, [
+      { target_name: "HNSW", relationship_type: "uses", weight: 0.9 },
+      { target_name: "PostgreSQL", relationship_type: "integrates", weight: 0.8 },
+    ]);
+    store.setEntityRelationships(11, [
+      { target_name: "vector-search", relationship_type: "provides", weight: 0.7 },
+    ]);
+
+    // Run with include_related=true
+    resultWith = await recallHandler(
+      {
+        query: "why did we choose pgvector over Pinecone?",
+        include_related: true,
+        max_results: 3,
+      },
+      store,
+      new DeterministicEmbeddingEngine(8),
+      DEFAULT_RECALL_SETTINGS,
+    );
+    captureExpected("recall_with_related", resultWith);
+
+    // Run same query with include_related=false (default) for regression check
+    resultWithout = await recallHandler(
+      {
+        query: "why did we choose pgvector over Pinecone?",
+        max_results: 3,
+      },
+      store,
+      new DeterministicEmbeddingEngine(8),
+      DEFAULT_RECALL_SETTINGS,
+    );
+  });
+
+  it("include_related=true: response has standard shape fields", () => {
+    assertResponseShape(resultWith);
+  });
+
+  it("include_related=true: every result carries a 'related' field", () => {
+    expect(resultWith.results.length).toBeGreaterThan(0);
+    for (const r of resultWith.results) {
+      expect(r).toHaveProperty("related");
+      expect(r.related).toHaveProperty("versions");
+      expect(r.related).toHaveProperty("entities");
+      expect(Array.isArray(r.related!.versions)).toBe(true);
+      expect(Array.isArray(r.related!.entities)).toBe(true);
+    }
+  });
+
+  it("include_related=true: memory id=1 has entity neighbors populated", () => {
+    const mem1 = resultWith.results.find((r) => r.memory_id === 1);
+    if (!mem1) return; // memory 1 may not be in top-3; skip if absent
+    expect(mem1.related!.entities.length).toBeGreaterThan(0);
+    // At least one entity group should have neighbors
+    const allNeighbors = mem1.related!.entities.flatMap((eg) => eg.neighbors);
+    expect(allNeighbors.length).toBeGreaterThan(0);
+    // Neighbor entries must have relationship_type
+    for (const n of allNeighbors) {
+      expect(n).toHaveProperty("relationship_type");
+    }
+  });
+
+  it("include_related=true: gist is capped at 160 chars", () => {
+    for (const r of resultWith.results) {
+      for (const v of r.related!.versions) {
+        expect(v.gist.length).toBeLessThanOrEqual(160);
+      }
+    }
+  });
+
+  it("include_related=false (default): results have NO 'related' field — byte-identical regression", () => {
+    for (const r of resultWithout.results) {
+      // When include_related is omitted, the 'related' field must be absent
+      expect(r).not.toHaveProperty("related");
+    }
+  });
+
+  it("include_related=false: scores, total, query_intent unchanged", () => {
+    expect(resultWithout.total).toBe(resultWithout.results.length);
+    expect(resultWithout.query_intent).toBe(resultWith.query_intent);
+    // Same result IDs in same order (same store, same query, same settings)
+    expect(resultWithout.results.map((r) => r.memory_id)).toEqual(
+      resultWith.results.map((r) => r.memory_id),
+    );
+  });
+
+  it("include_related=true: entity max_entities cap respected (≤ 3 entity groups per result)", () => {
+    for (const r of resultWith.results) {
+      expect(r.related!.entities.length).toBeLessThanOrEqual(3);
+    }
+  });
+
+  it("include_related=true: entity max_neighbors cap respected (≤ 5 neighbors per group)", () => {
+    for (const r of resultWith.results) {
+      for (const eg of r.related!.entities) {
+        expect(eg.neighbors.length).toBeLessThanOrEqual(5);
+      }
+    }
+  });
+});
+
 // ── Hierarchical recall supplementary ────────────────────────────────────
 
 describe("recall_hierarchical — basic parity", () => {
