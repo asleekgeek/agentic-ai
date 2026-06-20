@@ -23,11 +23,12 @@ import { narrativeHandler } from "@agentic/memory/narrative/handlers/narrative.j
 import type { MemoryPort } from "@agentic/memory/narrative/handlers/narrative.js";
 import { getProjectStoryHandler } from "@agentic/memory/narrative/handlers/get-project-story.js";
 import { unifiedSearchHandler } from "@agentic/memory/narrative/handlers/unified-search.js";
+import type { MemoryStore as RecallMemoryStore, EmbeddingEngine } from "@agentic/memory/recall/port.js";
 
 // ── Named constants for schema parameters ──────────────────────────────────
 
-// source: MCP_TOOLS.md §"get_project_story" — max_chapters constraint
-const MAX_CHAPTERS_MAX     = 20;
+// source: cortex@ed33435 get_project_story.py:64 — max_chapters maximum=30
+const MAX_CHAPTERS_MAX     = 30;
 const MAX_CHAPTERS_DEFAULT = 5;
 
 // source: MCP_TOOLS.md §"unified_search" — max_results constraint
@@ -42,6 +43,10 @@ const RRF_K_DEFAULT = 60;
 
 export interface NarrativeDeps {
   store: MemoryPort;
+  // source: cortex@ed33435 unified_search.py:24 — unified_search reuses the
+  // same recall store + embeddings backing the recall tool (recallHandler).
+  recallStore: RecallMemoryStore;
+  embedder: EmbeddingEngine | null;
   llmClient: LlmClient | null;
 }
 
@@ -128,8 +133,10 @@ export function registerNarrativeTools(
       try {
         // source: packages/memory/src/narrative/handlers/get-project-story.ts::getProjectStoryHandler
         if (!narrativeDeps) {
+          // source: cortex@ed33435 get_project_story.py:164-171 (_empty_story shape)
           return { content: [{ type: "text" as const, text: JSON.stringify({
-            chapters: [], period: args.period, note: "no MemoryStore configured",
+            period: args.period, chapters: [], total_memories: 0,
+            story: "No memories found for this period.",
           }) }] };
         }
         const response = getProjectStoryHandler(
@@ -170,9 +177,12 @@ export function registerNarrativeTools(
             results: [], query: args.query, note: "no MemoryStore configured",
           }) }] };
         }
-        const response = unifiedSearchHandler(
+        const response = await unifiedSearchHandler(
           // source: packages/memory/src/narrative/handlers/unified-search.ts::UnifiedSearchDeps
-          { memoryPort: narrativeDeps.store },
+          // Cortex leg via recallHandler (WRRF); AP leg absent until a
+          // CodebasePort is wired — recallHandler degrades gracefully.
+          // source: cortex@ed33435 unified_search.py:96 cortex_result = await recall_handler(...)
+          { recallStore: narrativeDeps.recallStore, embedder: narrativeDeps.embedder },
           {
             query:       args.query,
             domain:      args.domain,

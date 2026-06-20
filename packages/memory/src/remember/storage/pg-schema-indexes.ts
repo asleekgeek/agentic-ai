@@ -111,6 +111,25 @@ END $$;
 
 CREATE INDEX IF NOT EXISTS idx_memories_dominant_emotion ON memories (dominant_emotion) WHERE dominant_emotion != 'neutral';
 
+-- Supersession edges (MEM-G1): idempotent ADD COLUMN guards for existing DBs.
+-- source: Cortex mcp_server/infrastructure/pg_schema.py — supersession ADD COLUMN migration guards
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='memories' AND column_name='supersedes_id')
+    THEN ALTER TABLE memories ADD COLUMN supersedes_id INTEGER REFERENCES memories(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='memories' AND column_name='superseded_by_id')
+    THEN ALTER TABLE memories ADD COLUMN superseded_by_id INTEGER REFERENCES memories(id) ON DELETE SET NULL;
+    END IF;
+END $$;
+
+-- Partial indexes for supersession-chain walks (head-of-chain demotion + version walk).
+-- source: Cortex mcp_server/infrastructure/pg_schema.py — supersession partial indexes
+CREATE INDEX IF NOT EXISTS idx_memories_superseded_by ON memories (superseded_by_id) WHERE superseded_by_id IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_memories_supersedes ON memories (supersedes_id) WHERE supersedes_id IS NOT NULL;
+
 CREATE OR REPLACE FUNCTION normalize_domain() RETURNS trigger AS $$
 BEGIN
     NEW.domain := LOWER(COALESCE(NEW.domain, ''));

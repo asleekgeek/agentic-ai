@@ -35,8 +35,11 @@ describe("remember handler", () => {
     expect(result.memory_id!).toBeGreaterThan(0);
   });
 
-  it("returns stored=false for empty content", () => {
-    const result = remember({ content: "   " }, store);
+  it("returns stored=false when content hardens to empty", () => {
+    // Control-char-only content survives Zod (.min(1)) but hardens to empty.
+    // Mirrors Cortex remember.py:274-276 — harden_content then `if not content`.
+    // (Cortex does not trim whitespace; whitespace-only is NOT no_content.)
+    const result = remember({ content: "\x07" }, store);
     expect(result.stored).toBe(false);
     expect(result.reason).toBe("no_content");
   });

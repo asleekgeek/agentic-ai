@@ -22,6 +22,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { MemoryStore } from "@agentic/memory/remember/storage/memory-store.js";
 import { rememberAsync } from "@agentic/memory/remember/handlers/remember.js";
+import type { WriteEmbedder } from "@agentic/memory/remember/handlers/remember.js";
 import { forgetAsync } from "@agentic/memory/remember/handlers/forget.js";
 import { anchorAsync } from "@agentic/memory/remember/handlers/anchor.js";
 import { rateMemoryAsync } from "@agentic/memory/remember/handlers/rate-memory.js";
@@ -30,6 +31,11 @@ import { rateMemoryAsync } from "@agentic/memory/remember/handlers/rate-memory.j
 
 export interface RememberDeps {
   store: MemoryStore;
+  // Curation-on-write embedder (MEM-G1). null on the live server until Phase-7
+  // Group-A wires a real embedder; curation-on-write is a no-op when absent, so
+  // the write path stays byte-identical until then.
+  // source: packages/memory/src/remember/handlers/remember-helpers.ts::WriteEmbedder
+  embedder?: WriteEmbedder | null;
 }
 
 // ── Error envelope helper ─────────────────────────────────────────────────────
@@ -72,7 +78,8 @@ export function registerRememberTools(server: McpServer, deps: RememberDeps): vo
       try {
         // source: packages/memory/src/remember/handlers/remember.ts::rememberAsync
         // rememberAsync calls *Async store methods when available (PG), else sync (SQLite).
-        const response = await rememberAsync(args, deps.store);
+        // deps.embedder is null until Phase-7 Group-A → curation-on-write is a no-op.
+        const response = await rememberAsync(args, deps.store, deps.embedder ?? null);
         return { content: [{ type: "text" as const, text: JSON.stringify(response) }] };
       } catch (err) {
         return errorText("remember", err);

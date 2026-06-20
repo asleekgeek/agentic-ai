@@ -271,13 +271,29 @@ BEGIN
                    WHEN p_intent IN ('preference', 'instruction') AND c.tags @> to_jsonb(p_intent::TEXT)
                    THEN 0.4 ELSE 0.0 END) AS final_score
         FROM emotional_boosted eb JOIN candidates c ON c.id = eb.id
+    ),
+    -- Metamemory confidence as a multiplicative document prior (Bayesian: priors
+    -- multiply the query likelihood). confidence defaults to 1.0 (multiplicative
+    -- identity) and moves ONLY via rate_memory feedback, so the prior is
+    -- data-driven, no invented constant, and an identity transform on benchmark
+    -- fixtures / any corpus with no feedback — LoCoMo byte-identical.
+    -- source: Cortex mcp_server/infrastructure/pg_schema.py — recall_memories() confidence_weighted CTE
+    confidence_weighted AS (
+        SELECT tb.id,
+               tb.final_score * COALESCE(c.confidence, 1.0) AS final_score
+        FROM tag_boosted tb
+        JOIN candidates c ON c.id = tb.id
     )
-    SELECT tb.id, c.content, tb.final_score::REAL,
+    SELECT cw.id, c.content, cw.final_score::REAL,
            effective_heat(c, NOW(), v_factor)::REAL AS heat,
            c.domain, c.created_at, c.store_type, c.tags,
            c.importance, c.surprise_score, c.emotional_valence, c.source
-    FROM tag_boosted tb JOIN candidates c ON c.id = tb.id
-    ORDER BY tb.final_score DESC LIMIT p_max_results * 3;
+    FROM confidence_weighted cw JOIN candidates c ON c.id = cw.id
+    -- Supersession tier sort (MEM-G1): current versions (superseded_by_id IS NULL
+    -- → FALSE) lead; superseded rows demote below, then by fused score. Constant-free
+    -- (no tuned penalty), so byte-identical when no edges exist.
+    -- source: Cortex mcp_server/infrastructure/pg_schema.py — recall_memories() supersession tier-sort
+    ORDER BY (c.superseded_by_id IS NOT NULL), cw.final_score DESC LIMIT p_max_results * 3;
 END;
 $$ LANGUAGE plpgsql STABLE;
 `;

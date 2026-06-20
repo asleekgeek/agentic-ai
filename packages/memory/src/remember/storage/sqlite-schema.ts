@@ -308,4 +308,8 @@ export const MIGRATIONS: Array<[string, string, string]> = [
   ["memories", "agent_context", "TEXT DEFAULT ''"],
   ["memories", "is_global", "INTEGER DEFAULT 0"],
   ["memories", "stage_entered_at", "TEXT"],
+  // Supersession edges (MEM-G1): plain INTEGER, NULL default → byte-identical.
+  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:336-337
+  ["memories", "supersedes_id", "INTEGER"],
+  ["memories", "superseded_by_id", "INTEGER"],
 ];

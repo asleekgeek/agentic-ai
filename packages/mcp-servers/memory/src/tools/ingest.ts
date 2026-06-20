@@ -1,9 +1,9 @@
 /**
  * ingest.ts — MCP tool adapters for the upstream ingest topic.
  *
- * Tools registered (6):
+ * Tools registered (5):
  *   import_sessions, codebase_analyze, ingest_codebase, ingest_prd,
- *   change_impact, open_visualization
+ *   change_impact
  *
  * Phase 7 Group D — DI wiring:
  *   - import_sessions: calls real importHandler from @agentic/memory/import.
@@ -12,11 +12,9 @@
  *   - ingest_prd: calls real ingestPrdHandler.
  *   - change_impact: throws MissingStoreError — blocked on AP codebase graph.
  *     source: docs/ADR/0046-change-impact-analysis.md §Phase 3 (not landed)
- *   - open_visualization: launches the HTTP dashboard via @agentic/memory-dashboard.
- *     source: docs/ADR/0014-cortex-http-server-restored.md (ADR-0011 rescinded)
  *
  * source: worktrees/port-inventory-cortex/inventory/MCP_TOOLS.md
- *         §UpstreamIngest, §Tier1Memory (import_sessions), §Tier1Core (open_viz)
+ *         §UpstreamIngest, §Tier1Memory (import_sessions)
  */
 
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -26,15 +24,11 @@ import { changeImpactHandler } from "@agentic/memory/codebase-analysis/handlers/
 import { importHandler } from "@agentic/memory/import/handler.js";
 import { rememberAsync } from "@agentic/memory/remember/handlers/remember.js";
 import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-store.js";
-import { launchDashboard } from "@agentic/memory-dashboard/launcher";
 
 // ── Schema constants ──────────────────────────────────────────────────────────
-// source: MCP_TOOLS.md §import_sessions, §ingest_codebase, §codebase_analyze
-// source: session_extractor.py score_importance — baseline score = 0.3 (no signal hits).
-// 0.3 captures all content above length/noise floor; 0.4 required a category hit,
-// leaving ~50% of qualifying messages unrecorded. Empirical: 0.4→20/file, 0.3→45/file.
-// source: empirical 79-file sample, 2026-05-09.
-const MIN_IMPORTANCE_DEFAULT = 0.3;
+// source: MCP_TOOLS.md §ingest_codebase, §codebase_analyze
+// source: cortex tool_registry_memory.py:261 tool_import_sessions(min_importance: float = 0.4); handler import_sessions.py:306 default 0.4
+const MIN_IMPORTANCE_DEFAULT = 0.4;
 const TOP_SYMBOLS_DEFAULT    = 50;
 const TOP_PROCESSES_DEFAULT  = 10;
 // source: cortex@2f42428 mcp_server/handlers/codebase_analyze.py — max_files semantics
@@ -78,14 +72,11 @@ function errorText(tool: string, err: unknown): { content: Array<{ type: "text";
  * Registers ingest and import MCP tools.
  *
  * precondition:  deps is provided with a live store and wikiRoot.
- * postcondition: 6 tools registered; import_sessions/codebase_analyze/
- *   ingest_codebase/ingest_prd/change_impact call real handlers;
- *   open_visualization launches @agentic/memory-dashboard and returns the URL.
+ * postcondition: 5 tools registered; import_sessions/codebase_analyze/
+ *   ingest_codebase/ingest_prd/change_impact call real handlers.
  *
  * source: MCP_TOOLS.md §"import_sessions", §"codebase_analyze",
- *         §"ingest_codebase", §"ingest_prd", §"change_impact",
- *         §"open_visualization"
- * source: docs/ADR/0014-cortex-http-server-restored.md
+ *         §"ingest_codebase", §"ingest_prd", §"change_impact"
  */
 export function registerIngestTools(server: McpServer, deps?: IngestDeps): void {
   // ── import_sessions ───────────────────────────────────────────────────────
@@ -307,37 +298,6 @@ export function registerIngestTools(server: McpServer, deps?: IngestDeps): void 
         return { content: [{ type: "text" as const, text: JSON.stringify(response) }] };
       } catch (err) {
         return errorText("change_impact", err);
-      }
-    },
-  );
-
-  // ── open_visualization ────────────────────────────────────────────────────
-  server.registerTool(
-    "open_visualization",
-    {
-      description: "Launch the 3D methodology constellation map in the browser.",
-      inputSchema: {
-        domain: z.string().optional().describe("Domain to visualise"),
-      },
-    },
-    async (args) => {
-      try {
-        // Launch or reuse the memory-dashboard HTTP server.
-        // ADR-0011 is rescinded — source: docs/ADR/0014-cortex-http-server-restored.md
-        // source: cortex@ed33435 mcp_server/server/http_launcher.py:255-325 (launch_server)
-        const url = await launchDashboard({ openBrowser: true });
-        const domain = (args as { domain?: string }).domain;
-        const finalUrl = domain ? `${url}?domain=${encodeURIComponent(domain)}` : url;
-        return {
-          content: [
-            {
-              type: "text" as const,
-              text: JSON.stringify({ url: finalUrl, message: `Dashboard launched at ${finalUrl}` }),
-            },
-          ],
-        };
-      } catch (err) {
-        return errorText("open_visualization", err);
       }
     },
   );

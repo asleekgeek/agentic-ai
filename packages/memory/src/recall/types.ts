@@ -278,5 +278,10 @@ export interface MemoryItem {
   importance: number;
   surprise_score: number;
   embedding: number[] | null;
+  // Supersession edges (MEM-G1): populated by _normalizeRow so the include_related
+  // version walk (recall-helpers.ts:versionNeighbors) can read them off getMemory.
+  // source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_version_neighbors
+  supersedes_id?: number | null;
+  superseded_by_id?: number | null;
   memory_id?: number;
 }

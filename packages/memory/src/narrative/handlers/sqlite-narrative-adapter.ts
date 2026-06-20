@@ -20,6 +20,7 @@ import type { MemoryRecord } from "../types.js";
 // source: packages/memory/src/remember/storage/sqlite-store.ts MEMORIES_DDL
 
 interface MemoryRow {
+  id: number;
   content: string;
   tags: string;
   importance: number;
@@ -35,6 +36,7 @@ function rowToRecord(row: MemoryRow): MemoryRecord {
     tags = [];
   }
   return {
+    id:         row.id,
     content:    row.content,
     tags,
     importance: row.importance,
@@ -67,7 +69,7 @@ export class SqliteNarrativeAdapter implements MemoryPort {
    */
   getMemoriesForDirectory(directory: string, minHeat: number): MemoryRecord[] {
     const rows = this._db.prepare(
-      `SELECT content, tags, importance, heat_base, created_at
+      `SELECT id, content, tags, importance, heat_base, created_at
          FROM memories
         WHERE directory_context LIKE ? AND heat_base >= ?
         ORDER BY heat_base DESC`,
@@ -86,7 +88,7 @@ export class SqliteNarrativeAdapter implements MemoryPort {
    */
   getMemoriesForDomain(domain: string, minHeat: number, limit: number): MemoryRecord[] {
     const rows = this._db.prepare(
-      `SELECT content, tags, importance, heat_base, created_at
+      `SELECT id, content, tags, importance, heat_base, created_at
          FROM memories
         WHERE domain = ? AND heat_base >= ?
         ORDER BY heat_base DESC
@@ -106,7 +108,7 @@ export class SqliteNarrativeAdapter implements MemoryPort {
    */
   getHotMemories(minHeat: number, limit: number): MemoryRecord[] {
     const rows = this._db.prepare(
-      `SELECT content, tags, importance, heat_base, created_at
+      `SELECT id, content, tags, importance, heat_base, created_at
          FROM memories
         WHERE heat_base >= ?
         ORDER BY heat_base DESC

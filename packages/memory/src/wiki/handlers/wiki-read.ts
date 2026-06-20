@@ -14,11 +14,20 @@ import { isRedirect, parseFrontmatter, resolveChain } from "../redirect.js";
 export interface WikiReadArgs {
   readonly path: string;
   readonly follow_redirects?: boolean;
+  // Start the returned content at this character offset. content_length
+  // always carries the full page size so callers can page through pages
+  // larger than the response budget.
+  // source: cortex wiki_read.py:74-86 (offset, default 0, minimum 0)
+  readonly offset?: number;
 }
 
 export interface WikiReadResult {
   readonly path: string;
   readonly content: string;
+  // Full page size BEFORE any offset slice — lets callers page.
+  // source: cortex wiki_read.py:92-106 (_bounded sets content_length)
+  readonly content_length: number;
+  readonly offset: number;
   readonly root: string;
   readonly resolved_path: string;
   readonly redirect_hops: number;
@@ -38,6 +47,8 @@ export async function handler(
   const relPath = (args.path ?? "").trim();
   if (!relPath) return { error: "path is required" };
   const followRedirects = args.follow_redirects !== false; // default true
+  // source: cortex wiki_read.py:74-86 (offset default 0, minimum 0)
+  const offset = Math.max(0, args.offset ?? 0);
 
   let content: string | null;
   try {
@@ -50,7 +61,9 @@ export async function handler(
   if (!followRedirects) {
     return {
       path: relPath,
-      content,
+      content: offset > 0 ? content.slice(offset) : content,
+      content_length: content.length,
+      offset,
       root: deps.wikiRoot,
       resolved_path: relPath,
       redirect_hops: 0,
@@ -88,7 +101,9 @@ export async function handler(
     if (!isRedirect(fm)) {
       return {
         path: relPath,
-        content: text,
+        content: offset > 0 ? text.slice(offset) : text,
+        content_length: text.length,
+        offset,
         root: deps.wikiRoot,
         resolved_path: current,
         redirect_hops: chain.length - 1,

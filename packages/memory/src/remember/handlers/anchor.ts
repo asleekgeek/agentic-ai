@@ -100,18 +100,17 @@ export function anchor(
   const tags = buildAnchorTags(mem.tags, reason);
   const content = buildAnchorContent(mem.content, reason);
 
-  // A3 canonical anchor write: heat_base=1.0 + no_decay=TRUE preserves
-  // the anchor-resists-decay semantic via effective_heat(). heat_base_set_at
-  // refreshes the bump timestamp so recall sees a fresh anchor even after
-  // a long idle period.
-  // source: phase-3-a3-migration-design.md §3.3
-  store.bumpHeatRaw(memoryId, 1.0);
-  store.setMemoryProtected(memoryId, true);
-  store.updateMemoryImportance(memoryId, 1.0);
-
-  // Write the anchor prefix and updated tags in one call.
-  // source: cortex@f2b9f99 mcp_server/handlers/anchor.py:143-146
-  store.updateMemoryContent(memoryId, content, tags);
+  // A3 canonical anchor write: a single atomic UPDATE setting
+  // heat_base=1.0, heat_base_set_at=NOW(), no_decay=TRUE, is_protected=TRUE,
+  // importance=1.0, tags, content, is_global — exactly the Cortex
+  // acquire_interactive() single statement. Replaces the four prior
+  // non-atomic writes (which also never set no_decay=TRUE).
+  // source: handlers/anchor.py:141-147 (single UPDATE in acquire_interactive)
+  if (store.anchorMemory) {
+    store.anchorMemory({ memoryId, content, tags, isGlobal });
+  } else {
+    throw new Error("store does not implement anchorMemory");
+  }
 
   return {
     anchored: true,
@@ -157,17 +156,16 @@ export async function anchorAsync(
   const tags = buildAnchorTags(mem.tags, reason);
   const content = buildAnchorContent(mem.content, reason);
 
-  // bumpHeatRaw with async variant when available.
-  if (store.bumpHeatRawAsync) {
-    await store.bumpHeatRawAsync(memoryId, 1.0);
+  // Single atomic UPDATE — Async variant when available (PG), sync otherwise.
+  // Replaces the four prior non-atomic writes and sets no_decay=TRUE.
+  // source: handlers/anchor.py:141-147 (single UPDATE in acquire_interactive)
+  if (store.anchorMemoryAsync) {
+    await store.anchorMemoryAsync({ memoryId, content, tags, isGlobal });
+  } else if (store.anchorMemory) {
+    store.anchorMemory({ memoryId, content, tags, isGlobal });
   } else {
-    store.bumpHeatRaw(memoryId, 1.0);
+    throw new Error("store does not implement anchorMemory");
   }
-
-  // These fire-and-forget methods work on both SQLite and PG (void this.runAsync(...)).
-  store.setMemoryProtected(memoryId, true);
-  store.updateMemoryImportance(memoryId, 1.0);
-  store.updateMemoryContent(memoryId, content, tags);
 
   return {
     anchored: true,

@@ -210,10 +210,10 @@ export class PgMemoryStore implements MemoryStoreExt {
         consolidation_stage, theta_phase_at_encoding, encoding_strength,
         separation_index, interference_score, schema_match_score, schema_id,
         hippocampal_dependency, is_benchmark, agent_context, is_global,
-        stage_entered_at, arousal, dominant_emotion
+        stage_entered_at, arousal, dominant_emotion, supersedes_id
       ) VALUES (
         $1,$2::jsonb,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,
-        $16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29
+        $16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30
       ) RETURNING id`,
       // $2::jsonb — tags is JSON.stringify(array), must be cast to jsonb
       // source: cortex@82b15b3 mcp_server/infrastructure/pg_store.py:insert_memory
@@ -249,6 +249,9 @@ export class PgMemoryStore implements MemoryStoreExt {
         data.stage_entered_at ?? data.created_at ?? now,
         data.arousal ?? 0.0,
         data.dominant_emotion ?? "neutral",
+        // Supersession forward edge (MEM-G1): null unless curation supersedes.
+        // source: cortex@ed33435 mcp_server/infrastructure/pg_store.py:insert_memory
+        data.supersedes_id ?? null,
       ],
     );
     const row = result.rows[0];
@@ -391,6 +394,33 @@ export class PgMemoryStore implements MemoryStoreExt {
   }
 
   /**
+   * Close the supersession back-pointer (MEM-G1): stamp the OLD memory's
+   * superseded_by_id with the NEW memory id. Phase 2 of the two-phase edge
+   * write (forward edge supersedes_id is set at insert).
+   *
+   * Footgun (mirrored verbatim from Python): newId goes in SET, oldId in WHERE.
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store.py:set_superseded_by (517-528)
+   */
+  setSupersededBy(_oldId: number, _newId: number): void {
+    this._runSync(async (c) => this._setSupersededByOnClient(c, _oldId, _newId));
+  }
+
+  async setSupersededByAsync(oldId: number, newId: number): Promise<void> {
+    return this.runAsync((c) => this._setSupersededByOnClient(c, oldId, newId));
+  }
+
+  private async _setSupersededByOnClient(
+    client: PoolClient,
+    oldId: number,
+    newId: number,
+  ): Promise<void> {
+    await client.query(
+      `UPDATE memories SET superseded_by_id = $1 WHERE id = $2`,
+      [newId, oldId],
+    );
+  }
+
+  /**
    * A3 batch heat writer. Single UPDATE ... FROM UNNEST() round-trip.
    * source: issue #13; phase-3-a3-migration-design.md §3.2
    * source: infrastructure/pg_store.py:update_memories_heat_batch
@@ -494,6 +524,102 @@ export class PgMemoryStore implements MemoryStoreExt {
         [content, JSON.stringify(tags), memoryId],
       ).then(() => undefined),
     );
+  }
+
+  /**
+   * Atomic anchor write — single UPDATE replacing the four non-atomic anchor
+   * writes. Sets no_decay=TRUE (previously never set) alongside heat_base,
+   * heat_base_set_at, is_protected, importance, tags, content, is_global.
+   *
+   * source: cortex@HEAD mcp_server/handlers/anchor.py:141-147
+   *   acquire_interactive() single UPDATE
+   */
+  anchorMemory(args: { memoryId: number; content: string; tags: string[]; isGlobal: boolean }): void {
+    this._runSync(async (c) => this._anchorMemoryOnClient(c, args));
+  }
+
+  async anchorMemoryAsync(args: {
+    memoryId: number;
+    content: string;
+    tags: string[];
+    isGlobal: boolean;
+  }): Promise<void> {
+    return this.runAsync((c) => this._anchorMemoryOnClient(c, args));
+  }
+
+  private async _anchorMemoryOnClient(
+    client: PoolClient,
+    args: { memoryId: number; content: string; tags: string[]; isGlobal: boolean },
+  ): Promise<void> {
+    await client.query(
+      `UPDATE memories SET heat_base = 1.0, heat_base_set_at = NOW(), no_decay = TRUE, ` +
+        `is_protected = TRUE, importance = 1.0, tags = $1::jsonb, content = $2, is_global = $3 ` +
+        `WHERE id = $4`,
+      [JSON.stringify(args.tags), args.content, args.isGlobal, args.memoryId],
+    );
+  }
+
+  // ── User mood (MOOD_CONGRUENT_RERANK) ──────────────────────────────────
+  //
+  // source: cortex@HEAD mcp_server/infrastructure/pg_store.py:get_user_mood (673)/
+  //   set_user_mood (713). The TS surface exposes the scalar valence accessors
+  //   (arousal is reserved and defaults to 0.0, mirroring the Python contract).
+
+  getUserMood(): number | null {
+    return this._runSync(async (c) => this._getUserMoodOnClient(c));
+  }
+
+  async getUserMoodAsync(): Promise<number | null> {
+    return this.runAsync((c) => this._getUserMoodOnClient(c));
+  }
+
+  private async _getUserMoodOnClient(client: PoolClient): Promise<number | null> {
+    const result = await client.query<{ valence: number }>(
+      `SELECT valence FROM user_mood WHERE user_id = 'default'`,
+    );
+    const row = result.rows[0];
+    return row ? Number(row.valence) : null;
+  }
+
+  setUserMood(valence: number): void {
+    this._runSync(async (c) => this._setUserMoodOnClient(c, valence));
+  }
+
+  async setUserMoodAsync(valence: number): Promise<void> {
+    return this.runAsync((c) => this._setUserMoodOnClient(c, valence));
+  }
+
+  private async _setUserMoodOnClient(client: PoolClient, valence: number): Promise<void> {
+    const clamped = Math.max(-1.0, Math.min(1.0, valence));
+    await client.query(
+      `INSERT INTO user_mood (user_id, valence, updated_at) VALUES ('default', $1, NOW()) ` +
+        `ON CONFLICT (user_id) DO UPDATE SET valence = EXCLUDED.valence, updated_at = NOW()`,
+      [clamped],
+    );
+  }
+
+  /**
+   * Hottest recent memory contents for the structural-novelty window.
+   * Iso to get_hot_memories(min_heat=0.0, limit=n): heat_base DESC,
+   * last_accessed DESC. An empty domain returns the global hot set.
+   *
+   * source: cortex@HEAD mcp_server/handlers/remember_helpers.py:154
+   */
+  listRecentContents(domain: string, n: number): string[] {
+    return this._runSync(async (c) => this._listRecentContentsOnClient(c, domain, n));
+  }
+
+  private async _listRecentContentsOnClient(
+    client: PoolClient,
+    domain: string,
+    n: number,
+  ): Promise<string[]> {
+    const result = await client.query<{ content: string }>(
+      `SELECT content FROM memories WHERE ($1 = '' OR domain = $1) ` +
+        `ORDER BY heat_base DESC, last_accessed DESC LIMIT $2`,
+      [domain, n],
+    );
+    return result.rows.map((r) => r.content);
   }
 
   // ── Homeostatic state ──────────────────────────────────────────────────
@@ -1163,6 +1289,19 @@ export class PgMemoryStore implements MemoryStoreExt {
     }));
   }
 
+  // ── MemoryStoreExt: total memory count ────────────────────────────────
+
+  /**
+   * Count of stored memory rows. Iso to rebuild_profiles totalMemories.
+   * source: cortex@HEAD mcp_server/handlers/rebuild_profiles.py:113
+   */
+  countMemories(): number {
+    return this._runSync(async (c) => {
+      const result = await c.query<{ c: number }>(`SELECT COUNT(*)::int AS c FROM memories`);
+      return result.rows[0]?.c ?? 0;
+    });
+  }
+
   // ── MemoryStoreExt: prospective memories ──────────────────────────────
 
   getActiveProspectiveMemories(): Record<string, unknown>[] {
@@ -1206,11 +1345,33 @@ export class PgMemoryStore implements MemoryStoreExt {
   updateMemoryCompression(
     memoryId: number,
     content: string,
-    _embedding: Buffer | null,
+    embedding: Buffer | null,
     compressionLevel: number,
     _opts?: Record<string, unknown>,
   ): void {
-    // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py — compression update
+    // Re-persist the embedding alongside the new (gist/tag/merged) content so the
+    // stored vector matches the row's text. Cortex update_memory_compression
+    // ALWAYS rewrites the embedding column (pg_store.py:835-858); the previous TS
+    // impl dropped it, leaving the compression cycle + curation-merge with a stale
+    // vector. We only overwrite when a fresh embedding is supplied (null → keep
+    // the existing vector rather than NULL it, since no caller intends a wipe).
+    // source: cortex@ed33435 mcp_server/infrastructure/pg_store.py:835-858 update_memory_compression
+    if (embedding && embedding.byteLength > 0) {
+      const dim = embedding.byteLength / FLOAT32_BYTES_PER_ELEMENT;
+      const floats = new Float32Array(embedding.buffer, embedding.byteOffset, dim);
+      const vecLiteral = `[${Array.from(floats).join(",")}]`;
+      void this.runAsync((c) =>
+        c.query(
+          `UPDATE memories SET content = $1, compressed = TRUE,
+              compression_level = $2, embedding = $3::vector,
+              original_content = CASE WHEN original_content IS NULL THEN content ELSE original_content END
+           WHERE id = $4`,
+          [content, compressionLevel, vecLiteral, memoryId],
+        ),
+      );
+      return;
+    }
+    // source: cortex@ed33435 mcp_server/infrastructure/pg_store.py:835-858 (content-only branch)
     void this.runAsync((c) =>
       c.query(
         `UPDATE memories SET content = $1, compressed = TRUE,
@@ -1477,6 +1638,10 @@ export class PgMemoryStore implements MemoryStoreExt {
       is_benchmark: Boolean(row["is_benchmark"]),
       agent_context: (row["agent_context"] as string) ?? "",
       is_global: Boolean(row["is_global"]),
+      // Supersession edges (MEM-G1): whitelist these so the MEM-G4 version walk
+      // (recall-helpers.ts:versionNeighbors via getMemory) sees real ids, not undefined.
+      supersedes_id: (row["supersedes_id"] as number | null) ?? null,
+      superseded_by_id: (row["superseded_by_id"] as number | null) ?? null,
     };
   }
 }

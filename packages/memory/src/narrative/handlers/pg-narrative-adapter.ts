@@ -29,6 +29,7 @@ import type { PgMemoryStore } from "../../remember/storage/pg-store.js";
 // ── Row normalization ──────────────────────────────────────────────────────
 
 interface PgMemoryRow {
+  id: unknown;
   content: unknown;
   tags: unknown;
   importance: unknown;
@@ -52,6 +53,7 @@ function rowToRecord(row: PgMemoryRow): MemoryRecord {
     tags = [];
   }
   return {
+    id:         typeof row.id === "number" ? row.id : Number(row.id ?? 0),
     content:    String(row.content ?? ""),
     tags,
     importance: typeof row.importance === "number" ? row.importance : 0.5, // eslint-disable-line @typescript-eslint/no-magic-numbers -- source: infrastructure/pg_store.py default importance

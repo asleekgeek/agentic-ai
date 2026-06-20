@@ -181,6 +181,114 @@ export interface MemoryStore {
    */
   updateMemoryContent(memoryId: number, content: string, tags: string[]): void;
 
+  /**
+   * Close the supersession back-pointer (MEM-G1): set the OLD memory's
+   * superseded_by_id to the NEW memory id. Phase 2 of the two-phase edge write
+   * (the forward edge supersedes_id is written at insert time).
+   *
+   * precondition:  oldMemoryId and newMemoryId are valid ids; oldMemoryId != newMemoryId.
+   * postcondition: memories.superseded_by_id = newMemoryId for row oldMemoryId; no
+   *   other column or row is modified.
+   *
+   * source: cortex@ed33435 mcp_server/infrastructure/pg_store.py:set_superseded_by (517-528)
+   */
+  setSupersededBy(oldMemoryId: number, newMemoryId: number): void;
+
+  /**
+   * Async variant of setSupersededBy for the PG backend.
+   * Optional: present on PgMemoryStore, absent on SqliteMemoryStore.
+   * source: ADR-0042 — async-when-available pattern for PG/SQLite parity.
+   */
+  setSupersededByAsync?(oldMemoryId: number, newMemoryId: number): Promise<void>;
+
+  /**
+   * Atomic anchor write. Performs the full anchor mutation in a SINGLE
+   * UPDATE so it is atomic — replacing the four non-atomic writes
+   * (bumpHeatRaw + setMemoryProtected + updateMemoryImportance +
+   * updateMemoryContent) the anchor handler previously issued. Sets
+   * heat_base=1.0, heat_base_set_at=NOW(), no_decay=TRUE, is_protected=TRUE,
+   * importance=1.0, tags, content, is_global on the given row.
+   *
+   * precondition:  memoryId > 0; content is non-empty.
+   * postcondition: the eight columns above are written for the row; no other
+   *   column is modified. no_decay=TRUE (previously never set) preserves the
+   *   anchor-resists-decay semantic via effective_heat().
+   *
+   * source: cortex@HEAD mcp_server/handlers/anchor.py:141-147
+   *   (acquire_interactive() single UPDATE)
+   *
+   * Optional on the interface (concrete on both PgMemoryStore and
+   * SqliteMemoryStore): the anchor handler duck-types it the same way
+   * Cortex's handler reaches for acquire_interactive on the store. Declaring
+   * it here gives callers a typed surface without an `as unknown as` cast.
+   */
+  anchorMemory?(args: {
+    memoryId: number;
+    content: string;
+    tags: string[];
+    isGlobal: boolean;
+  }): void;
+
+  /**
+   * Async variant of anchorMemory for the PG backend.
+   * Optional: present on PgMemoryStore, absent on SqliteMemoryStore.
+   * source: ADR-0042 — async-when-available pattern for PG/SQLite parity.
+   */
+  anchorMemoryAsync?(args: {
+    memoryId: number;
+    content: string;
+    tags: string[];
+    isGlobal: boolean;
+  }): Promise<void>;
+
+  // ── User mood (MOOD_CONGRUENT_RERANK) ──────────────────────────────────
+  //
+  // source: cortex@HEAD mcp_server/infrastructure/pg_store.py:get_user_mood/
+  //   set_user_mood (673-742); sqlite_store_mood.py:get_user_mood/set_user_mood
+  // source: Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
+
+  /**
+   * Return the user's current mood valence in [-1, +1], or null if no signal.
+   * Consumed by updateUserMoodEma (remember_helpers) and the
+   * MOOD_CONGRUENT_RERANK recall stage. null means "no signal" — the stage
+   * no-ops rather than fabricating a mood.
+   *
+   * source: cortex@HEAD mcp_server/infrastructure/pg_store.py:get_user_mood (673)
+   *
+   * Optional on the interface (concrete on both stores): updateUserMoodEma
+   * guards with `if (!store.getUserMood)` exactly as Cortex guards with
+   * `hasattr(store, "get_user_mood")` — the duck-typed contract is preserved.
+   */
+  getUserMood?(): number | null;
+
+  /**
+   * Upsert the user's mood valence. Clamps to [-1, +1] and refreshes the
+   * freshness timestamp. Idempotent — repeated writes with the same value
+   * still bump updated_at.
+   *
+   * source: cortex@HEAD mcp_server/infrastructure/pg_store.py:set_user_mood (713)
+   *
+   * Optional on the interface (concrete on both stores) — paired with
+   * getUserMood under the same duck-typed guard.
+   */
+  setUserMood?(valence: number): void;
+
+  /**
+   * Return the content strings of the hottest recent memories for the
+   * structural-novelty recent window of the write gate. Iso to
+   * get_hot_memories(min_heat=0.0, limit=n): ordered by heat_base DESC
+   * then last_accessed DESC. An empty domain returns the global hot set.
+   *
+   * source: cortex@HEAD mcp_server/handlers/remember_helpers.py:154
+   *   recent = store.get_hot_memories(min_heat=0.0, limit=10)
+   *
+   * Optional on the interface (concrete on both stores): the remember write
+   * gate reads it best-effort (empty window on absence), mirroring Cortex's
+   * direct get_hot_memories call. Typed here so the handler no longer needs an
+   * `as unknown as` cast to reach it.
+   */
+  listRecentContents?(domain: string, n: number): string[];
+
   // ── Homeostatic state ──────────────────────────────────────────────────
 
   /** Fetch per-domain homeostatic scaling factor, defaulting to 1.0. */
@@ -339,6 +447,19 @@ export interface MemoryStoreExt extends MemoryStore {
    * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:56
    */
   getAllMemoriesForValidation(limit?: number): Record<string, unknown>[];
+
+  /**
+   * Return the total number of stored memory rows.
+   *
+   * rebuild_profiles reports this as totalMemories. The Python path counts
+   * len(discover_all_memories()) by scanning the FS memory store; the TS port
+   * is DB-backed and has no FS scanner, so the iso-faithful count is the
+   * number of rows in the memories table.
+   *
+   * source: cortex@HEAD mcp_server/handlers/rebuild_profiles.py:113
+   *   "totalMemories": len(memories)
+   */
+  countMemories(): number;
 
   // ── Domain / directory / hot queries ──────────────────────────────────
   //
@@ -609,6 +730,21 @@ export interface MemoryStoreExt extends MemoryStore {
 
   /** Async getAllMemoriesForValidation — safe on PG; absent on SQLite. */
   getAllMemoriesForValidationAsync?(limit?: number): Promise<Record<string, unknown>[]>;
+
+  /**
+   * Async getMemoriesForDomain — safe on PG; absent on SQLite (use the sync
+   * getMemoriesForDomain fallback). assess_coverage prefers this variant to
+   * avoid the PG _runSync() throw.
+   * source: implementation at pg-store.ts:getMemoriesForDomainAsync.
+   */
+  getMemoriesForDomainAsync?(domain: string, minHeat?: number, limit?: number): Promise<Record<string, unknown>[]>;
+
+  /**
+   * Async getMemoriesForDirectory — safe on PG; absent on SQLite (use the sync
+   * getMemoriesForDirectory fallback). assess_coverage prefers this variant.
+   * source: implementation at pg-store.ts:getMemoriesForDirectoryAsync.
+   */
+  getMemoriesForDirectoryAsync?(directory: string, minHeat?: number): Promise<Record<string, unknown>[]>;
 
   /** Async getAllEntities — safe on PG; absent on SQLite. */
   getAllEntitiesAsync?(opts?: { minHeat?: number; includeArchived?: boolean }): Promise<Record<string, unknown>[]>;

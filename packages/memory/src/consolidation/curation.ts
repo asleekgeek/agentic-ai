@@ -18,10 +18,9 @@
 const NEGATION_RE =
   /\b(not|don't|doesn't|no longer|replaced|switched from|deprecated|never|removed|stopped|avoid)\b/i;
 
-// source: cortex@ed33435 mcp_server/core/curation.py:24
-const ACTION_RE =
-  /\b(use|using|prefer|run|install|deploy|build|create|configure|set|enable|disable|switch|migrate)\b/i;
-
+// source: cortex@ed33435 mcp_server/core/curation.py:24 (_ACTION_RE — Python uses it
+// via re.findall, i.e. all matches, so the faithful TS port is the global variant
+// consumed by .match() below; a non-global copy would be dead code).
 const ACTION_RE_GLOBAL =
   /\b(use|using|prefer|run|install|deploy|build|create|configure|set|enable|disable|switch|migrate)\b/gi;
 
@@ -31,6 +30,26 @@ export const MERGE_THRESHOLD = 0.85;
 export const LINK_LOW = 0.6;
 // source: cortex@ed33435 mcp_server/core/curation.py:33
 export const LINK_HIGH = 0.85;
+
+// ── Memify self-improvement thresholds ──────────────────────────────────────
+// Python expresses these as keyword-argument defaults on the curation.py
+// functions; the TS port hoists them to named constants so no bare literal
+// appears at a call/comparison site (rules/coding-standards §3.1, §7 — no magic
+// numbers). Values are byte-identical to the Python defaults.
+const CONTRADICTION_SIMILARITY_THRESHOLD = 0.7; // source: cortex@ed33435 mcp_server/core/curation.py:121 detect_contradictions
+const PRUNE_HEAT_THRESHOLD = 0.01; // source: cortex@ed33435 mcp_server/core/curation.py:144
+const PRUNE_CONFIDENCE_THRESHOLD = 0.3; // source: cortex@ed33435 mcp_server/core/curation.py:145
+const STRENGTHEN_MIN_ACCESS = 5; // source: cortex@ed33435 mcp_server/core/curation.py:160
+const STRENGTHEN_MIN_CONFIDENCE = 0.8; // source: cortex@ed33435 mcp_server/core/curation.py:161
+const STRENGTHEN_BOOST = 0.1; // source: cortex@ed33435 mcp_server/core/curation.py:162
+const DEFAULT_IMPORTANCE = 0.5; // source: cortex@ed33435 mcp_server/core/curation.py:175 mem.get("importance", 0.5)
+const REWEIGHT_HOT_THRESHOLD = 0.7; // source: cortex@ed33435 mcp_server/core/curation.py:186
+const REWEIGHT_COLD_THRESHOLD = 0.1; // source: cortex@ed33435 mcp_server/core/curation.py:187
+const REWEIGHT_HOT_BOOST = 0.5; // source: cortex@ed33435 mcp_server/core/curation.py:188
+const REWEIGHT_COLD_DECAY = 0.9; // source: cortex@ed33435 mcp_server/core/curation.py:189
+const DEFAULT_ENTITY_HEAT = 0.5; // source: cortex@ed33435 mcp_server/core/curation.py:197-198 entity_heats.get(..., 0.5)
+const WEIGHT_ROUND_FACTOR = 1000; // round to 3 decimals — source: cortex@ed33435 mcp_server/core/curation.py:208 round(new_weight, 3)
+const DERIVABLE_WEIGHT_THRESHOLD = 10.0; // source: cortex@ed33435 mcp_server/core/curation.py:215
 
 // ── Ingestion Decisions ────────────────────────────────────────────────────
 
@@ -59,8 +78,16 @@ export function decideCurationAction(
  * source: cortex@ed33435 mcp_server/core/curation.py:57
  */
 export function computeTextualOverlap(contentA: string, contentB: string): number {
-  const wordsA = new Set((contentA.toLowerCase().match(/\b\w+\b/g) ?? []));
-  const wordsB = new Set((contentB.toLowerCase().match(/\b\w+\b/g) ?? []));
+  // Python's re.findall(r"\b\w+\b", text) uses Unicode \w by default, matching
+  // accented Latin, Cyrillic, Greek, CJK, etc. JS \w stays ASCII-only [A-Za-z0-9_]
+  // EVEN WITH the `u` flag (the u flag enables \p{} escapes + surrogate handling
+  // but does NOT change \w membership — verified by executing both runtimes:
+  // "café 日本語" → JS /\w+/gu = ["caf"], Python \w+ = ["café","日本語"]). The
+  // faithful equivalent of Unicode \w is the explicit class [\p{L}\p{N}_] under
+  // the u flag (re.findall over \w+ also makes the \b anchors redundant).
+  // source: cortex@ed33435 mcp_server/core/curation.py:59-60 (Unicode \w)
+  const wordsA = new Set((contentA.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? []));
+  const wordsB = new Set((contentB.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? []));
   if (wordsA.size === 0 || wordsB.size === 0) return 0;
 
   let intersection = 0;
@@ -160,7 +187,7 @@ function checkSingleContradiction(
 export function detectContradictions(
   newContent: string,
   similarMemories: Record<string, unknown>[],
-  _similarityThreshold: number = 0.7,
+  _similarityThreshold: number = CONTRADICTION_SIMILARITY_THRESHOLD,
 ): ContradictionRecord[] {
   const newHasNegation = NEGATION_RE.test(newContent);
   const newActions = new Set<string>(
@@ -187,8 +214,8 @@ export function detectContradictions(
  */
 export function identifyPrunable(
   memories: Record<string, unknown>[],
-  heatThreshold: number = 0.01, // source: cortex@ed33435 curation.py:144
-  confidenceThreshold: number = 0.3, // source: cortex@ed33435 curation.py:145
+  heatThreshold: number = PRUNE_HEAT_THRESHOLD,
+  confidenceThreshold: number = PRUNE_CONFIDENCE_THRESHOLD,
 ): number[] {
   return memories
     .filter(
@@ -210,9 +237,9 @@ export function identifyPrunable(
  */
 export function identifyStrengheneable(
   memories: Record<string, unknown>[],
-  minAccess: number = 5, // source: cortex@ed33435 curation.py:160
-  minConfidence: number = 0.8, // source: cortex@ed33435 curation.py:161
-  boostAmount: number = 0.1, // source: cortex@ed33435 curation.py:162
+  minAccess: number = STRENGTHEN_MIN_ACCESS,
+  minConfidence: number = STRENGTHEN_MIN_CONFIDENCE,
+  boostAmount: number = STRENGTHEN_BOOST,
 ): Array<[number, number]> {
   const results: Array<[number, number]> = [];
   for (const mem of memories) {
@@ -220,7 +247,7 @@ export function identifyStrengheneable(
       Number(mem["access_count"] ?? 0) >= minAccess &&
       Number(mem["confidence"] ?? 0) >= minConfidence
     ) {
-      const current = Number(mem["importance"] ?? 0.5);
+      const current = Number(mem["importance"] ?? DEFAULT_IMPORTANCE);
       const newImportance = Math.min(1.0, current + boostAmount);
       if (newImportance > current) {
         results.push([mem["id"] as number, newImportance]);
@@ -241,22 +268,22 @@ export function identifyStrengheneable(
 export function computeRelationshipReweights(
   relationships: Record<string, unknown>[],
   entityHeats: Map<number, number>,
-  hotThreshold: number = 0.7, // source: cortex@ed33435 curation.py:186
-  coldThreshold: number = 0.1, // source: cortex@ed33435 curation.py:187
-  hotBoost: number = 0.5, // source: cortex@ed33435 curation.py:188
-  coldDecay: number = 0.9, // source: cortex@ed33435 curation.py:189
+  hotThreshold: number = REWEIGHT_HOT_THRESHOLD,
+  coldThreshold: number = REWEIGHT_COLD_THRESHOLD,
+  hotBoost: number = REWEIGHT_HOT_BOOST,
+  coldDecay: number = REWEIGHT_COLD_DECAY,
 ): Array<[number, number]> {
   const updates: Array<[number, number]> = [];
   for (const rel of relationships) {
-    const srcHeat = entityHeats.get(Number(rel["source_entity_id"] ?? 0)) ?? 0.5;
-    const tgtHeat = entityHeats.get(Number(rel["target_entity_id"] ?? 0)) ?? 0.5;
+    const srcHeat = entityHeats.get(Number(rel["source_entity_id"] ?? 0)) ?? DEFAULT_ENTITY_HEAT;
+    const tgtHeat = entityHeats.get(Number(rel["target_entity_id"] ?? 0)) ?? DEFAULT_ENTITY_HEAT;
     const avgHeat = (srcHeat + tgtHeat) / 2;
     const currentWeight = Number(rel["weight"] ?? 1.0);
 
     if (avgHeat > hotThreshold) {
-      updates.push([rel["id"] as number, Math.round((currentWeight + hotBoost) * 1000) / 1000]);
+      updates.push([rel["id"] as number, Math.round((currentWeight + hotBoost) * WEIGHT_ROUND_FACTOR) / WEIGHT_ROUND_FACTOR]);
     } else if (avgHeat < coldThreshold) {
-      updates.push([rel["id"] as number, Math.round(currentWeight * coldDecay * 1000) / 1000]);
+      updates.push([rel["id"] as number, Math.round(currentWeight * coldDecay * WEIGHT_ROUND_FACTOR) / WEIGHT_ROUND_FACTOR]);
     }
     // else: no update — continue source: cortex@ed33435 curation.py:204
   }
@@ -274,7 +301,7 @@ export function computeRelationshipReweights(
 export function identifyDerivableFacts(
   relationships: Record<string, unknown>[],
   entityNames: Map<number, string>,
-  weightThreshold: number = 10.0, // source: cortex@ed33435 curation.py:215
+  weightThreshold: number = DERIVABLE_WEIGHT_THRESHOLD,
 ): string[] {
   const facts: string[] = [];
   for (const rel of relationships) {

@@ -77,6 +77,11 @@ export const MemoryItemSchema = z.object({
   is_benchmark: z.boolean().default(false),
   agent_context: z.string().default(""),
   is_global: z.boolean().default(false),
+  // Supersession edges (MEM-G1): self-referential nullable FKs. Default NULL keeps
+  // recall byte-identical (constant-free tier sort) and LoCoMo unaffected.
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:68-69
+  supersedes_id: z.number().int().nullable().optional(),
+  superseded_by_id: z.number().int().nullable().optional(),
   // Convenience alias: heat = heat_base for callers that predate A3.
   heat: z.number().min(0).max(1).optional(),
 });
@@ -111,6 +116,11 @@ export const MemoryInsertDataSchema = z.object({
   is_benchmark: z.boolean().default(false),
   agent_context: z.string().default(""),
   is_global: z.boolean().default(false),
+  // Supersession forward edge (MEM-G1): set at insert only when curation supersedes
+  // an existing contradicting near-duplicate. The back-pointer (superseded_by_id) is
+  // closed by a separate setSupersededBy UPDATE — two-phase, mirroring Python.
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store.py:insert_memory
+  supersedes_id: z.number().int().nullable().optional(),
   stage_entered_at: z.string().optional(),
   arousal: z.number().default(0.0),
   dominant_emotion: z.string().default("neutral"),
@@ -175,7 +185,10 @@ export type RememberRequest = z.infer<typeof RememberRequestSchema>;
 // ── RememberResponse ───────────────────────────────────────────────────────
 export const RememberResponseSchema = z.object({
   stored: z.boolean(),
-  action: z.enum(["stored", "merged", "rejected"]).optional(),
+  // "superseded" (MEM-G1): the new row was inserted with supersedes_id pointing at a
+  // contradicting near-duplicate, whose superseded_by_id now points back at the new row.
+  // source: cortex@ed33435 mcp_server/handlers/remember_response.py — supersede→"superseded"
+  action: z.enum(["stored", "merged", "rejected", "superseded"]).optional(),
   memory_id: z.number().int().optional(),
   reason: z.string().optional(),
   merged_with: z.number().int().optional(),

@@ -228,6 +228,23 @@ CREATE TABLE IF NOT EXISTS oscillatory_state (
   state_json TEXT NOT NULL DEFAULT '{}'
 )`;
 
+// User session-level mood state for MOOD_CONGRUENT_RERANK (Bower 1981).
+// Mirrors Cortex sqlite_schema.py USER_MOOD_DDL + USER_MOOD_SEED_DDL: a
+// user_id-keyed table with clamped valence/arousal, seeded with a neutral
+// default row so getUserMood returns a real signal. better-sqlite3's exec()
+// accepts multiple statements, so the table + seed are combined here (Cortex
+// splits them only because sqlite3.execute() takes one statement at a time).
+// source: cortex@HEAD mcp_server/infrastructure/sqlite_schema.py:247-264
+// source: Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
+const USER_MOOD_DDL = `
+CREATE TABLE IF NOT EXISTS user_mood (
+  user_id    TEXT PRIMARY KEY DEFAULT 'default',
+  valence    REAL NOT NULL DEFAULT 0.0 CHECK (valence >= -1.0 AND valence <= 1.0),
+  arousal    REAL NOT NULL DEFAULT 0.0 CHECK (arousal >= -1.0 AND arousal <= 1.0),
+  updated_at TEXT NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))
+);
+INSERT OR IGNORE INTO user_mood (user_id, valence, arousal) VALUES ('default', 0.0, 0.0);`;
+
 // ── Indexes ──────────────────────────────────────────────────────────────────
 
 const INDEXES = [
@@ -248,6 +265,13 @@ function nowIso(): string {
 
 function clampHeat(h: number): number {
   return Math.max(0.0, Math.min(1.0, h));
+}
+
+// Mood valence is a bipolar signal in [-1, +1] (Russell 1980 circumplex
+// valence axis), unlike heat which is unipolar [0, 1].
+// source: cortex@HEAD mcp_server/infrastructure/sqlite_store_mood.py:set_user_mood
+function clampValence(v: number): number {
+  return Math.max(-1.0, Math.min(1.0, v));
 }
 
 function boolToInt(v: boolean | undefined | null): number {
@@ -302,6 +326,8 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   private _stmtSetProtected!: Statement;
   private _stmtMarkStale!: Statement;
   private _stmtUpdateContent!: Statement;
+  private _stmtSetSupersededBy!: Statement;
+  private _stmtAnchorMemory!: Statement;
 
   /**
    * Create an SqliteMemoryStore.
@@ -335,6 +361,13 @@ export class SqliteMemoryStore implements MemoryStoreExt {
       HOMEOSTATIC_STATE_DDL,
       SCHEMAS_DDL,
       OSCILLATORY_STATE_DDL,
+      // User session-level mood state for MOOD_CONGRUENT_RERANK (Bower 1981).
+      // Mirrors Cortex sqlite_schema.py USER_MOOD_DDL — user_id PK keyed table
+      // with a clamped valence column. Inlined here (not in sqlite-schema.ts)
+      // so getUserMood/setUserMood have a table to read/write.
+      // source: cortex@HEAD mcp_server/infrastructure/sqlite_schema.py:247-256
+      // source: Bower, G.H. (1981). "Mood and Memory." Am. Psychologist 36(2).
+      USER_MOOD_DDL,
       ...INDEXES,
     ];
     for (const ddl of ddls) {
@@ -359,6 +392,10 @@ export class SqliteMemoryStore implements MemoryStoreExt {
       ["memories", "dominant_emotion", "TEXT DEFAULT 'neutral'"],
       ["memories", "heat_base_set_at", "TEXT NOT NULL DEFAULT ''"],
       ["memories", "no_decay", "INTEGER NOT NULL DEFAULT 0"],
+      // Supersession edges (MEM-G1): plain INTEGER, NULL default → byte-identical.
+      // source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:336-337
+      ["memories", "supersedes_id", "INTEGER"],
+      ["memories", "superseded_by_id", "INTEGER"],
     ];
     for (const [table, col, def] of migrations) {
       try {
@@ -419,7 +456,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
         consolidation_stage, theta_phase_at_encoding, encoding_strength,
         separation_index, interference_score, schema_match_score, schema_id,
         hippocampal_dependency, is_benchmark, agent_context, is_global,
-        stage_entered_at, arousal, dominant_emotion
+        stage_entered_at, arousal, dominant_emotion, supersedes_id
       ) VALUES (
         @content, @tags, @source, @domain, @directory_context, @created_at,
         @last_accessed, @heat_base, @heat_base_set_at, @surprise_score,
@@ -427,7 +464,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
         @consolidation_stage, @theta_phase_at_encoding, @encoding_strength,
         @separation_index, @interference_score, @schema_match_score, @schema_id,
         @hippocampal_dependency, @is_benchmark, @agent_context, @is_global,
-        @stage_entered_at, @arousal, @dominant_emotion
+        @stage_entered_at, @arousal, @dominant_emotion, @supersedes_id
       )`);
 
     this._stmtInsertFts = this._db.prepare(
@@ -516,6 +553,21 @@ export class SqliteMemoryStore implements MemoryStoreExt {
     this._stmtUpdateContent = this._db.prepare(
       `UPDATE memories SET content = ?, tags = ? WHERE id = ?`,
     );
+
+    // Supersession back-pointer (MEM-G1): newId in SET, oldId in WHERE.
+    // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store.py:set_superseded_by
+    this._stmtSetSupersededBy = this._db.prepare(
+      `UPDATE memories SET superseded_by_id = ? WHERE id = ?`,
+    );
+
+    // Atomic anchor write: single UPDATE setting the eight anchor columns,
+    // incl. no_decay = 1. Params: heat_base_set_at, tags, content, is_global, id.
+    // source: cortex@HEAD mcp_server/handlers/anchor.py:141-147
+    this._stmtAnchorMemory = this._db.prepare(
+      `UPDATE memories SET heat_base = 1.0, heat_base_set_at = ?, no_decay = 1, ` +
+        `is_protected = 1, importance = 1.0, tags = ?, content = ?, is_global = ? ` +
+        `WHERE id = ?`,
+    );
   }
 
   // ── Memory CRUD ────────────────────────────────────────────────────────
@@ -563,6 +615,9 @@ export class SqliteMemoryStore implements MemoryStoreExt {
       stage_entered_at: data.stage_entered_at ?? data.created_at ?? now,
       arousal: data.arousal ?? 0.0,
       dominant_emotion: data.dominant_emotion ?? "neutral",
+      // Supersession forward edge (MEM-G1): null unless curation supersedes.
+      // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store.py:insert_memory
+      supersedes_id: data.supersedes_id ?? null,
     };
 
     // Wrap in a transaction: if FTS insert fails the main row rolls back.
@@ -687,6 +742,80 @@ export class SqliteMemoryStore implements MemoryStoreExt {
    */
   updateMemoryContent(memoryId: number, content: string, tags: string[]): void {
     this._stmtUpdateContent.run(content, JSON.stringify(tags), memoryId);
+  }
+
+  /**
+   * Close the supersession back-pointer (MEM-G1): stamp the OLD memory's
+   * superseded_by_id with the NEW memory id. newId in SET, oldId in WHERE.
+   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store.py:set_superseded_by
+   */
+  setSupersededBy(oldId: number, newId: number): void {
+    this._stmtSetSupersededBy.run(newId, oldId);
+  }
+
+  /**
+   * Atomic anchor write — single UPDATE replacing the four non-atomic anchor
+   * writes. Sets no_decay=1 (previously never set) alongside heat_base,
+   * heat_base_set_at, is_protected, importance, tags, content, is_global.
+   * Wrapped in a transaction so it is atomic even though it is one statement,
+   * matching the insert/delete transaction pattern in this adapter.
+   *
+   * source: cortex@HEAD mcp_server/handlers/anchor.py:141-147
+   *   acquire_interactive() single UPDATE
+   */
+  anchorMemory(args: { memoryId: number; content: string; tags: string[]; isGlobal: boolean }): void {
+    const tx = this._db.transaction(() => {
+      this._stmtAnchorMemory.run(
+        nowIso(),
+        JSON.stringify(args.tags),
+        args.content,
+        boolToInt(args.isGlobal),
+        args.memoryId,
+      );
+    });
+    tx();
+  }
+
+  // ── User mood (MOOD_CONGRUENT_RERANK) ──────────────────────────────────
+  //
+  // source: cortex@HEAD mcp_server/infrastructure/sqlite_store_mood.py:
+  //   get_user_mood / set_user_mood. The TS surface exposes the scalar valence
+  //   accessors (arousal reserved, defaults to 0.0).
+
+  getUserMood(): number | null {
+    const row = this._db
+      .prepare("SELECT valence FROM user_mood WHERE user_id = 'default'")
+      .get() as { valence: number } | undefined;
+    return row ? Number(row.valence) : null;
+  }
+
+  setUserMood(valence: number): void {
+    const clamped = clampValence(valence);
+    this._db
+      .prepare(
+        "INSERT INTO user_mood (user_id, valence, updated_at) " +
+          "VALUES ('default', ?, strftime('%Y-%m-%dT%H:%M:%fZ', 'now')) " +
+          "ON CONFLICT(user_id) DO UPDATE SET valence = excluded.valence, " +
+          "updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+      )
+      .run(clamped);
+  }
+
+  /**
+   * Hottest recent memory contents for the structural-novelty window.
+   * Iso to get_hot_memories(min_heat=0.0, limit=n): heat_base DESC,
+   * last_accessed DESC. An empty domain returns the global hot set.
+   *
+   * source: cortex@HEAD mcp_server/handlers/remember_helpers.py:154
+   */
+  listRecentContents(domain: string, n: number): string[] {
+    const rows = this._db
+      .prepare(
+        "SELECT content FROM memories WHERE (? = '' OR domain = ?) " +
+          "ORDER BY heat_base DESC, last_accessed DESC LIMIT ?",
+      )
+      .all(domain, domain, n) as Array<{ content: string }>;
+    return rows.map((r) => r.content);
   }
 
   // ── Homeostatic state ──────────────────────────────────────────────────
@@ -997,6 +1126,10 @@ export class SqliteMemoryStore implements MemoryStoreExt {
       is_benchmark: Boolean(row["is_benchmark"]),
       agent_context: (row["agent_context"] as string) ?? "",
       is_global: Boolean(row["is_global"]),
+      // Supersession edges (MEM-G1): whitelist these so the MEM-G4 version walk
+      // (recall-helpers.ts:versionNeighbors via getMemory) sees real ids, not undefined.
+      supersedes_id: (row["supersedes_id"] as number | null) ?? null,
+      superseded_by_id: (row["superseded_by_id"] as number | null) ?? null,
     };
   }
 
@@ -1444,6 +1577,17 @@ export class SqliteMemoryStore implements MemoryStoreExt {
       .all() as Record<string, unknown>[];
   }
 
+  // ── Total memory count ─────────────────────────────────────────────────
+
+  /**
+   * Count of stored memory rows. Iso to rebuild_profiles totalMemories.
+   * source: cortex@HEAD mcp_server/handlers/rebuild_profiles.py:113
+   */
+  countMemories(): number {
+    const row = this._db.prepare("SELECT COUNT(*) AS c FROM memories").get() as { c: number };
+    return Number(row.c);
+  }
+
   // ── Replay count ───────────────────────��───────────────────────────────
 
   /**
@@ -1484,7 +1628,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   updateMemoryCompression(
     memoryId: number,
     content: string,
-    _embedding: Buffer | null,
+    embedding: Buffer | null,
     compressionLevel: number,
     _opts?: Record<string, unknown>,
   ): void {
@@ -1496,6 +1640,16 @@ export class SqliteMemoryStore implements MemoryStoreExt {
          WHERE id = ?`,
       )
       .run(content, compressionLevel, memoryId);
+    // Re-persist the embedding (SQLite keeps vectors in the memories_vec vec0
+    // table, not a column) so the stored vector matches the new content — Cortex
+    // update_memory_compression rewrites the embedding (pg_store.py:835-858). The
+    // previous TS impl dropped it, leaving the compression cycle + curation-merge
+    // with a stale vector. No-op when sqlite-vec is unavailable (upsertEmbedding
+    // self-guards on this._hasVec).
+    // source: cortex@ed33435 mcp_server/infrastructure/pg_store.py:835-858 update_memory_compression
+    if (embedding && embedding.byteLength > 0) {
+      this.upsertEmbedding(memoryId, embedding);
+    }
   }
 
   // ── By-IDs batch fetch ─────────────────────────────────────────────────

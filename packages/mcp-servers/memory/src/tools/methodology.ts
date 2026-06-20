@@ -25,6 +25,28 @@ import { detectDomainHandler } from "@agentic/memory/methodology/handlers/detect
 import { rebuildProfiles, checkSkip, type ConversationRecord } from "@agentic/memory/methodology/handlers/rebuild-profiles.js";
 import { exploreFeatures } from "@agentic/memory/methodology/handlers/explore-features.js";
 import { discoverJsonlFiles, readHeadTail } from "@agentic/memory/import/scanner.js";
+import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-store.js";
+import {
+  getHotMemories,
+  getFiredTriggers,
+  enrichContextWithMemories,
+  LIST_DOMAINS_TOP_CATEGORIES,
+} from "./methodology-memory-injection.js";
+
+/**
+ * Dependency bundle for the methodology tools.
+ *
+ * query_methodology enriches its response with hot memories + fired prospective
+ * triggers, and rebuild_profiles reports totalMemories — both require the shared
+ * memory store. The composition root (mcp-servers/memory/src/index.ts) injects
+ * the same MemoryStoreExt it hands to the remember/management tool groups.
+ *
+ * source: cortex@HEAD mcp_server/handlers/query_methodology.py:81-99
+ *   (_try_get_memory_store — the handler obtains the shared store)
+ */
+export interface MethodologyDeps {
+  store: MemoryStoreExt;
+}
 
 // ── JSONL session scanner ─────────────────────────────────────────────────────
 //
@@ -181,7 +203,8 @@ function errorText(tool: string, err: unknown): { content: Array<{ type: "text";
 /**
  * Registers the 5 methodology/profiling MCP tools.
  *
- * precondition:  server is a live McpServer instance.
+ * precondition:  server is a live McpServer instance; deps.store is the shared
+ *                MemoryStoreExt from the composition root.
  * postcondition: 5 tools registered; each body calls the real domain handler.
  *
  * source: MCP_TOOLS.md §"query_methodology", §"detect_domain",
@@ -189,7 +212,7 @@ function errorText(tool: string, err: unknown): { content: Array<{ type: "text";
  * source: cortex@ed33435 mcp_server/handlers/{query_methodology,detect_domain,
  *         rebuild_profiles,list_domains,explore_features}.py
  */
-export function registerMethodologyTools(server: McpServer): void {
+export function registerMethodologyTools(server: McpServer, deps: MethodologyDeps): void {
   // ── query_methodology ─────────────────────────────────────────────────────
   server.registerTool(
     "query_methodology",
@@ -209,6 +232,19 @@ export function registerMethodologyTools(server: McpServer): void {
         const response = queryMethodology(
           { cwd: args.cwd, project: args.project, firstMessage: args.first_message },
           profiles,
+        );
+        // Populate the memory/trigger fields the inner (infra-agnostic) handler
+        // leaves empty, then fold their summaries into the context string.
+        // source: cortex@HEAD mcp_server/handlers/query_methodology.py:317-331
+        const domainId = response.domain ?? "";
+        const cwd = args.cwd ?? "";
+        const firstMessage = args.first_message ?? "";
+        response.hotMemories = getHotMemories(deps.store, domainId, cwd);
+        response.firedTriggers = getFiredTriggers(deps.store, cwd, firstMessage);
+        response.context = enrichContextWithMemories(
+          response.context,
+          response.hotMemories,
+          response.firedTriggers,
         );
         return { content: [{ type: "text" as const, text: JSON.stringify(response) }] };
       } catch (err) {
@@ -267,11 +303,13 @@ export function registerMethodologyTools(server: McpServer): void {
         const existingProfiles = loadProfiles();
         const skipCheck = checkSkip(existingProfiles, args.force);
         if (skipCheck.skip) {
+          // source: cortex@HEAD mcp_server/handlers/rebuild_profiles.py:76-81
+          //   return {"skipped": True, "reason", "domains", "updatedAt"}
           return { content: [{ type: "text" as const, text: JSON.stringify({
-            rebuilt: skipCheck.domains ?? [],
-            duration_ms: 0,
             skipped: true,
             reason: skipCheck.reason,
+            domains: skipCheck.domains ?? [],
+            updatedAt: skipCheck.updatedAt,
           }) }] };
         }
 
@@ -287,10 +325,18 @@ export function registerMethodologyTools(server: McpServer): void {
         // source: cortex@ed33435 mcp_server/handlers/rebuild_profiles.py — saves profiles
         saveProfiles(result.profiles);
 
+        // source: cortex@HEAD mcp_server/handlers/rebuild_profiles.py:110-116
+        //   return {domains, totalSessions, totalMemories, duration}.
+        // Cortex's totalMemories = len(discover_all_memories()) (filesystem .md
+        // scan); the TS backend is a DB store, so the iso-faithful count is the
+        // stored-memory row count (store.countMemories). The audit already
+        // classifies the rebuild I/O backend as an accepted behavior_divergence,
+        // so the absolute count differs while both are correct.
         return { content: [{ type: "text" as const, text: JSON.stringify({
-          rebuilt:        result.domains,
-          total_sessions: result.totalSessions,
-          duration_ms:    Date.now() - t0,
+          domains:       result.domains,
+          totalSessions: result.totalSessions,
+          totalMemories: deps.store.countMemories(),
+          duration:      Date.now() - t0,
         }) }] };
       } catch (err) {
         process.stderr.write(`[rebuild_profiles] error: ${err instanceof Error ? err.message : String(err)}\n`);
@@ -309,17 +355,33 @@ export function registerMethodologyTools(server: McpServer): void {
     },
     async (_args) => {
       try {
-        // source: cortex@ed33435 mcp_server/handlers/list_domains.py — builds domain list
+        // source: cortex@HEAD mcp_server/handlers/list_domains.py:34-67
         const profiles = loadProfiles();
-        const domains = Object.entries(profiles.domains).map(([id, domain]) => ({
-          id,
-          label:         domain.label ?? id,
-          session_count: domain.sessionCount ?? 0,
-          last_active:   domain.lastUpdated ?? null,
-          confidence:    domain.confidence ?? 0,
-          projects:      domain.projects ?? [],
-        }));
-        return { content: [{ type: "text" as const, text: JSON.stringify({ domains }) }] };
+        const domains = Object.values(profiles.domains).map((domain) => {
+          // top 3 categories by ratio desc -> [{category, ratio}]
+          // source: list_domains.py:38-44,52-54
+          const topCategories = Object.entries(domain.categories ?? {})
+            .sort((a, b) => b[1] - a[1])
+            .slice(0, LIST_DOMAINS_TOP_CATEGORIES)
+            .map(([category, ratio]) => ({ category, ratio }));
+          return {
+            id:           domain.id,
+            label:        domain.label,
+            sessionCount: domain.sessionCount ?? 0,
+            confidence:   domain.confidence ?? 0,
+            lastActive:   domain.lastUpdated ?? null,
+            topCategories,
+            dominantMode: domain.sessionShape?.dominantMode ?? null,
+          };
+        });
+        // source: list_domains.py:61 — sort by sessionCount desc
+        domains.sort((a, b) => b.sessionCount - a.sessionCount);
+        // source: list_domains.py:63-67 — {domains, totalDomains, globalStyle}
+        return { content: [{ type: "text" as const, text: JSON.stringify({
+          domains,
+          totalDomains: domains.length,
+          globalStyle:  profiles.globalStyle ?? null,
+        }) }] };
       } catch (err) {
         return errorText("list_domains", err);
       }

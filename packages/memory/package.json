@@ -23,6 +23,10 @@
       "import": "./dist/infrastructure/transformers-embedding-engine.js",
       "types": "./dist/infrastructure/transformers-embedding-engine.d.ts"
     },
+    "./infrastructure/embedding-engine.js": {
+      "import": "./dist/infrastructure/embedding-engine.js",
+      "types": "./dist/infrastructure/embedding-engine.d.ts"
+    },
     "./narrative/handlers/narrative.js": {
       "import": "./dist/narrative/handlers/narrative.js",
       "types": "./dist/narrative/handlers/narrative.d.ts"
@@ -107,6 +111,10 @@
       "import": "./dist/recall/recall-handler.js",
       "types": "./dist/recall/recall-handler.d.ts"
     },
+    "./recall/recall-helpers.js": {
+      "import": "./dist/recall/recall-helpers.js",
+      "types": "./dist/recall/recall-helpers.d.ts"
+    },
     "./recall/recall-hierarchical-handler.js": {
       "import": "./dist/recall/recall-hierarchical-handler.js",
       "types": "./dist/recall/recall-hierarchical-handler.d.ts"
@@ -158,6 +166,10 @@
     "./wiki/handlers/wiki-verify.js": {
       "import": "./dist/wiki/handlers/wiki-verify.js",
       "types": "./dist/wiki/handlers/wiki-verify.d.ts"
+    },
+    "./wiki/handlers/wiki-rename-handler.js": {
+      "import": "./dist/wiki/handlers/wiki-rename-handler.js",
+      "types": "./dist/wiki/handlers/wiki-rename-handler.d.ts"
     },
     "./wiki/handlers/curate-wiki.js": {
       "import": "./dist/wiki/handlers/curate-wiki.js",
@@ -230,6 +242,10 @@
     "./import/types.js": {
       "import": "./dist/import/types.js",
       "types": "./dist/import/types.d.ts"
+    },
+    "./automation/index.js": {
+      "import": "./dist/automation/index.js",
+      "types": "./dist/automation/index.d.ts"
     },
     "./automation/handlers/get-rules.js": {
       "import": "./dist/automation/handlers/get-rules.js",

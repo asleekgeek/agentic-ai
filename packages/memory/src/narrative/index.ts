@@ -54,4 +54,4 @@ export { narrativeHandler } from "./handlers/narrative.js";
 export { getProjectStoryHandler } from "./handlers/get-project-story.js";
 export type { GetProjectStoryResponse } from "./handlers/get-project-story.js";
 export { unifiedSearchHandler } from "./handlers/unified-search.js";
-export type { UnifiedSearchResponse, UnifiedSearchResult } from "./handlers/unified-search.js";
+export type { UnifiedSearchResponse } from "./handlers/unified-search.js";

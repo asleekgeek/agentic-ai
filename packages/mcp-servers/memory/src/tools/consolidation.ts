@@ -196,7 +196,7 @@ export function registerConsolidationTools(server: McpServer, deps: Consolidatio
     {
       description: "Save or restore working state for hippocampal replay.",
       inputSchema: {
-        action:             z.enum(["save", "restore", "list"]).describe("Checkpoint action"),
+        action:             z.enum(["save", "restore"]).describe("Checkpoint action"),
         directory:          z.string().default("").describe("Project directory"),
         current_task:       z.string().default("").describe("Current task description"),
         files_being_edited: z.array(z.string()).default([]).describe("Files currently open"),
@@ -316,7 +316,7 @@ export function registerConsolidationTools(server: McpServer, deps: Consolidatio
         session_id: z.string().min(1).describe("Session identifier"),
         domain:     z.string().optional().describe("Cognitive domain"),
         tools_used: z.array(z.string()).optional().describe("Tools used in this session"),
-        duration:   z.number().optional().describe("Session duration in seconds"),
+        duration:   z.number().optional().describe("Session duration in milliseconds"),
         turn_count: z.number().int().optional().describe("Number of conversation turns"),
         keywords:   z.array(z.string()).optional().describe("Session keywords"),
         cwd:        z.string().optional().describe("Working directory"),

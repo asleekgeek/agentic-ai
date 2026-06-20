@@ -204,13 +204,16 @@ describe("sqlite-schema: getAllDdl", () => {
     db.close();
   });
 
-  it("MIGRATIONS list has 4 entries matching Python source exactly", () => {
-    // source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:294-299
-    expect(MIGRATIONS).toHaveLength(4);
+  it("MIGRATIONS list has 6 entries matching Python source exactly", () => {
+    // source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:294-299,336-337
+    expect(MIGRATIONS).toHaveLength(6);
     expect(MIGRATIONS[0]).toEqual(["memories", "is_benchmark", "INTEGER DEFAULT 0"]);
     expect(MIGRATIONS[1]).toEqual(["memories", "agent_context", "TEXT DEFAULT ''"]);
     expect(MIGRATIONS[2]).toEqual(["memories", "is_global", "INTEGER DEFAULT 0"]);
     expect(MIGRATIONS[3]).toEqual(["memories", "stage_entered_at", "TEXT"]);
+    // Supersession edges (MEM-G1) — source: sqlite_schema.py:336-337
+    expect(MIGRATIONS[4]).toEqual(["memories", "supersedes_id", "INTEGER"]);
+    expect(MIGRATIONS[5]).toEqual(["memories", "superseded_by_id", "INTEGER"]);
   });
 });
 

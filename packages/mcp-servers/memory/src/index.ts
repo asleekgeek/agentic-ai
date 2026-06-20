@@ -33,6 +33,19 @@ import { SqliteNarrativeAdapter } from "@agentic/memory/narrative/handlers/sqlit
 import { PgNarrativeAdapter } from "@agentic/memory/narrative/handlers/pg-narrative-adapter.js";
 import { SqliteMemoryStore } from "@agentic/memory/remember/storage/sqlite-store.js";
 import { PgMemoryStore } from "@agentic/memory/remember/storage/pg-store.js";
+// Curation-on-write embedding engine (MEM-G1). The remember handler must own a
+// live embedding engine exactly like Cortex's remember.py:297 (store, emb_engine
+// = _get_store(), get_embedding_engine()), so curation-on-write (merge / link /
+// supersede) actually fires for real users. getEmbeddingEngine() mirrors
+// embedding_engine.py: real model when available, deterministic hash fallback
+// otherwise — encode() is never null for non-empty text.
+// source: cortex@ed33435 mcp_server/handlers/remember.py:297-299
+// source: cortex@ed33435 mcp_server/infrastructure/embedding_engine.py:get_embedding_engine
+import {
+  getEmbeddingEngine,
+  EmbeddingEngine as InfraEmbeddingEngine,
+} from "@agentic/memory/infrastructure/embedding-engine.js";
+import type { WriteEmbedder } from "@agentic/memory/remember/handlers/remember.js";
 import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-store.js";
 import type { GraphPort } from "@agentic/memory/graph/port.js";
 import type { MemoryStore as RecallMemoryStore } from "@agentic/memory/recall/port.js";
@@ -285,18 +298,36 @@ const graphPort: GraphPort = {
   },
 };
 
+// ── Curation-on-write embedder (MEM-G1) ───────────────────────────────────────
+//
+// One process-wide engine, adapted to the WriteEmbedder port (encode → float[]).
+// The remember handler computes ONE embedding per write and reuses it for the
+// predictive-coding gate AND active curation, exactly mirroring Cortex
+// remember.py (embedding = emb_engine.encode(content); reused at evaluate_gate
+// and try_curation). This is what makes merge/link/supersede live in production
+// instead of a no-op — a contradicting near-duplicate is now superseded for
+// real users, identical to the Python server.
+// source: cortex@ed33435 mcp_server/handlers/remember.py:299,359-361
+// source: packages/memory/src/infrastructure/embedding-engine.ts::EmbeddingEngine.toList
+const writeEmbedder: WriteEmbedder = {
+  encode: async (text: string): Promise<number[] | null> => {
+    const blob = await getEmbeddingEngine().encode(text);
+    return blob ? InfraEmbeddingEngine.toList(blob) : null;
+  },
+};
+
 // ── Tool registration — one call per topic file ───────────────────────────────
 // source: docs/PHASE_PLAN.md §"Phase 4 merge order"
 
 registerRecallTools(server, { store: recallStore, embedder: null, graphPort });     // 4 tools
-registerRememberTools(server, { store: memoryStore });                               // 4 tools
-registerMethodologyTools(server);                                                    // 5 tools
+registerRememberTools(server, { store: memoryStore, embedder: writeEmbedder });      // 4 tools (curation-on-write live — Cortex remember.py parity)
+registerMethodologyTools(server, { store: memoryStore });                            // 5 tools
 registerConsolidationTools(server, { store: memoryStore });                         // 4 tools
-registerManagementTools(server, { store: memoryStore });                            // 5 tools (validate_memory, seed_project, backfill_memories, get_methodology_graph, get_telemetry)
-registerNarrativeTools(server, { store: narrativeStore, llmClient });               // 3 tools
-registerAdvancedTools(server, { store: memoryStore });                              // 6 tools
-registerWikiTools(server, { store: memoryStore });                                   // 9 tools (8 authoring + curate_wiki)
-registerIngestTools(server, { store: memoryStore, wikiRoot: process.env["CORTEX_WIKI_ROOT"] ?? join(homedir(), ".claude", "methodology", "wiki"), mcpClientPool: null }); // 6 tools
+registerManagementTools(server, { store: memoryStore });                            // 4 tools (validate_memory, seed_project, backfill_memories, get_telemetry)
+registerNarrativeTools(server, { store: narrativeStore, recallStore, embedder: null, llmClient }); // 3 tools
+registerAdvancedTools(server, { store: memoryStore });                              // 5 tools
+registerWikiTools(server, { store: memoryStore });                                   // 10 tools (9 authoring incl. wiki_rename + curate_wiki)
+registerIngestTools(server, { store: memoryStore, wikiRoot: process.env["CORTEX_WIKI_ROOT"] ?? join(homedir(), ".claude", "methodology", "wiki"), mcpClientPool: null }); // 5 tools
 registerNavigationTools(server, { store: memoryStore });                            // 2 tools
 
 // ── MCP Sampling client injection ─────────────────────────────────────────────

@@ -20,4 +20,3 @@ export { loadToolEvents, loadCommandEvents, loadCommandFiles, loadMemories, load
 export * from "./sources/source-ast.js";
 export * from "./sources/source-native-ast.js";
 export * from "./handlers/workflow-graph.js";
-export * from "./handlers/query-workflow-graph.js";

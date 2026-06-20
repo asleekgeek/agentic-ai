@@ -12,7 +12,7 @@
  *   6.  classifyStoreType — episodic default, semantic for definitions
  *   7.  buildInsertRecord — all fields populated
  *   8.  applyModulations — heat clamped to [0,1]
- *   9.  tryCuration — returns "create" when no embedding
+ *   9.  tryCurationAsync — returns "create" when no embedding
  *  10.  updateUserMoodEma — returns null for non-user sources; EMA decay
  *  11.  estimateImportance — decision tags → 1.0
  */
@@ -27,7 +27,7 @@ import {
   classifyStoreType,
   buildInsertRecord,
   applyModulations,
-  tryCuration,
+  tryCurationAsync,
   updateUserMoodEma,
   estimateImportance,
   type MoodStore,
@@ -278,27 +278,28 @@ describe("applyModulations", () => {
   });
 });
 
-// ── Test 9: tryCuration returns "create" with no embedding ────────────────
+// ── Test 9: tryCurationAsync returns "create" with no embedding ────────────────
+// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:try_curation:342
 
-describe("tryCuration", () => {
-  it("returns action='create' when embedding is null", () => {
+describe("tryCurationAsync", () => {
+  it("returns action='create' when embedding is null", async () => {
     const store = makeStore();
-    const { action, mergedId } = tryCuration("content", null, false, store, [] as string[]);
+    const { action, targetId } = await tryCurationAsync("content", null, false, store, null, [] as string[], 1.0);
     expect(action).toBe("create");
-    expect(mergedId).toBeNull();
+    expect(targetId).toBeNull();
   });
 
-  it("returns action='create' when force=true", () => {
+  it("returns action='create' when force=true", async () => {
     const store = makeStore();
     const emb = Buffer.from([1, 2, 3]);
-    const { action } = tryCuration("content", emb, true, store, [] as string[]);
+    const { action } = await tryCurationAsync("content", emb, true, store, null, [] as string[], 1.0);
     expect(action).toBe("create");
   });
 
-  it("returns action='create' when no candidates found", () => {
+  it("returns action='create' when no candidates found", async () => {
     const store = makeStore({ searchVectors: () => [] });
     const emb = Buffer.from([1, 2, 3]);
-    const { action } = tryCuration("content", emb, false, store, [] as string[]);
+    const { action } = await tryCurationAsync("content", emb, false, store, null, [] as string[], 1.0);
     expect(action).toBe("create");
   });
 });

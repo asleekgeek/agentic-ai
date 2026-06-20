@@ -1,9 +1,9 @@
 /**
  * advanced.ts — MCP tool adapters for the advanced/automation topic.
  *
- * Tools registered (6):
+ * Tools registered (5):
  *   sync_instructions, create_trigger, add_rule, get_rules,
- *   assess_coverage, query_workflow_graph
+ *   assess_coverage
  *
  * Phase 7 Group D — DI wiring:
  *   - sync_instructions: calls real syncInstructionsHandler.
@@ -11,12 +11,12 @@
  *   - add_rule: calls real addRuleHandler.
  *   - get_rules: calls real getRulesHandler.
  *   - assess_coverage: ported inline from cortex@ed33435 assess_coverage.py.
- *   - query_workflow_graph: calls real queryWorkflowGraph with skeleton source.
  *
- * source: worktrees/port-inventory-cortex/inventory/MCP_TOOLS.md
- *         §Tier2Advanced, §Tier1Core (query_workflow_graph)
+ * query_workflow_graph removed: not present in any Cortex tool_registry_*.py
+ * (zero matches for query_workflow_graph / tool_query_workflow). ISO removal.
+ *
+ * source: worktrees/port-inventory-cortex/inventory/MCP_TOOLS.md §Tier2Advanced
  * source: packages/memory/src/automation/handlers/ (create_trigger, add_rule, get_rules, sync)
- * source: packages/memory/src/workflow-graph/handlers/query-workflow-graph.ts
  * source: cortex@ed33435 mcp_server/handlers/assess_coverage.py
  */
 
@@ -31,7 +31,6 @@ import { addRuleHandler } from "@agentic/memory/automation/handlers/add-rule.js"
 import type { RuleStore } from "@agentic/memory/automation/handlers/add-rule.js";
 import { getRulesHandler } from "@agentic/memory/automation/handlers/get-rules.js";
 import type { RuleReadStore } from "@agentic/memory/automation/handlers/get-rules.js";
-import { queryWorkflowGraph } from "@agentic/memory/workflow-graph/handlers/query-workflow-graph.js";
 
 // ── Named constants ───────────────────────────────────────────────────────────
 // source: MCP_TOOLS.md §sync_instructions max_insights default=10, min_heat default=0.3
@@ -155,6 +154,48 @@ function toRuleReadStore(store: MemoryStoreExt): RuleReadStore {
   };
 }
 
+// ── assess_coverage scope fetch ────────────────────────────────────────────────
+
+// source: cortex@ed33435 assess_coverage.py — get_memories_for_domain(.., limit=1000)
+//   and get_all_memories_for_validation(limit=1000)
+const ASSESS_FETCH_LIMIT = 1000; // source: cortex assess_coverage.py — get_memories_for_domain/get_all_memories_for_validation limit=1000
+// source: cortex@ed33435 assess_coverage.py:240-242 — min_heat=0.0 for all scopes
+const ASSESS_MIN_HEAT = 0.0;
+
+/**
+ * Fetch memories scoped by directory → domain → global, dispatching the scope
+ * to the store (NOT post-filtering a full fetch). Mirrors Cortex
+ * _fetch_memories: directory (when != cwd) → getMemoriesForDirectory,
+ * domain → getMemoriesForDomain, else → getAllMemoriesForValidation.
+ *
+ * *Async variants are preferred when present (PgMemoryStore) to avoid the
+ * _runSync() throw; SqliteMemoryStore exposes only the sync method, used as
+ * the fallback.
+ *
+ * source: cortex@ed33435 mcp_server/handlers/assess_coverage.py:232-242
+ * source: MemoryStoreExt async declarations — memory-store.ts:740,747
+ */
+async function fetchScopedMemories(
+  store: MemoryStoreExt,
+  directory: string,
+  domain: string,
+): Promise<Array<Record<string, unknown>>> {
+  const cwd = process.cwd();
+  if (directory && directory !== cwd) {
+    return store.getMemoriesForDirectoryAsync != null
+      ? store.getMemoriesForDirectoryAsync(directory, ASSESS_MIN_HEAT)
+      : store.getMemoriesForDirectory(directory, ASSESS_MIN_HEAT);
+  }
+  if (domain) {
+    return store.getMemoriesForDomainAsync != null
+      ? store.getMemoriesForDomainAsync(domain, ASSESS_MIN_HEAT, ASSESS_FETCH_LIMIT)
+      : store.getMemoriesForDomain(domain, ASSESS_MIN_HEAT, ASSESS_FETCH_LIMIT);
+  }
+  return store.getAllMemoriesForValidationAsync != null
+    ? store.getAllMemoriesForValidationAsync(ASSESS_FETCH_LIMIT)
+    : store.getAllMemoriesForValidation(ASSESS_FETCH_LIMIT);
+}
+
 // ── Error envelope helper ─────────────────────────────────────────────────────
 
 function errorText(tool: string, err: unknown): { content: Array<{ type: "text"; text: string }> } {
@@ -168,10 +209,10 @@ function errorText(tool: string, err: unknown): { content: Array<{ type: "text";
  * Registers advanced automation and rule-engine MCP tools.
  *
  * precondition:  deps.store is a live MemoryStore.
- * postcondition: 6 tools registered; each body calls the real domain handler.
+ * postcondition: 5 tools registered; each body calls the real domain handler.
  *
  * source: MCP_TOOLS.md §"sync_instructions", §"create_trigger", §"add_rule",
- *         §"get_rules", §"assess_coverage", §"query_workflow_graph"
+ *         §"get_rules", §"assess_coverage"
  */
 export function registerAdvancedTools(server: McpServer, deps: AdvancedDeps): void {
   // ── sync_instructions ─────────────────────────────────────────────────────
@@ -288,22 +329,14 @@ export function registerAdvancedTools(server: McpServer, deps: AdvancedDeps): vo
     },
     async (args) => {
       try {
-        // source: cortex@ed33435 mcp_server/handlers/assess_coverage.py::_handler_impl
-        // Use *Async variant when available (PgMemoryStore) to avoid _runSync() throw.
+        // Fetch scoped by directory → domain → global, mirroring Cortex
+        // _fetch_memories (assess_coverage.py:232-242): the store dispatches
+        // scoping, NOT an in-memory post-filter over the full set.
+        // *Async variants are preferred (PgMemoryStore) to avoid _runSync()
+        // throw; SQLite falls back to its sync method.
+        // source: cortex@ed33435 assess_coverage.py:232-242 _fetch_memories
         // source: ADR-0042 — async-when-available pattern for PG/SQLite parity.
-        const storeAny = deps.store as unknown as { getAllMemoriesForDecayAsync?: () => Promise<Record<string, unknown>[]> };
-        const allMems = (
-          typeof storeAny.getAllMemoriesForDecayAsync === "function"
-            ? await storeAny.getAllMemoriesForDecayAsync()
-            : deps.store.getAllMemoriesForDecay()
-        ) as Array<Record<string, unknown>>;
-
-        // source: cortex@ed33435 assess_coverage.py:35 — filter by domain/directory
-        const scoped = allMems.filter((m) => {
-          if (args.domain && m["domain"] !== args.domain) return false;
-          if (args.directory && !String(m["directory"] ?? "").startsWith(args.directory)) return false;
-          return true;
-        });
+        const scoped = await fetchScopedMemories(deps.store, args.directory, args.domain);
 
         const now = Date.now();
         const staleMs = args.stale_days * MS_PER_DAY;
@@ -343,44 +376,4 @@ export function registerAdvancedTools(server: McpServer, deps: AdvancedDeps): vo
     },
   );
 
-  // ── query_workflow_graph ──────────────────────────────────────────────────
-  server.registerTool(
-    "query_workflow_graph",
-    {
-      description: "Return a typed subgraph of the unified workflow graph.",
-      inputSchema: {
-        node_kind:    z.union([z.string(), z.array(z.string())]).optional().describe("Node kind filter"),
-        edge_kind:    z.union([z.string(), z.array(z.string())]).optional().describe("Edge kind filter"),
-        neighbour_of: z.string().optional().describe("Node ID to find neighbours of"),
-        depth:        z.number().int().optional().describe("Traversal depth"),
-        domain:       z.string().optional().describe("Domain filter"),
-        limit_nodes:  z.number().int().optional().describe("Max nodes to return"),
-      },
-    },
-    async (args) => {
-      try {
-        // source: packages/memory/src/workflow-graph/handlers/query-workflow-graph.ts::queryWorkflowGraph
-        // The queryWorkflowGraph pure function accepts a pre-built payload and filters it.
-        // With no running workflow-graph source, we return the skeleton (empty graph).
-        // source: cortex@ed33435 mcp_server/handlers/query_workflow_graph.py::handler
-        const emptyGraph = {
-          nodes: [],
-          edges: [],
-          links: [],
-          meta:  { node_count: 0, edge_count: 0, built_at: new Date().toISOString() },
-        };
-        const response = queryWorkflowGraph(emptyGraph, {
-          node_kind:    args.node_kind as string | string[] | undefined,
-          edge_kind:    args.edge_kind as string | string[] | undefined,
-          neighbour_of: args.neighbour_of,
-          depth:        args.depth,
-          domain:       args.domain,
-          limit_nodes:  args.limit_nodes,
-        });
-        return { content: [{ type: "text" as const, text: JSON.stringify(response) }] };
-      } catch (err) {
-        return errorText("query_workflow_graph", err);
-      }
-    },
-  );
 }

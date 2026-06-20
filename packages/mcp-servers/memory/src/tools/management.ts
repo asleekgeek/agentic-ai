@@ -1,9 +1,8 @@
 /**
  * management.ts — MCP tool adapters for the memory management topic.
  *
- * Tools registered (5):
- *   validate_memory, seed_project, backfill_memories, get_methodology_graph,
- *   get_telemetry
+ * Tools registered (4):
+ *   validate_memory, seed_project, backfill_memories, get_telemetry
  *
  * Phase 7 Group D — DI wiring:
  *   - validate_memory: marks stale memories whose source files no longer exist.
@@ -12,8 +11,6 @@
  *   - backfill_memories: calls backfillMemoriesHandler (force:true, full-file scan,
  *     rglob discovery, hash-dedup). Replaces importHandler which used force:false
  *     causing ~90% write-gate rejection. source: backfill-memories.ts fix 0.1.4.
- *   - get_methodology_graph: builds graph from profiles.json.
- *     Ported from cortex@ed33435 mcp_server/handlers/get_methodology_graph.py.
  *   - get_telemetry: returns in-process telemetry counters + read/write ratio.
  *     Ported from cortex@ed33435 mcp_server/handlers/get_telemetry.py.
  *
@@ -22,13 +19,12 @@
  *   errors at MCP startup. source: 2026-05-08 cleanup pass.
  *
  * source: worktrees/port-inventory-cortex/inventory/MCP_TOOLS.md
- *         §Tier1Manage, §Tier1Core (get_methodology_graph)
+ *         §Tier1Manage
  * source: cortex@ed33435 mcp_server/handlers/get_telemetry.py
  */
 
-import { existsSync, readFileSync } from "node:fs";
+import { existsSync } from "node:fs";
 import { join } from "node:path";
-import { homedir } from "node:os";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
 import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-store.js";
@@ -46,28 +42,13 @@ const VALIDATE_ERROR_CAP = 10;
 const SEED_MAX_FILE_SIZE_KB = 64;
 // source: MCP_TOOLS.md §backfill_memories max_files default=20
 const BACKFILL_MAX_FILES_DEFAULT = 20;
-// source: session_extractor.py — baseline importance score = 0.3 (any message with text content)
-// Setting min_importance = 0.3 includes all messages that pass SKIP_RE + MIN_CONTENT_LEN filters.
-// Previous default was 0.35 which excluded messages with no category keyword match.
-// source: empirical — 3,077 files, 2026-05-08: 0.3 captures 45k items vs 17k at 0.35.
-const BACKFILL_MIN_IMPORTANCE = 0.3;
+// source: cortex tool_registry_manage.py:156 tool_backfill_memories(min_importance: float = 0.35); handler backfill_memories.py:116 default 0.35
+const BACKFILL_MIN_IMPORTANCE = 0.35;
 
 // ── Dependency bundle ─────────────────────────────────────────────────────────
 
 export interface ManagementDeps {
   store: MemoryStoreExt;
-}
-
-// ── Profiles I/O ──────────────────────────────────────────────────────────────
-
-function loadProfilesRaw(): Record<string, unknown> {
-  const profilePath = join(homedir(), ".claude", "methodology", "profiles.json");
-  if (!existsSync(profilePath)) return { domains: {} };
-  try {
-    return JSON.parse(readFileSync(profilePath, "utf-8")) as Record<string, unknown>;
-  } catch {
-    return { domains: {} };
-  }
 }
 
 // ── Error envelope helper ─────────────────────────────────────────────────────
@@ -84,11 +65,11 @@ function errorText(tool: string, err: unknown): { content: Array<{ type: "text";
  *
  * precondition:  deps.store is a live MemoryStore.
  * postcondition: 4 tools registered; validate_memory, backfill_memories,
- *   get_methodology_graph call real handlers;
+ *   get_telemetry call real handlers;
  *   seed_project calls the real seedProjectHandlerFn.
  *
  * source: MCP_TOOLS.md §"validate_memory", §"seed_project",
- *         §"backfill_memories", §"codebase_analyze", §"get_methodology_graph"
+ *         §"backfill_memories", §"get_telemetry"
  */
 export function registerManagementTools(server: McpServer, deps: ManagementDeps): void {
   // ── validate_memory ───────────────────────────────────────────────────────
@@ -262,55 +243,6 @@ export function registerManagementTools(server: McpServer, deps: ManagementDeps)
         }) }] };
       } catch (err) {
         return errorText("backfill_memories", err);
-      }
-    },
-  );
-
-  // ── get_methodology_graph ─────────────────────────────────────────────────
-  server.registerTool(
-    "get_methodology_graph",
-    {
-      description: "Returns methodology map as graph data for 3D visualisation.",
-      inputSchema: {
-        domain: z.string().optional().describe("Domain to visualise"),
-      },
-    },
-    async (args) => {
-      try {
-        // source: cortex@ed33435 mcp_server/handlers/get_methodology_graph.py::handler
-        const profiles = loadProfilesRaw();
-        const domains = (profiles["domains"] ?? {}) as Record<string, Record<string, unknown>>;
-
-        const nodes: Array<Record<string, unknown>> = [];
-        const edges: Array<Record<string, unknown>> = [];
-        let edgeId = 0;
-
-        for (const [id, domain] of Object.entries(domains)) {
-          if (args.domain && id !== args.domain) continue;
-          nodes.push({
-            id,
-            label:         domain["label"] ?? id,
-            session_count: domain["sessionCount"] ?? 0,
-            confidence:    domain["confidence"] ?? 0,
-          });
-
-          const bridges = (domain["connectionBridges"] ?? []) as Array<Record<string, unknown>>;
-          for (const bridge of bridges) {
-            const target = bridge["targetDomain"] as string | undefined;
-            if (!target) continue;
-            edges.push({
-              id:          edgeId++,
-              source:      id,
-              target,
-              bridge_type: bridge["bridgeType"] ?? "unknown",
-              strength:    bridge["strength"] ?? 0,
-            });
-          }
-        }
-
-        return { content: [{ type: "text" as const, text: JSON.stringify({ nodes, edges }) }] };
-      } catch (err) {
-        return errorText("get_methodology_graph", err);
       }
     },
   );

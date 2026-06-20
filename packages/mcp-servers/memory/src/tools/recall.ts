@@ -34,7 +34,7 @@ const RECALL_MAX_RESULTS_CAP = 100; // source: MCP_TOOLS.md §recall max_results
 const RECALL_DEFAULT_RESULTS = 10; // source: MCP_TOOLS.md §recall default max_results=10
 const RECALL_MIN_HEAT_DEFAULT = 0.05; // source: MCP_TOOLS.md §recall min_heat default=0.05
 const RECALL_CLUSTER_THRESHOLD_DEFAULT = 0.6; // source: MCP_TOOLS.md §recall_hierarchical cluster_threshold default=0.6
-const NAVIGATE_MAX_DEPTH_CAP = 5; // source: MCP_TOOLS.md §navigate_memory max_depth cap=5
+const NAVIGATE_MAX_DEPTH_CAP = 4; // source: cortex mcp_server/handlers/navigate_memory.py:61 schema 'maximum':4 and :170 min(max_depth,4)
 
 // ── Dependency bundle ─────────────────────────────────────────────────────────
 
@@ -76,10 +76,17 @@ export function registerRecallTools(server: McpServer, deps: RecallDeps): void {
         max_results: z.number().int().min(1).max(RECALL_MAX_RESULTS_CAP).default(RECALL_DEFAULT_RESULTS).describe("Max memories to return"), // source: MCP_TOOLS.md §recall max_results cap=100
         min_heat:    z.number().min(0).max(1).default(RECALL_MIN_HEAT_DEFAULT).describe("Minimum heat threshold"), // source: MCP_TOOLS.md §recall min_heat default=0.05
         agent_topic: z.string().optional().describe("Agent topic scope"),
-        include_low_signal: z.boolean().optional().describe(
-          "Default false: drop memories tagged as auto-captures " +
-          "(auto-captured, tool:*, _backfill, stage-N, …) so curated " +
-          "content surfaces. Set true for debugging / replay tooling.",
+        // ISO with Cortex recall tool signature (tool_registry_memory.py:134-142):
+        // the model-facing param is include_related, NOT include_low_signal. Cortex
+        // made include_low_signal non-model-facing after the 2026-05-13 spike showed
+        // unfiltered recall is drowned by tool-output captures; the handler defaults
+        // it false. source: anthropic-partnership/Cortex/mcp_server/tool_registry_memory.py:141
+        include_related: z.boolean().optional().describe(
+          "When true, inline a one-hop relation walk per recalled memory: " +
+          "related.versions (supersession-chain neighbors — the fact this row " +
+          "replaced and the one that replaced it) and related.entities (directly " +
+          "related entities via the knowledge graph). A cheap mid-tier enrichment " +
+          "between flat recall and the full context assembler. Default false.",
         ),
       },
     },
@@ -94,7 +101,11 @@ export function registerRecallTools(server: McpServer, deps: RecallDeps): void {
             max_results:        args.max_results,
             min_heat:           args.min_heat,
             agent_topic:        args.agent_topic,
-            include_low_signal: args.include_low_signal ?? false,
+            // include_low_signal is handler-internal in Cortex (the tool never forwards
+            // it → defaults false). include_related is the model-facing param.
+            // source: anthropic-partnership/Cortex/mcp_server/handlers/recall.py:401,459
+            include_low_signal: false,
+            include_related:    args.include_related ?? false,
           },
           deps.store,
           deps.embedder,

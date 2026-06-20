@@ -21,6 +21,11 @@
  */
 
 import type { MemoryStore } from "../storage/memory-store.js";
+// source: handlers/rate_memory.py:108-111 — AF-2 Platt feedback loop.
+//   getRawCeScore scores (query, content); recordRating buffers the
+//   (raw_ce, useful) pair and refits the calibrator every REFIT_EVERY pairs.
+import { getRawCeScore } from "../../recall/reranker.js";
+import { recordRating, sampleCount } from "../../recall/reranker-calibration.js";
 
 // Named constants — rationale for each value:
 // source: cortex@ed33435 mcp_server/handlers/rate_memory.py — confidence only
@@ -55,6 +60,34 @@ export interface RateMemoryResponse {
   confidence?: number;
   content_preview?: string;
   reason?: string;
+  // AF-2 feedback signal — set only when a query was supplied and the
+  // cross-encoder scored the pair. source: handlers/rate_memory.py:164-166
+  platt_sample_recorded?: boolean;
+  platt_sample_count?: number;
+}
+
+/**
+ * Record a (raw_ce_score, useful) sample for AF-2 Platt calibration.
+ *
+ * Returns true iff a sample was actually recorded. No-op (returns false) when
+ * query is empty, content is empty, or the cross-encoder is unavailable.
+ *
+ * precondition:  useful is a bool.
+ * postcondition: on true, the reranker-calibration buffer has one more pair
+ *   and a refit may have happened as a side effect of recordRating.
+ *
+ * source: handlers/rate_memory.py:92-112 _record_platt_sample
+ */
+async function recordPlattSample(
+  query: string,
+  content: string,
+  useful: boolean,
+): Promise<boolean> {
+  if (!query || !content) return false;
+  const rawCe = await getRawCeScore(query, content);
+  if (rawCe === null) return false;
+  recordRating(rawCe, useful);
+  return true;
 }
 
 /**
@@ -163,7 +196,18 @@ export async function rateMemoryAsync(
   // updateMemoryMetamemory uses void this.runAsync() on PG — works in fire-and-forget mode.
   store.updateMemoryMetamemory(memoryId, accessCount, usefulCount, confidence);
 
-  return {
+  // AF-2: collect a Platt training sample when the caller supplied the
+  // surfacing query. Silent best-effort — the metamemory update above is the
+  // primary contract. The query field is NOT model-facing (it is not in the
+  // tool_rate_memory signature); only non-MCP callers pass it.
+  // source: handlers/rate_memory.py:151-153,164-166
+  const plattRecorded = await recordPlattSample(
+    args.query ?? "",
+    mem.content,
+    useful,
+  );
+
+  const response: RateMemoryResponse = {
     rated: true,
     memory_id: memoryId,
     useful,
@@ -172,4 +216,9 @@ export async function rateMemoryAsync(
     confidence: Math.round(confidence * CONFIDENCE_ROUNDING_FACTOR) / CONFIDENCE_ROUNDING_FACTOR,
     content_preview: mem.content.slice(0, RATE_CONTENT_PREVIEW_CHARS),
   };
+  if (plattRecorded) {
+    response.platt_sample_recorded = true;
+    response.platt_sample_count = sampleCount();
+  }
+  return response;
 }

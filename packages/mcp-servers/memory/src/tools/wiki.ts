@@ -1,9 +1,9 @@
 /**
  * wiki.ts — MCP tool adapters for the wiki topic.
  *
- * Tools registered (8):
+ * Tools registered (9 authoring + curate_wiki):
  *   wiki_write, wiki_read, wiki_list, wiki_link, wiki_adr,
- *   wiki_reindex, wiki_purge, wiki_verify
+ *   wiki_reindex, wiki_purge, wiki_verify, wiki_rename
  *
  * Phase 7 Group D — DI wiring: WikiDeps are constructed from filesystem
  * wiki-store primitives and injected into each handler. No stub paths remain.
@@ -13,7 +13,7 @@
  * source: packages/memory/src/wiki/storage/wiki-store.ts (filesystem primitives)
  */
 
-import { mkdirSync, writeFileSync, rmSync, statSync, readFileSync } from "node:fs";
+import { mkdirSync, writeFileSync, rmSync, statSync, readdirSync, readFileSync } from "node:fs";
 import { join, resolve, dirname } from "node:path";
 import { homedir } from "node:os";
 import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
@@ -26,9 +26,10 @@ import { handler as wikiAdrHandler } from "@agentic/memory/wiki/handlers/wiki-ad
 import { handler as wikiReindexHandler } from "@agentic/memory/wiki/handlers/wiki-reindex.js";
 import { handler as wikiPurgeHandler } from "@agentic/memory/wiki/handlers/wiki-purge.js";
 import { handler as wikiVerifyHandler } from "@agentic/memory/wiki/handlers/wiki-verify.js";
+import { handler as wikiRenameHandler } from "@agentic/memory/wiki/handlers/wiki-rename-handler.js";
 import { handler as curateWikiHandler } from "@agentic/memory/wiki/handlers/curate-wiki.js";
 import type { CuratorMemory, PageMtimeFn } from "@agentic/memory/wiki/auto-curator.js";
-import { collectSourceFiles as codebaseCollectSourceFiles } from "@agentic/memory/codebase-analysis/handlers/codebase-analyze-helpers.js";
+import { autoResolveProjectRoot } from "@agentic/memory/wiki/project-roots.js";
 import type { MemoryStoreExt } from "@agentic/memory/remember/storage/memory-store.js";
 import {
   readPage as fsReadPage,
@@ -64,6 +65,20 @@ async function asyncWritePage(
   mode: string,
 ): Promise<{ path: string; mode: string; created: boolean; bytes_written: number }> {
   return Promise.resolve(fsWritePage(root, relPath, content, mode));
+}
+
+// Void-returning write adapter for wiki_rename. WikiRenameDeps.writePage
+// is typed ``(...) => Promise<void>`` with mode ``"create" | "replace"``;
+// asyncWritePage returns the write metadata, which the rename handler
+// ignores. This adapter discards the result so the contract matches
+// without leaning on TS return-position bivariance.
+async function asyncWritePageVoid(
+  root: string,
+  relPath: string,
+  content: string,
+  mode: "create" | "replace",
+): Promise<void> {
+  await asyncWritePage(root, relPath, content, mode);
 }
 
 async function asyncListPages(root: string, kind?: string | null): Promise<string[]> {
@@ -105,60 +120,77 @@ async function asyncDeleteFile(absPath: string): Promise<void> {
 // source: docs/ADR/0046-change-impact-analysis.md §Phase 2
 const AP_ENABLED = false;
 
-// Phase C — fs adapters for source-drift + file-coverage.
-// Failure isolation: every call to fs is wrapped so an ENOENT or
-// permission error returns null/[] and the curator treats the page or
-// file as "not present, not stale", never throwing through the MCP
-// surface.
-// source: packages/memory/src/wiki/{source-drift,file-coverage}.ts
+// ── G12 scope-coverage filesystem adapters ────────────────────────────────────
+//
+// Wrappers over WIKI_ROOT that let the curator audit per-domain scope
+// coverage (audit_all_domains parity). Every call is best-effort: an
+// ENOENT or permission error returns []/null/0 so a partial wiki tree
+// never throws through the MCP surface.
+// source: cortex core/wiki_coverage.py (audit_all_domains, _count_substantive_pages)
+// reference impl: packages/memory/src/hooks/consolidate-background.ts:246-276
 
-// File-size cap for the coverage scan. Mirrors codebase-analyze's
-// default (100 KB) since the same predicate filters here.
-// source: cortex@2f42428 codebase_analyze.py — max_file_size_kb default = 100
-// source: IEC 80000-13 — 1 kibibyte = 1024 bytes
-const FILE_SIZE_KB_DEFAULT = 100; // source: cortex@2f42428 codebase_analyze.py
-const BYTES_PER_KB = 1024; // source: IEC 80000-13:2008 §21-12
-const MAX_FILE_BYTES = FILE_SIZE_KB_DEFAULT * BYTES_PER_KB;
+const MS_PER_SECOND = 1000; // source: ECMAScript Date timestamps are ms
 
 // Wiki-page mtime adapter. Resolves seconds-since-epoch or null on
-// ENOENT. Used by the recently-authored skip filter and the drift
-// scanner's page-mtime side.
+// ENOENT. Used by the curator's recently-authored skip filter (pageMtime).
 const mtimeAdapter: PageMtimeFn = (absPath: string): number | null => {
   try {
-    const MS_PER_SECOND = 1000; // source: ECMAScript Date timestamps are ms
     return statSync(absPath).mtimeMs / MS_PER_SECOND;
   } catch {
     return null;
   }
 };
 
-// Project-rooted mtime adapter for source-drift. Resolves relative
-// citation paths against the supplied project root. Returns null on
-// ENOENT or when projectRoot is absent.
-function makeProjectMtime(projectRoot: string | undefined): PageMtimeFn | undefined {
-  if (!projectRoot) return undefined;
-  return (relPath: string): number | null => {
-    try {
-      const MS_PER_SECOND = 1000; // source: ECMAScript Date timestamps are ms
-      return statSync(join(projectRoot, relPath)).mtimeMs / MS_PER_SECOND;
-    } catch {
-      return null;
-    }
-  };
+// List the immediate subdirectories of <WIKI_ROOT>/<relDir>. Used by
+// listDomains to discover domain names under each wiki kind bucket.
+function wikiListSubdirs(relDir: string): readonly string[] {
+  try {
+    return readdirSync(join(WIKI_ROOT, relDir), { withFileTypes: true })
+      .filter((e) => e.isDirectory())
+      .map((e) => e.name);
+  } catch {
+    return [];
+  }
 }
 
-// Project-rooted file reader for file-coverage prompts.
-function makeProjectReader(
-  projectRoot: string | undefined,
-): ((projectRoot: string, relPath: string) => string | null) | undefined {
-  if (!projectRoot) return undefined;
-  return (_pr: string, relPath: string): string | null => {
-    try {
-      return readFileSync(join(projectRoot, relPath), "utf-8");
-    } catch {
-      return null;
+// Stat a wiki page at <WIKI_ROOT>/<relPath>. Returns size + mtime or null.
+function wikiPageStat(relPath: string): { sizeBytes: number; mtimeSec: number } | null {
+  try {
+    const s = statSync(join(WIKI_ROOT, relPath));
+    return { sizeBytes: s.size, mtimeSec: s.mtimeMs / MS_PER_SECOND };
+  } catch {
+    return null;
+  }
+}
+
+// Count substantive (.md, ≥ MIN_PAGE_BYTES) pages directly under
+// <WIKI_ROOT>/<relDir>. source: cortex wiki_coverage.py:_count_substantive_pages
+function wikiCountSubstantivePages(relDir: string): number {
+  // source: cortex core/wiki_coverage.py:_MIN_PAGE_BYTES = 800
+  const MIN_PAGE_BYTES = 800;
+  try {
+    const abs = join(WIKI_ROOT, relDir);
+    let count = 0;
+    for (const entry of readdirSync(abs)) {
+      if (!entry.endsWith(".md")) continue;
+      try {
+        if (statSync(join(abs, entry)).size >= MIN_PAGE_BYTES) count += 1;
+      } catch { /* skip unstatable entries */ }
     }
-  };
+    return count;
+  } catch {
+    return 0;
+  }
+}
+
+// Read a wiki page body at <WIKI_ROOT>/<wikiPath>. Returns null on read
+// failure. Used by the reauthor branch's prompt builder.
+function wikiReadPageBody(wikiPath: string): string | null {
+  try {
+    return readFileSync(join(WIKI_ROOT, wikiPath), "utf-8");
+  } catch {
+    return null;
+  }
 }
 
 // ── Error envelope helper ─────────────────────────────────────────────────────
@@ -173,8 +205,8 @@ function errorText(tool: string, err: unknown): { content: Array<{ type: "text";
 /**
  * Optional dependencies for the wiki tool surface.
  *
- * Wiki authoring tools (write/read/list/link/adr/reindex/purge/verify) are
- * pure-FS and need no store. The auto-curator (``curate_wiki``) needs a
+ * Wiki authoring tools (write/read/list/link/adr/reindex/purge/verify/rename)
+ * are pure-FS and need no store. The auto-curator (``curate_wiki``) needs a
  * live memory store to draw the cluster pool from — it is registered
  * only when ``deps.store`` is supplied. This keeps the legacy
  * ``registerWikiTools(server)`` call site working while letting the
@@ -190,12 +222,13 @@ export interface WikiToolDeps {
 }
 
 /**
- * Registers all wiki MCP tools (8 authoring tools, plus ``curate_wiki``
- * when ``deps.store`` is provided).
+ * Registers all wiki MCP tools (9 authoring tools incl. ``wiki_rename``,
+ * plus ``curate_wiki`` when ``deps.store`` is provided).
  *
  * precondition:  WIKI_ROOT directory exists or will be created on first write.
- * postcondition: 8 tools registered; ``curate_wiki`` is registered when a
- *                memory store is injected; each body calls the real domain handler.
+ * postcondition: 9 authoring tools registered; ``curate_wiki`` is registered
+ *                when a memory store is injected; each body calls the real
+ *                domain handler.
  *
  * source: MCP_TOOLS.md §"wiki_write" through §"wiki_verify"
  * source: cortex@47b818d mcp_server/handlers/curate_wiki.py (auto-curator)
@@ -234,13 +267,30 @@ export function registerWikiTools(server: McpServer, deps?: WikiToolDeps): void 
       description: "Read the raw Markdown of a wiki page by relative path.",
       inputSchema: {
         path: z.string().min(1).describe("Wiki page path"),
+        // source: cortex tool_registry_wiki.py:64 (tool_wiki_read signature —
+        //   follow_redirects: bool = True)
+        follow_redirects: z.boolean().default(true).describe(
+          "When true (default) follow redirect stubs to the terminal page. " +
+          "When false, return the stub's own body.",
+        ),
+        // source: cortex wiki_read.py:74-86 (offset: int, default 0, minimum 0)
+        offset: z.number().int().min(0).optional().describe(
+          "Start the returned content at this character offset. Page through " +
+          "pages larger than the response budget: when the response carries " +
+          "content_truncated: true, re-call with offset = previous offset + " +
+          "length of content received. content_length is the full page size.",
+        ),
       },
     },
     async (args) => {
       try {
         // source: packages/memory/src/wiki/handlers/wiki-read.ts::handler
         const response = await wikiReadHandler(
-          { path: args.path },
+          {
+            path: args.path,
+            follow_redirects: args.follow_redirects,
+            ...(args.offset !== undefined ? { offset: args.offset } : {}),
+          },
           { wikiRoot: WIKI_ROOT, readPage: asyncReadPage },
         );
         return { content: [{ type: "text" as const, text: JSON.stringify(response) }] };
@@ -445,6 +495,50 @@ export function registerWikiTools(server: McpServer, deps?: WikiToolDeps): void 
     },
   );
 
+  // ── wiki_rename ───────────────────────────────────────────────────────────
+  //
+  // Move a page and leave a redirect stub at the old path. The TS domain
+  // handler (wiki-rename-handler.ts) is a 1:1 port of Cortex's
+  // handlers/wiki_rename.py; this block is the model-facing registration.
+  //
+  // source: cortex tool_registry_wiki.py:170-193 (tool_wiki_rename:
+  //   from_path, to_path, reason="", overwrite_dest=False)
+  server.registerTool(
+    "wiki_rename",
+    {
+      description:
+        "Move a wiki page from from_path to to_path and leave a redirect " +
+        "stub at the old location pointing to the new one. The move " +
+        "preserves inbound links because wiki_read follows redirect stubs " +
+        "transparently. Refuses to operate on pages without a stable id " +
+        "field, or on existing redirect stubs. Returns {from_path, " +
+        "to_path, page_id, stub_created}.",
+      inputSchema: {
+        from_path:      z.string().min(1).describe("Current wiki-relative path of the page."),
+        to_path:        z.string().min(1).describe("Destination wiki-relative path."),
+        reason:         z.string().optional().describe("Optional free-form rationale recorded in the redirect stub."),
+        overwrite_dest: z.boolean().default(false).describe("When true, overwrite an existing destination."),
+      },
+    },
+    async (args) => {
+      try {
+        // source: packages/memory/src/wiki/handlers/wiki-rename-handler.ts::handler
+        const response = await wikiRenameHandler(
+          {
+            from_path:      args.from_path,
+            to_path:        args.to_path,
+            reason:         args.reason,
+            overwrite_dest: args.overwrite_dest,
+          },
+          { wikiRoot: WIKI_ROOT, readPage: asyncReadPage, writePage: asyncWritePageVoid },
+        );
+        return { content: [{ type: "text" as const, text: JSON.stringify(response) }] };
+      } catch (err) {
+        return errorText("wiki_rename", err);
+      }
+    },
+  );
+
   // ── curate_wiki ───────────────────────────────────────────────────────────
   //
   // Auto-curator — clusters recent PG memories and returns structured
@@ -468,6 +562,10 @@ export function registerWikiTools(server: McpServer, deps?: WikiToolDeps): void 
     // source: cortex@47b818d set 20; raised here per user feedback
     //         2026-05-18 ("why a limit cap?").
     const MAX_JOBS_PER_CALL = 100; // source: user feedback 2026-05-18 — raised from cortex's 20 to fit MCP wire + Opus 4.7 context
+    // source: cortex curate_wiki.py:148-159 (coverage_jobs_max, default 4) and :173-184 (reauthor_jobs_max, default 3)
+    const COVERAGE_JOBS_DEFAULT = 4;
+    const REAUTHOR_JOBS_DEFAULT = 3;
+    const COVERAGE_JOBS_MAX_CAP = 20; // source: cortex@47b818d original per-call job cap
     server.registerTool(
       "curate_wiki",
       {
@@ -485,26 +583,26 @@ export function registerWikiTools(server: McpServer, deps?: WikiToolDeps): void 
           min_avg_heat:     z.number().min(0).max(1).optional().describe("Minimum cluster average heat."),
           recent_only:      z.boolean().optional().describe("Use recently-accessed memories only (default true)."),
           memory_pool_size: z.number().int().min(1).optional().describe("Memory pool size to draw from."),
-          // Phase C — drift + coverage. Opt-in via these flags; both
-          // require project_root to resolve relative citation paths.
-          // source: packages/memory/src/wiki/{source-drift,file-coverage}.ts
-          include_drift: z.boolean().optional().describe(
-            "Phase C: also emit refresh jobs for pages whose cited " +
-            "source files have mtimes later than the page mtime " +
-            "(requires project_root).",
+          // source: cortex curate_wiki.py:137-148 (include_coverage, default True)
+          include_coverage: z.boolean().default(true).describe(
+            "If true, prepend coverage-driven jobs (missing architecture/" +
+            "services/api/data-flow/operations pages per project) ahead of " +
+            "cluster-driven jobs. Structural scopes get authored before heat " +
+            "clusters so a cold reader can navigate the wiki end-to-end.",
           ),
-          include_file_coverage: z.boolean().optional().describe(
-            "Phase C: also emit authoring jobs for source files that " +
-            "have no wiki page yet under reference/<domain>/<slug>.md " +
-            "(requires project_root + domain).",
+          // source: cortex curate_wiki.py:148-159 (coverage_jobs_max, default 4)
+          coverage_jobs_max: z.number().int().min(0).max(COVERAGE_JOBS_MAX_CAP).default(COVERAGE_JOBS_DEFAULT).describe(
+            "Cap on how many coverage jobs to return per invocation (default 4).",
           ),
-          project_root: z.string().optional().describe(
-            "Absolute path to the project root. Used by Phase C to " +
-            "resolve relative citations and walk for uncovered files.",
+          // source: cortex curate_wiki.py:161-172 (include_reauthor, default True)
+          include_reauthor: z.boolean().default(true).describe(
+            "Mix in re-authoring jobs for existing pages whose linked source " +
+            "files have moved, whose content is older than the freshness " +
+            "window, or whose body is off-template.",
           ),
-          max_files: z.number().int().min(0).optional().describe(
-            "Max source files scanned for coverage. 0 (default) = " +
-            "unbounded; matches codebase_analyze.",
+          // source: cortex curate_wiki.py:173-184 (reauthor_jobs_max, default 3)
+          reauthor_jobs_max: z.number().int().min(0).default(REAUTHOR_JOBS_DEFAULT).describe(
+            "Cap on how many re-author jobs to return per invocation (default 3).",
           ),
         },
       },
@@ -534,24 +632,55 @@ export function registerWikiTools(server: McpServer, deps?: WikiToolDeps): void 
             return rows as CuratorMemory[];
           };
 
-          const response = await curateWikiHandler(args, {
+          // Remap the model-facing Cortex param names to the TS handler's
+          // internal names: Cortex include_coverage → include_scope_coverage
+          // (both = structural per-domain scope-coverage jobs);
+          // coverage_jobs_max → scope_coverage_jobs_max.
+          // source: cortex curate_wiki.py:245/247 (include_coverage /
+          //   include_reauthor); TS handler curate-wiki.ts:123/131.
+          const handlerArgs = {
+            ...args,
+            include_scope_coverage:  args.include_coverage,
+            ...(args.coverage_jobs_max !== undefined
+              ? { scope_coverage_jobs_max: args.coverage_jobs_max }
+              : {}),
+            include_reauthor:        args.include_reauthor,
+            ...(args.reauthor_jobs_max !== undefined
+              ? { reauthor_jobs_max: args.reauthor_jobs_max }
+              : {}),
+          };
+
+          const response = await curateWikiHandler(handlerArgs, {
             wikiRoot:                    WIKI_ROOT,
             getRecentlyAccessedMemories: getRecent,
             getRecentMemories:           getRecentByHeat,
             listMdPages:                 asyncListPages,
-            // Phase C adapters — only used when args.include_drift /
-            // args.include_file_coverage are true and project_root is
-            // supplied. Failure isolation: each adapter swallows fs
-            // errors and returns null/[] so a single missing file
-            // never breaks the whole tool call.
-            // source: packages/memory/src/wiki/{source-drift,file-coverage}.ts
-            readPage:        asyncReadPage,
-            pageMtime:       mtimeAdapter,
-            sourceFileMtime: makeProjectMtime(args.project_root),
-            readSourceFile:  makeProjectReader(args.project_root),
-            listSourceFiles: async (projectRoot, maxFiles) =>
-              codebaseCollectSourceFiles(projectRoot, null, maxFiles, MAX_FILE_BYTES)
-                .map((abs) => abs.startsWith(projectRoot) ? abs.slice(projectRoot.length + 1) : abs),
+            // G12 scope-coverage adapters — filesystem wrappers over
+            // WIKI_ROOT. Best-effort: fs errors short-circuit to
+            // empty/null so a partial wiki tree never breaks the tool
+            // call. These make include_coverage (Cortex
+            // audit_all_domains) functional — the structural-navigation
+            // jobs that let a cold reader traverse the wiki.
+            // source: cortex curate_wiki.py:289-299 (audit_all_domains);
+            //   reference impl mirrors
+            //   packages/memory/src/hooks/consolidate-background.ts:246-276
+            readPage:              asyncReadPage,
+            pageMtime:             mtimeAdapter,
+            listSubdirs:           wikiListSubdirs,
+            pageStat:              wikiPageStat,
+            countSubstantivePages: wikiCountSubstantivePages,
+            // Reauthor-only adapters. The reauthor branch additionally
+            // gates on a per-call project_root (curate-wiki-scope.ts:229),
+            // which Cortex does not expose at the tool surface (it resolves
+            // source roots per-domain via _project_source_root inside
+            // audit_wiki_drift). Until the TS drift model is reworked to
+            // resolve per page-domain, include_reauthor short-circuits to
+            // empty here. These adapters are wired so the branch becomes
+            // functional the moment that rework lands; no behaviour relies
+            // on them today. Flagged to the consolidation group.
+            // source: cortex curate_wiki.py:302-316 (per-domain reauthor)
+            readWikiPageBody:      wikiReadPageBody,
+            sourceRootResolver:    autoResolveProjectRoot,
           });
           return { content: [{ type: "text" as const, text: JSON.stringify(response) }] };
         } catch (err) {

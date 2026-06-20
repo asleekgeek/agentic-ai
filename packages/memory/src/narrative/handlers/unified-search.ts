@@ -3,180 +3,199 @@
  *
  * Port of: cortex@ed33435 mcp_server/handlers/unified_search.py
  *
- * Liskov audit 2026-05-04 corrections:
- *   - status, sources, counts, k restored to response
- *   - AP-search leg restored (calls CodebasePort.searchCodebase)
- *   - Graceful degradation when codebasePort absent (matches Python ap_client is None guard)
+ * Composition root: cortex.recall (WRRF semantic memory via recallHandler) +
+ * AP code-symbol search (CodebasePort) → core.unified_search_fusion.fuse →
+ * single ranked list. Mirrors unified_search.py:85-136 exactly.
+ *
+ * When AP is off, returns Cortex-only results marked ``status: partial,
+ * sources: [cortex]`` — never fails (unified_search.py:112).
+ *
+ * Fusion contract: each input list presents unique string ids.
+ *   - Memories use ``memory:<memory_id>`` (added by _prepMemories — mirrors
+ *     unified_search.py:_prep_memories lines 70-82).
+ *   - AP symbols use ``symbol:<file>::<name>`` (added here).
  *
  * RRF formula: score(d) = Σ_r 1 / (k + rank_r(d))
  * source: Cormack, Clarke, Buettcher (2009) SIGIR — K=60 canonical value.
  * source: cortex@ed33435 mcp_server/handlers/unified_search.py — canonical contract
- * source: MCP_TOOLS.md §unified_search — return shape and parameters
  */
 
 import { z } from "zod";
-import { rrfFuseIds, DEFAULT_RRF_K } from "../../recall/rrf.js";
-import type { MemoryRecord } from "../types.js";
-import type { MemoryPort } from "./narrative.js";
+import { fuse, DEFAULT_K } from "../../recall/unified-search-fusion.js";
+import {
+  recallHandler,
+  DEFAULT_RECALL_SETTINGS,
+} from "../../recall/recall-handler.js";
+import type { EmbeddingEngine, MemoryStore } from "../../recall/port.js";
+import type { RecallResult } from "../../recall/types.js";
 import type { CodebasePort, SearchCodebaseInput } from "@agentic/core";
 
-// source: mcp_server/handlers/narrative.py:87 — limit=200
-const MEMORY_FETCH_LIMIT = 200;
-// source: mcp_server/handlers/narrative.py:89 — min_heat=0.1
-const HOT_MEMORY_MIN_HEAT = 0.1;
-// source: cortex@ed33435 mcp_server/handlers/unified_search.py:ap_limit=20
-const AP_SEARCH_LIMIT = 20; // source: cortex@ed33435 mcp_server/handlers/unified_search.py:ap_limit=20
+// source: cortex@ed33435 unified_search.py:103 — ap limit = max(top_n*2, top_n)
+const AP_LIMIT_MULTIPLIER = 2;
 // source: MCP_TOOLS.md §unified_search max_results upper bound
 const MAX_RESULTS_CAP = 50; // source: MCP_TOOLS.md §unified_search max=50
 // source: MCP_TOOLS.md §unified_search max_results lower bound
 const MIN_RESULTS = 1; // source: MCP_TOOLS.md §unified_search min=1
-// source: packages/memory/src/recall/multi-signal-fusion.ts::buildRecallResult — 4 decimal places
-const SCORE_DECIMAL_SHIFT = 10000; // source: multi-signal-fusion.ts — round to 4 decimal places
+const DEFAULT_MAX_RESULTS = 10; // source: MCP_TOOLS.md §unified_search default max_results=10
+// source: cortex@ed33435 unified_search.py:95 — recall asks for 2× top_n
+const RECALL_OVERFETCH_MULTIPLIER = 2;
+// source: cortex@ed33435 unified_search.py — recall min_heat floor for unified leg
+const UNIFIED_RECALL_MIN_HEAT = 0.0;
 
 export const UnifiedSearchRequestSchema = z.object({
   query:       z.string().min(1),
   domain:      z.string().optional(),
-  max_results: z.number().int().min(MIN_RESULTS).max(MAX_RESULTS_CAP).default(10),
+  max_results: z.number().int().min(MIN_RESULTS).max(MAX_RESULTS_CAP).default(DEFAULT_MAX_RESULTS),
   // source: Cormack, Clarke, Buettcher (2009) SIGIR — K=60 canonical
-  k:           z.number().int().min(1).default(DEFAULT_RRF_K),
+  k:           z.number().int().min(1).default(DEFAULT_K),
   // source: cortex@ed33435 unified_search.py — optional graph_path for AP leg
   graph_path:  z.string().optional(),
 });
 export type UnifiedSearchRequest = z.infer<typeof UnifiedSearchRequestSchema>;
 
-export interface UnifiedSearchResult {
-  source: "cortex" | "ap";
-  score: number;
-  content: string;
-  tags: string[];
-  heat: number;
-}
-
 /**
- * UnifiedSearchResponse matches cortex@ed33435 unified_search.py response contract.
- * source: cortex@ed33435 mcp_server/handlers/unified_search.py — response shape lines 84-101
+ * UnifiedSearchResponse matches cortex@ed33435 unified_search.py response
+ * contract (lines 111-122): status / query / sources / counts / results / k.
+ * Fused records carry the fusion body plus ``rrf_score`` and ``source_ranks``.
+ * source: cortex@ed33435 mcp_server/handlers/unified_search.py:111-122
  */
 export interface UnifiedSearchResponse {
-  status: "ok" | "error";
-  results: UnifiedSearchResult[];
+  status: "ok" | "partial";
   query: string;
-  total: number;
   sources: string[];
-  counts: { cortex: number; ap: number };
+  counts: { cortex: number; ap: number; fused: number };
+  results: Record<string, unknown>[];
   k: number;
 }
 
 export interface UnifiedSearchDeps {
-  memoryPort: MemoryPort;
+  /** Recall WRRF store — backs the cortex leg (recallHandler). */
+  recallStore: MemoryStore;
+  /** Embedding engine for the vector signal; null degrades gracefully. */
+  embedder: EmbeddingEngine | null;
   /**
-   * Optional AP code search port. When absent, AP leg is skipped.
+   * Optional AP code search port. When absent, AP leg is skipped and status
+   * is "partial" (mirrors unified_search.py is_enabled() False branch).
    * source: cortex@ed33435 unified_search.py — ap_client is None guard
    */
   codebasePort?: CodebasePort;
 }
 
-function scoreRecord(query: string, record: MemoryRecord): number {
-  const queryTokens = new Set(query.toLowerCase().split(/\s+/).filter((t) => t.length > 2));
-  const contentLower = record.content.toLowerCase();
-  if (queryTokens.size === 0) return 0;
-  let hits = 0;
-  for (const token of queryTokens) if (contentLower.includes(token)) hits++;
-  return hits / queryTokens.size;
-}
-
-function apSymbolToResult(symbol: Record<string, unknown>, score: number): UnifiedSearchResult {
-  const name = typeof symbol["name"] === "string" ? symbol["name"] : "";
-  const kind = typeof symbol["kind"] === "string" ? symbol["kind"] : "";
-  const filePath = typeof symbol["filePath"] === "string" ? symbol["filePath"] : "";
-  return {
-    source: "ap",
-    score: Math.round(score * SCORE_DECIMAL_SHIFT) / SCORE_DECIMAL_SHIFT,
-    content: `${filePath}::${name} [${kind}]`,
-    tags: ["code-symbol", kind].filter(Boolean),
-    heat: 0.0,
-  };
+/**
+ * Tag recall results with a fusion-friendly ``id`` and ``source``, preserving
+ * the retriever's own ordering (the one RRF consumes).
+ * source: cortex@ed33435 unified_search.py:70-82 _prep_memories
+ */
+function prepMemories(
+  results: ReadonlyArray<RecallResult>,
+): Record<string, unknown>[] {
+  const out: Record<string, unknown>[] = [];
+  for (const r of results) {
+    const mid = r.memory_id;
+    if (mid === null || mid === undefined) continue;
+    out.push({ ...r, id: `memory:${mid}`, source: "cortex" });
+  }
+  return out;
 }
 
 /**
- * RRF-fuse Cortex memory recall with AP code symbol search.
+ * Map AP symbols to fusion-friendly records ordered by the AP ranking,
+ * tagging each with ``symbol:<file>::<name>`` ids.
+ * source: cortex@ed33435 unified_search.py:13-15 — AP id convention
+ */
+function prepApHits(symbols: Record<string, unknown>[]): Record<string, unknown>[] {
+  return symbols.map((sym) => {
+    const name = typeof sym["name"] === "string" ? sym["name"] : "";
+    const filePath = typeof sym["filePath"] === "string" ? sym["filePath"] : "";
+    const kind = typeof sym["kind"] === "string" ? sym["kind"] : "";
+    return {
+      ...sym,
+      id: `symbol:${filePath}::${name}`,
+      source: "ap",
+      snippet: `${filePath}::${name} [${kind}]`,
+    };
+  });
+}
+
+/**
+ * Run the AP code-search leg. Returns [] on absence or failure (graceful
+ * degradation — unified_search.py wraps the AP call defensively).
+ * source: cortex@ed33435 unified_search.py:101-104
+ */
+async function searchApLeg(
+  deps: UnifiedSearchDeps,
+  query: string,
+  graphPath: string | undefined,
+  limit: number,
+): Promise<Record<string, unknown>[]> {
+  if (deps.codebasePort === undefined || graphPath === undefined || graphPath.length === 0) {
+    return [];
+  }
+  try {
+    const apInput: SearchCodebaseInput = { graphPath, query, limit };
+    const apResult = await deps.codebasePort.searchCodebase(apInput);
+    return apResult.results as Record<string, unknown>[];
+  } catch {
+    // AP leg failure non-fatal — graceful degradation.
+    // source: cortex@ed33435 unified_search.py — AP call guarded
+    return [];
+  }
+}
+
+/**
+ * RRF-fuse the WRRF cortex recall leg with the AP code-symbol leg.
  *
- * Precondition:  deps.memoryPort is valid; rawArgs passes UnifiedSearchRequestSchema.
+ * Precondition:  deps.recallStore is valid; rawArgs passes the schema.
  * Postcondition:
- *   status = "ok"; results ordered by descending RRF score bounded to max_results.
- *   sources = ranking signal names contributed.
- *   counts.cortex = raw Cortex memories fetched.
- *   counts.ap = raw AP symbols fetched (0 if AP leg inactive).
- *   k = RRF k parameter used.
+ *   status = "ok" when AP leg active, "partial" otherwise.
+ *   results = fused list (≤ max_results), each carrying rrf_score + source_ranks.
+ *   counts.cortex = recall hits; counts.ap = AP hits; counts.fused = result count.
  *
- * source: cortex@ed33435 mcp_server/handlers/unified_search.py — contract lines 58-101
+ * source: cortex@ed33435 mcp_server/handlers/unified_search.py:85-136
  */
 export async function unifiedSearchHandler(
   deps: UnifiedSearchDeps,
   rawArgs: unknown,
 ): Promise<UnifiedSearchResponse> {
   const args: UnifiedSearchRequest = UnifiedSearchRequestSchema.parse(rawArgs ?? {});
-  const { query, domain, max_results, k, graph_path } = args;
-  const { memoryPort, codebasePort } = deps;
+  const { query, domain, max_results: topN, k, graph_path } = args;
 
-  let memories: MemoryRecord[];
-  if (domain) {
-    memories = memoryPort.getMemoriesForDomain(domain, 0.0, MEMORY_FETCH_LIMIT);
-  } else {
-    memories = memoryPort.getHotMemories(HOT_MEMORY_MIN_HEAT, MEMORY_FETCH_LIMIT);
-  }
+  // Cortex leg: ask recall for 2× top_n so the fusion has room.
+  // source: cortex@ed33435 unified_search.py:93-96
+  const recallResp = await recallHandler(
+    {
+      query,
+      domain,
+      max_results: Math.max(topN * RECALL_OVERFETCH_MULTIPLIER, topN),
+      min_heat: UNIFIED_RECALL_MIN_HEAT,
+      // Cortex passes through recall defaults (include_low_signal=False,
+      // include_related=False). source: unified_search.py:94 recall_args
+      include_low_signal: false,
+      include_related: false,
+    },
+    deps.recallStore,
+    deps.embedder,
+    DEFAULT_RECALL_SETTINGS,
+  );
+  const memories = prepMemories(recallResp.results);
 
-  const textScores = memories.map((m, idx): [number, number] => [idx, scoreRecord(query, m)]);
-  const heatScores = memories.map((m, idx): [number, number] => [idx, m.heat]);
-  const textRanked = textScores.sort((a, b) => b[1] - a[1]).map(([id]) => id);
-  const heatRanked = heatScores.sort((a, b) => b[1] - a[1]).map(([id]) => id);
-  const cortexCount = memories.length;
+  // AP leg (optional). is_enabled() ≙ codebasePort present + graph_path given.
+  // source: cortex@ed33435 unified_search.py:99-104
+  const apEnabled = deps.codebasePort !== undefined && graph_path !== undefined && graph_path.length > 0;
+  const apHits = prepApHits(
+    await searchApLeg(deps, query, graph_path, Math.max(topN * AP_LIMIT_MULTIPLIER, topN)),
+  );
+  const sources = apEnabled ? ["cortex", "ap"] : ["cortex"];
 
-  let apSymbols: Record<string, unknown>[] = [];
-  const activeRankLists: [string, number[]][] = [["text", textRanked], ["heat", heatRanked]];
-
-  if (codebasePort !== undefined && graph_path !== undefined && graph_path.length > 0) {
-    try {
-      const apInput: SearchCodebaseInput = { graphPath: graph_path, query, limit: AP_SEARCH_LIMIT };
-      const apResult = await codebasePort.searchCodebase(apInput);
-      apSymbols = apResult.results as Record<string, unknown>[];
-      // source: cortex@ed33435 unified_search.py — ap result offset by cortex_count
-      const apRanked = apSymbols.map((_, i) => cortexCount + i);
-      activeRankLists.push(["ap", apRanked]);
-    } catch {
-      // AP leg failure non-fatal — graceful degradation
-      // source: cortex@ed33435 unified_search.py — ap_client call wrapped in try/except
-    }
-  }
-
-  // source: Cormack, Clarke, Buettcher (2009) SIGIR
-  const fused = rrfFuseIds(activeRankLists, k);
-
-  const results: UnifiedSearchResult[] = fused
-    .slice(0, max_results)
-    .flatMap(([idx, score]): UnifiedSearchResult[] => {
-      if (idx < cortexCount) {
-        const record = memories[idx];
-        if (!record) return [];
-        return [{
-          source: "cortex",
-          score: Math.round(score * SCORE_DECIMAL_SHIFT) / SCORE_DECIMAL_SHIFT,
-          content: record.content,
-          tags: Array.isArray(record.tags) ? record.tags : [],
-          heat: record.heat,
-        }];
-      }
-      const sym = apSymbols[idx - cortexCount];
-      if (!sym) return [];
-      return [apSymbolToResult(sym, score)];
-    });
+  // Fuse (RRF, idKey="id", clip to top_n). source: unified_search.py:106-110
+  const fused = fuse([["cortex", memories], ["ap", apHits]], k, "id", topN);
 
   return {
-    status: "ok",
-    results,
+    status: apEnabled ? "ok" : "partial",
     query,
-    total: results.length,
-    sources: activeRankLists.map(([name]) => name),
-    counts: { cortex: cortexCount, ap: apSymbols.length },
+    sources,
+    counts: { cortex: memories.length, ap: apHits.length, fused: fused.length },
+    results: fused,
     k,
   };
 }

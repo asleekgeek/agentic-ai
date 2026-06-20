@@ -1,3 +1,9 @@
+/* eslint-disable max-lines -- faithful 1:1 port of Cortex
+   mcp_server/handlers/remember_helpers.py (a single large cohesive module in
+   the source). Splitting would diverge from the Cortex structure this file
+   mirrors; a concern-boundary split is tracked for the port-wide cleanup.
+   Precedent: __tests__/remember/sqlite-mixins.test.ts uses the same exception.
+   source: rules/coding-standards.md §11 (justified, documented exception) */
 /**
  * remember-helpers.ts — Gate evaluation, modulation, curation, storage helpers.
  *
@@ -19,6 +25,12 @@
  */
 
 import type { MemoryStore } from "../storage/memory-store.js";
+import {
+  decideCurationAction,
+  computeTextualOverlap,
+  detectContradictions,
+  mergeContents,
+} from "../../consolidation/curation.js";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
@@ -66,14 +78,11 @@ const IMPORTANCE_MEDIUM = 0.5;
 const IMPORTANCE_LONG = 0.6;
 const IMPORTANCE_VERY_LONG = 0.7;
 
-// source: cortex@ed33435 mcp_server/core/curation.py:decide_curation_action — merge/link thresholds
-const CURATION_MERGE_THRESHOLD = 0.92;
-const CURATION_LINK_THRESHOLD = 0.8;
-
-// source: cortex@ed33435 mcp_server/core/curation.py — max recent candidates for curation
+// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:try_curation — store.search_vectors(embedding, top_k=3)
 const CURATION_TOP_K = 3;
-// source: cortex@ed33435 mcp_server/core/curation.py:merge_contents — overlap check prefix length
-const MERGE_OVERLAP_PREFIX = 50;
+// Jaccard word-overlap gate for the merge/supersede branch (decideCurationAction's
+// hasTextualOverlap argument). source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:try_curation — overlap > 0.5
+const CURATION_OVERLAP_THRESHOLD = 0.5;
 
 // source: cortex@ed33435 mcp_server/core/write_gate.py:apply_emotional_tagging — arousal levels
 const EMOTIONAL_AROUSAL_NEGATIVE = 0.8;
@@ -484,55 +493,122 @@ export function estimateImportance(content: string, tags: string[]): number {
   return IMPORTANCE_VERY_LONG;
 }
 
-// ── tryMerge / _doMerge ──────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:try_curation, _do_merge
+// ── tryCurationAsync (MEM-G1: curation-on-write) ──────────────────────────────
+// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:try_curation (341-367)
 
 /**
- * Decide curation action: create, merge, or link.
- *
- * pre:  embedding is null or valid; store is a live MemoryStore.
- * post: returns { action: "create"|"merge"|"link", mergedId: number|null }.
- *       If action=="merge", the candidate memory has been updated in the store.
+ * Minimal embedder port for the write path: encode one text into a float vector.
+ * Structurally compatible with recall/port.ts::EmbeddingEngine.encode so the MCP
+ * composition root can pass the same instance it builds for recall.
+ * source: packages/memory/src/recall/port.ts::EmbeddingEngine
  */
-export function tryCuration(
+export interface WriteEmbedder {
+  encode(text: string): Promise<number[] | null>;
+}
+
+/**
+ * Decision returned by tryCurationAsync.
+ * - "merge": the candidate row has already been updated in the store (side effect).
+ * - "supersede"/"link"/"create": the store is untouched; the handler inserts and,
+ *   for supersede, closes the back-pointer via setSupersededBy.
+ */
+export interface CurationDecision {
+  action: "create" | "merge" | "link" | "supersede";
+  targetId: number | null;
+}
+
+/**
+ * Async curation-on-write — faithful port of Python try_curation.
+ *
+ * Searches the top-k vector neighbors of the new content; for each computes cosine
+ * similarity (1 - pgvector cosine distance) and Jaccard word overlap, then classifies
+ * via decideCurationAction (MERGE=0.85, LINK=0.6). In the merge branch a detected
+ * contradiction (negation mismatch / action divergence) escalates to "supersede"
+ * (retain BOTH rows, linked by supersedes_id/superseded_by_id) instead of the
+ * destructive merge — that is the MEM-G1 behavior the supermemory item-1 added.
+ *
+ * pre:  embedding is null or a valid float buffer; store is a live MemoryStore;
+ *       embedder re-encodes the merged content on a merge; heat is the modulated
+ *       heat (mod.heat) used as the merge-heat floor.
+ * post: "merge" rewrites the candidate's content, embedding and compression flags
+ *       (re-encoded merged text) and bumps its heat to max(cand, heat); other
+ *       actions leave the store intact. Any I/O failure degrades to "create"
+ *       (Python except→create).
+ *
+ * Mirrors Cortex try_curation(content, embedding, force, store, emb_engine, tags, heat).
+ * source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:try_curation (341-367), _do_merge (370-385)
+ * source: cortex@ed33435 mcp_server/core/curation.py:decide_curation_action,detect_contradictions
+ */
+export async function tryCurationAsync(
   content: string,
   embedding: Buffer | null,
   force: boolean,
   store: MemoryStore,
+  embedder: WriteEmbedder | null,
   _tags: string[],
-): { action: string; mergedId: number | null } {
-  if (!embedding || force) return { action: "create", mergedId: null };
+  heat: number,
+): Promise<CurationDecision> {
+  if (!embedding || force) return { action: "create", targetId: null };
+  const storeAny = store as unknown as {
+    searchVectorsAsync?: (buf: Buffer, k: number, threshold: number) => Promise<Array<[number, number]>>;
+    getMemoryAsync?: (id: number) => Promise<ReturnType<MemoryStore["getMemory"]>>;
+    updateMemoryHeatAsync?: (id: number, heat: number) => Promise<void>;
+    // updateMemoryCompression lives on MemoryStoreExt (both concrete stores), not
+    // the narrow MemoryStore port; reach it via the same structural cast.
+    updateMemoryCompression?: (id: number, content: string, emb: Buffer | null, level: number) => void;
+  };
   try {
-    const candidates = store.searchVectors(embedding, CURATION_TOP_K, 0.0);
+    const candidates = storeAny.searchVectorsAsync
+      ? await storeAny.searchVectorsAsync(embedding, CURATION_TOP_K, 0.0)
+      : store.searchVectors(embedding, CURATION_TOP_K, 0.0);
     for (const [candId, dist] of candidates) {
-      const cand = store.getMemory(candId);
+      const cand = storeAny.getMemoryAsync
+        ? await storeAny.getMemoryAsync(candId)
+        : store.getMemory(candId);
       if (!cand?.content) continue;
-      const sim = 1.0 / (1.0 + dist);
-      // Merge threshold: >0.92 cosine similarity
-      // source: cortex@ed33435 mcp_server/core/curation.py:decide_curation_action
-      if (sim > CURATION_MERGE_THRESHOLD) {
-        const merged = mergeTwoContents(cand.content, content);
-        // source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:_do_merge
-        // updateMemoryContent is the TS equivalent of update_memory_compression for merge operations
-        store.updateMemoryContent(candId, merged, cand.tags ?? []);
-        store.updateMemoryHeat(candId, Math.max(cand.heat_base ?? 0, 1.0));
-        return { action: "merge", mergedId: candId };
+      // pgvector cosine distance → cosine similarity.
+      // source: pgvector vector_cosine_ops — distance = 1 - cosine_similarity
+      const sim = 1.0 - dist;
+      const overlap = computeTextualOverlap(content, cand.content);
+      const action = decideCurationAction(sim, overlap > CURATION_OVERLAP_THRESHOLD);
+      if (action === "merge") {
+        // Contradiction → supersede (retain both rows); else faithful merge.
+        // source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:351-362
+        const contradictions = detectContradictions(content, [
+          { id: cand.id, content: cand.content },
+        ]);
+        if (contradictions.length > 0) {
+          return { action: "supersede", targetId: candId };
+        }
+        // Faithful _do_merge: re-encode the merged content and overwrite the
+        // candidate's embedding + compression flags so the stored vector matches
+        // the new text; heat = max(candidate, modulated). Tags are NOT touched
+        // (Cortex _do_merge updates content + embedding + heat only).
+        // source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:370-385 _do_merge
+        const merged = mergeContents(cand.content, content);
+        let mergedEmb: Buffer | null = null;
+        if (embedder) {
+          const vec = await embedder.encode(merged);
+          if (vec && vec.length > 0) mergedEmb = Buffer.from(new Float32Array(vec).buffer);
+        }
+        const compressionLevel = Number(
+          (cand as { compression_level?: number }).compression_level ?? 0,
+        );
+        storeAny.updateMemoryCompression?.(candId, merged, mergedEmb, compressionLevel);
+        const mergedHeat = Math.max(cand.heat_base ?? 0, heat);
+        if (storeAny.updateMemoryHeatAsync) {
+          await storeAny.updateMemoryHeatAsync(candId, mergedHeat);
+        } else {
+          store.updateMemoryHeat(candId, mergedHeat);
+        }
+        return { action: "merge", targetId: candId };
       }
-      if (sim > CURATION_LINK_THRESHOLD) return { action: "link", mergedId: candId };
+      if (action === "link") return { action: "link", targetId: candId };
     }
   } catch {
-    // non-fatal — fall through to create
+    // non-fatal — fall through to create (matches Python except→create)
   }
-  return { action: "create", mergedId: null };
-}
-
-// ── mergeTwoContents ──────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/curation.py:merge_contents
-
-function mergeTwoContents(existing: string, incoming: string): string {
-  if (existing.includes(incoming.slice(0, MERGE_OVERLAP_PREFIX))) return existing;
-  if (incoming.includes(existing.slice(0, MERGE_OVERLAP_PREFIX))) return incoming;
-  return `${existing}\n\nUpdate: ${incoming}`;
+  return { action: "create", targetId: null };
 }
 
 // ── buildInsertRecord ─────────────────────────────────────────────────────

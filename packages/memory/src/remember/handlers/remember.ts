@@ -41,6 +41,25 @@ import {
   tryBlockReplicaUpsert,
   type BlockReplicaStore,
 } from "./block-replica-upsert.js";
+// source: mcp_server/handlers/remember_helpers.py:try_curation — curation-on-write (MEM-G1)
+import {
+  applyModulations,
+  tryCurationAsync,
+  updateUserMoodEma,
+  type CurationDecision,
+  type WriteEmbedder,
+} from "./remember-helpers.js";
+// source: shared/content_hardening.harden_content — ingestion-boundary hardening
+//   (NFC normalize, control/bidi strip, byte cap). remember.py:272-276.
+import { hardenContent } from "../../shared/content-hardening.js";
+// source: handlers/remember.py:200-220 _resolve_domain — git-root/hint/profile resolution.
+import { resolveDomain } from "../domain-resolution.js";
+// source: handlers/remember.py:338-341 detect_global — auto-detect global scope.
+import { detectGlobal } from "../../recall/global-detector.js";
+import type { WriteGateScore } from "../types.js";
+// Re-export so the MCP composition root can type RememberDeps.embedder without
+// reaching into the helpers module directly.
+export type { WriteEmbedder } from "./remember-helpers.js";
 
 // ── Surprisal heat boost ─────────────────────────────────────────────────────
 
@@ -77,6 +96,28 @@ function getRecentContents(store: MemoryStore, domain: string): string[] {
   }
 }
 
+// ── Novelty surfacing ────────────────────────────────────────────────────────
+// Predictive-coding gate signals copied into the response on the store path so
+// it matches Cortex gate output (the rejection path already surfaces these via
+// buildRejectionResponse).
+// source: remember.py:302-314 + remember_helpers.py:223-233 _enrich_mod_with_gate
+
+function noveltyFromScore(score: WriteGateScore): {
+  embedding_novelty: number;
+  entity_novelty: number;
+  temporal_novelty: number;
+  structural_novelty: number;
+  combined_novelty: number;
+} {
+  return {
+    embedding_novelty: score.embeddingNovelty,
+    entity_novelty: score.entityNovelty,
+    temporal_novelty: score.temporalNovelty,
+    structural_novelty: score.structuralNovelty,
+    combined_novelty: score.combinedNovelty,
+  };
+}
+
 // ── Handler ──────────────────────────────────────────────────────────────────
 
 /**
@@ -91,17 +132,22 @@ export function remember(
   // Parse and validate input. Zod throws on invalid input.
   const args: RememberRequest = RememberRequestSchema.parse(rawArgs);
 
-  if (!args.content.trim()) {
+  // Harden user-controlled content at the ingestion boundary (NFC normalize,
+  // control/bidi strip, byte cap); empty-after-harden is rejected.
+  // source: remember.py:272-276
+  const content = hardenContent(args.content);
+  if (!content) {
     return { stored: false, reason: "no_content" };
   }
 
-  const content = args.content.trim();
   const tags = args.tags;
   const force = args.force;
-  const domain = args.domain ?? "";
+  // Resolve the domain (git-root/cwd → hint → profile) instead of taking
+  // args.domain verbatim. source: remember.py:298 _resolve_domain.
+  const domain = resolveDomain(args.directory, args.domain);
   const source = args.source;
   const agentTopic = args.agent_topic;
-  const isGlobal = args.is_global;
+  let isGlobal = args.is_global;
 
   // Baseline heat: live writes default to 1.0; backfill/import paths
   // override via initial_heat to reflect content age (Ebbinghaus curve).
@@ -168,8 +214,8 @@ export function remember(
     return buildRejectionResponse(score, importance);
   }
 
-  const heat = applySurpriseBoost(baselineHeat, score.combinedNovelty);
-  const importance = estimateImportance(content, tags);
+  const baseHeat = applySurpriseBoost(baselineHeat, score.combinedNovelty);
+  const baseImportance = estimateImportance(content, tags);
 
   // Compute emotional valence via full VADER pipeline before insert.
   // source: Hutto CJ & Gilbert E (2014) ICWSM.
@@ -179,14 +225,28 @@ export function remember(
     process.stderr.write(`[vader] emotionalValence=0 for ${content.length}-char memory (id pending)\n`);
   }
 
+  // Apply oscillatory/emotional/thermodynamic modulations, then insert the
+  // modulated heat/importance/valence (not the raw values).
+  // source: remember.py:324-334 apply_modulations
+  const mod = applyModulations(content, tags, baseHeat, baseImportance, emotionalValence);
+  const heat = mod.heat;
+
+  // Auto-detect global when not explicitly set. source: remember.py:338-341
+  let globalReason = "explicit";
+  if (!isGlobal) {
+    const [g, , reason] = detectGlobal(content, tags);
+    isGlobal = g;
+    globalReason = reason;
+  }
+
   const memoryId = store.insertMemory({
     content,
     tags,
     source,
     domain,
     heat,
-    importance,
-    emotional_valence: emotionalValence,
+    importance: mod.importance,
+    emotional_valence: mod.valence,
     surprise_score: score.combinedNovelty,
     store_type: "episodic",
     agent_context: agentTopic,
@@ -208,13 +268,20 @@ export function remember(
     // Entity extraction failures do not abort the write (invariant I3).
   }
 
-  return {
+  // Post-write mood EMA (user-authored content only; self-guards on store).
+  // source: remember.py:398-399 update_user_mood_ema
+  updateUserMoodEma(content, source, store);
+
+  const response: RememberResponse = {
     stored: true,
     action: "stored",
     memory_id: memoryId,
     heat,
     is_global: isGlobal,
+    novelty: noveltyFromScore(score),
   };
+  if (isGlobal) response.global_reason = globalReason;
+  return response;
 }
 
 // ── Async variant (for PgMemoryStore) ───────────────────────────────────────
@@ -231,41 +298,66 @@ export function remember(
 export async function rememberAsync(
   rawArgs: unknown,
   store: MemoryStore,
+  embedder?: WriteEmbedder | null,
 ): Promise<RememberResponse> {
   const args: RememberRequest = RememberRequestSchema.parse(rawArgs);
 
-  if (!args.content.trim()) {
+  // Harden content at the ingestion boundary; empty-after-harden is rejected.
+  // source: remember.py:272-276
+  const content = hardenContent(args.content);
+  if (!content) {
     return { stored: false, reason: "no_content" };
   }
 
-  const content = args.content.trim();
   const tags = args.tags;
   const force = args.force;
-  const domain = args.domain ?? "";
+  // Resolve domain (git-root/cwd → hint → profile). source: remember.py:298.
+  const domain = resolveDomain(args.directory, args.domain);
   const source = args.source;
   const agentTopic = args.agent_topic;
-  const isGlobal = args.is_global;
+  let isGlobal = args.is_global;
 
   const baselineHeat = args.initial_heat !== undefined ? args.initial_heat : 1.0;
 
-  // Vector search: use async variant when available (PG), sync otherwise (SQLite).
-  // Empty buffer → no real embedding; PG correctly returns [] for an empty vector.
-  // searchVectorsAsync is not on the typed MemoryStore interface; accessed via cast.
-  // source: PgMemoryStore.searchVectorsAsync — async pgvector KNN search.
-  // source: engineer fix — *Async-when-available, sync-fallback pattern.
+  // Encode the content ONCE and reuse the embedding for BOTH the predictive-coding
+  // gate (embedding-novelty signal) AND active curation — exactly as Cortex
+  // remember.py:299 computes `embedding = emb_engine.encode(content)` and passes
+  // the same vector to evaluate_gate and try_curation. The embedder is the
+  // process-wide engine wired at the MCP composition root; it is null only for
+  // non-MCP callers / tests, where the write path degrades to no curation —
+  // matching Cortex when encode() yields nothing (remember_helpers.py:41,342).
+  // source: cortex@ed33435 mcp_server/handlers/remember.py:299
+  let embedding: Buffer | null = null;
+  if (embedder) {
+    try {
+      const vec = await embedder.encode(content);
+      if (vec && vec.length > 0) {
+        embedding = Buffer.from(new Float32Array(vec).buffer);
+      }
+    } catch {
+      // Embedding failure must not block the write path; degrade to no curation.
+      embedding = null;
+    }
+  }
+
+  // Gate vector search: use the real query embedding (Cortex compute_similarities:
+  // `if embedding: vec_hits = store.search_vectors(embedding, top_k=5, min_heat=0.0)`).
+  // With no embedder the search is skipped — Cortex likewise yields no neighbours
+  // when embedding is falsy. *Async-when-available (PG), sync fallback (SQLite).
+  // source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:41-42
   const storeAnyVec = store as unknown as {
     searchVectorsAsync?: (buf: Buffer, k: number, threshold: number) => Promise<Array<[number, number]>>;
   };
   let vecHits: Array<[number, number]> = [];
-  try {
-    if (storeAnyVec.searchVectorsAsync) {
-      vecHits = await storeAnyVec.searchVectorsAsync(Buffer.alloc(0), VECTOR_SEARCH_TOP_K, 0.0);
-    } else {
-      vecHits = store.searchVectors(Buffer.alloc(0), VECTOR_SEARCH_TOP_K, 0.0);
+  if (embedding) {
+    try {
+      vecHits = storeAnyVec.searchVectorsAsync
+        ? await storeAnyVec.searchVectorsAsync(embedding, VECTOR_SEARCH_TOP_K, 0.0)
+        : store.searchVectors(embedding, VECTOR_SEARCH_TOP_K, 0.0);
+    } catch {
+      // Vector search failure must not block the write path.
+      vecHits = [];
     }
-  } catch {
-    // Vector search failure must not block the write path.
-    vecHits = [];
   }
 
   const similarities: number[] = [];
@@ -331,8 +423,8 @@ export async function rememberAsync(
     return buildRejectionResponse(score, importance);
   }
 
-  const heat = applySurpriseBoost(baselineHeat, score.combinedNovelty);
-  const importance = estimateImportance(content, tags);
+  const baseHeat = applySurpriseBoost(baselineHeat, score.combinedNovelty);
+  const baseImportance = estimateImportance(content, tags);
 
   // Compute emotional valence via full VADER pipeline before insert.
   // source: Hutto CJ & Gilbert E (2014) ICWSM.
@@ -342,14 +434,27 @@ export async function rememberAsync(
     process.stderr.write(`[vader] emotionalValence=0 for ${content.length}-char memory (id pending)\n`);
   }
 
+  // Apply oscillatory/emotional/thermodynamic modulations; insert the
+  // modulated heat/importance/valence. source: remember.py:324-334.
+  const mod = applyModulations(content, tags, baseHeat, baseImportance, emotionalValenceAsync);
+  const heat = mod.heat;
+
+  // Auto-detect global when not explicitly set. source: remember.py:338-341.
+  let globalReason = "explicit";
+  if (!isGlobal) {
+    const [g, , reason] = detectGlobal(content, tags);
+    isGlobal = g;
+    globalReason = reason;
+  }
+
   const insertData = {
     content,
     tags,
     source,
     domain,
     heat,
-    importance,
-    emotional_valence: emotionalValenceAsync,
+    importance: mod.importance,
+    emotional_valence: mod.valence,
     surprise_score: score.combinedNovelty,
     store_type: "episodic" as const,
     agent_context: agentTopic,
@@ -388,11 +493,87 @@ export async function rememberAsync(
     }
   }
 
+  // ── Curation-on-write (MEM-G1) ─────────────────────────────────────────────
+  // Reuses the single embedding computed above — Cortex passes the same
+  // `embedding` to evaluate_gate and try_curation (remember.py:299,359-361).
+  // try_curation short-circuits to "create" when embedding is falsy or force is
+  // set (remember_helpers.py:342); otherwise it scans the top-3 neighbours and
+  // may merge, link, or — on a contradicting near-duplicate (negation mismatch /
+  // action divergence) — supersede, retaining both rows. Benchmark loaders bypass
+  // remember() (ingestMemoriesBatch), so curation never perturbs LoCoMo /
+  // LongMemEval / BEAM. tryCurationAsync wraps its own try/catch (except→create).
+  // source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:try_curation (341-367)
+  let curation: CurationDecision = { action: "create", targetId: null };
+  if (embedding && !force) {
+    curation = await tryCurationAsync(content, embedding, force, store, embedder ?? null, tags, mod.heat);
+  }
+  if (curation.action === "merge" && curation.targetId !== null) {
+    // Near-duplicate merged into the existing row in-place; no new row inserted.
+    // Mood signal still updates on merge — the user authored the content.
+    // source: remember.py:363-365 update_user_mood_ema on merge.
+    updateUserMoodEma(content, source, store);
+    return {
+      stored: true,
+      action: "merged",
+      memory_id: curation.targetId,
+      merged_with: curation.targetId,
+      heat,
+      is_global: isGlobal,
+    };
+  }
+
+  // Supersede writes the forward edge at insert; the back-pointer is closed below.
+  const insertPayload =
+    curation.action === "supersede" && curation.targetId !== null
+      ? { ...insertData, supersedes_id: curation.targetId }
+      : insertData;
+
   let memoryId: number;
   if (store.insertMemoryAsync) {
-    memoryId = await store.insertMemoryAsync(insertData);
+    memoryId = await store.insertMemoryAsync(insertPayload);
   } else {
-    memoryId = store.insertMemory(insertData);
+    memoryId = store.insertMemory(insertPayload);
+  }
+
+  // Persist the embedding for the freshly inserted row so that subsequent writes'
+  // gate and curation searches can find it as a near-neighbour. Cortex stores the
+  // embedding inside insert_memory (record["embedding"]); the TS stores split it
+  // into a dedicated upsert (PG: UPDATE ... SET embedding; SQLite: memories_vec).
+  // Best-effort: the row is already committed, so a persistence failure only means
+  // this memory won't be a future vector-search candidate.
+  // source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:_build_insert_record (embedding field)
+  // source: cortex@ed33435 mcp_server/infrastructure/pg_store.py:insert_memory (embedding column)
+  if (embedding) {
+    const storeAnyEmb = store as unknown as {
+      upsertEmbedding?: (id: number, emb: Buffer) => void | Promise<void>;
+    };
+    if (typeof storeAnyEmb.upsertEmbedding === "function") {
+      try {
+        await storeAnyEmb.upsertEmbedding(memoryId, embedding);
+      } catch {
+        // Embedding persistence is best-effort; the row is already committed.
+      }
+    }
+  }
+
+  if (curation.action === "supersede" && curation.targetId !== null) {
+    // Phase 2 (MEM-G1): stamp old.superseded_by_id = newId. Async-when-available (PG).
+    // source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:351-362
+    const storeAnySup = store as unknown as {
+      setSupersededByAsync?: (oldId: number, newId: number) => Promise<void>;
+    };
+    try {
+      if (storeAnySup.setSupersededByAsync) {
+        await storeAnySup.setSupersededByAsync(curation.targetId, memoryId);
+      } else {
+        store.setSupersededBy(curation.targetId, memoryId);
+      }
+    } catch {
+      // Back-pointer failure leaves the forward edge intact; logged, not fatal.
+      process.stderr.write(
+        `[remember] setSupersededBy failed (${curation.targetId} -> ${memoryId})\n`,
+      );
+    }
   }
 
   // ── Regex entity upsert (fast path) ────────────────────────────────────────
@@ -463,13 +644,26 @@ export async function rememberAsync(
     }
   })();
 
-  return {
+  // Post-write mood EMA (user-authored content only; self-guards on store).
+  // source: remember.py:398-399 update_user_mood_ema on stored.
+  updateUserMoodEma(content, source, store);
+
+  // action "superseded" (MEM-G1) when curation inserted this row as the successor
+  // of a contradicting near-duplicate; otherwise the normal "stored".
+  // source: cortex@ed33435 mcp_server/handlers/remember_response.py — supersede→"superseded"
+  const response: RememberResponse = {
     stored: true,
-    action: "stored",
+    action: curation.action === "supersede" ? "superseded" : "stored",
     memory_id: memoryId,
     heat,
     is_global: isGlobal,
+    novelty: noveltyFromScore(score),
   };
+  if (isGlobal) response.global_reason = globalReason;
+  if (curation.action === "supersede" && curation.targetId !== null) {
+    response.merged_with = curation.targetId;
+  }
+  return response;
 }
 
 // ── Lightweight entity name extraction ──────────────────────────────────────

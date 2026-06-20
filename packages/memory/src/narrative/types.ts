@@ -17,6 +17,11 @@
 
 import { z } from "zod";
 
+// Neutral importance fallback when a memory row omits importance — matches the
+// Python default used throughout core/narrative.py (mem.get("importance", 0.5)).
+// source: cortex@ed33435 mcp_server/core/thermodynamics.py compute_importance default 0.5
+const DEFAULT_IMPORTANCE = 0.5;
+
 // ── Primitive building blocks ─────────────────────────────────────────────
 
 /**
@@ -25,9 +30,11 @@ import { z } from "zod";
  * the MemoryStore.get_memories_for_directory / get_hot_memories responses.
  */
 export const MemoryRecordSchema = z.object({
+  // source: cortex@ed33435 get_project_story.py:155 — chapter entry carries mem["id"]
+  id: z.number().int().nonnegative().default(0),
   content: z.string(),
   tags: z.union([z.array(z.string()), z.string()]).default([]),
-  importance: z.number().min(0).max(1).default(0.5),
+  importance: z.number().min(0).max(1).default(DEFAULT_IMPORTANCE),
   heat: z.number().min(0).max(1).default(0),
   timestamp: z.string().default(""),
   session_id: z.string().default(""),
@@ -198,7 +205,7 @@ export const SessionEventSchema = z.object({
   id: z.string(),
   type: NarrativeFunctionTypeSchema,
   content: z.string(),
-  importance: z.number().min(0).max(1).default(0.5),
+  importance: z.number().min(0).max(1).default(DEFAULT_IMPORTANCE),
   timestamp: z.string().default(""),
 });
 

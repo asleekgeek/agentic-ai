@@ -32,6 +32,8 @@ function makeMemoryStoreStub(): Record<string, unknown> {
     bumpHeatRaw: (_id: number, _h: number) => {},
     updateMemoryImportance: (_id: number, _i: number) => {},
     updateMemoryContent: (_id: number, _c: string, _t: string[]) => {},
+    // Single atomic anchor write (canonical store contract). source: anchor.py:141-147
+    anchorMemory: (_args: { memoryId: number; content: string; tags: string[]; isGlobal: boolean }) => {},
     updateMemoryMetamemory: (_id: number, _ac: number, _uc: number, _conf: number) => {},
   };
 }

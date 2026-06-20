@@ -72,14 +72,6 @@ export const SCHEMAS: Readonly<Record<string, ToolSchema>> = {
     },
     required: ["session_id"],
   },
-  get_methodology_graph: {
-    properties: { domain: { type: "string" } },
-    required: [],
-  },
-  open_visualization: {
-    properties: { domain: { type: "string" } },
-    required: [],
-  },
   explore_features: {
     properties: {
       mode: { type: "string" },

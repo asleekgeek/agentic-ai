@@ -60,7 +60,13 @@ CREATE TABLE IF NOT EXISTS memories (
     hippocampal_dependency REAL DEFAULT 1.0,
     is_benchmark BOOLEAN DEFAULT FALSE,
     agent_context TEXT DEFAULT '',
-    is_global BOOLEAN DEFAULT FALSE
+    is_global BOOLEAN DEFAULT FALSE,
+    -- Supersession edges (MEM-G1): self-referential nullable FKs. Default NULL
+    -- keeps LoCoMo byte-identical (no edges on benchmark loaders → constant-free
+    -- tier sort collapses to the prior order).
+    -- source: Cortex mcp_server/infrastructure/pg_schema.py — memories.supersedes_id / superseded_by_id columns
+    supersedes_id    INTEGER REFERENCES memories(id) ON DELETE SET NULL,
+    superseded_by_id INTEGER REFERENCES memories(id) ON DELETE SET NULL
 );
 `;
 

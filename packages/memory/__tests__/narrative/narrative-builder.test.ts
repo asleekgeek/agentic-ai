@@ -29,6 +29,7 @@ function makeRecord(
   overrides: Partial<MemoryRecord> & { content: string }
 ): MemoryRecord {
   return {
+    id: 0,
     tags: [],
     importance: 0.5,
     heat: 0,
