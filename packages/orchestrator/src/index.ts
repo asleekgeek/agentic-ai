@@ -127,6 +127,8 @@ export async function runOrchestrator(config: OrchestratorConfig): Promise<void>
 if (process.argv[1] === new URL(import.meta.url).pathname) {
   await runOrchestrator({
     servers: defaultServerConfigs(),
-    model:   "claude-opus-4-5",
+    // source: Anthropic model lineup (skill claude-api, current Opus tier 2026-06):
+    // claude-opus-4-8 is the current most-capable Opus ($5/$25 per MTok, 1M ctx, 128K out).
+    model:   "claude-opus-4-8",
   });
 }
