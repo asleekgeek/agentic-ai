@@ -25,6 +25,8 @@ import {
   computeCoOccurrenceMatrix,
   discoverCausalEdges as _discoverCausalEdgesImpl,
 } from "../causal-graph.js";
+// source: mcp_server/handlers/consolidation/cls.py:39-57 _is_promotion_noise
+import { isPromotionNoise } from "../../remember/tier-model.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
@@ -525,7 +527,13 @@ export async function runClsCycle(
     return { ...EMPTY_CLS_STATS };
   }
 
-  const episodic = await store.getEpisodicMemories(EPISODIC_SAMPLE_CAP);
+  // Fetch candidates then exclude tier noise: auto-captured tool outputs and
+  // block-replica snapshots are not reasoning episodes and must not be
+  // promoted to semantic patterns.
+  // source: mcp_server/handlers/consolidation/cls.py:107-109
+  // contract: zetetic-team-subagents memory/contract.md §8b
+  const _rawEpisodic = await store.getEpisodicMemories(EPISODIC_SAMPLE_CAP);
+  const episodic = _rawEpisodic.filter((m) => !isPromotionNoise(m));
   const existingSemantics = await store.getSemanticMemories(SEMANTICS_SAMPLE_CAP);
 
   if (!episodic.length) {

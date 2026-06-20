@@ -36,6 +36,11 @@ import { computeEmotionalValence, detectEmotions } from "../emotional-tagging.js
 // LLM-based entity extraction via MCP sampling/createMessage — closes the
 // 106k vs 10k memory_entities gap. Fires after insertMemory, best-effort.
 import { extractEntitiesViaLlm } from "../llm-entity-extractor.js";
+// source: mcp_server/handlers/remember_helpers.py:242-328 try_block_replica_upsert
+import {
+  tryBlockReplicaUpsert,
+  type BlockReplicaStore,
+} from "./block-replica-upsert.js";
 
 // ── Surprisal heat boost ─────────────────────────────────────────────────────
 
@@ -351,6 +356,37 @@ export async function rememberAsync(
     is_global: isGlobal,
     created_at: args.created_at,
   };
+
+  // ── Block-replica upsert (§8b) ─────────────────────────────────────────────
+  // Before inserting, check whether this write is a memory-replica block and
+  // whether an existing row with the same vpath: tag already exists in PG.
+  // If so, update that row in-place (preserving heat_base and is_protected)
+  // and return early — no new row, no duplicate archival.
+  // source: mcp_server/handlers/remember_helpers.py:242-328 try_block_replica_upsert
+  // contract: zetetic-team-subagents memory/contract.md §8b
+  const blockReplicaStore = store as unknown as BlockReplicaStore;
+  if (
+    typeof blockReplicaStore.runAsync === "function" &&
+    Array.isArray(tags) &&
+    tags.includes("memory-replica")
+  ) {
+    const [upserted, uid] = await tryBlockReplicaUpsert(
+      content,
+      null,
+      tags,
+      source ?? "",
+      blockReplicaStore,
+    );
+    if (upserted && uid !== null) {
+      return {
+        stored: true,
+        action: "stored",
+        memory_id: uid,
+        heat,
+        is_global: isGlobal,
+      };
+    }
+  }
 
   let memoryId: number;
   if (store.insertMemoryAsync) {

@@ -46,6 +46,8 @@ import {
   fetchHotMemories,
   fetchTeamDecisions,
 } from "./db.js";
+// source: mcp_server/handlers/checkpoint.py:198-214 _is_tier_noise
+import { isTierNoise } from "../remember/tier-model.js";
 import {
   buildColdStartMessage,
   buildContext,
@@ -722,8 +724,17 @@ export async function main(): Promise<void> {
     countPendingMaintenanceSafe(),
   ]);
 
+  // Exclude tier-noise (auto-captured tool output, memory-replica block
+  // snapshots) so they are never injected into the working context — the
+  // two-tier model keeps state in blocks and facts in archival, never both.
+  // source: mcp_server/handlers/checkpoint.py:217-234 _partition_hot_memories
+  // contract: zetetic-team-subagents memory/contract.md §8b
+  const hotMemories = hot.filter(
+    (m) => !isTierNoise(m as unknown as Record<string, unknown>),
+  );
+
   const context = buildContext(
-    anchors, hot, checkpoint, teamDecisions, pendingCurations,
+    anchors, hotMemories, checkpoint, teamDecisions, pendingCurations,
     maintenance.drift, maintenance.coverage,
   );
 
@@ -735,7 +746,7 @@ export async function main(): Promise<void> {
       maintenance.coverage > 0 ? `${maintenance.coverage} coverage gaps` : null,
     ].filter(Boolean).join(" + ");
     log(
-      `Injected ${anchors.length} anchors + ${hot.length} hot memories ` +
+      `Injected ${anchors.length} anchors + ${hotMemories.length} hot memories ` +
         (extra ? `+ ${extra} ` : "") +
         `(total: ${memoryCount})`,
     );
