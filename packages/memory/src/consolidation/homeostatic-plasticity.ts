@@ -61,6 +61,24 @@ const MAX_GLOBAL_EXCITABILITY = 0.9;
 // Hand-tuned engineering heuristic.
 const TARGET_ACTIVE_FRACTION = 0.3;
 
+// Default initial BCM modification threshold. Neutral midpoint of the [0, 1]
+// activity range used as an uninformative initialization before EMA convergence.
+// Engineering heuristic; no paper source. Port of Cortex Python
+// compute_bcm_threshold default (core/homeostatic_plasticity.py).
+const BCM_THRESHOLD_INITIAL = 0.5;
+
+// Excitability threshold above which an engram slot is counted as "active".
+// Midpoint of excitability bounds [MIN_GLOBAL_EXCITABILITY, MAX_GLOBAL_EXCITABILITY].
+// Engineering heuristic; no paper source. Port of Cortex Python
+// compute_excitability_adjustment (core/homeostatic_plasticity.py).
+const ACTIVE_EXCITABILITY_THRESHOLD = 0.5;
+
+// Gain constant for excitability adjustment: adjustment = deviation * gain.
+// Hand-tuned for gentle convergence. Engineering heuristic; no paper source.
+// Port of Cortex Python compute_excitability_adjustment gain 0.1
+// (core/homeostatic_plasticity.py, line 207: return deviation * 0.1).
+const EXCITABILITY_ADJUSTMENT_GAIN = 0.1;
+
 // Sigma multiplier for hot-cohort detection.
 // // source: Wilcox (2012) sigma rule for non-Gaussian outlier identification.
 // 0.5 comfortably separates the upper peak even when the two peaks have
@@ -121,7 +139,7 @@ export function applySynapticScaling(
  */
 export function computeBcmThreshold(
   recentActivityLevels: readonly number[],
-  currentThreshold = 0.5,
+  currentThreshold = BCM_THRESHOLD_INITIAL,
   decay = BCM_THETA_DECAY,
 ): number {
   if (recentActivityLevels.length === 0) return currentThreshold;
@@ -178,11 +196,11 @@ export function computeExcitabilityAdjustment(
   } = {},
 ): number {
   if (excitabilities.length === 0) return 0.0;
-  const { targetActiveFraction = TARGET_ACTIVE_FRACTION, activeThreshold = 0.5 } = opts;
+  const { targetActiveFraction = TARGET_ACTIVE_FRACTION, activeThreshold = ACTIVE_EXCITABILITY_THRESHOLD } = opts;
   const activeCount = excitabilities.filter((e) => e >= activeThreshold).length;
   const currentFraction = activeCount / excitabilities.length;
   const deviation = targetActiveFraction - currentFraction;
-  return deviation * 0.1;
+  return deviation * EXCITABILITY_ADJUSTMENT_GAIN;
 }
 
 /**

@@ -22,6 +22,27 @@ import { applyHebbianUpdate, type Edge } from "../synaptic-plasticity-hebbian.js
 // ~25M ops on darval's store size.
 const CO_ACCESS_SAMPLE_CAP = 2000;
 
+// Minimum heat for a memory to be included in the co-access sample.
+// source: port of handlers/consolidation/plasticity.py:L97-L98; default-limit-sentinel-epsilon, no paper.
+const CO_ACCESS_MIN_HEAT = 0.1;
+
+// Default heat for an entity when the heat field is absent.
+// source: port of handlers/consolidation/plasticity.py:L113; default-limit-sentinel-epsilon, no paper.
+const ENTITY_HEAT_DEFAULT = 0.5;
+
+// Scaling factor applied to access_count when computing entity activity:
+//   activity = min(1.0, heat + access_count * ACCESS_COUNT_SCALE).
+// source: port of handlers/consolidation/plasticity.py:L115; true-hand-tuned, no paper.
+const ACCESS_COUNT_SCALE = 0.01;
+
+// BCM threshold base: threshold = THRESHOLD_BASE + heat * THRESHOLD_HEAT_SCALE.
+// source: port of handlers/consolidation/plasticity.py:L116; true-hand-tuned, no paper.
+const THRESHOLD_BASE = 0.3;
+
+// BCM threshold heat multiplier (see THRESHOLD_BASE comment).
+// source: port of handlers/consolidation/plasticity.py:L116; true-hand-tuned, no paper.
+const THRESHOLD_HEAT_SCALE = 0.4;
+
 // ── Store interface ───────────────────────────────────────────────────────────
 
 export interface PlasticityStore {
@@ -59,10 +80,10 @@ async function selectCoAccessSample(
   memories: readonly Record<string, unknown>[] | null,
 ): Promise<Record<string, unknown>[]> {
   if (memories === null) {
-    return store.getHotMemories({ minHeat: 0.1, limit: CO_ACCESS_SAMPLE_CAP });
+    return store.getHotMemories({ minHeat: CO_ACCESS_MIN_HEAT, limit: CO_ACCESS_SAMPLE_CAP });
   }
   const hot = memories.filter(
-    (m) => ((m["heat"] as number | undefined) ?? 0.0) >= 0.1,
+    (m) => ((m["heat"] as number | undefined) ?? 0.0) >= CO_ACCESS_MIN_HEAT,
   );
   if (hot.length <= CO_ACCESS_SAMPLE_CAP) return hot as Record<string, unknown>[];
   const sorted = [...hot].sort(
@@ -86,10 +107,10 @@ function buildEntityMaps(
   const thresholds = new Map<number, number>();
   for (const ent of entities) {
     const eid = ent["id"] as number;
-    const heat = (ent["heat"] as number | undefined) ?? 0.5;
+    const heat = (ent["heat"] as number | undefined) ?? ENTITY_HEAT_DEFAULT;
     const access = (ent["access_count"] as number | undefined) ?? 0;
-    activities.set(eid, Math.min(1.0, heat + access * 0.01));
-    thresholds.set(eid, 0.3 + heat * 0.4);
+    activities.set(eid, Math.min(1.0, heat + access * ACCESS_COUNT_SCALE));
+    thresholds.set(eid, THRESHOLD_BASE + heat * THRESHOLD_HEAT_SCALE);
   }
   return [activities, thresholds];
 }

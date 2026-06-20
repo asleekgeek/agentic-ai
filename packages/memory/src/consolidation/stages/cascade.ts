@@ -24,6 +24,24 @@ const ADVANCEABLE_STAGES = ["labile", "early_ltp", "late_ltp", "reconsolidating"
 const HEARTBEAT_SKIP_HOURS = 1.0;
 const TRANSITION_PREVIEW_CAP = 50;
 
+// source: unit identity: 1 hour = 3 600 s × 1 000 ms/s; JS Date.getTime() returns ms.
+// Python equivalent uses `delta.total_seconds() / 3600.0` (handlers/consolidation/cascade.py).
+const MS_PER_HOUR = 3_600_000;
+
+// source: operational tuning — per-stage scan limit, same as Python `limit=500`
+// (handlers/consolidation/cascade.py, run_cascade_advancement). issue #13.
+const MEMORIES_PER_STAGE_LIMIT = 500;
+
+// source: default importance midpoint mirroring Python `mem.get("importance", 0.5)`
+// (handlers/consolidation/cascade.py, _try_advance). Neutral encoding signal.
+const DEFAULT_IMPORTANCE = 0.5;
+
+// Rounding precision: round hours values to 2 decimal places before storing.
+// JS has no built-in round(x, n) so the idiom is Math.round(x * 10^n) / 10^n;
+// 100 = 10^2 (n=2 decimal places). Port of Python `round(x, 2)` in
+// handlers/consolidation/cascade.py:L153,L163,L179. Arithmetic identity; no paper.
+const ROUND_TO_2DP_FACTOR = 100;
+
 const MIN_DWELL: Record<string, number> = {
   labile: 1.0,
   early_ltp: 6.0,
@@ -74,7 +92,7 @@ function computeRealHours(mem: Record<string, unknown>, now: Date): number {
     const dt =
       typeof stageEntered === "string" ? new Date(stageEntered) : (stageEntered as Date);
     if (!isNaN(dt.getTime())) {
-      return Math.max(0.0, (now.getTime() - dt.getTime()) / 3_600_000);
+      return Math.max(0.0, (now.getTime() - dt.getTime()) / MS_PER_HOUR);
     }
   }
 
@@ -83,7 +101,7 @@ function computeRealHours(mem: Record<string, unknown>, now: Date): number {
   if (created) {
     const dt = typeof created === "string" ? new Date(created) : (created as Date);
     if (!isNaN(dt.getTime())) {
-      return Math.max(0.0, (now.getTime() - dt.getTime()) / 3_600_000);
+      return Math.max(0.0, (now.getTime() - dt.getTime()) / MS_PER_HOUR);
     }
     // parse failed — fall through to stored value
   }
@@ -117,7 +135,7 @@ async function tryAdvance(
     dopamineLevel: 1.0,
     replayCount: (mem["replay_count"] as number | undefined) ?? 0,
     schemaMatch: (mem["schema_match_score"] as number | undefined) ?? 0.0,
-    importance: (mem["importance"] as number | undefined) ?? 0.5,
+    importance: (mem["importance"] as number | undefined) ?? DEFAULT_IMPORTANCE,
   }) as AdvancementReadinessResult;
 
   if (ready && nextStage !== stageName) {
@@ -126,12 +144,12 @@ async function tryAdvance(
     // they would have spent in the previous stage (min_dwell hours).
     const dwell = MIN_DWELL[stageName] ?? 1.0;
     const remainingHours = Math.max(0.0, hours - dwell);
-    const newEntered = new Date(now.getTime() - remainingHours * 3_600_000);
+    const newEntered = new Date(now.getTime() - remainingHours * MS_PER_HOUR);
 
     await store.updateMemoryConsolidation(
       mem["id"] as number,
       nextStage,
-      Math.round(remainingHours * 100) / 100,
+      Math.round(remainingHours * ROUND_TO_2DP_FACTOR) / ROUND_TO_2DP_FACTOR,
       (mem["replay_count"] as number | undefined) ?? 0,
       (mem["hippocampal_dependency"] as number | undefined) ?? 1.0,
     );
@@ -142,7 +160,7 @@ async function tryAdvance(
         memory_id: mem["id"],
         from_stage: stageName,
         to_stage: nextStage,
-        hours_in_prev: Math.round(hours * 100) / 100,
+        hours_in_prev: Math.round(hours * ROUND_TO_2DP_FACTOR) / ROUND_TO_2DP_FACTOR,
       },
       "transition",
     ];
@@ -160,7 +178,7 @@ async function tryAdvance(
   await store.updateMemoryConsolidation(
     mem["id"] as number,
     stageName,
-    Math.round(hours * 100) / 100,
+    Math.round(hours * ROUND_TO_2DP_FACTOR) / ROUND_TO_2DP_FACTOR,
     (mem["replay_count"] as number | undefined) ?? 0,
     (mem["hippocampal_dependency"] as number | undefined) ?? 1.0,
   );
@@ -207,7 +225,7 @@ export async function runCascadeAdvancement(store: CascadeStore): Promise<Cascad
     const now = new Date();
 
     for (const stageName of ADVANCEABLE_STAGES) {
-      const memories = await store.getMemoriesByStage(stageName, 500);
+      const memories = await store.getMemoriesByStage(stageName, MEMORIES_PER_STAGE_LIMIT);
       scanned += memories.length;
 
       for (const mem of memories) {

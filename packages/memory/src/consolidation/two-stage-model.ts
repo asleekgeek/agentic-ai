@@ -52,6 +52,64 @@ const SCHEMA_ACCELERATION = 2.5;
 // Engineering choice: minimum replays before transfer begins. No direct paper source.
 const MIN_REPLAYS_FOR_TRANSFER = 2;
 
+// ── Derived / shared numeric constants ────────────────────────────────────────
+
+// Engineering choice: dependency > 0.7 → primarily hippocampal; no specific
+// paper threshold; mirrors Python two_stage_model.py classify_memory_store.
+const HIPPOCAMPAL_STORE_THRESHOLD = 0.7;
+
+// Engineering choice: heat must be below this to allow trace release.
+// Mirrors Python two_stage_model.py should_release_hippocampal_trace.
+const RELEASE_HEAT_THRESHOLD = 0.3;
+
+// Engineering choice: sigmoid steepness for hippocampal pressure curve.
+// Mirrors Python two_stage_model.py compute_hippocampal_pressure.
+const PRESSURE_SIGMOID_STEEPNESS = -8.0;
+
+// Engineering choice: sigmoid midpoint (ratio at which pressure = 0.5).
+// Mirrors Python two_stage_model.py compute_hippocampal_pressure.
+const PRESSURE_SIGMOID_MIDPOINT = 0.7;
+
+// Engineering choice: importance factor baseline and scale in transfer delta.
+// importance_factor = IMPORTANCE_FACTOR_BASE + importance * IMPORTANCE_FACTOR_SCALE.
+// Mirrors Python two_stage_transfer.py compute_transfer_delta.
+const IMPORTANCE_FACTOR_BASE = 0.8;
+const IMPORTANCE_FACTOR_SCALE = 0.4;
+
+// Default parameter values — engineering choices, no paper source.
+// Mirrors Python two_stage_transfer.py and two_stage_model.py defaults.
+const DEFAULT_IMPORTANCE = 0.5;
+const DEFAULT_HEAT = 0.5;
+const DEFAULT_HOURS_SINCE_CREATION = 24.0;
+const DEFAULT_MAX_REPLAY_CANDIDATES = 10;
+
+// Rounding precision: 4 decimal places (× 10000 then ÷ 10000).
+// Mirrors Python round(..., 4) used throughout two_stage_model.py.
+const ROUNDING_PRECISION = 10000;
+
+// Engineering choice: quadratic coefficient for the sweet-spot priority curve.
+// priority = 1.0 - SWEET_SPOT_COEFF * (dep - SWEET_SPOT_CENTER)^2.
+// Mirrors Python two_stage_model.py _dependency_sweet_spot.
+const SWEET_SPOT_COEFF = 4.0;
+const SWEET_SPOT_CENTER = 0.5;
+
+// 168 hours = 7 days × 24 hours/day. Used to normalise age to [0, 1] over one week.
+// Mirrors Python two_stage_model.py compute_consolidation_priority.
+// source: engineering choice; 7-day window from two_stage_model.py (Python source of truth).
+const HOURS_PER_WEEK = 168.0;
+
+// Priority weights for consolidation scoring (must sum to 1.0).
+// Engineering choices; no direct paper source. Mirrors Python two_stage_model.py.
+const PRIORITY_WEIGHT_IMPORTANCE = 0.30;
+const PRIORITY_WEIGHT_DEP = 0.25;
+const PRIORITY_WEIGHT_AGE = 0.20;
+const PRIORITY_WEIGHT_SCHEMA = 0.15;
+const PRIORITY_WEIGHT_HEAT = 0.10;
+
+// Schema boost scale: schema_boost = schema_match * SCHEMA_BOOST_SCALE.
+// Engineering choice. Mirrors Python two_stage_model.py compute_consolidation_priority.
+const SCHEMA_BOOST_SCALE = 0.3;
+
 // ── Store Classification ──────────────────────────────────────────────────────
 
 export type MemoryStore = "hippocampal" | "transitional" | "cortical";
@@ -64,7 +122,7 @@ export function classifyMemoryStore(
   hippocampalDependency: number,
   _consolidationStage: string,
 ): MemoryStore {
-  if (hippocampalDependency > 0.7) return "hippocampal";
+  if (hippocampalDependency > HIPPOCAMPAL_STORE_THRESHOLD) return "hippocampal";
   if (hippocampalDependency > CORTICAL_INDEPENDENCE_THRESHOLD) return "transitional";
   return "cortical";
 }
@@ -85,7 +143,7 @@ export function shouldReleaseHippocampalTrace(
   return (
     hippocampalDependency <= HIPPOCAMPAL_RELEASE_THRESHOLD &&
     consolidationStage === "consolidated" &&
-    heat < 0.3
+    heat < RELEASE_HEAT_THRESHOLD
   );
 }
 
@@ -106,7 +164,7 @@ export function computeHippocampalPressure(
 ): number {
   if (capacity <= 0) return 1.0;
   const ratio = activeHippocampalCount / capacity;
-  return 1.0 / (1.0 + Math.exp(-8.0 * (ratio - 0.7)));
+  return 1.0 / (1.0 + Math.exp(PRESSURE_SIGMOID_STEEPNESS * (ratio - PRESSURE_SIGMOID_MIDPOINT)));
 }
 
 // ── Transfer Computation ──────────────────────────────────────────────────────
@@ -135,7 +193,7 @@ export function computeTransferDelta(
   currentDependency: number,
   replayCount: number,
   schemaMatch = 0.0,
-  importance = 0.5,
+  importance = DEFAULT_IMPORTANCE,
   opts: {
     transferRate?: number;
     schemaAcceleration?: number;
@@ -153,7 +211,7 @@ export function computeTransferDelta(
 
   const base = computeBaseRate(replayCount, minReplays, transferRate);
   const schemaFactor = 1.0 + schemaMatch * (schemaAcceleration - 1.0);
-  const importanceFactor = 0.8 + importance * 0.4;
+  const importanceFactor = IMPORTANCE_FACTOR_BASE + importance * IMPORTANCE_FACTOR_SCALE;
 
   const delta = base * schemaFactor * importanceFactor;
   return Math.min(delta, currentDependency);
@@ -167,16 +225,16 @@ export function updateHippocampalDependency(
   currentDependency: number,
   replayCount: number,
   schemaMatch = 0.0,
-  importance = 0.5,
+  importance = DEFAULT_IMPORTANCE,
 ): number {
   const delta = computeTransferDelta(currentDependency, replayCount, schemaMatch, importance);
-  return Math.max(0.0, Math.round((currentDependency - delta) * 10000) / 10000);
+  return Math.max(0.0, Math.round((currentDependency - delta) * ROUNDING_PRECISION) / ROUNDING_PRECISION);
 }
 
 // ── Consolidation Priority ────────────────────────────────────────────────────
 
 function dependencySweetSpot(hippocampalDependency: number): number {
-  const priority = 1.0 - 4.0 * Math.pow(hippocampalDependency - 0.5, 2);
+  const priority = 1.0 - SWEET_SPOT_COEFF * Math.pow(hippocampalDependency - SWEET_SPOT_CENTER, 2);
   return Math.max(0.0, priority);
 }
 
@@ -195,17 +253,17 @@ export function computeConsolidationPriority(
   hoursSinceCreation: number,
 ): number {
   const depPriority = dependencySweetSpot(hippocampalDependency);
-  const ageFactor = Math.min(hoursSinceCreation / 168.0, 1.0);
-  const schemaBoost = schemaMatch * 0.3;
+  const ageFactor = Math.min(hoursSinceCreation / HOURS_PER_WEEK, 1.0);
+  const schemaBoost = schemaMatch * SCHEMA_BOOST_SCALE;
 
   const priority =
-    importance * 0.30 +
-    depPriority * 0.25 +
-    ageFactor * 0.20 +
-    schemaBoost * 0.15 +
-    heat * 0.10;
+    importance * PRIORITY_WEIGHT_IMPORTANCE +
+    depPriority * PRIORITY_WEIGHT_DEP +
+    ageFactor * PRIORITY_WEIGHT_AGE +
+    schemaBoost * PRIORITY_WEIGHT_SCHEMA +
+    heat * PRIORITY_WEIGHT_HEAT;
 
-  return Math.round(Math.max(0.0, Math.min(1.0, priority)) * 10000) / 10000;
+  return Math.round(Math.max(0.0, Math.min(1.0, priority)) * ROUNDING_PRECISION) / ROUNDING_PRECISION;
 }
 
 // ── Replay Sequence Selection ─────────────────────────────────────────────────
@@ -221,10 +279,10 @@ function scoreReplayCandidate(
 
   const priority = computeConsolidationPriority(
     dep,
-    (mem["importance"] as number | undefined) ?? 0.5,
-    (mem["heat"] as number | undefined) ?? 0.5,
+    (mem["importance"] as number | undefined) ?? DEFAULT_IMPORTANCE,
+    (mem["heat"] as number | undefined) ?? DEFAULT_HEAT,
     (mem["schema_match_score"] as number | undefined) ?? 0.0,
-    (mem["hours_since_creation"] as number | undefined) ?? 24.0,
+    (mem["hours_since_creation"] as number | undefined) ?? DEFAULT_HOURS_SINCE_CREATION,
   );
 
   return { ...mem, replay_priority: priority };
@@ -237,7 +295,7 @@ function scoreReplayCandidate(
  */
 export function selectReplayCandidates(
   memories: readonly Record<string, unknown>[],
-  maxCandidates = 10,
+  maxCandidates = DEFAULT_MAX_REPLAY_CANDIDATES,
 ): Array<Record<string, unknown> & { replay_priority: number }> {
   const candidates: Array<Record<string, unknown> & { replay_priority: number }> = [];
   for (const mem of memories) {
@@ -332,7 +390,7 @@ export function computeTransferMetrics(memories: readonly Record<string, unknown
     hippocampal: stores.filter((s) => s === "hippocampal").length,
     transitional: stores.filter((s) => s === "transitional").length,
     cortical: corticalCount,
-    avgDependency: Math.round(avgDep * 10000) / 10000,
-    transferProgress: Math.round(progress * 10000) / 10000,
+    avgDependency: Math.round(avgDep * ROUNDING_PRECISION) / ROUNDING_PRECISION,
+    transferProgress: Math.round(progress * ROUNDING_PRECISION) / ROUNDING_PRECISION,
   };
 }

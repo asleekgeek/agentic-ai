@@ -77,15 +77,56 @@ function bufferItemToDict(item: BufferItem): Record<string, unknown> {
 // and compute_valence. We provide a local implementation derived from the
 // same heuristics used in the TS port of thermodynamics.
 
+// Importance heuristic bump weights.
+// source: cortex@ed33435 mcp_server/core/thermodynamics.py — importance heuristics
+// (local TS approximation; Python uses full Edmundson 1969 JACM 16(2):264-285 scoring)
+const IMPORTANCE_BASE_SCORE = 0.5;
+const IMPORTANCE_BUMP_ERROR = 0.2;    // error/crash/critical keywords
+const IMPORTANCE_BUMP_DECISION = 0.15; // decided/decision/crucial keywords
+const IMPORTANCE_BUMP_RESOLVED = 0.1;  // fixed/resolved/done keywords
+const IMPORTANCE_BUMP_TAG = 0.2;       // "important" or "critical" tag present
+
+// Valence heuristic adjustment weights.
+// source: cortex@ed33435 mcp_server/core/thermodynamics.py — valence heuristics
+// (local TS approximation; Python delegates to VADER: Hutto & Gilbert 2014, ICWSM)
+const VALENCE_NEGATIVE_BUMP = 0.3;    // error/fail/broken/crash keywords
+const VALENCE_POSITIVE_BUMP = 0.3;    // success/fixed/done/good keywords
+
+// Rounding precision: 4 decimal places, matching Python round(x, 4).
+// source: cortex@ed33435 mcp_server/core/sensory_buffer.py — push(), stats()
+const ROUND_PRECISION = 1e4;
+
+// Default buffer capacity and urgency threshold.
+// source: cortex@ed33435 mcp_server/core/sensory_buffer.py:76-77
+//   capacity: int = 50
+//   importance_threshold: float = 0.7
+const DEFAULT_CAPACITY = 50;
+const DEFAULT_IMPORTANCE_THRESHOLD = 0.7;
+
+// Default peek window.
+// source: cortex@ed33435 mcp_server/core/sensory_buffer.py:130 — peek(self, n: int = 5)
+const DEFAULT_PEEK_N = 5;
+
+// peekImportant threshold multiplier (fraction of importanceThreshold used when
+// no explicit threshold is supplied).
+// source: cortex@ed33435 mcp_server/core/sensory_buffer.py:138
+//   thresh = self._importance_threshold * 0.8
+const PEEK_IMPORTANT_THRESHOLD_FACTOR = 0.8;
+
+// fill_pct rounding: round(x * 100, 1) === Math.round(x * 100 * 10) / 10
+// source: cortex@ed33435 mcp_server/core/sensory_buffer.py:210 — round(..., 1)
+const FILL_PCT_SCALE = 100;
+const FILL_PCT_ROUND_FACTOR = 10;
+
 function computeImportanceHeuristic(content: string, tags: string[]): number {
   // source: cortex@ed33435 mcp_server/core/thermodynamics.py — importance heuristics
-  let score = 0.5;
+  let score = IMPORTANCE_BASE_SCORE;
   const lower = content.toLowerCase();
-  if (/\b(error|exception|crash|fatal|fail(ed|ure)?|critical)\b/.test(lower)) score = Math.min(1.0, score + 0.2);
-  if (/\b(decided|decision|important|key|crucial)\b/.test(lower)) score = Math.min(1.0, score + 0.15);
-  if (/\b(fixed|resolved|completed|done)\b/.test(lower)) score = Math.min(1.0, score + 0.1);
+  if (/\b(error|exception|crash|fatal|fail(ed|ure)?|critical)\b/.test(lower)) score = Math.min(1.0, score + IMPORTANCE_BUMP_ERROR);
+  if (/\b(decided|decision|important|key|crucial)\b/.test(lower)) score = Math.min(1.0, score + IMPORTANCE_BUMP_DECISION);
+  if (/\b(fixed|resolved|completed|done)\b/.test(lower)) score = Math.min(1.0, score + IMPORTANCE_BUMP_RESOLVED);
   const tagSet = new Set(tags.map((t) => t.toLowerCase()));
-  if (tagSet.has("important") || tagSet.has("critical")) score = Math.min(1.0, score + 0.2);
+  if (tagSet.has("important") || tagSet.has("critical")) score = Math.min(1.0, score + IMPORTANCE_BUMP_TAG);
   return score;
 }
 
@@ -93,8 +134,8 @@ function computeValenceHeuristic(content: string): number {
   // source: cortex@ed33435 mcp_server/core/thermodynamics.py — valence heuristics
   const lower = content.toLowerCase();
   let v = 0.0;
-  if (/\b(error|fail|broken|wrong|bug|crash)\b/.test(lower)) v -= 0.3;
-  if (/\b(success|fixed|done|complete|great|good)\b/.test(lower)) v += 0.3;
+  if (/\b(error|fail|broken|wrong|bug|crash)\b/.test(lower)) v -= VALENCE_NEGATIVE_BUMP;
+  if (/\b(success|fixed|done|complete|great|good)\b/.test(lower)) v += VALENCE_POSITIVE_BUMP;
   return Math.max(-1.0, Math.min(1.0, v));
 }
 
@@ -131,7 +172,7 @@ export class SensoryBuffer {
    *   capacity default = 50
    *   importance_threshold default = 0.7
    */
-  constructor(capacity = 50, importanceThreshold = 0.7) {
+  constructor(capacity = DEFAULT_CAPACITY, importanceThreshold = DEFAULT_IMPORTANCE_THRESHOLD) {
     this._capacity = capacity;
     this._importanceThreshold = importanceThreshold;
     this._buffer = [];
@@ -188,8 +229,8 @@ export class SensoryBuffer {
     return {
       buffered: !isUrgent,
       isUrgent,
-      importance: Math.round(importance * 1e4) / 1e4,
-      valence: Math.round(valence * 1e4) / 1e4,
+      importance: Math.round(importance * ROUND_PRECISION) / ROUND_PRECISION,
+      valence: Math.round(valence * ROUND_PRECISION) / ROUND_PRECISION,
       bufferSize: this._buffer.length,
       item: isUrgent ? bufferItemToDict(item) : null,
     };
@@ -205,7 +246,7 @@ export class SensoryBuffer {
    *
    * source: cortex@ed33435 mcp_server/core/sensory_buffer.py:130-133
    */
-  peek(n = 5): BufferItem[] {
+  peek(n = DEFAULT_PEEK_N): BufferItem[] {
     return this._buffer.slice(-n);
   }
 
@@ -218,7 +259,7 @@ export class SensoryBuffer {
    * source: cortex@ed33435 mcp_server/core/sensory_buffer.py:135-140
    */
   peekImportant(threshold: number | null = null): BufferItem[] {
-    const thresh = threshold !== null ? threshold : this._importanceThreshold * 0.8;
+    const thresh = threshold !== null ? threshold : this._importanceThreshold * PEEK_IMPORTANT_THRESHOLD_FACTOR;
     return this._buffer.filter((item) => item.importance >= thresh);
   }
 
@@ -305,10 +346,10 @@ export class SensoryBuffer {
       size: items.length,
       capacity: this._capacity,
       fill_pct: this._capacity > 0
-        ? Math.round((items.length / this._capacity) * 100 * 10) / 10
+        ? Math.round((items.length / this._capacity) * FILL_PCT_SCALE * FILL_PCT_ROUND_FACTOR) / FILL_PCT_ROUND_FACTOR
         : 0,
-      avg_importance: Math.round(avgImportance * 1e4) / 1e4,
-      max_importance: Math.round(maxImportance * 1e4) / 1e4,
+      avg_importance: Math.round(avgImportance * ROUND_PRECISION) / ROUND_PRECISION,
+      max_importance: Math.round(maxImportance * ROUND_PRECISION) / ROUND_PRECISION,
       displaced_pending: this._displaced.length,
       sources,
     };
@@ -333,8 +374,8 @@ let _globalBuffer: SensoryBuffer | null = null;
  * source: cortex@ed33435 mcp_server/core/sensory_buffer.py:229-239
  */
 export function getGlobalBuffer(
-  capacity = 50,
-  importanceThreshold = 0.7,
+  capacity = DEFAULT_CAPACITY,
+  importanceThreshold = DEFAULT_IMPORTANCE_THRESHOLD,
 ): SensoryBuffer {
   if (_globalBuffer === null) {
     _globalBuffer = new SensoryBuffer(capacity, importanceThreshold);

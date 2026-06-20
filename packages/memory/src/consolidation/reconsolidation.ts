@@ -24,17 +24,92 @@
 
 import * as nodePath from "node:path";
 
+// ── Constants ─────────────────────────────────────────────────────────────────
+
+// Temporal distance
+// source: mathematical constant — milliseconds per hour
+const MS_PER_HOUR = 3_600_000;
+// source: mathematical constant — hours in one week (temporal normalization window)
+const HOURS_PER_WEEK = 168.0;
+// source: engineering default — neutral fallback when timestamp is absent or invalid
+const TEMPORAL_DISTANCE_FALLBACK = 0.5;
+
+// Mismatch signal weights (must sum to 1.0)
+// source: port of mcp_server/core/reconsolidation.py — hand-set composition weights.
+//         Cortex attributes Osan-Tort-Amaral (2011) only to the mismatch THRESHOLDS
+//         (below), not to these weights; no paper source for the weight split.
+const MISMATCH_WEIGHT_EMBEDDING = 0.5;
+const MISMATCH_WEIGHT_DIRECTORY = 0.2;
+const MISMATCH_WEIGHT_TEMPORAL = 0.15;
+const MISMATCH_WEIGHT_TAG = 0.15;
+
+// Directory distance — sibling-directory partial mismatch
+// source: engineering default — 0.0 same dir, 0.5 sibling, 1.0 unrelated
+const DIR_DISTANCE_SIBLING = 0.5;
+
+// Reconsolidation thresholds (default values when caller does not override)
+// source: Osan-Tort-Amaral (PLoS ONE, 2011) — low/high threshold values for
+//         the three-outcome reconsolidation regime (none / update / archive)
+const DEFAULT_LOW_THRESHOLD = 0.15;
+const DEFAULT_HIGH_THRESHOLD = 0.65;
+
+// Prediction error gate stability dampening coefficient
+// source: Lee (Trends Neurosci, 2009) — PE gate: PE = mismatch * (1 - stability * 0.5)
+const PE_GATE_STABILITY_COEFF = 0.5;
+
+// Age-dependent threshold parameters
+// source: Milekic & Alberini (2002) — older memories require larger prediction error
+//         to destabilize; normalization window and age-factor scale from Python port
+const AGE_NORMALIZATION_DAYS = 30.0;
+const AGE_FACTOR_SCALE = 0.15;
+
+// Stability modulation of effective thresholds
+// source: engineering default — calibration pending (see docs/provenance/blend-weight-calibration.md)
+const STABILITY_LOW_COEFF = 0.2;
+const STABILITY_HIGH_COEFF = 0.1;
+
+// Plasticity susceptibility threshold and adjustment
+// source: engineering default — calibration pending (see docs/provenance/blend-weight-calibration.md)
+const PLASTICITY_SUSCEPTIBILITY_THRESHOLD = 0.5;
+const PLASTICITY_THRESHOLD_ADJUSTMENT = 0.1;
+
+// Emotional arousal cap and strength-delta gain
+// source: Yonelinas & Ritchey (2015) — decay ratio b_neutral/b_emotional = 2.0,
+//         arousal capped at 0.8 yields up to 1.8x multiplier; gain 0.1 from Python port
+const EMOTIONAL_AROUSAL_CAP = 0.8;
+const STRENGTH_DELTA_GAIN = 0.1;
+
+// Strength delta on archive (extinction regime)
+// source: engineering default — calibration pending (see docs/provenance/blend-weight-calibration.md)
+const ARCHIVE_STRENGTH_DELTA = -0.2;
+
+// Content merge lengths
+// source: engineering default — max merged length and prefix/suffix window for truncation
+const MERGE_MAX_DEFAULT_LENGTH = 2000;
+const MERGE_CONTENT_WINDOW = 500;
+
+// Plasticity decay half-life and access spike
+// source: engineering default — calibration pending (see docs/provenance/blend-weight-calibration.md)
+const PLASTICITY_HALF_LIFE_HOURS_DEFAULT = 6.0;
+const PLASTICITY_SPIKE_DEFAULT = 0.3;
+
+// Stability update increment and access-count threshold
+// source: engineering default — calibration pending (see docs/provenance/blend-weight-calibration.md)
+const STABILITY_INCREMENT_DEFAULT = 0.1;
+const STABILITY_DECAY_COEFF = 0.5;
+const ACCESS_COUNT_THRESHOLD = 5;
+
 // ── Temporal Distance ─────────────────────────────────────────────────────────
 
 function temporalDistance(memoryLastAccessed: string | null | undefined): number {
-  if (!memoryLastAccessed) return 0.5;
+  if (!memoryLastAccessed) return TEMPORAL_DISTANCE_FALLBACK;
   try {
     const last = new Date(memoryLastAccessed);
-    if (isNaN(last.getTime())) return 0.5;
-    const hours = (Date.now() - last.getTime()) / 3_600_000;
-    return Math.min(hours / 168.0, 1.0); // normalize to 1 week
+    if (isNaN(last.getTime())) return TEMPORAL_DISTANCE_FALLBACK;
+    const hours = (Date.now() - last.getTime()) / MS_PER_HOUR;
+    return Math.min(hours / HOURS_PER_WEEK, 1.0); // normalize to 1 week
   } catch {
-    return 0.5;
+    return TEMPORAL_DISTANCE_FALLBACK;
   }
 }
 
@@ -78,7 +153,9 @@ export interface MismatchInput {
  */
 export function computeMismatch(input: MismatchInput): number {
   const embDistance =
-    input.embeddingSimilarity === null ? 0.5 : 1.0 - input.embeddingSimilarity;
+    input.embeddingSimilarity === null
+      ? TEMPORAL_DISTANCE_FALLBACK
+      : 1.0 - input.embeddingSimilarity;
 
   let dirDistance: number;
   if (input.memoryDirectory === input.currentDirectory) {
@@ -86,16 +163,16 @@ export function computeMismatch(input: MismatchInput): number {
   } else if (
     nodePath.dirname(input.memoryDirectory) === nodePath.dirname(input.currentDirectory)
   ) {
-    dirDistance = 0.5;
+    dirDistance = DIR_DISTANCE_SIBLING;
   } else {
     dirDistance = 1.0;
   }
 
   const mismatch =
-    0.5 * embDistance +
-    0.2 * dirDistance +
-    0.15 * temporalDistance(input.memoryLastAccessed) +
-    0.15 * tagDivergence(input.memoryTags, input.contextTokens);
+    MISMATCH_WEIGHT_EMBEDDING * embDistance +
+    MISMATCH_WEIGHT_DIRECTORY * dirDistance +
+    MISMATCH_WEIGHT_TEMPORAL * temporalDistance(input.memoryLastAccessed) +
+    MISMATCH_WEIGHT_TAG * tagDivergence(input.memoryTags, input.contextTokens);
 
   return Math.max(0.0, Math.min(1.0, mismatch));
 }
@@ -140,21 +217,21 @@ export function decideAction(
     return { action: "none", predictionError: 0.0, strengthDelta: 0.0, emotionalMultiplier: 1.0 };
   }
 
-  const { lowThreshold = 0.15, highThreshold = 0.65 } = opts;
+  const { lowThreshold = DEFAULT_LOW_THRESHOLD, highThreshold = DEFAULT_HIGH_THRESHOLD } = opts;
 
   // Prediction error gate (Lee 2009): stable memories dampen PE
-  const predictionError = mismatch * (1.0 - stability * 0.5);
+  const predictionError = mismatch * (1.0 - stability * PE_GATE_STABILITY_COEFF);
 
   // Age-dependent threshold (Milekic & Alberini 2002):
   // Older memories require larger PE to destabilize
-  const ageFactor = Math.min(ageDays / 30.0, 1.0) * 0.15;
-  let effectiveLow = lowThreshold + ageFactor + stability * 0.2;
-  let effectiveHigh = highThreshold + stability * 0.1;
+  const ageFactor = Math.min(ageDays / AGE_NORMALIZATION_DAYS, 1.0) * AGE_FACTOR_SCALE;
+  let effectiveLow = lowThreshold + ageFactor + stability * STABILITY_LOW_COEFF;
+  let effectiveHigh = highThreshold + stability * STABILITY_HIGH_COEFF;
 
   // Recently accessed (high plasticity) memories are MORE susceptible
-  if (plasticity > 0.5) {
-    effectiveLow -= 0.1;
-    effectiveHigh -= 0.1;
+  if (plasticity > PLASTICITY_SUSCEPTIBILITY_THRESHOLD) {
+    effectiveLow -= PLASTICITY_THRESHOLD_ADJUSTMENT;
+    effectiveHigh -= PLASTICITY_THRESHOLD_ADJUSTMENT;
   }
 
   if (predictionError < effectiveLow) {
@@ -164,15 +241,15 @@ export function decideAction(
     return {
       action: "archive",
       predictionError,
-      strengthDelta: -0.2,
+      strengthDelta: ARCHIVE_STRENGTH_DELTA,
       emotionalMultiplier: 1.0,
     };
   }
 
   // Reconsolidation regime — emotional multiplier (Yonelinas & Ritchey 2015)
   // Decay ratio b_neutral/b_emotional = 2.0 → up to 1.8x at arousal=0.8
-  const emotionalMultiplier = 1.0 + Math.min(emotionalArousal, 0.8);
-  const strengthDelta = predictionError * 0.1 * emotionalMultiplier;
+  const emotionalMultiplier = 1.0 + Math.min(emotionalArousal, EMOTIONAL_AROUSAL_CAP);
+  const strengthDelta = predictionError * STRENGTH_DELTA_GAIN * emotionalMultiplier;
 
   return { action: "update", predictionError, strengthDelta, emotionalMultiplier };
 }
@@ -187,13 +264,13 @@ export function decideAction(
 export function mergeContent(
   oldContent: string,
   newContext: string,
-  maxLength = 2000,
+  maxLength = MERGE_MAX_DEFAULT_LENGTH,
 ): string {
   const merged = `${oldContent}\n--- Updated context ---\n${newContext}`;
   if (merged.length <= maxLength) return merged;
 
-  const oldPrefix = oldContent.slice(0, 500);
-  const oldSuffix = oldContent.length > 500 ? oldContent.slice(-500) : "";
+  const oldPrefix = oldContent.slice(0, MERGE_CONTENT_WINDOW);
+  const oldSuffix = oldContent.length > MERGE_CONTENT_WINDOW ? oldContent.slice(-MERGE_CONTENT_WINDOW) : "";
   if (oldSuffix) {
     return `${oldPrefix}\n...\n${oldSuffix}\n--- Updated context ---\n${newContext}`;
   }
@@ -209,8 +286,8 @@ export function mergeContent(
 export function computePlasticityDecay(
   currentPlasticity: number,
   hoursElapsed: number,
-  halfLifeHours = 6.0,
-  spike = 0.3,
+  halfLifeHours = PLASTICITY_HALF_LIFE_HOURS_DEFAULT,
+  spike = PLASTICITY_SPIKE_DEFAULT,
 ): number {
   let p = currentPlasticity;
   if (hoursElapsed > 0 && halfLifeHours > 0) {
@@ -227,9 +304,10 @@ export function updateStability(
   currentStability: number,
   wasUseful: boolean,
   accessCount: number,
-  increment = 0.1,
+  increment = STABILITY_INCREMENT_DEFAULT,
 ): number {
   if (wasUseful) return Math.min(currentStability + increment, 1.0);
-  if (accessCount > 5) return Math.max(currentStability - increment * 0.5, 0.0);
+  if (accessCount > ACCESS_COUNT_THRESHOLD)
+    return Math.max(currentStability - increment * STABILITY_DECAY_COEFF, 0.0);
   return currentStability;
 }

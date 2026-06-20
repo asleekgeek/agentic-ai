@@ -22,6 +22,33 @@ import { cosineSimilarity, norm, scale } from "../shared/linear-algebra.js";
 const NEUROGENESIS_BOOST = 0.3;
 const SEPARATION_THRESHOLD = 0.75;
 
+// Width of each temporal bucket in hours for the dimension-rotation hash.
+// Port of core/neurogenesis.py:L54 (`int(hours_since_creation / 6.0)`);
+// true-hand-tuned, no paper.
+const TIME_BUCKET_HOURS = 6.0;
+
+// Prime stride for rotating the boosted-dimension window across embedding space.
+// Port of core/neurogenesis.py:L55 (`time_bucket * 7`);
+// true-hand-tuned, no paper.
+const DIMENSION_ROTATION_STRIDE = 7;
+
+// Fraction of embedding dimensions that receive the neurogenesis boost.
+// Port of core/neurogenesis.py:L56 (`int(embedding_dim * 0.1)`);
+// true-hand-tuned, no paper.
+const BOOSTED_DIMENSION_FRACTION = 0.1;
+
+// Default maturation half-life in hours: how long until the neurogenesis boost
+// decays to ~63 % of its initial value (one time constant of the exponential).
+// Port of core/neurogenesis.py:L68 (`maturation_hours: float = 48.0`);
+// true-hand-tuned, no paper.
+const DEFAULT_MATURATION_HOURS = 48.0;
+
+// Epsilon guard: skip renormalization when the weighted-vector norm is
+// effectively zero, preventing division by zero.
+// Port of core/neurogenesis.py:L115 (`if weighted_norm > 1e-10`);
+// default-limit-sentinel-epsilon, no paper.
+const NORM_EPSILON = 1e-10;
+
 // ── Temporal Separation Weights ───────────────────────────────────────────────
 
 function computeBoostMagnitude(
@@ -40,9 +67,9 @@ function applyDimensionBoosts(
   boostMagnitude: number,
 ): void {
   const embeddingDim = weights.length;
-  const timeBucket = Math.floor(hoursSinceCreation / 6.0);
-  const boostedStart = (timeBucket * 7) % embeddingDim;
-  const boostedCount = Math.max(1, Math.floor(embeddingDim * 0.1));
+  const timeBucket = Math.floor(hoursSinceCreation / TIME_BUCKET_HOURS);
+  const boostedStart = (timeBucket * DIMENSION_ROTATION_STRIDE) % embeddingDim;
+  const boostedCount = Math.max(1, Math.floor(embeddingDim * BOOSTED_DIMENSION_FRACTION));
 
   for (let i = 0; i < boostedCount; i++) {
     const dimIdx = (boostedStart + i) % embeddingDim;
@@ -73,7 +100,7 @@ export function computeTemporalSeparationWeights(
     maturationHours?: number;
   } = {},
 ): number[] {
-  const { boost = NEUROGENESIS_BOOST, maturationHours = 48.0 } = opts;
+  const { boost = NEUROGENESIS_BOOST, maturationHours = DEFAULT_MATURATION_HOURS } = opts;
 
   const boostMagnitude = computeBoostMagnitude(hoursSinceCreation, maturationHours, boost);
   const weights = new Array<number>(embeddingDim).fill(1.0);
@@ -96,7 +123,7 @@ export function applyTemporalWeights(
 
   const weighted = embedding.map((e, i) => e * (weights[i] ?? 1.0));
   const weightedNorm = norm(weighted);
-  if (weightedNorm > 1e-10) {
+  if (weightedNorm > NORM_EPSILON) {
     return scale(weighted, 1.0 / weightedNorm);
   }
   return weighted;

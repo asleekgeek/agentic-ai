@@ -72,6 +72,89 @@ const STAGE_MIN_DWELL_HOURS: Record<string, number> = {
 // source: cortex@ed33435 mcp_server/core/cascade_advancement.py:141
 const SYSTEMS_STAGES = new Set<string>([LATE_LTP, CONSOLIDATED]);
 
+// ── Schema-acceleration constants ─────────────────────────────────────────
+//
+// These are engineering choices calibrated against Tse et al. (2007)'s
+// ~10-15x acceleration magnitude. No paper provides equations; values are
+// hand-tuned. Source: cascade_advancement.py header + lines 143-153.
+// source: engineering choice — calibration pending; mcp_server/core/cascade_advancement.py:143
+
+// Base for schema-acceleration exponential: 15^(-schema_match).
+// Matches experimental ~10-15x magnitude (Tse 2007). Engineering approximation.
+// source: engineering choice — see cascade_advancement.py header: "The functional form
+//   and the 15.0 constant are engineering choices, not paper-derived equations."
+const SCHEMA_ACCEL_BASE = 15.0;
+
+// Linear-attenuation coefficient for pre-systems stages (hand-tuned).
+// source: engineering choice — mcp_server/core/cascade_advancement.py:153
+const EARLY_SCHEMA_ATTENUATION = 0.2;
+
+// ── Stage-readiness formula constants ─────────────────────────────────────
+//
+// All values below are engineering choices: thresholds and coefficients in
+// readiness formulas that were hand-tuned to reflect biological plausibility
+// but have no paper-derived equation mapping them exactly. Each constant cites
+// the Python line where the same value appears.
+// source: engineering choice — mcp_server/core/cascade_advancement.py
+
+// Importance threshold for LABILE -> EARLY_LTP (moderately important).
+// source: engineering choice — cascade_advancement.py:59
+const LABILE_IMPORTANCE_THRESHOLD = 0.3;
+
+// Dopamine offset in LABILE readiness formula: (dopamine - 0.5) / 1.5 + importance * 0.5
+// source: engineering choice — cascade_advancement.py:60
+const LABILE_READINESS_DA_OFFSET = 0.5;
+
+// Dopamine scale in LABILE readiness formula.
+// source: engineering choice — cascade_advancement.py:60
+const LABILE_READINESS_DA_SCALE = 1.5;
+
+// Importance weight in LABILE readiness formula.
+// source: engineering choice — cascade_advancement.py:60
+const LABILE_READINESS_IMPORTANCE_WEIGHT = 0.5;
+
+// Importance threshold for EARLY_LTP -> LATE_LTP (strong encoding).
+// source: engineering choice — cascade_advancement.py:82
+const EARLY_LTP_IMPORTANCE_THRESHOLD = 0.4;
+
+// Importance weight in EARLY_LTP readiness formula: replay/2 + importance * 0.5
+// source: engineering choice — cascade_advancement.py:83
+const EARLY_LTP_READINESS_IMPORTANCE_WEIGHT = 0.5;
+
+// Schema-match threshold below which full replay count (3) is required.
+// source: engineering choice — cascade_advancement.py:103
+const LATE_LTP_SCHEMA_FAST_THRESHOLD = 0.5;
+
+// Replay count required for LATE_LTP -> CONSOLIDATED without schema boost.
+// source: engineering choice — cascade_advancement.py:103
+const LATE_LTP_REPLAY_THRESHOLD_NORMAL = 3;
+
+// Replay count required with schema boost (schema >= LATE_LTP_SCHEMA_FAST_THRESHOLD).
+// source: engineering choice — cascade_advancement.py:103
+const LATE_LTP_REPLAY_THRESHOLD_SCHEMA = 1;
+
+// Minimum denominator guard to avoid division by zero in readiness calculations.
+// source: engineering choice — cascade_advancement.py:118, 184
+const MIN_DWELL_FLOOR = 0.01;
+
+// Default dopamine level / importance / stability parameter values.
+// source: engineering choice — cascade_advancement.py:160, 163, 202
+const DEFAULT_DOPAMINE_LEVEL = 1.0;
+const DEFAULT_IMPORTANCE = 0.5;
+const DEFAULT_STABILITY = 0.5;
+
+// Cap on readiness score while min-dwell not yet elapsed (just below 1.0).
+// source: engineering choice — cascade_advancement.py:185
+const READINESS_PREDWELL_CAP = 0.99;
+
+// Base mismatch threshold for reconsolidation.
+// source: engineering choice — cascade_advancement.py:203
+const DEFAULT_MISMATCH_THRESHOLD = 0.3;
+
+// Stability multiplier applied to the effective reconsolidation threshold.
+// source: engineering choice — cascade_advancement.py:228
+const RECONSOLIDATION_STABILITY_FACTOR = 0.3;
+
 // ── Schema acceleration ────────────────────────────────────────────────────
 
 /**
@@ -102,11 +185,11 @@ export function effectiveMinDwell(
   if (SYSTEMS_STAGES.has(stage)) {
     // Tse et al. (2007): ~15x acceleration for schema-consistent memories.
     // Engineering approximation: exponential gives diminishing returns.
-    const schemaFactor = Math.pow(15.0, -schemaMatch); // source: cortex@ed33435 cascade_advancement.py:144
+    const schemaFactor = Math.pow(SCHEMA_ACCEL_BASE, -schemaMatch); // source: cortex@ed33435 cascade_advancement.py:144
     return baseDwell * schemaFactor;
   }
   // Earlier stages: modest acceleration (hand-tuned)
-  const schemaFactor = 1.0 - schemaMatch * 0.2; // source: cortex@ed33435 cascade_advancement.py:147
+  const schemaFactor = 1.0 - schemaMatch * EARLY_SCHEMA_ATTENUATION; // source: cortex@ed33435 cascade_advancement.py:147
   return baseDwell * schemaFactor;
 }
 
@@ -130,9 +213,9 @@ function checkLabileAdvancement(
   dopamineLevel: number,
   importance: number,
 ): [boolean, string, number] {
-  const daReady = dopamineLevel >= 1.0; // source: cortex@ed33435 cascade_advancement.py:58
-  const importanceReady = importance > 0.3; // source: cortex@ed33435 cascade_advancement.py:59
-  const readiness = Math.min(1.0, (dopamineLevel - 0.5) / 1.5 + importance * 0.5);
+  const daReady = dopamineLevel >= DEFAULT_DOPAMINE_LEVEL; // source: cortex@ed33435 cascade_advancement.py:58
+  const importanceReady = importance > LABILE_IMPORTANCE_THRESHOLD; // source: cortex@ed33435 cascade_advancement.py:59
+  const readiness = Math.min(1.0, (dopamineLevel - LABILE_READINESS_DA_OFFSET) / LABILE_READINESS_DA_SCALE + importance * LABILE_READINESS_IMPORTANCE_WEIGHT);
   if (daReady || importanceReady) {
     return [true, EARLY_LTP, readiness];
   }
@@ -158,8 +241,8 @@ function checkEarlyLtpAdvancement(
   importance: number,
 ): [boolean, string, number] {
   const replayReady = replayCount >= 1; // source: cortex@ed33435 cascade_advancement.py:81
-  const importanceBoost = importance > 0.4; // source: cortex@ed33435 cascade_advancement.py:82
-  const readiness = Math.min(1.0, replayCount / 2.0 + importance * 0.5);
+  const importanceBoost = importance > EARLY_LTP_IMPORTANCE_THRESHOLD; // source: cortex@ed33435 cascade_advancement.py:82
+  const readiness = Math.min(1.0, replayCount / 2.0 + importance * EARLY_LTP_READINESS_IMPORTANCE_WEIGHT);
   if (replayReady || importanceBoost) {
     return [true, LATE_LTP, readiness];
   }
@@ -183,7 +266,7 @@ function checkLateLtpAdvancement(
   replayCount: number,
   schemaMatch: number,
 ): [boolean, string, number] {
-  const replayThreshold = schemaMatch < 0.5 ? 3 : 1; // source: cortex@ed33435 cascade_advancement.py:103
+  const replayThreshold = schemaMatch < LATE_LTP_SCHEMA_FAST_THRESHOLD ? LATE_LTP_REPLAY_THRESHOLD_NORMAL : LATE_LTP_REPLAY_THRESHOLD_SCHEMA; // source: cortex@ed33435 cascade_advancement.py:103
   const replayReady = replayCount >= replayThreshold;
   const readiness = Math.min(1.0, replayCount / Math.max(replayThreshold, 1));
   if (replayReady) {
@@ -205,7 +288,7 @@ function checkReconsolidatingAdvancement(
   if (hoursInStage >= effectiveMinDwellHours) {
     return [true, EARLY_LTP, 1.0];
   }
-  const readiness = hoursInStage / Math.max(effectiveMinDwellHours, 0.01);
+  const readiness = hoursInStage / Math.max(effectiveMinDwellHours, MIN_DWELL_FLOOR);
   return [false, RECONSOLIDATING, readiness];
 }
 
@@ -270,15 +353,15 @@ export function computeAdvancementReadiness(
 
   if (isOptsForm) {
     const opts = (dopamineLevelOrOpts as AdvancementReadinessOptions | undefined) ?? {};
-    dopamine = opts.dopamineLevel ?? 1.0;
+    dopamine = opts.dopamineLevel ?? DEFAULT_DOPAMINE_LEVEL;
     replay = opts.replayCount ?? 0;
     schema = opts.schemaMatch ?? 0.0;
-    imp = opts.importance ?? 0.5;
+    imp = opts.importance ?? DEFAULT_IMPORTANCE;
   } else {
-    dopamine = (dopamineLevelOrOpts as number) ?? 1.0;
+    dopamine = (dopamineLevelOrOpts as number) ?? DEFAULT_DOPAMINE_LEVEL;
     replay = replayCount ?? 0;
     schema = schemaMatch ?? 0.0;
-    imp = importance ?? 0.5;
+    imp = importance ?? DEFAULT_IMPORTANCE;
   }
 
   // Ablation guard
@@ -300,7 +383,7 @@ export function computeAdvancementReadiness(
   const minDwell = effectiveMinDwell(currentStage, schema);
 
   if (hoursInStage < minDwell) {
-    const readiness = Math.min(hoursInStage / Math.max(minDwell, 0.01), 0.99);
+    const readiness = Math.min(hoursInStage / Math.max(minDwell, MIN_DWELL_FLOOR), READINESS_PREDWELL_CAP);
     if (isOptsForm) {
       return { ready: false, nextStage: currentStage, readinessScore: readiness };
     }
@@ -350,14 +433,14 @@ export function computeAdvancementReadiness(
 export function triggerReconsolidation(
   currentStage: string,
   mismatchScore: number,
-  stability: number = 0.5,
-  mismatchThreshold: number = 0.3, // source: cortex@ed33435 cascade_advancement.py:197
+  stability: number = DEFAULT_STABILITY,
+  mismatchThreshold: number = DEFAULT_MISMATCH_THRESHOLD, // source: cortex@ed33435 cascade_advancement.py:197
 ): [boolean, string] {
   if (currentStage !== CONSOLIDATED && currentStage !== LATE_LTP) {
     return [false, currentStage];
   }
 
-  const effectiveThreshold = mismatchThreshold + stability * 0.3; // source: cortex@ed33435 cascade_advancement.py:222
+  const effectiveThreshold = mismatchThreshold + stability * RECONSOLIDATION_STABILITY_FACTOR; // source: cortex@ed33435 cascade_advancement.py:222
 
   if (mismatchScore >= effectiveThreshold) {
     return [true, RECONSOLIDATING];

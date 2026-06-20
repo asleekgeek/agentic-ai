@@ -25,6 +25,64 @@
  * Pure business logic -- no I/O.
  */
 
+// ── Overflow Clamp Bounds ─────────────────────────────────────────────────────
+// Symmetric clamp on the sigmoid exponent to avoid Math.exp() overflow/underflow.
+// At ±500 the sigmoid is already at 0 / 1 to full IEEE-754 float precision.
+// source: port of core/oscillatory_phases.py:L130-L132; overflow-clamp, no paper.
+const SIGMOID_EXPONENT_MAX = 500.0;
+const SIGMOID_EXPONENT_MIN = -500.0;
+
+// ── Gamma Serial-Position Decay Rate ─────────────────────────────────────────
+// Rate constant for the primacy/recency exponential in gammaBindingStrength.
+// Governs how quickly binding strength falls with distance from first/last slot.
+// source: port of core/oscillatory_phases.py:L208-L209; true-hand-tuned, no paper.
+const GAMMA_DECAY_RATE = 0.5;
+
+// Output floor and scale for binding-strength linear rescaling to [0.5, 1.0].
+// source: port of core/oscillatory_phases.py:L211; true-hand-tuned, no paper.
+const GAMMA_STRENGTH_FLOOR = 0.5;
+const GAMMA_STRENGTH_SCALE = 0.5;
+
+// ── SWR Probability Factor Normalisers ────────────────────────────────────────
+// Divisors that convert raw counts / hours to a [0, 1] saturation factor.
+// All three are engineering choices; no paper specifies these values.
+// source: port of core/oscillatory_phases.py:L229; true-hand-tuned, no paper.
+const SWR_OPS_NORMALISER = 20.0;
+// source: port of core/oscillatory_phases.py:L230; true-hand-tuned, no paper.
+const SWR_IMPORTANCE_NORMALISER = 5.0;
+// source: port of core/oscillatory_phases.py:L231; true-hand-tuned, no paper.
+const SWR_TIME_NORMALISER = 4.0;
+
+// Weighted combination of the three factors inside computeSWRProbability.
+// Weights sum to 1.0 — an arithmetic identity requiring no independent source.
+// source: port of core/oscillatory_phases.py:L233; true-hand-tuned, no paper.
+const SWR_PROB_WEIGHT_OPS = 0.4;
+const SWR_PROB_WEIGHT_IMP = 0.3;
+const SWR_PROB_WEIGHT_TIME = 0.3;
+
+// Minimum operations since last SWR before a new event is considered.
+// source: port of core/oscillatory_phases.py:L250; default-limit-sentinel-epsilon, no paper.
+const SWR_MIN_OPERATIONS = 3;
+
+// Fraction of baseProbability used as the fire threshold in shouldGenerateSWR.
+// source: port of core/oscillatory_phases.py:L259; true-hand-tuned, no paper.
+const SWR_FIRE_THRESHOLD_FRACTION = 0.5;
+
+// ── Heat-Score Inverted-U Formula Coefficients ────────────────────────────────
+// computeHeatScore implements  max(0, 1 - 4*(heat - 0.5)^2):
+//   0.5  = peak of the inverted-U (heat value of maximum replay need)
+//   4.0  = curvature: forces the parabola to zero at heat=0 and heat=1.0
+// Both are determined by the design constraint (peak at 0.5, zeros at {0,1}).
+// source: port of core/oscillatory_phases.py:L268; true-hand-tuned, no paper.
+const HEAT_SCORE_PEAK = 0.5;
+const HEAT_SCORE_CURVATURE = 4.0;
+
+// ── Rehearsal-Need Decay Rate ─────────────────────────────────────────────────
+// In  1 / (1 + accessCount * RATE), controls how quickly rehearsal need decays
+// as a memory is accessed more. Engineering choice; no paper specifies this value.
+// source: port of core/oscillatory_phases.py:L287; true-hand-tuned, no paper.
+const REHEARSAL_NEED_DECAY_RATE = 0.5;
+
 // ── Phase Enumerations ───────────────────────────────────────────────────────
 
 /**
@@ -77,6 +135,41 @@ export const TRANSITION_WIDTH = 0.08;
  * // source: Lisman & Jensen (2013) Neuron 77:1002-1016
  */
 export const GAMMA_CAPACITY = 7;
+
+/**
+ * Theta cycle phase boundary: encoding occupies [0, 0.5), retrieval [0.5, 1.0).
+ * The sigmoid gate crosses 0.5 at this midpoint, recovering the paper's
+ * piecewise step function at k->inf.
+ * // source: Hasselmo, Bodelon & Wyble (2002) Neural Computation 14:793-817
+ */
+export const THETA_PHASE_MIDPOINT = 0.5;
+
+/**
+ * Week time constant for recency decay in replay priority (hours).
+ * Memories decay over a week-scale window consistent with hippocampal
+ * consolidation timescales reported in Olafsdottir et al. (2018).
+ * // source: Olafsdottir et al. (2018) Curr Biol 28:R37-R50
+ */
+export const HOURS_PER_WEEK = 168.0;
+
+// ── Replay Priority Weights ───────────────────────────────────────────────────
+// Weights for the five replay-priority signals. Sum = 1.0. The signal SET
+// (importance, heat, surprise, rehearsal, recency) follows Olafsdottir et al.
+// (2018); the specific weight VALUES are the Cortex port's hand-set coefficients
+// — the paper does not specify them.
+// source: port of mcp_server/core/oscillatory_phases.py (weight values; no paper
+//   source for the split). Olafsdottir et al. (2018) Curr Biol 28:R37-R50 = signal set.
+
+/** Importance weight in replay priority */
+export const REPLAY_WEIGHT_IMPORTANCE = 0.35;
+/** Heat-score weight in replay priority */
+export const REPLAY_WEIGHT_HEAT = 0.2;
+/** Surprise weight in replay priority */
+export const REPLAY_WEIGHT_SURPRISE = 0.2;
+/** Rehearsal-need weight in replay priority */
+export const REPLAY_WEIGHT_REHEARSAL = 0.15;
+/** Recency weight in replay priority */
+export const REPLAY_WEIGHT_RECENCY = 0.1;
 
 // ── SWR Constants (engineering choices, not from any specific paper) ─────────
 // These control the discrete SWR state machine for consolidation scheduling.
@@ -136,9 +229,9 @@ export function makeOscillatoryState(): OscillatoryState {
  * // source: Hasselmo, Bodelon & Wyble (2002) Neural Computation 14:793-817
  */
 function sigmoidGate(phase: number, k: number = SIGMOID_STEEPNESS): number {
-  const exponent = -k * (phase - 0.5);
-  if (exponent > 500.0) return 0.0;
-  if (exponent < -500.0) return 1.0;
+  const exponent = -k * (phase - THETA_PHASE_MIDPOINT);
+  if (exponent > SIGMOID_EXPONENT_MAX) return 0.0;
+  if (exponent < SIGMOID_EXPONENT_MIN) return 1.0;
   return 1.0 / (1.0 + Math.exp(exponent));
 }
 
@@ -158,8 +251,8 @@ export function classifyThetaPhase(phase: number): ThetaPhase {
   const p = ((phase % 1.0) + 1.0) % 1.0; // normalize to [0,1)
 
   if (p < TRANSITION_WIDTH || p > 1.0 - TRANSITION_WIDTH) return "transition";
-  if (Math.abs(p - 0.5) < TRANSITION_WIDTH) return "transition";
-  if (p < 0.5) return "encoding";
+  if (Math.abs(p - THETA_PHASE_MIDPOINT) < TRANSITION_WIDTH) return "transition";
+  if (p < THETA_PHASE_MIDPOINT) return "encoding";
   return "retrieval";
 }
 
@@ -218,10 +311,10 @@ export function gammaBindingStrength(
   capacity: number = GAMMA_CAPACITY,
 ): number {
   if (capacity <= 1) return 1.0;
-  const primacy = Math.exp(-0.5 * position);
-  const recency = Math.exp(-0.5 * (capacity - 1 - position));
+  const primacy = Math.exp(-GAMMA_DECAY_RATE * position);
+  const recency = Math.exp(-GAMMA_DECAY_RATE * (capacity - 1 - position));
   const raw = Math.max(primacy, recency);
-  return 0.5 + 0.5 * Math.min(raw, 1.0);
+  return GAMMA_STRENGTH_FLOOR + GAMMA_STRENGTH_SCALE * Math.min(raw, 1.0);
 }
 
 // ── Sharp-Wave Ripple Logic ───────────────────────────────────────────────────
@@ -239,11 +332,11 @@ function computeSWRProbability(
   accumulatedImportance: number,
   baseProbability: number,
 ): number {
-  const opFactor = Math.min(operationsSinceSwr / 20.0, 1.0);
-  const impFactor = Math.min(accumulatedImportance / 5.0, 1.0);
-  const timeFactor = Math.min(hoursSinceLastSwr / 4.0, 1.0);
+  const opFactor = Math.min(operationsSinceSwr / SWR_OPS_NORMALISER, 1.0);
+  const impFactor = Math.min(accumulatedImportance / SWR_IMPORTANCE_NORMALISER, 1.0);
+  const timeFactor = Math.min(hoursSinceLastSwr / SWR_TIME_NORMALISER, 1.0);
 
-  return baseProbability * (0.4 * opFactor + 0.3 * impFactor + 0.3 * timeFactor);
+  return baseProbability * (SWR_PROB_WEIGHT_OPS * opFactor + SWR_PROB_WEIGHT_IMP * impFactor + SWR_PROB_WEIGHT_TIME * timeFactor);
 }
 
 /**
@@ -262,7 +355,7 @@ export function shouldGenerateSWR(
   baseProbability: number = SWR_BASE_PROBABILITY,
 ): boolean {
   if (hoursSinceLastSwr < minIntervalHours) return false;
-  if (operationsSinceSwr < 3) return false;
+  if (operationsSinceSwr < SWR_MIN_OPERATIONS) return false;
 
   const probability = computeSWRProbability(
     operationsSinceSwr,
@@ -270,7 +363,7 @@ export function shouldGenerateSWR(
     accumulatedImportance,
     baseProbability,
   );
-  return probability >= baseProbability * 0.5;
+  return probability >= baseProbability * SWR_FIRE_THRESHOLD_FRACTION;
 }
 
 /**
@@ -280,7 +373,7 @@ export function shouldGenerateSWR(
  * too cold means not worth replaying. Peak at heat=0.5.
  */
 function computeHeatScore(heat: number): number {
-  return Math.max(0.0, 1.0 - 4.0 * (heat - 0.5) ** 2);
+  return Math.max(0.0, 1.0 - HEAT_SCORE_CURVATURE * (heat - HEAT_SCORE_PEAK) ** 2);
 }
 
 /**
@@ -304,16 +397,16 @@ export function computeReplayPriority(
   hoursSinceCreation: number,
 ): number {
   const heatScore = computeHeatScore(heat);
-  const rehearsalNeed = 1.0 / (1.0 + accessCount * 0.5);
+  const rehearsalNeed = 1.0 / (1.0 + accessCount * REHEARSAL_NEED_DECAY_RATE);
   // Week time constant — source: Olafsdottir et al. (2018) Curr Biol 28:R37-R50
-  const recency = Math.exp(-hoursSinceCreation / 168.0);
+  const recency = Math.exp(-hoursSinceCreation / HOURS_PER_WEEK);
 
   const priority =
-    importance * 0.35 +
-    heatScore * 0.2 +
-    surprise * 0.2 +
-    rehearsalNeed * 0.15 +
-    recency * 0.1;
+    importance * REPLAY_WEIGHT_IMPORTANCE +
+    heatScore * REPLAY_WEIGHT_HEAT +
+    surprise * REPLAY_WEIGHT_SURPRISE +
+    rehearsalNeed * REPLAY_WEIGHT_REHEARSAL +
+    recency * REPLAY_WEIGHT_RECENCY;
 
   return Math.min(1.0, Math.max(0.0, priority));
 }

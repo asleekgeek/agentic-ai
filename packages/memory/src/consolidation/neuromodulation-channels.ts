@@ -60,6 +60,62 @@ const ACH_SER_COUPLING = -0.15; // High ACh dampens 5-HT (encoding reduces explo
 export const NE_HABITUATION_RATE = 0.05;
 export const NE_HABITUATION_DECAY = 0.02;
 
+// ── DA reward-mapping constants ───────────────────────────────────────────────
+// Hand-tuned engineering translation of Schultz (1997) juice/airpuff paradigm
+// to memory operations. No paper provides this mapping. Values are heuristic.
+// source: Schultz W (1997) Science 275:1593-1599 (direction only; values hand-tuned)
+const DA_POSITIVE_BASE = 0.7;    // Base reward signal for positive outcomes
+const DA_POSITIVE_SCALE = 0.3;   // Importance scaling for positive outcomes
+const DA_NEGATIVE_BASE = 0.2;    // Base reward signal for negative outcomes
+const DA_NEGATIVE_SCALE = 0.1;   // Importance scaling for negative outcomes
+const DA_NEUTRAL_LEVEL = 0.5;    // Neutral outcome reward level
+
+// ── DA clamp bounds ───────────────────────────────────────────────────────────
+// Floor 0.0: DA neurons cannot fire below zero (Schultz 1997, Fig 1-3).
+// Ceiling 3.0: conservative bound; biology ~4-6x baseline (Schultz 1997,
+//   Ljungberg et al. 1992); 3x avoids positive RPE dominating downstream.
+// source: Schultz W (1997) Science 275:1593-1599
+const DA_LEVEL_MIN = 0.0;
+const DA_LEVEL_MAX = 3.0;
+
+// ── DA baseline clamp bounds ─────────────────────────────────────────────────
+// Engineering bounds ensuring daBaseline stays in a numerically stable range.
+// Not derived from paper; chosen to keep EMA in (0, 1) with margin.
+const DA_BASELINE_MIN = 0.1;
+const DA_BASELINE_MAX = 0.9;
+
+// ── Rescorla-Wagner alpha*beta ────────────────────────────────────────────────
+// Combined alpha*beta = 0.1 — hand-tuned within standard simulation range
+// [0.01-0.25] (Daw 2011, Sutton & Barto 1998). In R-W theory alpha = CS
+// salience, beta = US intensity; merged here as each memory op has one context.
+// source: Rescorla RA, Wagner AR (1972) Classical Conditioning II, pp. 64-99
+const DA_ALPHA_BETA = 0.1;
+
+// ── NE arousal constants ──────────────────────────────────────────────────────
+// Burst size, clamp bounds, and decay constants for NE arousal model.
+// All values hand-tuned for hours timescale; qualitative model from
+// Aston-Jones & Cohen (2005) — no equations for these specific values.
+// source: Aston-Jones G, Cohen JD (2005) Annu Rev Neurosci 28:403-450 (qualitative)
+const NE_BURST_SCALE = 0.5;      // Phasic burst amplitude (attenuated by habituation)
+const NE_LEVEL_MAX = 2.0;        // Upper clamp for NE level
+const NE_HABITUATION_MAX = 0.8;  // Upper clamp for NE adaptation state
+const NE_DECAY_RATE = 0.1;       // Decay rate toward tonic baseline
+const NE_TONIC_BASELINE = 1.0;   // Tonic NE baseline (absence of errors target)
+const NE_ADAPTATION_MIN = 0.0;   // Lower clamp for NE adaptation state
+const NE_LEVEL_MIN = 0.3;        // Lower clamp for NE level
+
+// ── 5-HT exploration constants ────────────────────────────────────────────────
+// Engineering formula parameters for serotonin exploration/exploitation signal.
+// Direction qualitatively consistent with Dayan & Huys (2009); specific
+// coefficients are engineering approximations — no paper provides these values.
+// source: Dayan P, Huys QJM (2009) Annu Rev Neurosci 32:95-126 (direction only)
+const SER_NOVELTY_FALLBACK = 0.5;  // Novelty ratio when totalEntities == 0
+const SER_TARGET_MIN = 0.3;        // Lower clamp for 5-HT target
+const SER_TARGET_MAX = 1.8;        // Upper clamp for 5-HT target
+const SER_TARGET_BASE = 0.5;       // Base target level (neutral novelty/exploitation)
+const SER_NOVELTY_WEIGHT = 0.8;    // Novelty ratio contribution to target
+const SER_EXPLOIT_WEIGHT = 0.5;    // Exploitation signal contribution to target
+
 // ── Channel Computation Functions ─────────────────────────────────────────────
 
 /**
@@ -93,21 +149,21 @@ export function computeDopamineRpe(
   // Hand-tuned reward mapping — no paper provides this translation.
   let actual: number;
   if (outcomePositive) {
-    actual = 0.7 + memoryImportance * 0.3;
+    actual = DA_POSITIVE_BASE + memoryImportance * DA_POSITIVE_SCALE;
   } else if (outcomeNegative) {
-    actual = 0.2 - memoryImportance * 0.1;
+    actual = DA_NEGATIVE_BASE - memoryImportance * DA_NEGATIVE_SCALE;
   } else {
-    actual = 0.5;
+    actual = DA_NEUTRAL_LEVEL;
   }
 
   // Rescorla-Wagner: delta = lambda - V(s)
   const delta = actual - daBaseline;
   // Schultz: DA firing = baseline * (1 + delta), clamped to [0, 3x baseline]
-  const da = Math.max(0.0, Math.min(3.0, 1.0 + delta));
+  const da = Math.max(DA_LEVEL_MIN, Math.min(DA_LEVEL_MAX, 1.0 + delta));
 
   // Rescorla-Wagner: V(s) := V(s) + alpha*beta * (actual - V(s))
   // Combined alpha*beta = 0.1 (hand-tuned, within standard range)
-  const newBaseline = Math.max(0.1, Math.min(0.9, daBaseline + 0.1 * (actual - daBaseline)));
+  const newBaseline = Math.max(DA_BASELINE_MIN, Math.min(DA_BASELINE_MAX, daBaseline + DA_ALPHA_BETA * (actual - daBaseline)));
 
   return [da, newBaseline];
 }
@@ -134,15 +190,15 @@ export function computeNorepinephrineArousal(
   let newAdapt: number;
 
   if (errorEncountered) {
-    const burst = 0.5 * (1.0 - neAdaptation);
-    ne = Math.min(2.0, currentNe + burst);
-    newAdapt = Math.min(0.8, neAdaptation + NE_HABITUATION_RATE);
+    const burst = NE_BURST_SCALE * (NE_TONIC_BASELINE - neAdaptation);
+    ne = Math.min(NE_LEVEL_MAX, currentNe + burst);
+    newAdapt = Math.min(NE_HABITUATION_MAX, neAdaptation + NE_HABITUATION_RATE);
   } else {
-    ne = currentNe + 0.1 * (1.0 - currentNe);
-    newAdapt = Math.max(0.0, neAdaptation - NE_HABITUATION_DECAY);
+    ne = currentNe + NE_DECAY_RATE * (NE_TONIC_BASELINE - currentNe);
+    newAdapt = Math.max(NE_ADAPTATION_MIN, neAdaptation - NE_HABITUATION_DECAY);
   }
 
-  return [Math.max(0.3, Math.min(2.0, ne)), newAdapt];
+  return [Math.max(NE_LEVEL_MIN, Math.min(NE_LEVEL_MAX, ne)), newAdapt];
 }
 
 /**
@@ -166,12 +222,12 @@ export function computeSerotoninExploration(
   currentSer: number,
 ): number {
   const noveltyRatio =
-    totalEntities > 0 ? novelEntities / Math.max(totalEntities, 1) : 0.5;
+    totalEntities > 0 ? novelEntities / Math.max(totalEntities, 1) : SER_NOVELTY_FALLBACK;
   const exploitationSignal = schemaMatch;
 
   const target = Math.max(
-    0.3,
-    Math.min(1.8, 0.5 + noveltyRatio * 0.8 - exploitationSignal * 0.5),
+    SER_TARGET_MIN,
+    Math.min(SER_TARGET_MAX, SER_TARGET_BASE + noveltyRatio * SER_NOVELTY_WEIGHT - exploitationSignal * SER_EXPLOIT_WEIGHT),
   );
 
   return currentSer + SER_ALPHA * (target - currentSer);
@@ -204,9 +260,9 @@ export function applyCrossCoupling(
   const serCoupled = ser + ACH_SER_COUPLING * (ach - 1.0);
 
   return [
-    Math.max(0.0, Math.min(3.0, daCoupled)),  // DA: asymmetric [0, 3] per Schultz 1997
-    Math.max(0.3, Math.min(2.0, neCoupled)),
-    Math.max(0.3, Math.min(2.0, achCoupled)),
-    Math.max(0.3, Math.min(2.0, serCoupled)),
+    Math.max(DA_LEVEL_MIN, Math.min(DA_LEVEL_MAX, daCoupled)),  // DA: asymmetric [0, 3] per Schultz 1997
+    Math.max(NE_LEVEL_MIN, Math.min(NE_LEVEL_MAX, neCoupled)),
+    Math.max(NE_LEVEL_MIN, Math.min(NE_LEVEL_MAX, achCoupled)),
+    Math.max(NE_LEVEL_MIN, Math.min(NE_LEVEL_MAX, serCoupled)),
   ];
 }

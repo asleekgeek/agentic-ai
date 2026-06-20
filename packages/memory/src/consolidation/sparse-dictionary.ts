@@ -1,9 +1,92 @@
 /**
  * Behavioral feature dictionary learning via OMP (sparse coding).
  * 27D activation space: tool ratios(7), keyword densities(4), temporal(5), derived(1), categories(10).
- * // source: Mallat SG, Zhang Z (1993) "Matching pursuits." IEEE Trans Signal Process 41:3397-3415 (OMP concept).
+ * Implements OMP sparse coding + K-SVD dictionary learning. Cortex names these
+ * algorithms but cites no published paper; no paper source is claimed here.
  * Port of: mcp_server/core/sparse_dictionary*.py  Pure business logic — no I/O.
  */
+
+// ---------------------------------------------------------------------------
+// Numerical tolerances — floating-point epsilon guards.
+// source: port of mcp_server/core/sparse_dictionary_learning.py (best_corr < 1e-10
+//   at line 128; abs(det) < 1e-12 at lines 43/66). Bare numerical guards in the
+//   source of truth — no paper source.
+// 1e-10 guards norm/cosine degenerate vectors; 1e-12 guards 2×2/3×3 determinant
+// singularity in the Cramer's-rule least-squares solve.
+// ---------------------------------------------------------------------------
+const NORM_EPSILON = 1e-10;       // zero-vector guard in normalize() and OMP residual check
+const DET_EPSILON  = 1e-12;       // near-singular determinant guard in Cramer's rule (sls2/sls3)
+
+// ---------------------------------------------------------------------------
+// Activation-space index offsets
+// Positions are determined by the SIGNAL_NAMES ordering defined below.
+// source: mcp_server/core/sparse_dictionary_activation.py — same indices used
+// in _extract_keyword_densities (7-10), _extract_temporal_signals (11-15),
+// _extract_derived_ratio (16), _extract_category_scores (17-26).
+// ---------------------------------------------------------------------------
+const IDX_KW_ABSTRACT  = 7;   // activation[7]  = kw:abstract density
+const IDX_KW_CONCRETE  = 8;   // activation[8]  = kw:concrete density
+const IDX_KW_PLANNING  = 9;   // activation[9]  = kw:planning density
+const IDX_KW_TRIAL     = 10;  // activation[10] = kw:trial density
+const IDX_TMP_DURATION = 11;  // activation[11] = normalized session duration
+const IDX_TMP_TURNS    = 12;  // activation[12] = normalized turn count
+const IDX_TMP_BURST    = 13;  // activation[13] = burst mode flag (0/1)
+const IDX_TMP_EXPLORE  = 14;  // activation[14] = exploration mode flag (0/1)
+const IDX_TMP_SPREAD   = 15;  // activation[15] = file spread ratio
+const IDX_DRV_EDITREAD = 16;  // activation[16] = edit/read ratio
+const IDX_CAT_START    = 17;  // activation[17..25] = category scores
+const IDX_CAT_GENERAL  = 26;  // activation[26]     = "general" category fallback
+
+// ---------------------------------------------------------------------------
+// Temporal normalization denominators
+// source: mcp_server/core/sparse_dictionary_activation.py _extract_temporal_signals()
+// 3_600_000 ms = 1 hour (duration capped at 1.0 at one hour);
+// 600_000 ms = 10 minutes (burst session threshold);
+// 50 turns = turn-count normalization ceiling;
+// 20 turns = high-interaction exploration threshold.
+// ---------------------------------------------------------------------------
+const MS_PER_HOUR          = 3_600_000;  // 1 h in milliseconds
+const MS_BURST_THRESHOLD   = 600_000;    // 10 min burst session upper bound
+const TURN_COUNT_NORM_CAP  = 50;         // denominator for turn-count normalization
+const TURN_EXPLORE_MIN     = 20;         // minimum turns to flag exploration mode
+
+// ---------------------------------------------------------------------------
+// Default category fallback weight
+// source: mcp_server/core/sparse_dictionary_activation.py _extract_category_scores()
+// When no category keyword matches, act[26] (general) is set to 0.5 so the
+// general slot receives a partial activation rather than zero.
+// ---------------------------------------------------------------------------
+const GENERAL_FALLBACK_WEIGHT = 0.5;
+
+// ---------------------------------------------------------------------------
+// OMP / dictionary-learning hyperparameters (defaults).
+// source: mcp_server/core/sparse_dictionary.py learn_dictionary() and
+//         build_seed_dictionary() — K=15, S=3, iter=5 from the module docstring.
+//         Cortex's own documented defaults; no published-paper source.
+// ---------------------------------------------------------------------------
+const DEFAULT_K          = 15;   // number of dictionary atoms
+const DEFAULT_SPARSITY   = 3;    // OMP sparsity (S=3)
+const DEFAULT_ITERATIONS = 5;    // K-SVD update iterations
+const MIN_SESSIONS_TO_LEARN = 10; // minimum conversations before learning (vs seed)
+
+// ---------------------------------------------------------------------------
+// Feature labeling thresholds
+// source: mcp_server/core/sparse_dictionary.py label_feature()
+// 0.05 = minimum absolute weight to include a signal in the label description;
+// 5    = maximum top-signals to retain per feature atom.
+// ---------------------------------------------------------------------------
+const MIN_SIGNAL_WEIGHT = 0.05;  // abs(weight) threshold for signal inclusion
+const TOP_SIGNALS_COUNT = 5;     // number of top signals kept per feature atom
+
+// ---------------------------------------------------------------------------
+// Cramer's rule solver size discriminants
+// source: mcp_server/core/sparse_dictionary_learning.py _solve_least_squares()
+// The OMP least-squares step is solved analytically via Cramer's rule for
+// system sizes 1, 2, 3 (maximum sparsity S=3); sizes above fall back to zeros.
+// ---------------------------------------------------------------------------
+const LS_SIZE_1 = 1;  // dispatch to 1×1 solver (sls1)
+const LS_SIZE_2 = 2;  // dispatch to 2×2 solver (sls2)
+const LS_SIZE_3 = 3;  // dispatch to 3×3 solver (sls3)
 
 export const SIGNAL_NAMES: string[] = [
   "tool:Read","tool:Edit","tool:Write","tool:Grep","tool:Glob","tool:Bash","tool:Agent",
@@ -24,20 +107,20 @@ const CATKW:Record<string,string[]>={"bug-fix":["fix","bug","error","issue","cra
 function zeros(n:number):number[]{return new Array<number>(n).fill(0);}
 function dot(a:readonly number[],b:readonly number[]):number{let s=0;for(let i=0;i<a.length;i++)s+=(a[i]??0)*(b[i]??0);return s;}
 export function norm(v:readonly number[]):number{return Math.sqrt(dot(v,v));}
-function normalize(v:readonly number[]):number[]{const n=norm(v);if(n<1e-10)return zeros(v.length);return v.map(x=>x/n);}
+function normalize(v:readonly number[]):number[]{const n=norm(v);if(n<NORM_EPSILON)return zeros(v.length);return v.map(x=>x/n);}
 function scale(v:readonly number[],s:number):number[]{return v.map(x=>x*s);}
 function subtract(a:readonly number[],b:readonly number[]):number[]{return a.map((x,i)=>x-(b[i]??0));}
-function cosineSim(a:readonly number[],b:readonly number[]):number{const na=norm(a),nb=norm(b);if(na<1e-10||nb<1e-10)return 0;return dot(a,b)/(na*nb);}
+function cosineSim(a:readonly number[],b:readonly number[]):number{const na=norm(a),nb=norm(b);if(na<NORM_EPSILON||nb<NORM_EPSILON)return 0;return dot(a,b)/(na*nb);}
 
 function sls1(G:readonly(readonly number[])[],h:readonly number[]):number[]{const g=G[0]?.[0]??0,h0=h[0]??0;return g!==0?[h0/g]:[0];}
-function sls2(G:readonly(readonly number[])[],h:readonly number[]):number[]{const g00=G[0]?.[0]??0,g01=G[0]?.[1]??0,g10=G[1]?.[0]??0,g11=G[1]?.[1]??0,h0=h[0]??0,h1=h[1]??0,det=g00*g11-g01*g10;if(Math.abs(det)<1e-12)return[0,0];return[(h0*g11-h1*g01)/det,(g00*h1-g10*h0)/det];}
+function sls2(G:readonly(readonly number[])[],h:readonly number[]):number[]{const g00=G[0]?.[0]??0,g01=G[0]?.[1]??0,g10=G[1]?.[0]??0,g11=G[1]?.[1]??0,h0=h[0]??0,h1=h[1]??0,det=g00*g11-g01*g10;if(Math.abs(det)<DET_EPSILON)return[0,0];return[(h0*g11-h1*g01)/det,(g00*h1-g10*h0)/det];}
 function det3(m:readonly(readonly number[])[]):number{const m00=m[0]?.[0]??0,m01=m[0]?.[1]??0,m02=m[0]?.[2]??0,m10=m[1]?.[0]??0,m11=m[1]?.[1]??0,m12=m[1]?.[2]??0,m20=m[2]?.[0]??0,m21=m[2]?.[1]??0,m22=m[2]?.[2]??0;return m00*(m11*m22-m12*m21)-m01*(m10*m22-m12*m20)+m02*(m10*m21-m11*m20);}
-function sls3(G:readonly(readonly number[])[],h:readonly number[]):number[]{const dg=det3(G);if(Math.abs(dg)<1e-12)return[0,0,0];const r=[];for(let c=0;c<3;c++){const M=G.map(row=>[...row]);for(let row=0;row<3;row++){const mRow=M[row];if(mRow)mRow[c]=h[row]??0;}r.push(det3(M)/dg);}return r;}
+function sls3(G:readonly(readonly number[])[],h:readonly number[]):number[]{const dg=det3(G);if(Math.abs(dg)<DET_EPSILON)return[0,0,0];const r=[];for(let c=0;c<LS_SIZE_3;c++){const M=G.map(row=>[...row]);for(let row=0;row<LS_SIZE_3;row++){const mRow=M[row];if(mRow)mRow[c]=h[row]??0;}r.push(det3(M)/dg);}return r;}
 function solveLs(atoms:readonly(readonly number[])[],b:readonly number[],sel:readonly number[]):number[]{
   const n=sel.length;if(n===0)return[];
   const G=Array.from({length:n},(_,i)=>Array.from({length:n},(__,j)=>dot(atoms[sel[i]??0]??[],atoms[sel[j]??0]??[])));
   const h=sel.map(i=>dot(atoms[i]??[],b));
-  if(n===1)return sls1(G,h);if(n===2)return sls2(G,h);if(n===3)return sls3(G,h);return zeros(n);
+  if(n===LS_SIZE_1)return sls1(G,h);if(n===LS_SIZE_2)return sls2(G,h);if(n===LS_SIZE_3)return sls3(G,h);return zeros(n);
 }
 
 export interface OmpResult{indices:number[];coefficients:number[];residual:number[];}
@@ -46,7 +129,7 @@ export function omp(signal:readonly number[],atoms:readonly(readonly number[])[]
   for(let _=0;_<sparsity;_++){
     let best=-1,bi=-1;
     for(let k=0;k<K;k++){if(sel.includes(k))continue;const c=Math.abs(dot(residual,atoms[k]??[]));if(c>best){best=c;bi=k;}}
-    if(bi===-1||best<1e-10)break;
+    if(bi===-1||best<NORM_EPSILON)break;
     sel.push(bi);
     const co=solveLs(atoms,signal,sel);residual=[...signal];
     for(let i=0;i<sel.length;i++)residual=subtract(residual,scale(atoms[sel[i]??0]??[],co[i]??0));
@@ -93,17 +176,17 @@ export function extractSessionActivation(conv:Record<string,unknown>):number[]{
   const total=tools.length||1;
   const tns=["Read","Edit","Write","Grep","Glob","Bash","Agent"];
   for(let i=0;i<tns.length;i++)act[i]=cntTool(tools,tns[i]??"")/total;
-  act[7]=kwDensity(text,AKW);act[8]=kwDensity(text,CKW);act[9]=kwDensity(text,PKW);act[10]=kwDensity(text,TKW);
+  act[IDX_KW_ABSTRACT]=kwDensity(text,AKW);act[IDX_KW_CONCRETE]=kwDensity(text,CKW);act[IDX_KW_PLANNING]=kwDensity(text,PKW);act[IDX_KW_TRIAL]=kwDensity(text,TKW);
   const dur=(conv["duration"] as number|undefined)??0;
-  act[11]=Math.min(dur/3_600_000,1);act[12]=Math.min(((conv["turnCount"] as number|undefined)??0)/50,1);
-  act[13]=dur>0&&dur<600_000?1:0;act[14]=((conv["turnCount"] as number|undefined)??0)>20?1:0;
-  act[15]=Math.min((cntTool(tools,"Glob")+cntTool(tools,"Read"))/total,1);
+  act[IDX_TMP_DURATION]=Math.min(dur/MS_PER_HOUR,1);act[IDX_TMP_TURNS]=Math.min(((conv["turnCount"] as number|undefined)??0)/TURN_COUNT_NORM_CAP,1);
+  act[IDX_TMP_BURST]=dur>0&&dur<MS_BURST_THRESHOLD?1:0;act[IDX_TMP_EXPLORE]=((conv["turnCount"] as number|undefined)??0)>TURN_EXPLORE_MIN?1:0;
+  act[IDX_TMP_SPREAD]=Math.min((cntTool(tools,"Glob")+cntTool(tools,"Read"))/total,1);
   const ec=cntTool(tools,"Edit")+cntTool(tools,"Write"),rg=cntTool(tools,"Read")+cntTool(tools,"Grep");
-  act[16]=rg>0?ec/rg:ec>0?1:0;
+  act[IDX_DRV_EDITREAD]=rg>0?ec/rg:ec>0?1:0;
   const lt=text.toLowerCase();let ac=false;
   const ce=Object.entries(CATKW);
-  for(let i=0;i<ce.length;i++){const ent=ce[i];if(!ent)continue;const [,kws]=ent;if(!kws||!kws.length)continue;const sc=kws.filter(k=>lt.includes(k)).length;act[17+i]=Math.min(sc/kws.length,1);if(sc>0)ac=true;}
-  if(!ac)act[26]=0.5;
+  for(let i=0;i<ce.length;i++){const ent=ce[i];if(!ent)continue;const [,kws]=ent;if(!kws||!kws.length)continue;const sc=kws.filter(k=>lt.includes(k)).length;act[IDX_CAT_START+i]=Math.min(sc/kws.length,1);if(sc>0)ac=true;}
+  if(!ac)act[IDX_CAT_GENERAL]=GENERAL_FALLBACK_WEIGHT;
   return act;
 }
 
@@ -111,8 +194,8 @@ const SLABS:Record<string,string>={"tool:Read":"reading","tool:Edit":"editing","
 
 export interface FeatureAtom{index:number;label:string;description:string;direction:number[];topSignals:Array<{signal:string;weight:number}>;}
 export function labelFeature(direction:readonly number[],index:number):FeatureAtom{
-  const w=SIGNAL_NAMES.map((sig,i)=>({signal:sig,weight:i<direction.length?(direction[i]??0):0})).filter(x=>Math.abs(x.weight)>0.05).sort((a,b)=>Math.abs(b.weight)-Math.abs(a.weight));
-  const ts=w.slice(0,5),top=ts[0]??null;
+  const w=SIGNAL_NAMES.map((sig,i)=>({signal:sig,weight:i<direction.length?(direction[i]??0):0})).filter(x=>Math.abs(x.weight)>MIN_SIGNAL_WEIGHT).sort((a,b)=>Math.abs(b.weight)-Math.abs(a.weight));
+  const ts=w.slice(0,TOP_SIGNALS_COUNT),top=ts[0]??null;
   let label=`feature-${index}`,desc="Behavioral feature";
   if(top){label=SLABS[top.signal]??`feature-${index}`;const sec=ts[1]??null;desc=sec?`${label} with ${SLABS[sec.signal]??""} tendency`:`Dominant ${label} behavioral mode`;}
   return{index,label,description:desc,direction:[...direction],topSignals:ts};
@@ -137,11 +220,11 @@ export function buildSeedDictionary():FeatureDictionary{
     const ts=Object.entries(s.signals).map(([sig,w])=>({signal:sig,weight:w})).sort((a,b)=>Math.abs(b.weight)-Math.abs(a.weight));
     return{index:idx,label:s.label,description:s.description,direction:nd,topSignals:ts};
   });
-  return{K:features.length,D,sparsity:3,signalNames:[...SIGNAL_NAMES],features,learnedFromSessions:0};
+  return{K:features.length,D,sparsity:DEFAULT_SPARSITY,signalNames:[...SIGNAL_NAMES],features,learnedFromSessions:0};
 }
 export function learnDictionary(conversations:Record<string,unknown>[]|null|undefined,options:{K?:number;sparsity?:number;iterations?:number}={}):FeatureDictionary{
-  const K=options.K??15,sparsity=options.sparsity??3,iterations=options.iterations??5;
-  if(!conversations||conversations.length<10)return buildSeedDictionary();
+  const K=options.K??DEFAULT_K,sparsity=options.sparsity??DEFAULT_SPARSITY,iterations=options.iterations??DEFAULT_ITERATIONS;
+  if(!conversations||conversations.length<MIN_SESSIONS_TO_LEARN)return buildSeedDictionary();
   const data=conversations.map(extractSessionActivation);
   let atoms=initializeAtoms(data,K);
   atoms=updateDictionary(data,atoms,sparsity,iterations);
@@ -150,6 +233,6 @@ export function learnDictionary(conversations:Record<string,unknown>[]|null|unde
 export function encodeSession(conv:Record<string,unknown>,dict:FeatureDictionary):{weights:Record<string,number>;reconstructionError:number}{
   const act=extractSessionActivation(conv),atoms=dict.features.map(f=>f.direction);
   const res=omp(act,atoms,dict.sparsity);const weights:Record<string,number>={};
-  for(let i=0;i<res.indices.length;i++){const idx=res.indices[i];const f=idx!==undefined?dict.features[idx]:undefined;const co=res.coefficients[i]??0;if(f&&Math.abs(co)>1e-10)weights[f.label]=co;}
+  for(let i=0;i<res.indices.length;i++){const idx=res.indices[i];const f=idx!==undefined?dict.features[idx]:undefined;const co=res.coefficients[i]??0;if(f&&Math.abs(co)>NORM_EPSILON)weights[f.label]=co;}
   return{weights,reconstructionError:norm(res.residual)};
 }

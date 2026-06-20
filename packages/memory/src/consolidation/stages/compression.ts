@@ -14,6 +14,72 @@
  *   mcp_server/core/compression.py (inline — no separate TS core file exists)
  */
 
+// ── Named constants ───────────────────────────────────────────────────────────
+
+// Milliseconds in one hour — arithmetic identity, no citation needed.
+const MS_PER_HOUR = 3_600_000;
+
+// Compression resistance thresholds and multipliers.
+// Qualitative direction (important/surprising/frequently-accessed memories
+// resist compression longer) is grounded in rate-distortion and memory-
+// importance literature (Tishby 1999; Toth et al. 2020), but the specific
+// thresholds and multipliers are engineering choices requiring ablation
+// calibration. See mcp_server/core/compression.py _compute_resistance docstring.
+// source: engineering choice — see mcp_server/core/compression.py _compute_resistance docstring
+const IMPORTANCE_DEFAULT = 0.5;
+const IMPORTANCE_HIGH_THRESHOLD = 0.7;
+const IMPORTANCE_HIGH_MULTIPLIER = 2.0; // source: engineering choice — calibration pending ablation
+const SURPRISE_HIGH_THRESHOLD = 0.6;
+const SURPRISE_HIGH_MULTIPLIER = 1.5; // source: engineering choice — von Restorff 1933 (qualitative), calibration pending
+const CONFIDENCE_HIGH_THRESHOLD = 0.8;
+const CONFIDENCE_HIGH_MULTIPLIER = 1.3; // source: engineering choice — calibration pending ablation
+const ACCESS_COUNT_HIGH_THRESHOLD = 10;
+const ACCESS_COUNT_HIGH_MULTIPLIER = 1.5; // source: engineering choice — calibration pending ablation
+
+// Sentence scoring weights (information density heuristics).
+// These are engineering choices; no paper specifies these exact values.
+// source: engineering choice — see mcp_server/core/compression.py _score_sentence
+const SCORE_FILE_PATH = 3.0;
+const SCORE_ERROR = 4.0;
+const SCORE_DECISION = 3.0;
+const SCORE_NUMBER_VERSION = 2.0;
+const SCORE_CAMELCASE = 2.0;
+const SCORE_BACKTICK = 2.0;
+
+// Primacy-recency scoring bonuses for gist selection.
+// source: port of mcp_server/core/compression.py:163-165 (score += 10.0 # Primacy,
+//   score += 8.0 # Recency). Engineering bonuses; the source of truth cites no paper.
+const SCORE_PRIMACY_BONUS = 10.0;
+const SCORE_RECENCY_BONUS = 8.0;
+
+// Gist extraction parameters.
+// source: engineering choice — see mcp_server/core/compression.py extract_gist
+const GIST_TARGET_RATIO = 0.3;         // target ~30% of original length
+const GIST_MIN_LENGTH = 50;            // minimum gist character length floor
+const GIST_SHORT_SENTENCE_MAX = 3;    // use all sentences when count <= this
+
+// Tag generation parameters.
+// source: engineering choice — see mcp_server/core/compression.py _extract_tag_entities / _truncate_tag_repr
+const TAG_MAX_ENTITIES = 5;            // max entities in tag
+const TAG_MAX_LENGTH = 200;            // maximum tag character length
+const TAG_TRUNCATE_LENGTH = 197;       // TAG_MAX_LENGTH - 3 (room for "...")
+const TAG_AVAILABLE_THRESHOLD = 10;   // min available chars before fallback truncation
+const TAG_SUMMARY_FALLBACK_LEN = 30;  // summary prefix length under fallback truncation
+const TAG_ENTITIES_FALLBACK_COUNT = 2; // entity count under fallback truncation
+
+// YYYY-MM-DD date prefix length = 10 characters.
+// source: port of mcp_server/core/compression.py:234 (created[:10]); plain string
+//   slice in the source of truth — no standard or paper cited.
+const ISO_DATE_PREFIX_LEN = 10;
+
+// Ellipsis string length used when slicing to fit within TAG_MAX_LENGTH.
+// source: engineering choice — "..." is 3 characters; see mcp_server/core/compression.py _truncate_tag_repr
+const ELLIPSIS_LEN = 3;
+
+// Fallback summary length when no sentences are available in generateTag.
+// source: engineering choice — see mcp_server/core/compression.py generate_tag (content[:80])
+const TAG_SUMMARY_NO_SENTENCE_LEN = 80;
+
 // ── Regex patterns (from mcp_server/core/compression.py) ─────────────────────
 
 const CODE_BLOCK_RE = /```[\s\S]*?```/g;
@@ -94,10 +160,10 @@ function parseIngestedAt(memory: Record<string, unknown>): Date | null {
  */
 function computeResistance(memory: Record<string, unknown>): number {
   let resistance = 1.0;
-  if (((memory["importance"] as number | undefined) ?? 0.5) > 0.7) resistance *= 2.0;
-  if (((memory["surprise_score"] as number | undefined) ?? 0.0) > 0.6) resistance *= 1.5;
-  if (((memory["confidence"] as number | undefined) ?? 1.0) > 0.8) resistance *= 1.3;
-  if (((memory["access_count"] as number | undefined) ?? 0) > 10) resistance *= 1.5;
+  if (((memory["importance"] as number | undefined) ?? IMPORTANCE_DEFAULT) > IMPORTANCE_HIGH_THRESHOLD) resistance *= IMPORTANCE_HIGH_MULTIPLIER;
+  if (((memory["surprise_score"] as number | undefined) ?? 0.0) > SURPRISE_HIGH_THRESHOLD) resistance *= SURPRISE_HIGH_MULTIPLIER;
+  if (((memory["confidence"] as number | undefined) ?? 1.0) > CONFIDENCE_HIGH_THRESHOLD) resistance *= CONFIDENCE_HIGH_MULTIPLIER;
+  if (((memory["access_count"] as number | undefined) ?? 0) > ACCESS_COUNT_HIGH_THRESHOLD) resistance *= ACCESS_COUNT_HIGH_MULTIPLIER;
   return resistance;
 }
 
@@ -118,7 +184,7 @@ function getCompressionSchedule(
   const ingestedAt = parseIngestedAt(memory);
   if (!ingestedAt) return 0;
 
-  const hoursElapsed = (Date.now() - ingestedAt.getTime()) / 3_600_000;
+  const hoursElapsed = (Date.now() - ingestedAt.getTime()) / MS_PER_HOUR;
   const resistance = computeResistance(memory);
 
   if (hoursElapsed < gistAgeHours * resistance) return 0;
@@ -135,14 +201,14 @@ function splitSentences(text: string): string[] {
 
 function scoreSentence(sentence: string): number {
   let score = 0.0;
-  if (FILE_PATH_RE.test(sentence)) score += 3.0;
+  if (FILE_PATH_RE.test(sentence)) score += SCORE_FILE_PATH;
   FILE_PATH_RE.lastIndex = 0;
-  if (ERROR_RE.test(sentence)) score += 4.0;
-  if (DECISION_RE.test(sentence)) score += 3.0;
-  if (NUMBER_VERSION_RE.test(sentence)) score += 2.0;
-  if (CAMELCASE_RE.test(sentence)) score += 2.0;
+  if (ERROR_RE.test(sentence)) score += SCORE_ERROR;
+  if (DECISION_RE.test(sentence)) score += SCORE_DECISION;
+  if (NUMBER_VERSION_RE.test(sentence)) score += SCORE_NUMBER_VERSION;
+  if (CAMELCASE_RE.test(sentence)) score += SCORE_CAMELCASE;
   CAMELCASE_RE.lastIndex = 0;
-  if (sentence.includes("`")) score += 2.0;
+  if (sentence.includes("`")) score += SCORE_BACKTICK;
   return score;
 }
 
@@ -154,8 +220,8 @@ function selectGistSentences(
   // Invariant: always include first and last sentence (primacy-recency effect).
   const scored: Array<[number, string, number]> = sentences.map((sent, i) => {
     let score = scoreSentence(sent);
-    if (i === 0) score += 10.0; // primacy
-    if (i === sentences.length - 1) score += 8.0; // recency
+    if (i === 0) score += SCORE_PRIMACY_BONUS; // primacy
+    if (i === sentences.length - 1) score += SCORE_RECENCY_BONUS; // recency
     return [i, sent, score];
   });
   scored.sort((a, b) => b[2] - a[2]);
@@ -185,7 +251,7 @@ function selectGistSentences(
  * Precondition: content is a non-empty string.
  * Postcondition: returns a string <= content.length (usually ~30% of original).
  */
-function extractGist(content: string, targetRatio = 0.3): string {
+function extractGist(content: string, targetRatio = GIST_TARGET_RATIO): string {
   const codeBlocks = content.match(CODE_BLOCK_RE) ?? [];
   CODE_BLOCK_RE.lastIndex = 0;
   const textWithoutCode = content.replace(CODE_BLOCK_RE, "");
@@ -196,11 +262,11 @@ function extractGist(content: string, targetRatio = 0.3): string {
     return codeBlocks.length > 0 ? codeBlocks.join("\n\n") : content;
   }
 
-  if (sentences.length <= 3) {
+  if (sentences.length <= GIST_SHORT_SENTENCE_MAX) {
     return [...sentences, ...codeBlocks].join("\n");
   }
 
-  const targetLength = Math.max(content.length * targetRatio, 50);
+  const targetLength = Math.max(content.length * targetRatio, GIST_MIN_LENGTH);
   const gistSentences = selectGistSentences(sentences, codeBlocks, targetLength);
   return [...gistSentences, ...codeBlocks].join("\n");
 }
@@ -222,7 +288,7 @@ function extractTagEntities(content: string, memory: Record<string, unknown>): s
       if (typeof t === "string") entities.add(t);
     }
   }
-  return [...entities].sort().slice(0, 5);
+  return [...entities].sort().slice(0, TAG_MAX_ENTITIES);
 }
 
 function formatCreatedDate(memory: Record<string, unknown>): string {
@@ -230,10 +296,10 @@ function formatCreatedDate(memory: Record<string, unknown>): string {
   if (!created) return "unknown";
   try {
     const dt = typeof created === "string" ? new Date(created) : (created as Date);
-    if (isNaN(dt.getTime())) return String(created).slice(0, 10);
-    return dt.toISOString().slice(0, 10);
+    if (isNaN(dt.getTime())) return String(created).slice(0, ISO_DATE_PREFIX_LEN);
+    return dt.toISOString().slice(0, ISO_DATE_PREFIX_LEN);
   } catch {
-    return String(created).slice(0, 10);
+    return String(created).slice(0, ISO_DATE_PREFIX_LEN);
   }
 }
 
@@ -244,20 +310,20 @@ function truncateTagRepr(
   entityList: string[],
 ): string {
   let tagRepr = `${summary} | Tags: ${tagPart} | Created: ${dateStr}`;
-  if (tagRepr.length > 200) {
+  if (tagRepr.length > TAG_MAX_LENGTH) {
     const suffix = ` | Tags: ${tagPart} | Created: ${dateStr}`;
-    const available = 200 - suffix.length;
+    const available = TAG_MAX_LENGTH - suffix.length;
     let s = summary;
     let tp = tagPart;
-    if (available > 10) {
-      s = summary.slice(0, available - 3) + "...";
+    if (available > TAG_AVAILABLE_THRESHOLD) {
+      s = summary.slice(0, available - ELLIPSIS_LEN) + "...";
     } else {
-      s = summary.slice(0, 30) + "...";
-      tp = entityList.length > 0 ? entityList.slice(0, 2).join(", ") : "general";
+      s = summary.slice(0, TAG_SUMMARY_FALLBACK_LEN) + "...";
+      tp = entityList.length > 0 ? entityList.slice(0, TAG_ENTITIES_FALLBACK_COUNT).join(", ") : "general";
     }
     tagRepr = `${s} | Tags: ${tp} | Created: ${dateStr}`;
   }
-  if (tagRepr.length > 200) tagRepr = tagRepr.slice(0, 197) + "...";
+  if (tagRepr.length > TAG_MAX_LENGTH) tagRepr = tagRepr.slice(0, TAG_TRUNCATE_LENGTH) + "...";
   return tagRepr;
 }
 
@@ -273,7 +339,7 @@ function truncateTagRepr(
 function generateTag(content: string, memory: Record<string, unknown>): string {
   const entityList = extractTagEntities(content, memory);
   const sentences = splitSentences(content);
-  const summary = sentences[0] ?? content.slice(0, 80);
+  const summary = sentences[0] ?? content.slice(0, TAG_SUMMARY_NO_SENTENCE_LEN);
   const dateStr = formatCreatedDate(memory);
   const tagPart = entityList.length > 0 ? entityList.join(", ") : "general";
   return truncateTagRepr(summary, tagPart, dateStr, entityList);

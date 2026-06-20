@@ -44,6 +44,61 @@ const ACT_R_NOISE_S = 1.0;
 // Minimum hours to avoid log(0)
 const MIN_LIFETIME_HOURS = 0.01;
 
+// ── Time Conversion ───────────────────────────────────────────────────────────
+
+// Milliseconds per hour — pure math constant (60 * 60 * 1000).
+const MS_PER_HOUR = 3_600_000;
+
+// ── ACT-R Importance / Valence Modulation Constants (McGaugh 2004) ────────────
+// source: McGaugh JL (2004) "The amygdala modulates the consolidation of
+//   memories of emotionally arousing experiences" — meaningful and emotional
+//   memories decay slower; these coefficients adapt that finding to ACT-R d.
+//   Matches mcp_server/core/decay_cycle.py _compute_actr_decay().
+
+// Importance threshold above which a memory is considered "important".
+const IMPORTANCE_HIGH_THRESHOLD = 0.7;
+
+// Multiplier applied to d when importance exceeds threshold (20% slower decay).
+const IMPORTANCE_DECAY_SLOWDOWN = 0.8;
+
+// Valence resistance coefficient: d is scaled by (1 - |valence| * coeff).
+const VALENCE_DECAY_RESISTANCE = 0.3;
+
+// Minimum value for d to prevent d=0 (engineering floor, no rehearsal effect).
+// source: mcp_server/core/decay_cycle.py — engineering choice, avoids d=0 singularity.
+const ACT_R_DECAY_D_MIN = 0.1;
+
+// ── Heat-Change Precision Sentinel ────────────────────────────────────────────
+// Skip updates smaller than this to avoid spurious writes.
+// source: mcp_server/core/decay_cycle.py — engineering choice, matches round(x, 6).
+const HEAT_CHANGE_THRESHOLD = 0.001;
+
+// Rounding precision: equivalent to Python's round(x, 6).
+// source: mcp_server/core/decay_cycle.py — engineering choice.
+const HEAT_ROUND_PRECISION = 1_000_000;
+
+// ── Default Decay Parameters ──────────────────────────────────────────────────
+// All defaults match mcp_server/core/decay_cycle.py compute_decay_updates() /
+// compute_entity_decay() — engineering-tuned; no paper citation available.
+
+// Per-hour exponential decay factor for memory heat.
+const DEFAULT_MEMORY_DECAY_FACTOR = 0.95;
+
+// Per-hour exponential decay factor weighted by importance.
+const DEFAULT_IMPORTANCE_DECAY_FACTOR = 0.998;
+
+// Resistance coefficient for emotional valence slowing decay.
+const DEFAULT_EMOTIONAL_DECAY_RESISTANCE = 0.5;
+
+// Heat below this threshold is considered "cold" and skipped.
+const DEFAULT_COLD_THRESHOLD = 0.05;
+
+// Per-hour exponential decay factor for entity heat (simpler model).
+const DEFAULT_ENTITY_DECAY_FACTOR = 0.98;
+
+// Default importance used when a memory carries no importance field.
+const DEFAULT_IMPORTANCE = 0.5;
+
 // ── DateTime Helpers ──────────────────────────────────────────────────────────
 
 function parseDatetime(value: unknown): Date | null {
@@ -63,7 +118,7 @@ function hoursSinceAccess(
   const lastAccessed = mem["last_accessed"] ?? mem["created_at"] ?? "";
   const lastDt = parseDatetime(lastAccessed);
   if (!lastDt) return null;
-  const hours = (now.getTime() - lastDt.getTime()) / 3_600_000;
+  const hours = (now.getTime() - lastDt.getTime()) / MS_PER_HOUR;
   return hours > 0 ? hours : null;
 }
 
@@ -74,7 +129,7 @@ function hoursSinceCreation(
   const created = mem["created_at"] ?? "";
   const createdDt = parseDatetime(created);
   if (!createdDt) return null;
-  const hours = (now.getTime() - createdDt.getTime()) / 3_600_000;
+  const hours = (now.getTime() - createdDt.getTime()) / MS_PER_HOUR;
   return Math.max(MIN_LIFETIME_HOURS, hours);
 }
 
@@ -116,7 +171,7 @@ export function actrActivationToHeat(baseLevel: number, s = ACT_R_NOISE_S): numb
 function computeActrDecay(
   mem: Record<string, unknown>,
   now: Date,
-  importance = 0.5,
+  importance = DEFAULT_IMPORTANCE,
   valence = 0.0,
 ): number | null {
   const lifetime = hoursSinceCreation(mem, now);
@@ -126,9 +181,9 @@ function computeActrDecay(
 
   // Modulate d based on importance and emotion
   let d = ACT_R_DECAY_D;
-  if (importance > 0.7) d *= 0.8; // Important memories decay 20% slower
-  d *= 1.0 - Math.abs(valence) * 0.3; // Emotional memories resist decay
-  d = Math.max(0.1, d); // Floor to prevent d=0
+  if (importance > IMPORTANCE_HIGH_THRESHOLD) d *= IMPORTANCE_DECAY_SLOWDOWN; // Important memories decay 20% slower
+  d *= 1.0 - Math.abs(valence) * VALENCE_DECAY_RESISTANCE; // Emotional memories resist decay
+  d = Math.max(ACT_R_DECAY_D_MIN, d); // Floor to prevent d=0
 
   const baseLevel = computeActrBaseLevel(accessCount, lifetime, d);
   return actrActivationToHeat(baseLevel);
@@ -157,7 +212,7 @@ function computeSingleDecay(
     const actrResult = computeActrDecay(
       mem,
       now,
-      (mem["importance"] as number | undefined) ?? 0.5,
+      (mem["importance"] as number | undefined) ?? DEFAULT_IMPORTANCE,
       (mem["emotional_valence"] as number | undefined) ?? 0.0,
     );
     if (actrResult === null) return null;
@@ -174,7 +229,7 @@ function computeSingleDecay(
     newHeat = computeDecay(
       currentHeat,
       hours,
-      (mem["importance"] as number | undefined) ?? 0.5,
+      (mem["importance"] as number | undefined) ?? DEFAULT_IMPORTANCE,
       (mem["emotional_valence"] as number | undefined) ?? 0.0,
       (mem["confidence"] as number | undefined) ?? 1.0,
       {
@@ -188,8 +243,8 @@ function computeSingleDecay(
   // Enforce permastore floor (Bahrick 1984)
   newHeat = Math.max(floor, newHeat);
 
-  if (Math.abs(newHeat - currentHeat) > 0.001) {
-    return [(mem["id"] as number), Math.round(newHeat * 1_000_000) / 1_000_000];
+  if (Math.abs(newHeat - currentHeat) > HEAT_CHANGE_THRESHOLD) {
+    return [(mem["id"] as number), Math.round(newHeat * HEAT_ROUND_PRECISION) / HEAT_ROUND_PRECISION];
   }
   return null;
 }
@@ -220,10 +275,10 @@ export function computeDecayUpdates(
 ): Array<[number, number]> {
   const ts = now ?? new Date();
   const {
-    decayFactor = 0.95,
-    importanceDecayFactor = 0.998,
-    emotionalDecayResistance = 0.5,
-    coldThreshold = 0.05,
+    decayFactor = DEFAULT_MEMORY_DECAY_FACTOR,
+    importanceDecayFactor = DEFAULT_IMPORTANCE_DECAY_FACTOR,
+    emotionalDecayResistance = DEFAULT_EMOTIONAL_DECAY_RESISTANCE,
+    coldThreshold = DEFAULT_COLD_THRESHOLD,
     adaptiveDecay = false,
   } = opts;
 
@@ -257,7 +312,7 @@ export function computeEntityDecay(
   opts: { decayFactor?: number; coldThreshold?: number } = {},
 ): Array<[number, number]> {
   const ts = now ?? new Date();
-  const { decayFactor = 0.98, coldThreshold = 0.05 } = opts;
+  const { decayFactor = DEFAULT_ENTITY_DECAY_FACTOR, coldThreshold = DEFAULT_COLD_THRESHOLD } = opts;
 
   const updates: Array<[number, number]> = [];
   for (const entity of entities) {
@@ -268,12 +323,12 @@ export function computeEntityDecay(
     const lastDt = parseDatetime(lastAccessed);
     if (!lastDt) continue;
 
-    const hours = (ts.getTime() - lastDt.getTime()) / 3_600_000;
+    const hours = (ts.getTime() - lastDt.getTime()) / MS_PER_HOUR;
     if (hours <= 0) continue;
 
     const newHeat = currentHeat * Math.pow(decayFactor, hours);
-    if (Math.abs(newHeat - currentHeat) > 0.001) {
-      updates.push([entity["id"] as number, Math.round(newHeat * 1_000_000) / 1_000_000]);
+    if (Math.abs(newHeat - currentHeat) > HEAT_CHANGE_THRESHOLD) {
+      updates.push([entity["id"] as number, Math.round(newHeat * HEAT_ROUND_PRECISION) / HEAT_ROUND_PRECISION]);
     }
   }
   return updates;

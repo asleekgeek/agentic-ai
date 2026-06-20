@@ -13,6 +13,50 @@
 
 import { buildEnrichedContent } from "../wiki/enrichment.js";
 
+// ── Configuration ─────────────────────────────────────────────────────────────
+
+// Default cap on the number of hottest memories re-processed during dream replay.
+// source: port of core/sleep_compute.py:L179,L239 (run_sleep_compute_streamed /
+// run_sleep_compute, max_replay: int = 50); default-limit-sentinel-epsilon, no paper.
+const DEFAULT_MAX_REPLAY = 50;
+
+// Minimum content length (chars) below which a memory is skipped during replay.
+// source: port of core/sleep_compute.py:L37 (len(content) < 30);
+// default-limit-sentinel-epsilon, no paper.
+const MIN_CONTENT_LENGTH = 30;
+
+// Maximum chars kept when truncating a centroid sentence for cluster summaries.
+// source: port of core/sleep_compute.py:L56,L74 (texts[0][:200], best_text[:200]);
+// default-limit-sentinel-epsilon, no paper.
+const CENTROID_SENTENCE_MAX_CHARS = 200;
+
+// Default cap on the number of stale-embedding candidates returned.
+// source: port of core/sleep_compute.py:L180,L240 (max_reembed: int = 100);
+// default-limit-sentinel-epsilon, no paper.
+const DEFAULT_MAX_REEMBED = 100;
+
+// Default number of top keywords returned by keywordFrequency.
+// TS-only default (Python uses 8 at the call site via _narration_from_accumulators
+// keywords[:8]; the Python helper does not declare a default for the internal
+// function — this 10 is a TS-only sentinel); not in Cortex py as a top-level
+// default, no paper.
+const DEFAULT_KEYWORD_TOP_N = 10;
+
+// Number of top keywords included in the narration key-themes phrase.
+// source: port of core/sleep_compute.py:L145 (keywords[:5]);
+// default-limit-sentinel-epsilon, no paper.
+const NARRATION_KW_PHRASE_COUNT = 5;
+
+// Maximum chars kept from the top-importance memory content in the narration.
+// source: port of core/sleep_compute.py:L153 (top_importance.get("content", "")[:120]);
+// default-limit-sentinel-epsilon, no paper.
+const NARRATION_TOP_IMPORTANCE_MAX_CHARS = 120;
+
+// Number of top keywords extracted per narration pass.
+// source: port of core/sleep_compute.py:L143 (keywords[:8]);
+// default-limit-sentinel-epsilon, no paper.
+const NARRATION_KEYWORD_COUNT = 8;
+
 // ── Dream Replay ──────────────────────────────────────────────────────────────
 
 /**
@@ -27,7 +71,7 @@ import { buildEnrichedContent } from "../wiki/enrichment.js";
  */
 export function dreamReplay(
   memories: Record<string, unknown>[],
-  maxMemories: number = 50,
+  maxMemories: number = DEFAULT_MAX_REPLAY,
 ): Array<{ memory_id: unknown; enriched_content: string }> {
   const hot = [...memories]
     .sort((a, b) => ((b["heat"] as number) ?? 0) - ((a["heat"] as number) ?? 0))
@@ -36,7 +80,7 @@ export function dreamReplay(
   const updates: Array<{ memory_id: unknown; enriched_content: string }> = [];
   for (const mem of hot) {
     const content = (mem["content"] ?? "") as string;
-    if (!content || content.length < 30) continue;
+    if (!content || content.length < MIN_CONTENT_LENGTH) continue;
     // Skip already-enriched content to avoid double-appending
     if (content.includes("<!-- doc2query -->")) continue;
 
@@ -52,7 +96,7 @@ export function dreamReplay(
 
 function centroidSentence(texts: string[]): string {
   if (texts.length === 0) return "";
-  if (texts.length === 1) return (texts[0] ?? "").slice(0, 200);
+  if (texts.length === 1) return (texts[0] ?? "").slice(0, CENTROID_SENTENCE_MAX_CHARS);
 
   function tokens(t: string): Set<string> {
     return new Set(Array.from(t.toLowerCase().matchAll(/[a-zA-Z]{3,}/g)).map((m) => m[0]));
@@ -73,7 +117,7 @@ function centroidSentence(texts: string[]): string {
       bestText = t;
     }
   }
-  return bestText.slice(0, 200);
+  return bestText.slice(0, CENTROID_SENTENCE_MAX_CHARS);
 }
 
 /**
@@ -122,7 +166,7 @@ export function summarizeClusters(
  */
 export function selectStaleEmbeddings(
   memories: Record<string, unknown>[],
-  maxMemories: number = 100,
+  maxMemories: number = DEFAULT_MAX_REEMBED,
 ): Record<string, unknown>[] {
   const candidates: Record<string, unknown>[] = [];
   for (const mem of memories) {
@@ -145,7 +189,7 @@ export function selectStaleEmbeddings(
 
 const FILLER_RE = /\b(the|a|an|is|are|was|were|this|that|it|be|been|being)\b/gi;
 
-function keywordFrequency(texts: string[], topN: number = 10): Array<[string, number]> {
+function keywordFrequency(texts: string[], topN: number = DEFAULT_KEYWORD_TOP_N): Array<[string, number]> {
   const freq = new Map<string, number>();
   for (const text of texts) {
     const words = Array.from(text.toLowerCase().matchAll(/[a-zA-Z]{4,}/g)).map((m) => m[0]);
@@ -179,7 +223,7 @@ function buildNarrationProse(
   periodLabel: string,
 ): string {
   const kwPhrase =
-    keywords.length > 0 ? keywords.slice(0, 5).map(([kw]) => kw).join(", ") : "various topics";
+    keywords.length > 0 ? keywords.slice(0, NARRATION_KW_PHRASE_COUNT).map(([kw]) => kw).join(", ") : "various topics";
   const label = directory || "this project";
 
   const lines: string[] = [
@@ -191,7 +235,7 @@ function buildNarrationProse(
     (a, b) => ((b["importance"] as number) ?? 0) - ((a["importance"] as number) ?? 0),
   );
   if (byImportance.length > 0) {
-    const top = (((byImportance[0] ?? {})["content"] ?? "") as string).slice(0, 120);
+    const top = (((byImportance[0] ?? {})["content"] ?? "") as string).slice(0, NARRATION_TOP_IMPORTANCE_MAX_CHARS);
     lines.push(`Most important: "${top}"`);
   }
 
@@ -229,7 +273,7 @@ export function autoNarrate(
 
   const sortedMems = [...memories].sort((a, b) => memoryTimestamp(b) - memoryTimestamp(a));
   const texts = sortedMems.map((m) => (m["content"] ?? "") as string).filter((t) => t.length > 0);
-  const keywords = keywordFrequency(texts, 8);
+  const keywords = keywordFrequency(texts, NARRATION_KEYWORD_COUNT);
   const narrativeText = buildNarrationProse(memories, keywords, directory, periodLabel);
 
   return {
@@ -263,8 +307,8 @@ export function runSleepCompute(
   clusters: Record<string, unknown>[] | null = null,
   directory: string = "",
   periodLabel: string = "recent",
-  maxReplay: number = 50,
-  maxReembed: number = 100,
+  maxReplay: number = DEFAULT_MAX_REPLAY,
+  maxReembed: number = DEFAULT_MAX_REEMBED,
 ): SleepComputeResult {
   const replayUpdates = dreamReplay(memories, maxReplay);
   const clusterSummaries = summarizeClusters(clusters ?? []);

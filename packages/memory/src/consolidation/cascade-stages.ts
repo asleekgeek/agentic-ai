@@ -51,6 +51,15 @@ export interface StageProperties {
   readonly heatFloor: number;
 }
 
+// ── Serialization Constants ──────────────────────────────────────────────────
+
+/**
+ * Multiplier used to round hours_in_stage to 2 decimal places.
+ * Equivalent to Python's round(x, 2) in cascade_stages.py::stage_to_dict.
+ * // source: port of mcp_server/core/cascade_stages.py — round(hours_in_stage, 2)
+ */
+const HOURS_ROUNDING_FACTOR = 100; // 10^2 = two decimal places
+
 // ── Stage Properties ────────────────────────────────────────────────────────
 
 const STAGE_PROPERTIES: Readonly<Record<ConsolidationStageName, StageProperties>> = {
@@ -188,7 +197,7 @@ export function stageToDict(
   const props = getStagePropertiesByName(stage);
   return {
     stage,
-    hours_in_stage: Math.round(hoursInStage * 100) / 100,
+    hours_in_stage: Math.round(hoursInStage * HOURS_ROUNDING_FACTOR) / HOURS_ROUNDING_FACTOR,
     replay_count: replayCount,
     decay_multiplier: props.decayMultiplier,
     interference_vulnerability: props.interferenceVulnerability,

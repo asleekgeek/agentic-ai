@@ -39,6 +39,23 @@ const STDP_REPLAY_SCALE = 0.5;
  */
 const COMPRESSION_RATIO = 20.0;
 
+// ── DJB2 hash constants ────────────────────────────────────────────────────
+// Non-cryptographic DJB2 string hash (seed 5381, shift 5: h*33 = (h<<5)+h).
+// source: port of Cortex mcp_server/shared/hash.py:16-18 — Cortex documents this
+//   as "DJB2 hash" with no published-paper citation; these are the algorithm's
+//   intrinsic constants, not attributed to any paper in the source of truth.
+/** Initial seed for the djb2 hash. */
+const DJB2_INIT = 5381;
+/** Bit-shift operand in djb2: (h << DJB2_SHIFT) + h ≡ h * 33. */
+const DJB2_SHIFT = 5;
+/**
+ * Bitmask to restrict hash output to a positive 31-bit integer.
+ * Mirrors Python: hash(s) & 0x7FFFFFFF in mcp_server/core/replay_execution.py:234-235.
+ * source: cortex@ed33435 mcp_server/core/replay_execution.py — standard positive-int
+ *   hash truncation idiom used identically in consolidation/replay.ts.
+ */
+const HASH_POSITIVE_31_BIT_MASK = 0x7fffffff;
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 function parseTags(tags: unknown): string[] {
@@ -200,8 +217,8 @@ function entityPairsForStep(
     for (const tgtEnt of nextEv.entities) {
       if (srcEnt === tgtEnt) continue;
       // Simple deterministic hash to integer
-      const srcHash = Math.abs(hashStr(srcEnt)) & 0x7FFFFFFF;
-      const tgtHash = Math.abs(hashStr(tgtEnt)) & 0x7FFFFFFF;
+      const srcHash = Math.abs(hashStr(srcEnt)) & HASH_POSITIVE_31_BIT_MASK;
+      const tgtHash = Math.abs(hashStr(tgtEnt)) & HASH_POSITIVE_31_BIT_MASK;
       if (direction === ReplayDirection.FORWARD) {
         pairs.push([srcHash, tgtHash, baseDt]);
       } else {
@@ -214,9 +231,9 @@ function entityPairsForStep(
 
 /** Simple djb2 hash for string → integer. */
 function hashStr(s: string): number {
-  let h = 5381;
+  let h = DJB2_INIT;
   for (let i = 0; i < s.length; i++) {
-    h = ((h << 5) + h) + s.charCodeAt(i);
+    h = ((h << DJB2_SHIFT) + h) + s.charCodeAt(i);
     h = h & h; // force 32-bit integer
   }
   return h;

@@ -87,6 +87,47 @@ const STDP_REPLAY_SCALE = 0.5;
 const COMPRESSION_RATIO = 20.0;
 const PRIORITY_THRESHOLD = 0.3;
 
+// ── Priority scoring weights ──────────────────────────────────────────────────
+// source: port of core/replay_selection.py:57; true-hand-tuned, no paper.
+// Module docstring (replay_selection.py:14): "All constants (0.4/0.6 weights,
+// threshold 0.3, max 5) are hand-tuned."
+/** Weight on avg_heat term in priority formula: (avg_heat * W_HEAT + sqrt(variance) * W_VAR) * DA. */
+const PRIORITY_W_HEAT = 0.4;
+/** Weight on sqrt(variance) term in priority formula. Complement of PRIORITY_W_HEAT. */
+const PRIORITY_W_VAR = 0.6;
+
+// source: port of core/replay.py:206; true-hand-tuned, no paper.
+// Hard threshold above which a sequence emits a schema-update signal.
+const SCHEMA_SIGNAL_PRIORITY_THRESHOLD = 0.5;
+
+// source: port of core/replay.py:213; true-hand-tuned, no paper.
+// replay_selection.py:14 confirms "All constants … are hand-tuned."
+// Scales priority_score to produce a schema update_strength in (0, 1).
+const SCHEMA_UPDATE_STRENGTH_FACTOR = 0.3;
+
+// ── Micro-checkpoint tuning ───────────────────────────────────────────────────
+// source: port of core/replay_formatting.py:33; default-limit-sentinel-epsilon, no paper.
+// Minimum tool calls before micro-checkpoint logic activates.
+const MICRO_CHECKPOINT_COOLDOWN_DEFAULT = 5;
+
+// source: port of core/replay_formatting.py:48; true-hand-tuned, no paper.
+// Surprise level above which content triggers a micro-checkpoint.
+const MICRO_CHECKPOINT_SURPRISE_THRESHOLD = 0.8;
+
+// ── DJB2 Hash Constants ───────────────────────────────────────────────────────
+// Non-cryptographic DJB2 string hash (seed 5381, multiplier 33 ≡ (h<<5)+h).
+// source: port of Cortex mcp_server/shared/hash.py:16-18 — Cortex documents this
+//   as "DJB2 hash" with no published-paper citation; these are the algorithm's
+//   intrinsic constants, not attributed to any paper in the source of truth.
+/** Initial seed for the djb2 hash. */
+const DJB2_INIT = 5381;
+/** Djb2 multiplicand: equivalent to (h << 5) + h = h * 33. */
+const DJB2_MULTIPLIER = 33;
+/** Bitmask to restrict hash to positive 31-bit integer (mirrors Python hash(s) & 0x7FFFFFFF). */
+// source: mcp_server/core/replay_execution.py — `hash(src_ent) & 0x7FFFFFFF`; standard
+// Python/JS idiom for positive-int hash truncation.
+const HASH_POSITIVE_31_BIT_MASK = 0x7fffffff;
+
 // ── Helper utilities ──────────────────────────────────────────────────────────
 
 function parseTags(tags: unknown): string[] {
@@ -244,8 +285,8 @@ function entityPairsForStep(
       if (srcEnt === tgtEnt) continue;
       // Hash entity strings to integers. We use a simple djb2-style hash
       // and mask to positive 31-bit integer (mirrors Python hash(s) & 0x7FFFFFFF).
-      const srcHash = hashStr(srcEnt) & 0x7fffffff;
-      const tgtHash = hashStr(tgtEnt) & 0x7fffffff;
+      const srcHash = hashStr(srcEnt) & HASH_POSITIVE_31_BIT_MASK;
+      const tgtHash = hashStr(tgtEnt) & HASH_POSITIVE_31_BIT_MASK;
 
       if (direction === "forward") {
         pairs.push([srcHash, tgtHash, baseDt]);
@@ -258,10 +299,10 @@ function entityPairsForStep(
 }
 
 function hashStr(s: string): number {
-  let h = 5381;
+  let h = DJB2_INIT;
   for (let i = 0; i < s.length; i++) {
     // djb2: h = ((h << 5) + h) + charCode
-    h = Math.imul(h, 33) ^ s.charCodeAt(i);
+    h = Math.imul(h, DJB2_MULTIPLIER) ^ s.charCodeAt(i);
   }
   return h;
 }
@@ -308,7 +349,7 @@ export function computeSequencePriority(
   const heats = events.map((e) => e.heat);
   const avgHeat = heats.reduce((s, h) => s + h, 0) / heats.length;
   const variance = heats.reduce((s, h) => s + Math.pow(h - avgHeat, 2), 0) / heats.length;
-  const rawPriority = (avgHeat * 0.4 + Math.sqrt(variance) * 0.6) * dopamineLevel;
+  const rawPriority = (avgHeat * PRIORITY_W_HEAT + Math.sqrt(variance) * PRIORITY_W_VAR) * dopamineLevel;
   return Math.max(0.0, Math.min(1.0, rawPriority));
 }
 
@@ -404,12 +445,12 @@ function aggregateResults(selected: ReplaySequence[]): ReplayResult {
     if (seq.direction === "forward") result.forwardCount++;
     else result.reverseCount++;
 
-    if (seq.priorityScore > 0.5) {
+    if (seq.priorityScore > SCHEMA_SIGNAL_PRIORITY_THRESHOLD) {
       schemaSignals.push({
         entities: seq.events.flatMap((ev) => ev.entities),
         priority: seq.priorityScore,
         direction: seq.direction,
-        update_strength: seq.priorityScore * 0.3,
+        update_strength: seq.priorityScore * SCHEMA_UPDATE_STRENGTH_FACTOR,
       });
     }
   }
@@ -467,7 +508,7 @@ export function shouldMicroCheckpoint(
   tags: readonly string[],
   surprise = 0.0,
   toolCallCount = 0,
-  cooldown = 5,
+  cooldown = MICRO_CHECKPOINT_COOLDOWN_DEFAULT,
 ): [boolean, string] {
   if (toolCallCount < cooldown) return [false, ""];
 
@@ -477,7 +518,7 @@ export function shouldMicroCheckpoint(
   if (/\b(decided|chose|switched|migrated|will use|going with|opted)\b/i.test(content)) {
     return [true, "decision_made"];
   }
-  if (surprise > 0.8) return [true, "high_surprise_event"];
+  if (surprise > MICRO_CHECKPOINT_SURPRISE_THRESHOLD) return [true, "high_surprise_event"];
 
   const criticalTags = new Set(["critical", "important", "architecture", "breaking"]);
   if (tags.some((t) => criticalTags.has(t.toLowerCase()))) return [true, "critical_tag"];

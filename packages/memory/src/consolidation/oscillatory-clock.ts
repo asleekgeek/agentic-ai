@@ -56,6 +56,117 @@ export const SWR_BASE_PROBABILITY = 0.3;
 export const SWR_BURST_STEPS = 5;
 export const SWR_REFRACTORY_STEPS = 3;
 
+// Sigmoid overflow clamp: exp(x) for |x| > 500 is numerically indistinguishable
+// from 0 or Infinity in IEEE-754 double precision. Clamp avoids NaN / Infinity.
+// source: port of core/oscillatory_phases.py:L130-131; overflow-clamp, no paper.
+const SIGMOID_EXPONENT_MAX = 500.0;
+
+// Gamma binding strength serial-position exponent.
+// Both arms of the primacy/recency model: exp(-0.5 * position) and
+// exp(-0.5 * (capacity - 1 - position)). Coefficient 0.5 controls decay rate.
+// source: port of core/oscillatory_phases.py:L208-209; true-hand-tuned, no paper.
+const GAMMA_BINDING_DECAY = -0.5;
+
+// Gamma binding strength lower bound: minimum strength returned is 0.5.
+// The formula returns 0.5 + 0.5 * min(raw, 1.0); both 0.5 terms are the same
+// literal so one const covers both uses.
+// source: port of core/oscillatory_phases.py:L211; true-hand-tuned, no paper.
+const GAMMA_BINDING_FLOOR = 0.5;
+
+// SWR probability: normalizer for operation-count factor.
+// Scales operations_since_swr to [0, 1] at 20 operations.
+// source: port of core/oscillatory_phases.py:L229; true-hand-tuned, no paper.
+const SWR_OP_FACTOR_SCALE = 20.0;
+
+// SWR probability: normalizer for accumulated-importance factor.
+// source: port of core/oscillatory_phases.py:L230; true-hand-tuned, no paper.
+const SWR_IMP_FACTOR_SCALE = 5.0;
+
+// SWR probability: normalizer for time factor (hours).
+// source: port of core/oscillatory_phases.py:L231; true-hand-tuned, no paper.
+const SWR_TIME_FACTOR_SCALE = 4.0;
+
+// SWR probability weights for the three contributing factors (must sum to 1.0).
+// source: port of core/oscillatory_phases.py:L233; true-hand-tuned, no paper.
+const SWR_OP_WEIGHT   = 0.4;
+const SWR_IMP_WEIGHT  = 0.3;
+const SWR_TIME_WEIGHT = 0.3;
+
+// Minimum operations before SWR can trigger.
+// source: port of core/oscillatory_phases.py:L249; true-hand-tuned, no paper.
+const SWR_MIN_OPERATIONS = 3;
+
+// SWR fire threshold: probability must reach baseProbability * 0.5.
+// source: port of core/oscillatory_phases.py:L259; true-hand-tuned, no paper.
+const SWR_PROBABILITY_THRESHOLD_FACTOR = 0.5;
+
+// Heat-score inverted-U curvature: 4.0 * (heat - 0.5)^2.
+// Gives score = 0 at heat = 0 or 1, score = 1 at heat = 0.5.
+// source: port of core/oscillatory_phases.py:L268; true-hand-tuned, no paper.
+const HEAT_SCORE_CURVATURE = 4.0;
+
+// Heat peak for the inverted-U score: score peaks at heat = HEAT_SCORE_PEAK.
+// source: port of core/oscillatory_phases.py:L268; true-hand-tuned, no paper.
+const HEAT_SCORE_PEAK = 0.5;
+
+// Rehearsal-need decay factor: rehearsalNeed = 1 / (1 + accessCount * 0.5).
+// Decays to ~0.67 at count=1, ~0.5 at count=2.
+// source: port of core/oscillatory_phases.py:L287; true-hand-tuned, no paper.
+const REHEARSAL_DECAY_FACTOR = 0.5;
+
+// Default operations-per-theta-cycle for advance_theta.
+// source: port of core/oscillatory_phases.py:L44-48 (operations_per_cycle=20);
+// true-hand-tuned, no paper.
+const DEFAULT_OPERATIONS_PER_CYCLE = 20;
+
+// Phase rounding precision: round(phase * 1_000_000) / 1_000_000 gives 6 dp.
+// Matches Python round(new_phase, 6) in advance_theta (oscillatory_phases.py:L65).
+// arithmetic-identity: 1_000_000 = 10^6, no paper.
+const PHASE_ROUND_FACTOR = 1_000_000;
+
+// ACh rounding precision: round(ach * 10000) / 10000 gives 4 dp.
+// Matches Python round(compute_ach_from_phase(new_phase), 4) (oscillatory_phases.py:L72).
+// arithmetic-identity: 10000 = 10^4, no paper.
+const ACH_ROUND_FACTOR = 10000;
+
+// SWR encoding suppression during ripple: phase_mod *= 0.3.
+// Hippocampus busy with replay; new encoding nearly suppressed.
+// source: port of core/oscillatory_clock.py:L164; true-hand-tuned, no paper.
+const SWR_ENCODING_SUPPRESSION = 0.3;
+
+// SWR plasticity boost during ripple: base_delta * 1.5.
+// Replay-driven LTP is stronger than normal encoding-phase plasticity.
+// source: port of core/oscillatory_clock.py:L196; true-hand-tuned, no paper.
+const SWR_PLASTICITY_BOOST = 1.5;
+
+// Initial / default ACh level: system starts in encoding mode (high ACh).
+// source: port of core/oscillatory_phases.py:L117 `ach_level: float = 0.8`;
+// true-hand-tuned, no paper.
+const ACH_INITIAL = 0.8;
+
+// Theta cycle phase midpoint: sigmoid inflection at phase=0.5 separates
+// encoding (0.0–0.5) from retrieval (0.5–1.0).
+// // source: Hasselmo, Bodelon & Wyble (2002) Neural Computation 14:793-817 —
+// gate(phase) = 1 / (1 + exp(-k * (phase - 0.5))).
+export const THETA_PHASE_MIDPOINT = 0.5;
+
+// Week expressed in hours — unit-conversion constant used as the recency
+// decay time constant in replay priority scoring.
+// // source: factual unit conversion: 7 days × 24 hours/day = 168 h.
+export const HOURS_PER_WEEK = 168.0;
+
+// Replay priority weights (must sum to 1.0).
+// // source: Olafsdottir et al. (2018) Curr Biol 28:R37-R50 — replay
+// prioritises importance, novelty (surprise), rehearsal need, and recency.
+// Specific weight values are calibrated to this timescale; Olafsdottir
+// provides the qualitative ordering (importance > heat ≈ surprise > rehearsal
+// > recency) that these weights implement.
+export const REPLAY_WEIGHT_IMPORTANCE = 0.35;
+export const REPLAY_WEIGHT_HEAT       = 0.20;
+export const REPLAY_WEIGHT_SURPRISE   = 0.20;
+export const REPLAY_WEIGHT_REHEARSAL  = 0.15;
+export const REPLAY_WEIGHT_RECENCY    = 0.10;
+
 // ── Oscillatory State ─────────────────────────────────────────────────────────
 
 export interface OscillatoryState {
@@ -78,17 +189,17 @@ export function makeInitialOscillatoryState(): OscillatoryState {
     thetaCyclesTotal: 0,
     operationsSinceSwr: 0,
     hoursSinceLastSwr: 0.0,
-    achLevel: 0.8, // Start in encoding mode
+    achLevel: ACH_INITIAL, // Start in encoding mode
   };
 }
 
 // ── Sigmoid Gate (Hasselmo piecewise model) ───────────────────────────────────
 
 function sigmoidGate(phase: number, k = SIGMOID_STEEPNESS): number {
-  const exponent = -k * (phase - 0.5);
+  const exponent = -k * (phase - THETA_PHASE_MIDPOINT);
   // Clamp to avoid overflow in exp()
-  if (exponent > 500.0) return 0.0;
-  if (exponent < -500.0) return 1.0;
+  if (exponent > SIGMOID_EXPONENT_MAX) return 0.0;
+  if (exponent < -SIGMOID_EXPONENT_MAX) return 1.0;
   return 1.0 / (1.0 + Math.exp(exponent));
 }
 
@@ -98,8 +209,8 @@ function sigmoidGate(phase: number, k = SIGMOID_STEEPNESS): number {
 export function classifyThetaPhase(phase: number): ThetaPhaseName {
   const p = phase % 1.0;
   if (p < TRANSITION_WIDTH || p > 1.0 - TRANSITION_WIDTH) return "transition";
-  if (Math.abs(p - 0.5) < TRANSITION_WIDTH) return "transition";
-  if (p < 0.5) return "encoding";
+  if (Math.abs(p - THETA_PHASE_MIDPOINT) < TRANSITION_WIDTH) return "transition";
+  if (p < THETA_PHASE_MIDPOINT) return "encoding";
   return "retrieval";
 }
 
@@ -145,10 +256,10 @@ export function canBindItem(gammaCount: number, capacity = GAMMA_CAPACITY): bool
  */
 export function gammaBindingStrength(position: number, capacity = GAMMA_CAPACITY): number {
   if (capacity <= 1) return 1.0;
-  const primacy = Math.exp(-0.5 * position);
-  const recency = Math.exp(-0.5 * (capacity - 1 - position));
+  const primacy = Math.exp(GAMMA_BINDING_DECAY * position);
+  const recency = Math.exp(GAMMA_BINDING_DECAY * (capacity - 1 - position));
   const raw = Math.max(primacy, recency);
-  return 0.5 + 0.5 * Math.min(raw, 1.0);
+  return GAMMA_BINDING_FLOOR + GAMMA_BINDING_FLOOR * Math.min(raw, 1.0);
 }
 
 // ── SWR Logic ─────────────────────────────────────────────────────────────────
@@ -159,10 +270,10 @@ function computeSwrProbability(
   accumulatedImportance: number,
   baseProbability: number,
 ): number {
-  const opFactor = Math.min(operationsSinceSwr / 20.0, 1.0);
-  const impFactor = Math.min(accumulatedImportance / 5.0, 1.0);
-  const timeFactor = Math.min(hoursSinceLastSwr / 4.0, 1.0);
-  return baseProbability * (0.4 * opFactor + 0.3 * impFactor + 0.3 * timeFactor);
+  const opFactor = Math.min(operationsSinceSwr / SWR_OP_FACTOR_SCALE, 1.0);
+  const impFactor = Math.min(accumulatedImportance / SWR_IMP_FACTOR_SCALE, 1.0);
+  const timeFactor = Math.min(hoursSinceLastSwr / SWR_TIME_FACTOR_SCALE, 1.0);
+  return baseProbability * (SWR_OP_WEIGHT * opFactor + SWR_IMP_WEIGHT * impFactor + SWR_TIME_WEIGHT * timeFactor);
 }
 
 /** Determine whether to generate a sharp-wave ripple event. */
@@ -177,20 +288,20 @@ export function shouldGenerateSwr(
 ): boolean {
   const { minIntervalHours = SWR_MIN_INTERVAL_HOURS, baseProbability = SWR_BASE_PROBABILITY } = opts;
   if (hoursSinceLastSwr < minIntervalHours) return false;
-  if (operationsSinceSwr < 3) return false;
+  if (operationsSinceSwr < SWR_MIN_OPERATIONS) return false;
   const probability = computeSwrProbability(
     operationsSinceSwr,
     hoursSinceLastSwr,
     accumulatedImportance,
     baseProbability,
   );
-  return probability >= baseProbability * 0.5;
+  return probability >= baseProbability * SWR_PROBABILITY_THRESHOLD_FACTOR;
 }
 
 // ── Replay Priority ───────────────────────────────────────────────────────────
 
 function computeHeatScore(heat: number): number {
-  return Math.max(0.0, 1.0 - 4.0 * Math.pow(heat - 0.5, 2));
+  return Math.max(0.0, 1.0 - HEAT_SCORE_CURVATURE * Math.pow(heat - HEAT_SCORE_PEAK, 2));
 }
 
 /**
@@ -208,15 +319,15 @@ export function computeReplayPriority(
   hoursSinceCreation: number,
 ): number {
   const heatScore = computeHeatScore(heat);
-  const rehearsalNeed = 1.0 / (1.0 + accessCount * 0.5);
-  const recency = Math.exp(-hoursSinceCreation / 168.0); // Week time constant
+  const rehearsalNeed = 1.0 / (1.0 + accessCount * REHEARSAL_DECAY_FACTOR);
+  const recency = Math.exp(-hoursSinceCreation / HOURS_PER_WEEK); // Week time constant
 
   const priority =
-    importance * 0.35 +
-    heatScore * 0.20 +
-    surprise * 0.20 +
-    rehearsalNeed * 0.15 +
-    recency * 0.10;
+    importance * REPLAY_WEIGHT_IMPORTANCE +
+    heatScore  * REPLAY_WEIGHT_HEAT       +
+    surprise   * REPLAY_WEIGHT_SURPRISE   +
+    rehearsalNeed * REPLAY_WEIGHT_REHEARSAL +
+    recency    * REPLAY_WEIGHT_RECENCY;
 
   return Math.min(1.0, Math.max(0.0, priority));
 }
@@ -232,7 +343,7 @@ export function computeReplayPriority(
 export function advanceTheta(
   state: OscillatoryState,
   operations = 1,
-  operationsPerCycle = 20,
+  operationsPerCycle = DEFAULT_OPERATIONS_PER_CYCLE,
 ): OscillatoryState {
   const phaseIncrement = operations / operationsPerCycle;
   const rawPhase = state.thetaPhase + phaseIncrement;
@@ -244,11 +355,11 @@ export function advanceTheta(
 
   return {
     ...state,
-    thetaPhase: Math.round(newPhase * 1_000_000) / 1_000_000,
+    thetaPhase: Math.round(newPhase * PHASE_ROUND_FACTOR) / PHASE_ROUND_FACTOR,
     gammaCount,
     thetaCyclesTotal: newCycles,
     operationsSinceSwr: state.operationsSinceSwr + operations,
-    achLevel: Math.round(computeAchFromPhase(newPhase) * 10000) / 10000,
+    achLevel: Math.round(computeAchFromPhase(newPhase) * ACH_ROUND_FACTOR) / ACH_ROUND_FACTOR,
   };
 }
 
@@ -301,7 +412,7 @@ export function isSwrActive(state: OscillatoryState): boolean {
 /** Apply oscillatory modulation to an encoding operation. SWR suppresses new encoding. */
 export function modulateEncoding(baseStrength: number, state: OscillatoryState): number {
   let phaseMod = computeEncodingStrength(state.thetaPhase);
-  if (isSwrActive(state)) phaseMod *= 0.3;
+  if (isSwrActive(state)) phaseMod *= SWR_ENCODING_SUPPRESSION;
   return baseStrength * phaseMod;
 }
 
@@ -315,7 +426,7 @@ export function modulateRetrieval(baseScore: number, state: OscillatoryState): n
  * During SWR, replay-driven plasticity is boosted.
  */
 export function modulatePlasticity(baseDelta: number, state: OscillatoryState): number {
-  if (isSwrActive(state)) return baseDelta * 1.5;
+  if (isSwrActive(state)) return baseDelta * SWR_PLASTICITY_BOOST;
   return baseDelta * computeEncodingStrength(state.thetaPhase);
 }
 
@@ -343,6 +454,6 @@ export function stateFromDict(data: Record<string, unknown>): OscillatoryState {
     thetaCyclesTotal: (data["theta_cycles_total"] as number | undefined) ?? 0,
     operationsSinceSwr: (data["operations_since_swr"] as number | undefined) ?? 0,
     hoursSinceLastSwr: (data["hours_since_last_swr"] as number | undefined) ?? 0.0,
-    achLevel: (data["ach_level"] as number | undefined) ?? 0.8,
+    achLevel: (data["ach_level"] as number | undefined) ?? ACH_INITIAL,
   };
 }

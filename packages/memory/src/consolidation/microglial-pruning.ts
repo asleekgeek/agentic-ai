@@ -28,6 +28,19 @@ const MIN_ENTITY_HEAT = 0.02;
 const MIN_ACCESS_COUNT = 2;
 const PROTECTION_ACCESS_THRESHOLD = 5;
 
+// Heat threshold below which both endpoints of an edge are considered "cold".
+// Port of core/microglial_pruning.py:L158; true-hand-tuned, no paper.
+const COLD_ENDPOINT_HEAT_THRESHOLD = 0.1;
+
+// Multiplier to convert a fraction to a percentage (× 100 = %).
+// Port of core/microglial_pruning.py:L215; arithmetic-identity, no paper.
+const PERCENTAGE_SCALE = 100;
+
+// Shift factor for rounding to 1 decimal place via Math.round(x * 10) / 10.
+// Python equivalent: round(x, 1). TS-only — JS has no built-in ndigits round;
+// not in Cortex py (TS-only), no paper.
+const ROUND_ONE_DECIMAL_SHIFT = 10;
+
 // ── Temporal Decay ────────────────────────────────────────────────────────────
 
 /**
@@ -108,7 +121,7 @@ function classifyPruneReasons(
   if (hours > TEMPORAL_HALF_LIFE_HOURS) reasons.push("stale");
   const srcHeat = entityHeat.get(edge["source_entity_id"] as number) ?? 0;
   const tgtHeat = entityHeat.get(edge["target_entity_id"] as number) ?? 0;
-  if (srcHeat < 0.1 && tgtHeat < 0.1) reasons.push("cold_endpoints");
+  if (srcHeat < COLD_ENDPOINT_HEAT_THRESHOLD && tgtHeat < COLD_ENDPOINT_HEAT_THRESHOLD) reasons.push("cold_endpoints");
   // suppress unused variable warnings
   void alphaSrc;
   void alphaTgt;
@@ -233,8 +246,8 @@ export function computePruningStats(
     entities_to_archive: orphanedEntities.length,
     total_edges: totalEdges,
     total_entities: totalEntities,
-    edge_prune_pct: Math.round(prunableEdges.length / Math.max(totalEdges, 1) * 100 * 10) / 10,
-    entity_archive_pct: Math.round(orphanedEntities.length / Math.max(totalEntities, 1) * 100 * 10) / 10,
+    edge_prune_pct: Math.round(prunableEdges.length / Math.max(totalEdges, 1) * PERCENTAGE_SCALE * ROUND_ONE_DECIMAL_SHIFT) / ROUND_ONE_DECIMAL_SHIFT,
+    entity_archive_pct: Math.round(orphanedEntities.length / Math.max(totalEntities, 1) * PERCENTAGE_SCALE * ROUND_ONE_DECIMAL_SHIFT) / ROUND_ONE_DECIMAL_SHIFT,
     edge_reasons: edgeReasons,
   };
 }

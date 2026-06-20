@@ -16,6 +16,93 @@
  * Pure business logic — no I/O.
  */
 
+// ---------------------------------------------------------------------------
+// Pébay (2008) SAND2008-6212 — moment update polynomial coefficients
+// (equations 2.1–2.4, incremental single-pass updates for M4, M3, M2, M1).
+// source: Pébay P (2008) "Formulas for Robust, One-Pass Parallel Computation
+//   of Covariances and Arbitrary-Order Statistical Moments." Sandia Report
+//   SAND2008-6212. Equations 2.1–2.4 and §3.1 pairwise merge.
+// ---------------------------------------------------------------------------
+/** Coefficient of (n²-3n+3) term in the M4 incremental update (Pébay 2008 eq 2.4). */
+const PEBAY_M4_POLY_OFFSET = 3; // n^2 - 3n + 3
+/** Coefficient multiplying δn²·M2 in the M4 incremental update (Pébay 2008 eq 2.4). */
+const PEBAY_M4_M2_COEFF = 6.0;
+/** Coefficient multiplying δn·M3 in the M4 incremental update (Pébay 2008 eq 2.4). */
+const PEBAY_M4_M3_COEFF = 4.0;
+/** Coefficient multiplying δn·M2 in the M3 incremental update (Pébay 2008 eq 2.3). */
+const PEBAY_M3_M2_COEFF = 3.0;
+/** Offset in the (n-2) factor of the M3 incremental update (Pébay 2008 eq 2.3). */
+const PEBAY_M3_N_OFFSET = 2;
+
+// ---------------------------------------------------------------------------
+// Statistical moment conversion constants (standard textbook definitions).
+// Skewness denominator exponent = 3 (third standardised central moment);
+// kurtosis denominator exponent = 4 (fourth standardised central moment);
+// excess kurtosis = raw − 3.
+// source: port of mcp_server/core/homeostatic_health.py:95-96 (M3/(n·std**3),
+//   M4/(n·std**4) − 3.0). Definitional standard-moment constants; the source of
+//   truth cites no paper for them.
+// ---------------------------------------------------------------------------
+/** Exponent of σ in the skewness estimator denominator (third standard moment). */
+const SKEW_STD_EXPONENT = 3;
+/** Exponent of σ in the raw kurtosis estimator denominator (fourth standard moment). */
+const KURTOSIS_STD_EXPONENT = 4;
+/** Excess-kurtosis offset: excess = raw − 3 (standard definition; no paper cited in source of truth). */
+const EXCESS_KURTOSIS_OFFSET = 3.0;
+
+// ---------------------------------------------------------------------------
+// Numerical stability floor for standard-deviation comparisons.
+// source: port of mcp_server/core/homeostatic_health.py:94 (`if std > 1e-10`).
+//   Bare engineering guard in the source of truth — no paper source. (Pébay 2008
+//   §4 is cited by the source only for the 1e-9 four-pass postcondition, a
+//   different quantity — not this floor.)
+// ---------------------------------------------------------------------------
+/** Minimum σ below which skew/kurtosis are set to 0 (numerical stability). */
+const STD_STABILITY_FLOOR = 1e-10;
+
+// ---------------------------------------------------------------------------
+// Pfister (2013) bimodality coefficient formula constants.
+// BC = (γ²+1) / (κ+3)   where γ=skewness, κ=excess kurtosis.
+// "kurtosis + 3" restores the raw (non-excess) kurtosis; +3 is the
+// excess-kurtosis offset above (raw − 3 standard definition), reused here.
+// source: Pfister R et al. (2013) "Good things peak in pairs: a note on the
+//   bimodality coefficient." Frontiers in Psychology 4:700. Equation 1.
+// ---------------------------------------------------------------------------
+/** Raw-kurtosis restore offset in the bimodality coefficient denominator (Pfister 2013 eq 1). */
+const BIMODALITY_KURTOSIS_OFFSET = 3;
+/** Numerical stability guard preventing division by zero in bimodality formula. */
+const BIMODALITY_DENOM_MIN = 0.01;
+
+// ---------------------------------------------------------------------------
+// Rounding precision constant: round(x, 4) in Python ≡ Math.round(x * 10000) / 10000.
+// 4 decimal places is the precision chosen in the Python port (homeostatic_health.py
+// _health_from_moments). No external citation — implementation-convention match.
+// ---------------------------------------------------------------------------
+/** Multiplier for 4-decimal-place rounding (matches Python round(x, 4) convention). */
+const ROUND_4DP_FACTOR = 10000;
+
+// ---------------------------------------------------------------------------
+// Health-score penalty weights and caps (_compute_health_score).
+// source: port of core/homeostatic_health.py:L125-L129; true-hand-tuned,
+//   no paper. All seven values are bare literals in the Python source of truth.
+// ---------------------------------------------------------------------------
+/** Maximum penalty subtracted for deviation from target mean (caps deviation * 2 term). */
+const HEALTH_DEVIATION_MAX_PENALTY = 0.4;
+/** Bimodality threshold: BC values above this begin incurring a health penalty. */
+const HEALTH_BIMODALITY_THRESHOLD = 0.4;
+/** Slope of the bimodality penalty: penalty = (BC - threshold) * slope. */
+const HEALTH_BIMODALITY_SLOPE = 1.5;
+/** Maximum penalty subtracted for bimodality. */
+const HEALTH_BIMODALITY_MAX_PENALTY = 0.3;
+/** Slope of the skewness penalty: penalty = |skew| * slope. */
+const HEALTH_SKEW_SLOPE = 0.15;
+/** Maximum penalty subtracted for extreme skewness. */
+const HEALTH_SKEW_MAX_PENALTY = 0.2;
+/** Standard deviation below which a low-variance penalty is applied. */
+const HEALTH_LOW_STD_THRESHOLD = 0.05;
+/** Penalty subtracted when std < HEALTH_LOW_STD_THRESHOLD. */
+const HEALTH_LOW_STD_PENALTY = 0.1;
+
 export interface DistributionHealth {
   mean: number;
   std: number;
@@ -70,11 +157,11 @@ function computeMoments(values: number[]): [number, number, number, number] {
 
     // Fourth moment must be updated before M3 and M2 (depends on old M2, M3).
     m4 +=
-      term1 * deltaN2 * (n * n - 3 * n + 3) +
-      6.0 * deltaN2 * m2 -
-      4.0 * deltaN * m3;
+      term1 * deltaN2 * (n * n - PEBAY_M4_POLY_OFFSET * n + PEBAY_M4_POLY_OFFSET) +
+      PEBAY_M4_M2_COEFF * deltaN2 * m2 -
+      PEBAY_M4_M3_COEFF * deltaN * m3;
     // Third moment depends on old M2, must precede M2 update.
-    m3 += term1 * deltaN * (n - 2) - 3.0 * deltaN * m2;
+    m3 += term1 * deltaN * (n - PEBAY_M3_N_OFFSET) - PEBAY_M3_M2_COEFF * deltaN * m2;
     m2 += term1;
     m1 += deltaN;
   }
@@ -88,9 +175,9 @@ function computeMoments(values: number[]): [number, number, number, number] {
 
   let skew = 0.0;
   let kurtosis = 0.0;
-  if (std > 1e-10) {
-    skew = m3 / (n * std ** 3);
-    kurtosis = m4 / (n * std ** 4) - 3.0;
+  if (std > STD_STABILITY_FLOOR) {
+    skew = m3 / (n * std ** SKEW_STD_EXPONENT);
+    kurtosis = m4 / (n * std ** KURTOSIS_STD_EXPONENT) - EXCESS_KURTOSIS_OFFSET;
   }
 
   return [m1, std, skew, kurtosis];
@@ -112,10 +199,10 @@ function computeHealthScore(
   std: number,
 ): number {
   let health = 1.0;
-  health -= Math.min(deviation * 2.0, 0.4);
-  health -= Math.min(Math.max(bimodality - 0.4, 0) * 1.5, 0.3);
-  health -= Math.min(Math.abs(skew) * 0.15, 0.2);
-  if (std < 0.05) health -= 0.1;
+  health -= Math.min(deviation * 2.0, HEALTH_DEVIATION_MAX_PENALTY);
+  health -= Math.min(Math.max(bimodality - HEALTH_BIMODALITY_THRESHOLD, 0) * HEALTH_BIMODALITY_SLOPE, HEALTH_BIMODALITY_MAX_PENALTY);
+  health -= Math.min(Math.abs(skew) * HEALTH_SKEW_SLOPE, HEALTH_SKEW_MAX_PENALTY);
+  if (std < HEALTH_LOW_STD_THRESHOLD) health -= HEALTH_LOW_STD_PENALTY;
   return Math.max(0.0, Math.min(1.0, health));
 }
 
@@ -127,18 +214,19 @@ function healthFromMoments(
   targetMean: number,
 ): DistributionHealth {
   // Pfister 2013 bimodality coefficient formula
-  const bimodality = (skew ** 2 + 1) / Math.max(kurtosis + 3, 0.01);
+  const bimodality =
+    (skew ** 2 + 1) / Math.max(kurtosis + BIMODALITY_KURTOSIS_OFFSET, BIMODALITY_DENOM_MIN);
   const deviation = Math.abs(mean - targetMean);
   const health = computeHealthScore(deviation, bimodality, skew, std);
 
   return {
-    mean: Math.round(mean * 10000) / 10000,
-    std: Math.round(std * 10000) / 10000,
-    skew: Math.round(skew * 10000) / 10000,
-    kurtosis_excess: Math.round(kurtosis * 10000) / 10000,
-    deviation_from_target: Math.round(deviation * 10000) / 10000,
-    bimodality_coefficient: Math.round(bimodality * 10000) / 10000,
-    health_score: Math.round(health * 10000) / 10000,
+    mean: Math.round(mean * ROUND_4DP_FACTOR) / ROUND_4DP_FACTOR,
+    std: Math.round(std * ROUND_4DP_FACTOR) / ROUND_4DP_FACTOR,
+    skew: Math.round(skew * ROUND_4DP_FACTOR) / ROUND_4DP_FACTOR,
+    kurtosis_excess: Math.round(kurtosis * ROUND_4DP_FACTOR) / ROUND_4DP_FACTOR,
+    deviation_from_target: Math.round(deviation * ROUND_4DP_FACTOR) / ROUND_4DP_FACTOR,
+    bimodality_coefficient: Math.round(bimodality * ROUND_4DP_FACTOR) / ROUND_4DP_FACTOR,
+    health_score: Math.round(health * ROUND_4DP_FACTOR) / ROUND_4DP_FACTOR,
   };
 }
 
@@ -188,10 +276,10 @@ function chunkRawMoments(values: number[]): RawMoments {
     const deltaN2 = deltaN * deltaN;
     const term1 = delta * deltaN * n1;
     m4 +=
-      term1 * deltaN2 * (n * n - 3 * n + 3) +
-      6.0 * deltaN2 * m2 -
-      4.0 * deltaN * m3;
-    m3 += term1 * deltaN * (n - 2) - 3.0 * deltaN * m2;
+      term1 * deltaN2 * (n * n - PEBAY_M4_POLY_OFFSET * n + PEBAY_M4_POLY_OFFSET) +
+      PEBAY_M4_M2_COEFF * deltaN2 * m2 -
+      PEBAY_M4_M3_COEFF * deltaN * m3;
+    m3 += term1 * deltaN * (n - PEBAY_M3_N_OFFSET) - PEBAY_M3_M2_COEFF * deltaN * m2;
     m2 += term1;
     m1 += deltaN;
   }
@@ -245,13 +333,13 @@ export function computeDistributionHealthStreaming(
       m4 +
       m4B +
       delta * deltaN * deltaN2 * naNb * (n * n - naNb + nB * nB) +
-      6 * deltaN2 * (n * n * m2B + nB * nB * m2) +
-      4 * deltaN * (n * m3B - nB * m3);
+      PEBAY_M4_M2_COEFF * deltaN2 * (n * n * m2B + nB * nB * m2) +
+      PEBAY_M4_M3_COEFF * deltaN * (n * m3B - nB * m3);
     const m3New =
       m3 +
       m3B +
       delta * deltaN2 * naNb * (n - nB) +
-      3 * deltaN * (n * m2B - nB * m2);
+      PEBAY_M3_M2_COEFF * deltaN * (n * m2B - nB * m2);
     const m2New = m2 + m2B + delta * deltaN * naNb;
     const m1New = m1 + deltaN * nB;
 
@@ -270,9 +358,9 @@ export function computeDistributionHealthStreaming(
   const std = Math.sqrt(variance);
   let skew = 0.0;
   let kurtosis = 0.0;
-  if (std > 1e-10) {
-    skew = m3 / (n * std ** 3);
-    kurtosis = m4 / (n * std ** 4) - 3.0;
+  if (std > STD_STABILITY_FLOOR) {
+    skew = m3 / (n * std ** SKEW_STD_EXPONENT);
+    kurtosis = m4 / (n * std ** KURTOSIS_STD_EXPONENT) - EXCESS_KURTOSIS_OFFSET;
   }
 
   return [healthFromMoments(m1, std, skew, kurtosis, targetMean), n];
