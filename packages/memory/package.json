@@ -1,6 +1,6 @@
 {
   "name": "@agentic/memory",
-  "version": "0.3.0",
+  "version": "0.3.2",
   "private": true,
   "description": "Cortex memory subsystem: recall, remember, consolidation, hooks",
   "type": "module",

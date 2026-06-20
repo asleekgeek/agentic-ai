@@ -29,6 +29,7 @@
  */
 
 /** 1 MB default. Environment override via CORTEX_MEMORY_CONTENT_MAX_BYTES. */
+// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- 1024 = 1 KiB binary byte multiplier (IEC 80000-13)
 export const CONTENT_MAX_BYTES = 1 * 1024 * 1024;
 
 // Stripped: C0 controls except \t \n \r, all C1 controls, BOM/ZWNBSP,
@@ -49,7 +50,8 @@ function capBytes(s: string, maxBytes: number): string {
   // TextEncoder/TextDecoder are available in Node >= 16 and all browsers.
   const encoded = new TextEncoder().encode(s);
   if (encoded.byteLength <= maxBytes) return s;
-  console.warn(
+  // stderr only — stdout is the MCP JSON-RPC channel (see index.ts header).
+  console.error(
     `[content-hardening] Content truncated from ${encoded.byteLength} bytes to ${maxBytes} at ingestion`,
   );
   // Slice bytes then decode — errors: 'ignore' equivalent via try/replace

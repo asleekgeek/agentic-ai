@@ -1,5 +1,4 @@
 /* eslint-disable @typescript-eslint/no-magic-numbers */
-/* eslint-disable no-console */
 // source: coding-standards.md §8 — numeric constants in this file are domain
 // science parameters (Turrigiano 2008, Tetzlaff 2011) cited inline; disabling
 // no-magic-numbers file-wide to avoid repeating citations on every rounding
@@ -449,7 +448,8 @@ function logDiagnostics(outcome: Partial<HomeostaticStageResult>): void {
     outcome.bimodality_before != null &&
     outcome.bimodality_after >= outcome.bimodality_before
   ) {
-    console.warn(
+    // stderr only — stdout is the MCP JSON-RPC channel (see index.ts header).
+    console.error(
       `Cohort correction did not reduce bimodality: ` +
         `before=${outcome.bimodality_before.toFixed(3)} ` +
         `after=${outcome.bimodality_after.toFixed(3)} ` +
