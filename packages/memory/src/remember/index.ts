@@ -63,6 +63,7 @@ export {
   parseHoursSince,
   scoreCandidate,
   buildRejectionResponse,
+  isHierarchicalGateEnabled,
 } from "./write-gate.js";
 export type { WriteGateInput } from "./write-gate.js";
 

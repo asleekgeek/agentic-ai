@@ -8,7 +8,7 @@
  * "given these inputs, the invariant holds."
  */
 
-import { describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   computeEmbeddingNovelty,
   computeEntityNovelty,
@@ -18,6 +18,10 @@ import {
   describeSignals,
   gateDecision,
 } from "../../src/remember/predictive-coding.js";
+import {
+  isHierarchicalGateEnabled,
+  scoreCandidate,
+} from "../../src/remember/write-gate.js";
 
 describe("computeEmbeddingNovelty", () => {
   it("returns 0.5 for empty similarities (prior: uncertain)", () => {
@@ -162,5 +166,138 @@ describe("describeSignals", () => {
   it("includes all five keys", () => {
     const result = describeSignals(0.1, 0.2, 0.3, 0.4, 0.5);
     expect(Object.keys(result)).toHaveLength(5);
+  });
+});
+
+// ── MEM-G5: gate dispatch parity tests ─────────────────────────────────────
+//
+// These tests verify that:
+// 1. isHierarchicalGateEnabled() reads the env flag correctly.
+// 2. With flag absent, scoreCandidate produces the flat gate decision.
+// 3. With flag present, scoreCandidate routes to the hierarchical gate
+//    and produces a distinct decision on a case that differs between the two.
+//
+// source: MEM-G5 task specification, PARITY_PLAN §3
+
+describe("isHierarchicalGateEnabled (MEM-G5)", () => {
+  afterEach(() => {
+    delete process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"];
+  });
+
+  it("returns false when env var is absent", () => {
+    delete process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"];
+    expect(isHierarchicalGateEnabled()).toBe(false);
+  });
+
+  it("returns true for '1'", () => {
+    process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"] = "1";
+    expect(isHierarchicalGateEnabled()).toBe(true);
+  });
+
+  it("returns true for 'true'", () => {
+    process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"] = "true";
+    expect(isHierarchicalGateEnabled()).toBe(true);
+  });
+
+  it("returns true for 'yes'", () => {
+    process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"] = "yes";
+    expect(isHierarchicalGateEnabled()).toBe(true);
+  });
+
+  it("returns true for 'on'", () => {
+    process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"] = "on";
+    expect(isHierarchicalGateEnabled()).toBe(true);
+  });
+
+  it("returns false for empty string", () => {
+    process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"] = "";
+    expect(isHierarchicalGateEnabled()).toBe(false);
+  });
+
+  it("returns false for '0'", () => {
+    process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"] = "0";
+    expect(isHierarchicalGateEnabled()).toBe(false);
+  });
+});
+
+describe("scoreCandidate gate dispatch (MEM-G5)", () => {
+  // A low-novelty input that the flat gate (threshold=0.4) will REJECT
+  // because combinedNovelty will be low (high similarities → low embeddingNovelty,
+  // all entities known → entityNovelty=0, recently written → temporalNovelty=0,
+  // structurally identical → structuralNovelty=0).
+  // Combined = 0.4*0 + 0.25*0 + 0.2*0 + 0.15*0 = 0.0 < 0.4 → flat rejects.
+  //
+  // The hierarchical gate uses free-energy (DEFAULT_HIERARCHICAL_THRESHOLD=0.15).
+  // With all-zero novelty, sensory FE will be non-trivial (sensory features
+  // against default prior), potentially above 0.15, so the two gates may
+  // diverge — confirming independent paths.
+  //
+  // source: predictive_coding_gate.py:hierarchical_gate_decision (threshold=0.15)
+  // source: write_gate.py:DEFAULT_HIERARCHICAL_THRESHOLD
+  const lowNoveltyInput = {
+    content: "short",
+    tags: [],
+    force: false,
+    similarities: [0.99, 0.98, 0.97], // very similar to existing memories
+    newEntityNames: ["Known"],
+    knownEntityNames: new Set(["Known"]),
+    recentContents: ["short"],          // structurally identical
+    hoursSinceSimilar: 0,               // just written
+    threshold: 0.4,
+  };
+
+  beforeEach(() => {
+    delete process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"];
+  });
+  afterEach(() => {
+    delete process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"];
+  });
+
+  it("flat gate (flag absent): rejects low-novelty candidate", () => {
+    const score = scoreCandidate(lowNoveltyInput);
+    // combinedNovelty = 0.4*(1-0.99) + 0.25*0 + 0.2*0 + 0.15*0 = 0.004 < 0.4
+    expect(score.combinedNovelty).toBeLessThan(0.4);
+    expect(score.shouldStore).toBe(false);
+    expect(score.gateReason).toContain("below_threshold");
+  });
+
+  it("flat gate (flag absent): byte-identical result with flag explicitly absent", () => {
+    delete process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"];
+    const score1 = scoreCandidate(lowNoveltyInput);
+    // Run again to confirm determinism (pure function invariant)
+    const score2 = scoreCandidate(lowNoveltyInput);
+    expect(score1.shouldStore).toBe(score2.shouldStore);
+    expect(score1.gateReason).toBe(score2.gateReason);
+    expect(score1.combinedNovelty).toBe(score2.combinedNovelty);
+  });
+
+  it("hierarchical gate (flag set): routes to hierarchical path, gateReason is distinct", () => {
+    process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"] = "1";
+    const score = scoreCandidate(lowNoveltyInput);
+    // The hierarchical gate reason always starts with 'high_free_energy' or
+    // 'low_free_energy' — never 'below_threshold' or 'high_novelty'.
+    expect(score.gateReason).not.toContain("below_threshold");
+    expect(score.gateReason).not.toBe("high_novelty");
+    expect(
+      score.gateReason.startsWith("high_free_energy") ||
+      score.gateReason.startsWith("low_free_energy") ||
+      score.gateReason === "bypass",
+    ).toBe(true);
+  });
+
+  it("bypass=true forces shouldStore=true on both gates", () => {
+    const forced = { ...lowNoveltyInput, force: true };
+
+    // Flat gate
+    delete process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"];
+    const flatScore = scoreCandidate(forced);
+    expect(flatScore.shouldStore).toBe(true);
+    expect(flatScore.gateReason).toBe("bypass");
+
+    // Hierarchical gate
+    process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"] = "1";
+    const hierScore = scoreCandidate(forced);
+    expect(hierScore.shouldStore).toBe(true);
+    expect(hierScore.gateReason).toBe("bypass");
   });
 });

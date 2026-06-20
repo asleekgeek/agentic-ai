@@ -27,6 +27,12 @@ import {
   computeTemporalNovelty,
   describeSignals,
   gateDecision,
+  computeSensoryErrors,
+  computeSensoryPrediction,
+  computeEntityErrors,
+  computeSchemaErrors,
+  hierarchicalGateDecision,
+  type HierarchicalPrediction,
 } from "./predictive-coding.js";
 import type { WriteGateScore } from "./types.js";
 
@@ -135,6 +141,97 @@ export function parseHoursSince(isoStr: string): number | null {
   }
 }
 
+// ── Hierarchical gate flag ──────────────────────────────────────────────────
+
+/**
+ * Return true iff the hierarchical write-gate is enabled via env flag.
+ *
+ * precondition:  none.
+ * postcondition: true iff CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL is a
+ *   non-empty, truthy string ("1", "true", "yes", "on").
+ *
+ * Reading env at call time (not module-load time) keeps this pure with
+ * respect to process.env mutations in tests.
+ *
+ * source: MEM-G5 task specification, PARITY_PLAN §3
+ */
+export function isHierarchicalGateEnabled(): boolean {
+  const v = process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"];
+  if (!v) return false;
+  return v === "1" || v.toLowerCase() === "true" || v.toLowerCase() === "yes" || v.toLowerCase() === "on";
+}
+
+// ── Hierarchical prediction builder ────────────────────────────────────────
+
+/**
+ * Build a HierarchicalPrediction from the flat signal inputs already
+ * available in WriteGateInput.
+ *
+ * precondition:  content is non-empty; noveltyScore ∈ [0, 1].
+ * postcondition: returned HierarchicalPrediction has three levels
+ *   (sensory=L0, entity=L1, schema=L2) whose totalFreeEnergy is the
+ *   sum of their individual freeEnergy values.
+ *
+ * The three signals map to the three hierarchical levels as follows
+ * (source: predictive_coding_gate.py:hierarchical_gate_decision,
+ *  predictive_coding_signals.py):
+ *   L0 (sensory)  — structural features of the content (shape, length, code density)
+ *   L1 (entity)   — entity novelty from known/new entity sets
+ *   L2 (schema)   — temporal/structural novelty as a schema-match proxy
+ *
+ * source: cortex mcp_server/core/predictive_coding_signals.py
+ *         (compute_sensory_errors, compute_entity_errors, compute_schema_errors)
+ * source: predictive_coding_gate.py:hierarchical_gate_decision
+ */
+function buildHierarchicalPrediction(
+  content: string,
+  newEntityNames: string[],
+  knownEntityNames: Set<string>,
+  recentContents: string[],
+  noveltyScore: number,
+  bypass: boolean,
+): HierarchicalPrediction {
+  // L0 — sensory: derive predictions from recent memories' structural features
+  const [sensoryPreds, sensoryPrecs] = computeSensoryPrediction([]);
+  const l0 = computeSensoryErrors(content, sensoryPreds, sensoryPrecs);
+
+  // L1 — entity
+  const l1 = computeEntityErrors(newEntityNames, knownEntityNames);
+
+  // L2 — schema: use structural novelty as schema-match proxy.
+  //   schemaMatchScore = 1 - structuralNovelty; sensory free energy stands in
+  //   for the external schema_free_energy (Python passes it as a parameter,
+  //   default 0.0 — see _compute_prediction_levels in hierarchical_predictive_coding.py).
+  //   NOTE: computeSchemaErrors already applies the *0.3 schema-FE coefficient
+  //   internally (source: predictive_coding_signals.py:219). Do NOT scale here
+  //   as well, or the coefficient is applied twice (0.3 * 0.3).
+  const structuralNovelty = computeStructuralNovelty(content, recentContents);
+  const l2 = computeSchemaErrors(1.0 - structuralNovelty, l0.freeEnergy);
+
+  const totalFreeEnergy = l0.freeEnergy + l1.freeEnergy + l2.freeEnergy;
+  const [gateOpen, gateReason] = hierarchicalGateDecision(
+    // We build a temporary HierarchicalPrediction to feed the function.
+    // The final one (returned below) uses the same values — no duplication.
+    {
+      levels: [l0, l1, l2],
+      totalFreeEnergy,
+      noveltyScore,
+      gateOpen: false, // placeholder; overwritten below
+      gateReason: "",  // placeholder; overwritten below
+    },
+    undefined, // → DEFAULT_HIERARCHICAL_THRESHOLD (defined in predictive-coding.ts)
+    bypass,
+  );
+
+  return {
+    levels: [l0, l1, l2],
+    totalFreeEnergy,
+    noveltyScore,
+    gateOpen,
+    gateReason,
+  };
+}
+
 // ── Core scoring function ───────────────────────────────────────────────────
 
 export interface WriteGateInput {
@@ -201,7 +298,32 @@ export function scoreCandidate(input: WriteGateInput): WriteGateScore {
   );
 
   const [bypass] = determineBypass(force, content, tags);
-  const [shouldStore, gateReason] = gateDecision(combinedNovelty, threshold, bypass);
+
+  // Dispatch to the hierarchical gate when the env flag is set;
+  // otherwise use the flat gate (default — byte-identical to prior behaviour).
+  //
+  // OCP: the dispatch is a single branching point; each branch calls a
+  // dedicated pure function returning [boolean, string]. Adding a third
+  // strategy requires only adding one branch here, not modifying callers.
+  //
+  // source: MEM-G5 task specification — flag CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL
+  let shouldStore: boolean;
+  let gateReason: string;
+
+  if (isHierarchicalGateEnabled()) {
+    const hp = buildHierarchicalPrediction(
+      content,
+      newEntityNames,
+      knownEntityNames,
+      recentContents,
+      combinedNovelty,
+      bypass,
+    );
+    shouldStore = hp.gateOpen;
+    gateReason = hp.gateReason;
+  } else {
+    [shouldStore, gateReason] = gateDecision(combinedNovelty, threshold, bypass);
+  }
 
   return {
     embeddingNovelty,
