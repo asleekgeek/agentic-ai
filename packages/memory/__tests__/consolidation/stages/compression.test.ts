@@ -135,6 +135,25 @@ describe("runCompressionCycle", () => {
     expect(emb.calls).toHaveLength(2);
   });
 
+  it("ablation gate: CORTEX_ABLATE_COMPRESSION=1 skips all compression (full fidelity)", async () => {
+    // Contrast with "compresses very old memory to tag" above: identical
+    // 400-day-old input, but the ablation gate forces level 0 for every memory.
+    // source: cortex bc5af469 mcp_server/core/compression.py:127
+    process.env["CORTEX_ABLATE_COMPRESSION"] = "1";
+    try {
+      const store = makeStore();
+      const emb = makeEmbeddings();
+      const result = await runCompressionCycle(store, SETTINGS, emb, [makeOldMem(40), makeOldMem(41)]);
+      expect(result.compressed_to_gist).toBe(0);
+      expect(result.compressed_to_tag).toBe(0);
+      expect(store.compressions).toHaveLength(0);
+      expect(emb.calls).toHaveLength(0);
+      expect(result.rows_scanned).toBe(2); // still scanned, just not compressed
+    } finally {
+      delete process.env["CORTEX_ABLATE_COMPRESSION"];
+    }
+  });
+
   it("compresses medium-age memory to gist only (0→1)", async () => {
     const store = makeStore();
     const emb = makeEmbeddings();

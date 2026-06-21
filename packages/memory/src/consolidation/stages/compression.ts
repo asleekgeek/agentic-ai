@@ -14,6 +14,8 @@
  *   mcp_server/core/compression.py (inline — no separate TS core file exists)
  */
 
+import { Mechanism, isMechanismDisabled } from "../ablation.js";
+
 // ── Named constants ───────────────────────────────────────────────────────────
 
 // Milliseconds in one hour — arithmetic identity, no citation needed.
@@ -178,6 +180,11 @@ function getCompressionSchedule(
   gistAgeHours: number,
   tagAgeHours: number,
 ): number {
+  // Ablation gate: CORTEX_ABLATE_COMPRESSION=1 skips compression entirely —
+  // every memory stays at full fidelity (level 0). Mirrors the Python gate so
+  // an A/B benchmark can disable compression with no other behavior change.
+  // source: cortex bc5af469 mcp_server/core/compression.py:127 — is_mechanism_disabled(Mechanism.COMPRESSION) → return 0
+  if (isMechanismDisabled(Mechanism.COMPRESSION)) return 0;
   if (memory["is_protected"]) return 0;
   if ((memory["store_type"] as string | undefined) === "semantic") return 0;
 

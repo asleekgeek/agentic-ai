@@ -50,6 +50,13 @@ export enum Mechanism {
   EMOTIONAL_RETRIEVAL = "emotional_retrieval",
   EMOTIONAL_DECAY = "emotional_decay",
   MOOD_CONGRUENT_RERANK = "mood_congruent_rerank",
+  // COMPRESSION postdates the ed33435 pin (introduced cortex 44296810); wired in
+  // consolidation/stages/compression.ts to mirror compression.py:127.
+  // source: cortex bc5af469 mcp_server/core/ablation.py:80
+  COMPRESSION = "compression",
+  // ENTITY_DEDUP (cortex ablation.py:79) intentionally omitted: its entity-merge
+  // mechanism (handlers/consolidation/entity_merge.py) is not ported to TS yet;
+  // the label alone would be unwired. Port the subsystem first.
 }
 
 // ── Core gate ────────────────────────────────────────────────────────────
