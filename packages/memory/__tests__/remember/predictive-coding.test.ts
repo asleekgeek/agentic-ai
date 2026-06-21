@@ -17,6 +17,9 @@ import {
   computeTemporalNovelty,
   describeSignals,
   gateDecision,
+  computeHierarchicalNovelty,
+  computeAchWeights,
+  extractSensoryFeatures,
 } from "../../src/remember/predictive-coding.js";
 import {
   isHierarchicalGateEnabled,
@@ -227,13 +230,14 @@ describe("scoreCandidate gate dispatch (MEM-G5)", () => {
   // structurally identical → structuralNovelty=0).
   // Combined = 0.4*0 + 0.25*0 + 0.2*0 + 0.15*0 = 0.0 < 0.4 → flat rejects.
   //
-  // The hierarchical gate uses free-energy (DEFAULT_HIERARCHICAL_THRESHOLD=0.15).
-  // With all-zero novelty, sensory FE will be non-trivial (sensory features
-  // against default prior), potentially above 0.15, so the two gates may
-  // diverge — confirming independent paths.
+  // The hierarchical mode swaps the SCORER (sigmoid hierarchical free-energy
+  // novelty) and reuses the SAME flat gate at the same threshold. With the
+  // neutral schema default (L2 free energy = 1.5), the sigmoid novelty floors
+  // around ~0.5-0.6 for ANY content, so the hierarchical mode ACCEPTS this
+  // low-novelty duplicate that the flat gate rejects — the documented
+  // hierarchical-mode inferiority (ROC-AUC 0.55 vs 0.99), faithfully mirrored.
   //
-  // source: predictive_coding_gate.py:hierarchical_gate_decision (threshold=0.15)
-  // source: write_gate.py:DEFAULT_HIERARCHICAL_THRESHOLD
+  // source: remember_helpers.py:evaluate_gate (158-163) + _hierarchical_novelty_score
   const lowNoveltyInput = {
     content: "short",
     tags: [],
@@ -271,18 +275,17 @@ describe("scoreCandidate gate dispatch (MEM-G5)", () => {
     expect(score1.combinedNovelty).toBe(score2.combinedNovelty);
   });
 
-  it("hierarchical gate (flag set): routes to hierarchical path, gateReason is distinct", () => {
+  it("hierarchical mode (flag set): swaps the scorer, reuses the FLAT gate", () => {
     process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"] = "1";
     const score = scoreCandidate(lowNoveltyInput);
-    // The hierarchical gate reason always starts with 'high_free_energy' or
-    // 'low_free_energy' — never 'below_threshold' or 'high_novelty'.
-    expect(score.gateReason).not.toContain("below_threshold");
-    expect(score.gateReason).not.toBe("high_novelty");
-    expect(
-      score.gateReason.startsWith("high_free_energy") ||
-      score.gateReason.startsWith("low_free_energy") ||
-      score.gateReason === "bypass",
-    ).toBe(true);
+    // Gate reasons are the FLAT gate's reasons — NEVER the free-energy gate's.
+    expect(score.gateReason).not.toContain("free_energy");
+    // combinedNovelty is now the hierarchical sigmoid score, not the flat one.
+    // With L2's neutral 1.5 constant the sigmoid floors >= the 0.4 threshold,
+    // so the hierarchical mode ACCEPTS this duplicate (the flat gate rejects it).
+    expect(score.combinedNovelty).toBeGreaterThanOrEqual(0.4);
+    expect(score.shouldStore).toBe(true);
+    expect(score.gateReason).toBe("high_novelty");
   });
 
   it("bypass=true forces shouldStore=true on both gates", () => {
@@ -300,4 +303,141 @@ describe("scoreCandidate gate dispatch (MEM-G5)", () => {
     expect(hierScore.shouldStore).toBe(true);
     expect(hierScore.gateReason).toBe("bypass");
   });
+});
+
+// ── MEM-G5: computeHierarchicalNovelty oracle parity ───────────────────────
+//
+// Cross-checked against the Cortex source of truth: values produced by
+// mcp_server/core/hierarchical_predictive_coding.py:compute_hierarchical_novelty
+// (HEAD bc5af469) on identical inputs, built the same way the production write
+// path builds them (recent contents → extract_sensory_features). If the regex
+// feature extraction, the level weights, or the sigmoid diverged, noveltyScore
+// would not match.
+//
+// source: hierarchical_predictive_coding.py (oracle captured 2026-06-21)
+
+describe("computeHierarchicalNovelty — Cortex oracle parity (MEM-G5)", () => {
+  function novelty(
+    content: string,
+    ent: string[],
+    known: string[],
+    recent: string[],
+  ): ReturnType<typeof computeHierarchicalNovelty> {
+    return computeHierarchicalNovelty(
+      content,
+      ent,
+      new Set(known),
+      recent.map((c) => extractSensoryFeatures(c)),
+    );
+  }
+
+  it("ACh weights at default ach_level=0.5 match the Cortex normalization", () => {
+    const [w0, w1, w2] = computeAchWeights(0.5);
+    expect(w0).toBeCloseTo(0.2719167905, 9);
+    expect(w1).toBeCloseTo(0.3172362556, 9);
+    expect(w2).toBeCloseTo(0.4108469539, 9);
+    expect(w0 + w1 + w2).toBeCloseTo(1.0, 12);
+  });
+
+  it("empty recent, no entities → novelty 0.601", () => {
+    const p = novelty(
+      "A short novel note about quantum entanglement.",
+      [],
+      [],
+      [],
+    );
+    expect(p.noveltyScore).toBe(0.601);
+    expect(p.totalFreeEnergy).toBeCloseTo(0.636559, 4);
+    expect(p.levels[0].freeEnergy).toBeCloseTo(0.074615, 4);
+    expect(p.levels[1].freeEnergy).toBe(0.0);
+    expect(p.levels[2].freeEnergy).toBe(1.5);
+  });
+
+  it("entities + known + recent → novelty 0.7578", () => {
+    const p = novelty(
+      "# Heading\n- item\n```code```\nMachine Learning and Cortex parity work.",
+      ["Machine Learning", "Cortex", "Parity"],
+      ["Cortex"],
+      ["old memory about databases", "another about vectors"],
+    );
+    expect(p.noveltyScore).toBe(0.7578);
+    expect(p.totalFreeEnergy).toBeCloseTo(0.8803, 3);
+    expect(p.levels[0].freeEnergy).toBeCloseTo(0.452475, 4);
+    expect(p.levels[1].freeEnergy).toBeCloseTo(0.444444, 4);
+    expect(p.levels[2].freeEnergy).toBe(1.5);
+  });
+
+  it("long code-heavy duplicate → novelty 0.5863 (accepts: documented inferiority)", () => {
+    const dup = "```\n" + "x = 1\n".repeat(200) + "```";
+    const p = novelty(dup, ["X"], ["X"], [dup]);
+    expect(p.noveltyScore).toBe(0.5863);
+    expect(p.totalFreeEnergy).toBeCloseTo(0.61627, 4);
+    expect(p.levels[0].freeEnergy).toBe(0.0);
+    expect(p.levels[1].freeEnergy).toBe(0.0);
+    expect(p.levels[2].freeEnergy).toBe(1.5);
+  });
+});
+
+// ── MEM-G5: flag-off byte-identical regression guard ───────────────────────
+//
+// With the flag unset, scoreCandidate MUST be byte-identical to the flat path:
+// combinedNovelty == computeNoveltyScore(4 signals), and the gate decision is
+// the flat gateDecision. Pins the default behaviour against future drift.
+
+describe("scoreCandidate flag-off == flat path (MEM-G5 regression guard)", () => {
+  afterEach(() => {
+    delete process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"];
+  });
+
+  const cases = [
+    {
+      name: "novel content",
+      input: {
+        content: "Entirely new fact about photosynthesis pathways.",
+        tags: [],
+        force: false,
+        similarities: [0.1],
+        newEntityNames: ["Photosynthesis"],
+        knownEntityNames: new Set<string>(),
+        recentContents: ["unrelated old note"],
+        hoursSinceSimilar: 100,
+        threshold: 0.4,
+      },
+    },
+    {
+      name: "duplicate content",
+      input: {
+        content: "short",
+        tags: [],
+        force: false,
+        similarities: [0.99],
+        newEntityNames: ["Known"],
+        knownEntityNames: new Set(["Known"]),
+        recentContents: ["short"],
+        hoursSinceSimilar: 0,
+        threshold: 0.4,
+      },
+    },
+  ];
+
+  for (const { name, input } of cases) {
+    it(`${name}: combinedNovelty equals the flat 4-signal score`, () => {
+      delete process.env["CORTEX_MEMORY_WRITE_GATE_HIERARCHICAL"];
+      const score = scoreCandidate(input);
+      const expectedFlat = computeNoveltyScore(
+        score.embeddingNovelty,
+        score.entityNovelty,
+        score.temporalNovelty,
+        score.structuralNovelty,
+      );
+      expect(score.combinedNovelty).toBe(expectedFlat);
+      const [shouldStore, reason] = gateDecision(
+        expectedFlat,
+        input.threshold,
+        false,
+      );
+      expect(score.shouldStore).toBe(shouldStore);
+      expect(score.gateReason).toBe(reason);
+    });
+  }
 });
