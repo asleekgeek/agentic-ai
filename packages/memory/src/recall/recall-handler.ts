@@ -59,7 +59,7 @@ import { QueryIntent } from "./types.js";
 // ── CORTEX_ABLATE env-var ablation contract ───────────────────────────────
 //
 // Each CORTEX_ABLATE_<MECH>=1 env var disables the corresponding mechanism
-// at handler entry. Mirrors cortex@bc0ae4f mcp_server/handlers/recall.py
+// at handler entry. Mirrors cortex main mcp_server/handlers/recall.py
 // ablation guard block.
 //
 // WIRED (5 mechanisms — their implementations are present in this port):
@@ -88,32 +88,32 @@ const ABLATE_CO_ACTIVATION = process.env["CORTEX_ABLATE_CO_ACTIVATION"] === "1";
 // ── Handler-internal constants ────────────────────────────────────────────
 
 /** Minimum word length for keyword-trigger matching.
- *  source: cortex@bc0ae4f mcp_server/handlers/recall.py (check_trigger heuristic) */
-const TRIGGER_MIN_WORD_LEN = 3; // source: cortex@bc0ae4f mcp_server/handlers/recall.py (len(w) > 3 keyword heuristic)
+ *  source: cortex main mcp_server/handlers/recall.py (check_trigger heuristic) */
+const TRIGGER_MIN_WORD_LEN = 3; // source: cortex main mcp_server/handlers/recall.py (len(w) > 3 keyword heuristic)
 
 /** Number of FTS candidates to fetch per prospective trigger.
- *  source: cortex@bc0ae4f mcp_server/handlers/recall.py (ftsCandidates limit = 3) */
-const TRIGGER_FTS_LIMIT = 3; // source: cortex@bc0ae4f mcp_server/handlers/recall.py (trigger FTS limit)
+ *  source: cortex main mcp_server/handlers/recall.py (ftsCandidates limit = 3) */
+const TRIGGER_FTS_LIMIT = 3; // source: cortex main mcp_server/handlers/recall.py (trigger FTS limit)
 
 /** Default importance score for injected trigger memories.
- *  source: cortex@bc0ae4f mcp_server/handlers/recall.py (default importance = 0.5) */
-const DEFAULT_IMPORTANCE = 0.5; // source: cortex@bc0ae4f mcp_server/handlers/recall.py (default importance=0.5)
+ *  source: cortex main mcp_server/handlers/recall.py (default importance = 0.5) */
+const DEFAULT_IMPORTANCE = 0.5; // source: cortex main mcp_server/handlers/recall.py (default importance=0.5)
 
 /** Default max_results when not specified by the caller.
- *  source: cortex@bc0ae4f mcp_server/handlers/recall.py (max_results=10 default) */
-const DEFAULT_MAX_RESULTS = 10; // source: cortex@bc0ae4f mcp_server/handlers/recall.py (top_k default=10)
+ *  source: cortex main mcp_server/handlers/recall.py (max_results=10 default) */
+const DEFAULT_MAX_RESULTS = 10; // source: cortex main mcp_server/handlers/recall.py (top_k default=10)
 
 /** Default min_heat threshold when not specified by the caller.
- *  source: cortex@bc0ae4f mcp_server/handlers/recall.py (min_heat=0.05 default) */
-const DEFAULT_MIN_HEAT = 0.05; // source: cortex@bc0ae4f mcp_server/handlers/recall.py (min_heat default=0.05)
+ *  source: cortex main mcp_server/handlers/recall.py (min_heat=0.05 default) */
+const DEFAULT_MIN_HEAT = 0.05; // source: cortex main mcp_server/handlers/recall.py (min_heat default=0.05)
 
 /** Candidate pool multiplier: pool = max_results * POOL_MULTIPLIER (min POOL_FLOOR).
- *  source: cortex@bc0ae4f mcp_server/handlers/recall.py (pool = max(top_k * 3, 30)) */
-const POOL_MULTIPLIER = 3; // source: cortex@bc0ae4f mcp_server/handlers/recall.py (pool multiplier = 3)
+ *  source: cortex main mcp_server/handlers/recall.py (pool = max(top_k * 3, 30)) */
+const POOL_MULTIPLIER = 3; // source: cortex main mcp_server/handlers/recall.py (pool multiplier = 3)
 
 /** Minimum candidate pool size.
- *  source: cortex@bc0ae4f mcp_server/handlers/recall.py (max(top_k * 3, 30)) */
-const POOL_FLOOR = 30; // source: cortex@bc0ae4f mcp_server/handlers/recall.py (pool floor = 30)
+ *  source: cortex main mcp_server/handlers/recall.py (max(top_k * 3, 30)) */
+const POOL_FLOOR = 30; // source: cortex main mcp_server/handlers/recall.py (pool floor = 30)
 
 // ── Settings ──────────────────────────────────────────────────────────────
 
@@ -136,7 +136,7 @@ export const DEFAULT_RECALL_SETTINGS: RecallSettings = {
   WRRF_K: 60,
   CO_ACTIVATION_ENABLED: true,
   CO_ACTIVATION_MIN_SCORE: 0.3,
-  CO_ACTIVATION_LEARNING_RATE: 0.01, // source: cortex@bc0ae4f mcp_server/handlers/recall.py (default Hebbian learning rate, empirical)
+  CO_ACTIVATION_LEARNING_RATE: 0.01, // source: cortex main mcp_server/handlers/recall.py (default Hebbian learning rate, empirical)
   STRATEGIC_ORDERING_ENABLED: true,
   STRATEGIC_TOP_FRACTION: 0.3,
   STRATEGIC_BOTTOM_FRACTION: 0.2,
@@ -293,9 +293,9 @@ export async function recallHandler(
 
   if (!args || !args.query) return empty;
 
-  // source: cortex@bc0ae4f mcp_server/handlers/recall.py (max_results=10, min_heat=0.05 — empirical defaults)
-  // source: cortex@f425157 mcp_server/handlers/recall.py (include_low_signal default=False)
-  // source: cortex@6fbf723d mcp_server/handlers/recall.py (include_related default=False)
+  // source: cortex main mcp_server/handlers/recall.py (max_results=10, min_heat=0.05 — empirical defaults)
+  // source: cortex main mcp_server/handlers/recall.py (include_low_signal default=False)
+  // source: cortex main mcp_server/handlers/recall.py (include_related default=False)
   const {
     query,
     max_results = DEFAULT_MAX_RESULTS,
@@ -319,7 +319,7 @@ export async function recallHandler(
 
   // 4. Compute Hopfield signal (energy-based associative retrieval).
   //    CORTEX_ABLATE_HOPFIELD=1 → skip.
-  //    source: Ramsauer et al. (2021); cortex@bc0ae4f mcp_server/core/hopfield.py
+  //    source: Ramsauer et al. (2021); cortex main mcp_server/core/hopfield.py
   let hopfieldPairs: Array<[number, number]> = [];
   if (!ABLATE_HOPFIELD && queryEmbedding !== null && queryEmbedding.length > 0 && hotMems.length > 0) {
     const embPairs: Array<[number, number[]]> = hotMems
@@ -333,7 +333,7 @@ export async function recallHandler(
 
   // 5. Compute HDC signal (hyperdimensional text encoding).
   //    CORTEX_ABLATE_HDC=1 → skip.
-  //    source: Kanerva (2009); cortex@bc0ae4f mcp_server/core/hdc_encoder.py
+  //    source: Kanerva (2009); cortex main mcp_server/core/hdc_encoder.py
   let hdcPairs: Array<[number, number]> = [];
   if (!ABLATE_HDC && hotMems.length > 0) {
     const memContents: Array<[number, string]> = hotMems.map((m) => [m.id, m.content]);
@@ -342,7 +342,7 @@ export async function recallHandler(
 
   // 6. Compute spreading-activation signal (entity-graph BFS).
   //    CORTEX_ABLATE_SPREADING_ACTIVATION=1 → no propagation (seeds only).
-  //    source: Collins & Loftus (1975); cortex@bc0ae4f mcp_server/core/spreading_activation.py
+  //    source: Collins & Loftus (1975); cortex main mcp_server/core/spreading_activation.py
   let saPairs: Array<[number, number]> = [];
   if (store.getEntities && store.getRelationships) {
     try {
@@ -379,7 +379,7 @@ export async function recallHandler(
 
   // 7. Compute dendritic branch signal (semantic clustering).
   //    CORTEX_ABLATE_DENDRITIC_CLUSTERS=1 → findBestBranch returns null.
-  //    source: Kastellakis et al. (2015); cortex@bc0ae4f mcp_server/core/dendritic_clusters.py
+  //    source: Kastellakis et al. (2015); cortex main mcp_server/core/dendritic_clusters.py
   //    Note: the dendritic signal boosts memories that belong to the same
   //    branch as the top-scoring results. We derive a simple score from
   //    branch affinity of the query's entity set against existing hot-mem
@@ -395,7 +395,7 @@ export async function recallHandler(
     // has no extractable entity names. Jaccard over empty sets = 0, so the
     // affinity score is driven entirely by the tag Jaccard (0.3 weight), which
     // matches the Python code path for name-free queries.
-    // source: cortex@ed33435 mcp_server/core/dendritic_clusters.py:44-67
+    // source: cortex main mcp_server/core/dendritic_clusters.py:44-67
     const queryEntitySet = new Set<string>(); // entity names not extractable from raw query text
     // Score each hot memory by how well its tags align with query keywords.
     const tagScored: Array<[number, number]> = hotMems.map((m) => {
@@ -433,7 +433,7 @@ export async function recallHandler(
   };
 
   // 9. WRRF fusion — apply per-signal weights derived from query intent.
-  // Port of: cortex@ed33435 mcp_server/core/retrieval_dispatch.py:wrrf_fuse
+  // Port of: cortex main mcp_server/core/retrieval_dispatch.py:wrrf_fuse
   // The earlier TS port called plain rrfFuseSignals, ignoring the
   // BASE_WEIGHTS / INTENT_WEIGHT_OVERRIDES the rest of the pipeline computed —
   // a regression of ~21pp on LoCoMo MRR vs the Python baseline. Passing the
@@ -505,7 +505,7 @@ export async function recallHandler(
   // POOL_FLOOR=30), so post-filter we still have enough candidates to
   // cap at max_results without iterative refill.
   //
-  // source: cortex@f425157 mcp_server/handlers/recall.py — low_signal_dropped wiring
+  // source: cortex main mcp_server/handlers/recall.py — low_signal_dropped wiring
   let lowSignalDropped = 0;
   let afterFilter = afterRules;
   if (!include_low_signal) {
@@ -529,7 +529,7 @@ export async function recallHandler(
 
   // 15. Inline relation-walk when include_related=true (MEM-G4).
   //     When false (default), ordered is untouched — byte-identical to pre-MEM-G4 path.
-  //     source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:inline_related_neighbors
+  //     source: cortex main mcp_server/handlers/recall_helpers.py:inline_related_neighbors
   if (include_related) {
     await inlineRelatedNeighbors(ordered, store);
   }
@@ -563,7 +563,7 @@ export async function recallHandler(
   // Bounded I/O: keep the tool result under the host's token cap. Items whose
   // content is cut keep their memory_id so the full body stays fetchable by id;
   // count is recomputed after the budget may have dropped tail items.
-  // source: cortex@bc5af469 mcp_server/handlers/recall.py:468-484
+  // source: cortex main mcp_server/handlers/recall.py:468-484
   //         (bound_payload(resp, [ListTarget("memories", weight_key="score")]))
   boundPayload(response, [listTarget("memories", "content", "score")]);
   response.count = response.memories.length;

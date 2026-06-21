@@ -11,7 +11,7 @@
  *                       correct, but probably isn't; the curator
  *                       should re-author against the new code.
  *
- * The curator's recently-authored filter (cortex@4883307) protects
+ * The curator's recently-authored filter (cortex main) protects
  * fresh pages from being re-suggested by mtime alone. It does NOT
  * detect drift: a page authored 2 weeks ago whose cited source was
  * rewritten yesterday is still "fresh by mtime" but its content no
@@ -35,8 +35,8 @@ import type { PageMtimeFn } from "./auto-curator.js";
 //   3. ``source_files: [a, b]`` — explicit frontmatter list
 //
 // Match on the line, then extract path-shaped tokens from inside. This
-// keeps prose like "source: cortex@deadbeef mcp_server/foo.py" from
-// matching "cortex@deadbeef" as a path; we only want the file tokens.
+// keeps prose like "source: cortex main mcp_server/foo.py" from
+// matching "cortex main" as a path; we only want the file tokens.
 //
 // source: project coding-standards.md §8 "Zetetic Source Discipline"
 //   — every algorithm/constant carries a "// source: <citation>" marker
@@ -44,7 +44,7 @@ const CITATION_LINE_RE = /(?:^|\n)\s*(?:\/\/\s*)?source:\s*([^\n]+)/gi;
 const FRONTMATTER_LIST_RE = /^\s*source_files\s*:\s*\[([^\]]+)\]/im;
 // Path-token shape: word chars / dots / slashes / dashes / underscores
 // ending in a known source-extension. Picks "packages/foo/bar.ts" out of
-// "source: cortex@deadbeef packages/foo/bar.ts — explanation".
+// "source: cortex main packages/foo/bar.ts — explanation".
 const PATH_TOKEN_RE =
   /([\w./_-]+\.(?:py|ts|js|tsx|jsx|md|sql|yml|yaml|toml|rs|go|rb|cpp|c|h|cs|swift|java|kt|scala|ex|exs|sh|css))(?=\b|$)/g;
 

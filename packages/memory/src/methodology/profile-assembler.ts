@@ -4,7 +4,7 @@
  * Orchestrates pattern extraction, style classification, bridge finding,
  * blind spot detection, persona vectors, and cross-coding.
  *
- * source: cortex@ed33435 mcp_server/core/profile_assembler.py
+ * source: cortex main mcp_server/core/profile_assembler.py
  */
 
 import type { DomainProfile, ProfilesStore } from "./types.js";
@@ -270,7 +270,7 @@ function extractPatterns(convs: ConversationRaw[]): Patterns {
  * precondition: data.conversations.length > 0
  * postcondition: profile has all DomainProfile fields; confidence in [0, 1]
  *
- * source: cortex@ed33435 mcp_server/core/profile_assembler.py _build_single_domain:112-153
+ * source: cortex main mcp_server/core/profile_assembler.py _build_single_domain:112-153
  */
 function buildSingleDomain(
   domainId: string,
@@ -320,7 +320,7 @@ function buildSingleDomain(
 
 /**
  * Compute session-weighted global cognitive style across all domains.
- * source: cortex@ed33435 mcp_server/core/profile_assembler.py _compute_global_style:213-237
+ * source: cortex main mcp_server/core/profile_assembler.py _compute_global_style:213-237
  */
 function computeGlobalStyle(profiles: ProfilesStore): void {
   const allDomains = Object.values(profiles.domains ?? {});
@@ -357,7 +357,7 @@ function computeGlobalStyle(profiles: ProfilesStore): void {
 
 /**
  * Attach bridges, blind spots to each domain profile.
- * source: cortex@ed33435 mcp_server/core/profile_assembler.py _apply_cross_domain_analysis:239-275
+ * source: cortex main mcp_server/core/profile_assembler.py _apply_cross_domain_analysis:239-275
  */
 function applyCrossDomainAnalysis(
   profiles: ProfilesStore,
@@ -398,7 +398,7 @@ export interface BuildDomainProfilesInput {
  * precondition: existingProfiles has a "domains" map (may be empty)
  * postcondition: all domains in byProject have a profile; globalStyle updated
  *
- * source: cortex@ed33435 mcp_server/core/profile_assembler.py build_domain_profiles:278-313
+ * source: cortex main mcp_server/core/profile_assembler.py build_domain_profiles:278-313
  */
 export function buildDomainProfiles({
   existingProfiles,

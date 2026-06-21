@@ -14,7 +14,7 @@
  *
  * Pure business logic — no I/O.
  *
- * Port of: cortex@ed33435 mcp_server/core/separation_core.py
+ * Port of: cortex main mcp_server/core/separation_core.py
  *
  * References:
  *   Leutgeb JK et al. (2007) Pattern separation in the DG and CA3.
@@ -35,30 +35,30 @@ import {
 import { isMechanismDisabled, Mechanism } from "./ablation.js";
 
 // ── Configuration ─────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/separation_core.py:42-55
+// source: cortex main mcp_server/core/separation_core.py:42-55
 
 /** Cosine similarity threshold above which two memories need separation.
  * Engineering choice — tuned empirically for 384-dim dense embeddings.
- * source: cortex@ed33435 mcp_server/core/separation_core.py:42-43
+ * source: cortex main mcp_server/core/separation_core.py:42-43
  */
 const SEPARATION_THRESHOLD = 0.75;
 
 /** Deduplication boundary. Above this cosine similarity, memories are
  * treated as near-duplicates (handled by dedup, not separation).
- * source: cortex@ed33435 mcp_server/core/separation_core.py:46-47
+ * source: cortex main mcp_server/core/separation_core.py:46-47
  */
 const IDENTITY_THRESHOLD = 0.95;
 
 /** Floor for post-separation similarity with the original embedding,
  * preventing orthogonalization from destroying semantic content.
- * source: cortex@ed33435 mcp_server/core/separation_core.py:50-51
+ * source: cortex main mcp_server/core/separation_core.py:50-51
  */
 const MIN_POST_SEPARATION_SIMILARITY = 0.3;
 
 /** DG granule cell activation sparsity: 2-5% of cells active.
  * Leutgeb et al. (2007) Science 315:961-966; Rolls (2013) Front Syst Neurosci.
  * We use 4% as the midpoint of the published range.
- * source: cortex@ed33435 mcp_server/core/separation_core.py:53-55
+ * source: cortex main mcp_server/core/separation_core.py:53-55
  */
 const SPARSITY_TARGET = 0.04;
 
@@ -88,7 +88,7 @@ const DEFAULT_ORTHOGONALIZATION_STRENGTH = 0.5;
  * postcondition: returned pairs are sorted by similarity descending;
  *   every pair (i, sim) satisfies threshold <= sim < identityThreshold.
  *
- * source: cortex@ed33435 mcp_server/core/separation_core.py:61-82
+ * source: cortex main mcp_server/core/separation_core.py:61-82
  */
 export function detectInterferenceRisk(
   newEmbedding: number[],
@@ -117,7 +117,7 @@ export function detectInterferenceRisk(
  * Returns the updated result vector, or the original result if the
  * projection would violate the minimum similarity constraint.
  *
- * source: cortex@ed33435 mcp_server/core/separation_core.py:88-117
+ * source: cortex main mcp_server/core/separation_core.py:88-117
  */
 function projectAwayFromSingle(
   result: number[],
@@ -144,7 +144,7 @@ function projectAwayFromSingle(
 
 /**
  * Normalize to unit length if non-degenerate.
- * source: cortex@ed33435 mcp_server/core/separation_core.py:120-125
+ * source: cortex main mcp_server/core/separation_core.py:120-125
  */
 function normalizeResult(result: number[]): number[] {
   const resultNorm = norm(result);
@@ -166,7 +166,7 @@ function normalizeResult(result: number[]): number[] {
  *   separationIndex = 1 - cosine_similarity(original, orthogonalized) ∈ [0, 1].
  *   Returns input unchanged when PATTERN_SEPARATION is ablated.
  *
- * source: cortex@ed33435 mcp_server/core/separation_core.py:128-166
+ * source: cortex main mcp_server/core/separation_core.py:128-166
  */
 export function orthogonalizeEmbedding(
   newEmbedding: number[],
@@ -210,7 +210,7 @@ export function orthogonalizeEmbedding(
  * postcondition: returned array has same length; non-zero entries normalized
  *   to unit length; at most ceil(dim * sparsity) non-zero entries.
  *
- * source: cortex@ed33435 mcp_server/core/separation_core.py:172-202
+ * source: cortex main mcp_server/core/separation_core.py:172-202
  *   sparsity default = 0.04 (4% — Leutgeb et al. 2007 midpoint)
  */
 export function applySparsification(

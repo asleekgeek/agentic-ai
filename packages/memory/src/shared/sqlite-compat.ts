@@ -16,7 +16,7 @@
  *   - ON CONFLICT ... DO UPDATE SET -> preserved (SQLite 3.24+)
  *   - RETURNING id -> stripped (use lastrowid instead)
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_compat.py
+ * source: cortex main mcp_server/infrastructure/sqlite_compat.py
  */
 
 import type { Database as DatabaseType, RunResult, Statement } from "better-sqlite3";
@@ -31,7 +31,7 @@ import type { Database as DatabaseType, RunResult, Statement } from "better-sqli
  *   SERIAL replaced with INTEGER PRIMARY KEY AUTOINCREMENT,
  *   TIMESTAMPTZ replaced with TEXT, NOW() replaced with strftime(...)
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_compat.py:24-62
+ * source: cortex main mcp_server/infrastructure/sqlite_compat.py:24-62
  */
 export function translateSql(sql: string): string {
   // Parameter placeholders: %s -> ?
@@ -66,7 +66,7 @@ export function translateSql(sql: string): string {
 /**
  * Wraps a better-sqlite3 result to mimic psycopg result access.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_compat.py:65-92
+ * source: cortex main mcp_server/infrastructure/sqlite_compat.py:65-92
  */
 export interface CompatCursorResult {
   readonly lastrowid: number;
@@ -117,7 +117,7 @@ class CompatCursor implements CompatCursorResult {
  * Handlers that use store._conn.execute("... %s ...", [val])
  * will work transparently with this wrapper.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_compat.py:94-145
+ * source: cortex main mcp_server/infrastructure/sqlite_compat.py:94-145
  */
 export class PsycopgCompatConnection {
   private readonly _real: DatabaseType;
@@ -133,7 +133,7 @@ export class PsycopgCompatConnection {
    * precondition:  sql is a non-empty string; params is an array or undefined
    * postcondition: returns a CompatCursorResult reflecting the executed statement
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_compat.py:104-120
+   * source: cortex main mcp_server/infrastructure/sqlite_compat.py:104-120
    */
   execute(sql: string, params?: unknown[]): CompatCursorResult {
     const hadReturning = /\bRETURNING\s+\w+\b/i.test(sql);
@@ -174,7 +174,7 @@ export class PsycopgCompatConnection {
   /**
    * Execute multiple statements (DDL). No param translation.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_compat.py:122-124
+   * source: cortex main mcp_server/infrastructure/sqlite_compat.py:122-124
    */
   executescript(sql: string): void {
     this._real.exec(sql);

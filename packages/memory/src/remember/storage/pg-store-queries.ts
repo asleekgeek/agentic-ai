@@ -1,15 +1,15 @@
 /**
  * pg-store-queries.ts — Memory query operations for PgMemoryStore.
- * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py
+ * source: cortex main mcp_server/infrastructure/pg_store_queries.py
  */
 import type { PoolClient } from "pg";
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:20-28
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:20-28
 export async function getMemoriesForDomain(
   client: PoolClient, domain: string,
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:21
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:21
   minHeat = 0.05, // eslint-disable-line @typescript-eslint/no-magic-numbers
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:21
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:21
   limit = 50, // eslint-disable-line @typescript-eslint/no-magic-numbers
 ): Promise<Record<string, unknown>[]> {
   return (await client.query(
@@ -17,10 +17,10 @@ export async function getMemoriesForDomain(
     [domain, minHeat, limit])).rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:30-38
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:30-38
 export async function getMemoriesForDirectory(
   client: PoolClient, directory: string,
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:31
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:31
   minHeat = 0.05, // eslint-disable-line @typescript-eslint/no-magic-numbers
 ): Promise<Record<string, unknown>[]> {
   return (await client.query(
@@ -28,9 +28,9 @@ export async function getMemoriesForDirectory(
     [directory, minHeat])).rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:40-61
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:40-61
 export async function getHotMemories(
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:41
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:41
   client: PoolClient, minHeat = 0.7, limit = 20, includeBenchmarks = false, // eslint-disable-line @typescript-eslint/no-magic-numbers
 ): Promise<Record<string, unknown>[]> {
   const f = includeBenchmarks ? "" : "AND NOT coalesce(is_benchmark, FALSE) ";
@@ -40,7 +40,7 @@ export async function getHotMemories(
   return (await client.query(`SELECT * FROM memories WHERE heat_base >= $1 ${f}ORDER BY heat_base DESC`, [minHeat])).rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:63-75
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:63-75
 export async function getAllMemoriesWithEmbeddings(
   client: PoolClient, vectorToBytes: (v: unknown) => Buffer | null,
 ): Promise<Record<string, unknown>[]> {
@@ -52,37 +52,37 @@ export async function getAllMemoriesWithEmbeddings(
   });
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:77-85
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:77-85
 export async function getAllMemoriesForValidation(
   client: PoolClient,
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:78
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:78
   limit = 1000, // eslint-disable-line @typescript-eslint/no-magic-numbers
 ): Promise<Record<string, unknown>[]> {
   return (await client.query("SELECT * FROM memories WHERE NOT is_stale ORDER BY last_accessed ASC LIMIT $1", [limit])).rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:87-95
-// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:88
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:87-95
+// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- source: cortex main mcp_server/infrastructure/pg_store_queries.py:88
 export async function getMemoriesCreatedAfter(client: PoolClient, isoTimestamp: string, limit = 20): Promise<Record<string, unknown>[]> {
   return (await client.query("SELECT * FROM memories WHERE created_at >= $1 ORDER BY created_at ASC LIMIT $2", [isoTimestamp, limit])).rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:97-105
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:97-105
 export async function getMemoriesInTimeWindow(client: PoolClient, centerTime: string, windowMinutes: number): Promise<Record<string, unknown>[]> {
   return (await client.query(
     `SELECT * FROM memories WHERE ABS(EXTRACT(EPOCH FROM (created_at - $1::timestamptz))) / 60 <= $2`,
     [centerTime, windowMinutes])).rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:107-109
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:107-109
 export async function getAllMemoriesForDecay(client: PoolClient): Promise<Record<string, unknown>[]> {
   return (await client.query("SELECT * FROM memories WHERE NOT is_stale")).rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:111-152
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:111-152
 export async function* iterMemoriesForDecay(
   client: PoolClient,
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:113
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:113
   chunkSize = 1000, // eslint-disable-line @typescript-eslint/no-magic-numbers
 ): AsyncGenerator<Record<string, unknown>[]> {
   let offset = 0;
@@ -96,13 +96,13 @@ export async function* iterMemoriesForDecay(
   }
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:154-193
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:154-193
 export async function searchByTagVector(
   client: PoolClient, queryEmbedding: Buffer | null, tag: string,
   domain: string | null = null,
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:156
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:156
   minHeat = 0.01, // eslint-disable-line @typescript-eslint/no-magic-numbers
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:157
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:157
   limit = 3, // eslint-disable-line @typescript-eslint/no-magic-numbers
   bufferToVecLiteral: (buf: Buffer) => string,
 ): Promise<Record<string, unknown>[]> {
@@ -134,7 +134,7 @@ export async function searchByTagVector(
  *   domain when scope matters (e.g. seed-project, which is per-repo by
  *   design — see issue #16).
  *
- * source: cortex@fdc78f7 mcp_server/infrastructure/pg_store_queries.py:195-218 (issue #16)
+ * source: cortex main mcp_server/infrastructure/pg_store_queries.py:195-218 (issue #16)
  */
 export async function deleteMemoriesByTag(
   client: PoolClient,
@@ -151,7 +151,7 @@ export async function deleteMemoriesByTag(
 }
 
 // Source: docs/program/phase-5-pool-admission-design.md Phase 2 B1.
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:206-236
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:206-236
 export async function findCoAccessedPairs(client: PoolClient, memoryIds: number[]): Promise<Array<[number, number]>> {
   if (memoryIds.length === 0) return [];
   const result = await client.query<{ a: number; b: number }>(
@@ -162,7 +162,7 @@ export async function findCoAccessedPairs(client: PoolClient, memoryIds: number[
 }
 
 // Source: Phase 2 B2; Frey & Morris (1997) synaptic tagging.
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:238-258
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:238-258
 export async function findSharedEntities(client: PoolClient, memoryId: number, entityIds: number[]): Promise<number[]> {
   if (entityIds.length === 0) return [];
   return (await client.query<{ entity_id: number }>(
@@ -181,8 +181,8 @@ export async function findSharedEntities(client: PoolClient, memoryId: number, e
 // + weighted-sum fusion — NOT WRRF. This is fundamentally different from the
 // SQLite client-side WRRF used as the SQLite fallback.
 //
-// source: cortex@82b15b3 mcp_server/infrastructure/pg_schema.py:RECALL_MEMORIES_LAZY_FN
-// source: cortex@82b15b3 mcp_server/infrastructure/pg_store.py:recall_memories
+// source: cortex main mcp_server/infrastructure/pg_schema.py:RECALL_MEMORIES_LAZY_FN
+// source: cortex main mcp_server/infrastructure/pg_store.py:recall_memories
 
 export interface RecallMemoriesParams {
   queryText: string;
@@ -228,9 +228,9 @@ export interface RecallMemoryRow {
  * The queryEmbedding Buffer must contain 384 float32 values (4 bytes each) for
  * the MiniLM-L6-v2 model. Pass null to skip vector signal.
  *
- * source: cortex@82b15b3 mcp_server/infrastructure/pg_schema.py:807-920
+ * source: cortex main mcp_server/infrastructure/pg_schema.py:807-920
  *   (recall_memories stored procedure body)
- * source: cortex@82b15b3 mcp_server/infrastructure/pg_store.py:recall_memories
+ * source: cortex main mcp_server/infrastructure/pg_store.py:recall_memories
  *   (Python caller — passes query_embedding as bytes)
  */
 export async function callRecallMemories(
@@ -245,11 +245,11 @@ export async function callRecallMemories(
     directory = null,
     agentTopic = null,
     // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-    minHeat = 0.01, // source: cortex@82b15b3 mcp_server/core/pg_recall.py:197
+    minHeat = 0.01, // source: cortex main mcp_server/core/pg_recall.py:197
     // eslint-disable-next-line @typescript-eslint/no-magic-numbers
     maxResults = 10,
     // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-    wrrfK = 60,     // source: cortex@82b15b3 mcp_server/core/pg_recall.py:203
+    wrrfK = 60,     // source: cortex main mcp_server/core/pg_recall.py:203
     weights = {},
     includeGlobals = true,
   } = params;
@@ -265,7 +265,7 @@ export async function callRecallMemories(
   void wrrfK; // PG stored procedure has its own k parameter (unused here)
 
   // Convert Buffer to pgvector literal: '[f1, f2, ...]'
-  // source: cortex@82b15b3 mcp_server/infrastructure/pg_store.py:recall_memories
+  // source: cortex main mcp_server/infrastructure/pg_store.py:recall_memories
   //   passes embedding bytes which psycopg adapts to pgvector
   let embeddingLiteral: string | null = null;
   // 384 = MiniLM-L6-v2 embedding dimension
@@ -285,7 +285,7 @@ export async function callRecallMemories(
   //                   p_directory, p_agent_topic, p_min_heat, p_max_results,
   //                   p_wrrf_k, p_w_vector, p_w_fts, p_w_heat, p_w_ngram,
   //                   p_w_recency, p_include_globals)
-  // source: cortex@82b15b3 mcp_server/infrastructure/pg_schema.py:RECALL_MEMORIES_LAZY_FN
+  // source: cortex main mcp_server/infrastructure/pg_schema.py:RECALL_MEMORIES_LAZY_FN
   const result = await client.query<RecallMemoryRow>(
     `SELECT memory_id, content, score, heat, domain, created_at::text,
             store_type, tags, importance, surprise_score, emotional_valence, source

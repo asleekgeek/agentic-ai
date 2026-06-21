@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-magic-numbers -- all numeric defaults are literal ports from cortex@ed33435 */
+/* eslint-disable @typescript-eslint/no-magic-numbers -- all numeric defaults are literal ports from cortex main */
 /**
  * sqlite-store-search.ts — Search and retrieval mixin for SqliteMemoryStore.
  *
@@ -7,7 +7,7 @@
  *
  * Ports: infrastructure/sqlite_store_search.py (lines 1-373)
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py
+ * source: cortex main mcp_server/infrastructure/sqlite_store_search.py
  */
 
 import type { Database as DatabaseType } from "better-sqlite3";
@@ -35,7 +35,7 @@ export interface RecallResult {
 /**
  * Search operations on SQLite with client-side WRRF fusion.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:15-373
+ * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:15-373
  */
 export class SqliteSearchMixin {
   protected _rawConn!: DatabaseType;
@@ -49,7 +49,7 @@ export class SqliteSearchMixin {
   /**
    * Client-side WRRF fusion: vector + FTS5 + heat + recency.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:39-61
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:39-61
    */
   recallMemories(
     queryText: string,
@@ -58,10 +58,10 @@ export class SqliteSearchMixin {
     domain: string | null = null,
     directory: string | null = null,
     agentTopic: string | null = null,
-    minHeat = 0.05, // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:46
+    minHeat = 0.05, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:46
     maxResults = 10,
-    // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:46 — wrrf_k default 60
-    wrfK = 60, // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:46
+    // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:46 — wrrf_k default 60
+    wrfK = 60, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:46
     weights: WrrfWeights | null = null,
     includeGlobals = true,
   ): RecallResult[] {
@@ -86,7 +86,7 @@ export class SqliteSearchMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:63-85
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:63-85
    */
   private _signalVector(
     scores: Map<number, number>,
@@ -117,7 +117,7 @@ export class SqliteSearchMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:87-106
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:87-106
    */
   private _signalFts(
     scores: Map<number, number>,
@@ -143,7 +143,7 @@ export class SqliteSearchMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:108-128
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:108-128
    */
   private _signalHeat(
     scores: Map<number, number>,
@@ -169,7 +169,7 @@ export class SqliteSearchMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:130-151
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:130-151
    */
   private _signalRecency(
     scores: Map<number, number>,
@@ -195,7 +195,7 @@ export class SqliteSearchMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:152-166
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:152-166
    */
   private _buildFilter(
     minHeat: number,
@@ -216,7 +216,7 @@ export class SqliteSearchMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:168-186
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:168-186
    */
   private _applyAgentBoost(
     scores: Map<number, number>,
@@ -240,7 +240,7 @@ export class SqliteSearchMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:188-230
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:188-230
    */
   private _fetchRankedResults(
     scores: Map<number, number>,
@@ -290,7 +290,7 @@ export class SqliteSearchMixin {
   /**
    * Full-text search via FTS5. Returns (memory_id, score) pairs.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:232-242
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:232-242
    */
   searchFts(query: string, limit = 20): Array<[number, number]> {
     try {
@@ -309,7 +309,7 @@ export class SqliteSearchMixin {
   /**
    * Vector KNN search via sqlite-vec. Returns (memory_id, distance) pairs.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:244-261
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:244-261
    */
   searchVectors(
     queryEmbedding: Buffer,
@@ -338,15 +338,15 @@ export class SqliteSearchMixin {
   /**
    * Client-side spread activation: query terms -> entities -> memories.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:263-279
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:263-279
    */
   spreadActivationMemories(
     queryTerms: string[],
-    decay = 0.65, // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:265
-    threshold = 0.1, // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:266
+    decay = 0.65, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:265
+    threshold = 0.1, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:266
     maxDepth = 3,
     maxResults = 50,
-    minHeat = 0.05, // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:269
+    minHeat = 0.05, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:269
   ): Array<[number, number]> {
     const seedEntities = this._resolveSeedEntities(queryTerms, minHeat);
     if (seedEntities.size === 0) return [];
@@ -355,7 +355,7 @@ export class SqliteSearchMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:281-292
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:281-292
    */
   private _resolveSeedEntities(
     queryTerms: string[],
@@ -377,7 +377,7 @@ export class SqliteSearchMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:294-327
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:294-327
    */
   private _propagateActivation(
     seeds: Map<number, number>,
@@ -422,7 +422,7 @@ export class SqliteSearchMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:329-354
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:329-354
    */
   private _mapEntitiesToMemories(
     activated: Map<number, number>,
@@ -458,12 +458,12 @@ export class SqliteSearchMixin {
   /**
    * Stub — sqlite-vec does not support efficient batch embedding fetch.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:356-363
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:356-363
    */
   getHotEmbeddings(
-    _minHeat = 0.05, // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:358
+    _minHeat = 0.05, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:358
     _domain: string | null = null,
-    _limit = 500, // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:360
+    _limit = 500, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:360
   ): Array<[number, unknown, number]> {
     return [];
   }
@@ -471,12 +471,12 @@ export class SqliteSearchMixin {
   /**
    * Stub — temporal co-access requires PG window functions.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:365-372
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:365-372
    */
   getTemporalCoAccess(
-    _windowHours = 2.0, // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:366
+    _windowHours = 2.0, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:366
     _minAccess = 1,
-    _limit = 100, // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:368
+    _limit = 100, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:368
   ): Array<[number, number, number]> {
     return [];
   }

@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-magic-numbers -- all numeric defaults are literal ports from cortex@ed33435; citations on each method */
+/* eslint-disable @typescript-eslint/no-magic-numbers -- all numeric defaults are literal ports from cortex main; citations on each method */
 /**
  * sqlite-store-entities.ts — Entity CRUD mixin for SqliteMemoryStore.
  *
  * Ports: infrastructure/sqlite_store_entities.py (lines 1-167)
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py
+ * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py
  */
 
 import type { Database as DatabaseType } from "better-sqlite3";
@@ -23,7 +23,7 @@ export interface EntityRow {
 /**
  * Entity persistence operations on SQLite.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:9-167
+ * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:9-167
  */
 export class SqliteEntityMixin {
   protected _conn!: { execute: (...args: unknown[]) => unknown; raw: DatabaseType };
@@ -40,7 +40,7 @@ export class SqliteEntityMixin {
    * precondition:  updates is a list of [entity_id, heat] pairs
    * postcondition: returns count of updated rows; 0 if input is empty
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:18-27
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:18-27
    */
   updateEntitiesHeatBatch(updates: Array<[number, number]>): number {
     if (updates.length === 0) return 0;
@@ -62,7 +62,7 @@ export class SqliteEntityMixin {
    * precondition:  entityIds is a list of integer ids
    * postcondition: returns count of entities archived; 0 if input is empty
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:29-39
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:29-39
    */
   archiveEntitiesBatch(entityIds: number[]): number {
     if (entityIds.length === 0) return 0;
@@ -76,7 +76,7 @@ export class SqliteEntityMixin {
   /**
    * Insert an entity row and return its integer id.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:41-54
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:41-54
    */
   insertEntity(data: Record<string, unknown>): number {
     const stmt = this._rawConn.prepare(
@@ -94,7 +94,7 @@ export class SqliteEntityMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:56-59
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:56-59
    */
   getEntityByName(name: string): EntityRow | null {
     const row = this._rawConn
@@ -104,7 +104,7 @@ export class SqliteEntityMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:61-64
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:61-64
    */
   getEntityById(entityId: number): EntityRow | null {
     const row = this._rawConn
@@ -114,11 +114,11 @@ export class SqliteEntityMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:66-78
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:66-78
    */
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:66 — minHeat default 0.05
+  // source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:66 — minHeat default 0.05
   getAllEntities(
-    minHeat = 0.05, // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:66
+    minHeat = 0.05, // source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:66
     includeArchived = false,
   ): Record<string, unknown>[] {
     if (includeArchived) {
@@ -132,7 +132,7 @@ export class SqliteEntityMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:80-83
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:80-83
    */
   countEntities(): number {
     const row = this._rawConn
@@ -142,7 +142,7 @@ export class SqliteEntityMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:85-89
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:85-89
    */
   getEntitiesOfType(entityType: string): Record<string, unknown>[] {
     return this._rawConn
@@ -151,7 +151,7 @@ export class SqliteEntityMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:91-95
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:91-95
    */
   getDomainEntityCounts(): Record<string, unknown>[] {
     return this._rawConn
@@ -163,7 +163,7 @@ export class SqliteEntityMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:97-110
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:97-110
    */
   getIsolatedEntities(limit = 20): Record<string, unknown>[] {
     return this._rawConn
@@ -182,7 +182,7 @@ export class SqliteEntityMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:112-117
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:112-117
    */
   getResolvedEntityIds(): Set<number> {
     const rows = this._rawConn
@@ -197,7 +197,7 @@ export class SqliteEntityMixin {
   /**
    * Link a memory to an entity. Idempotent via PRIMARY KEY.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:119-126
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:119-126
    */
   insertMemoryEntity(memoryId: number, entityId: number): void {
     this._rawConn
@@ -211,7 +211,7 @@ export class SqliteEntityMixin {
   /**
    * Return all entities linked to a memory via the join table.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:128-136
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:128-136
    */
   getEntitiesForMemory(memoryId: number): Record<string, unknown>[] {
     return this._rawConn
@@ -226,7 +226,7 @@ export class SqliteEntityMixin {
   /**
    * Return all memories linked to an entity via the join table.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:138-146
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:138-146
    */
   getMemoriesForEntity(entityId: number): Record<string, unknown>[] {
     const rows = this._rawConn
@@ -248,12 +248,11 @@ export class SqliteEntityMixin {
    *   alias heat/recency via MAX (bounded — never a sum); alias tombstoned
    *   (archived=1, heat=0). All in one transaction; rollback on error.
    *
-   * DEVIATION: agentic-ai entities has NO 'origin' column (confirmed by
-   * pg-schema-tables.ts:75-84 and sqlite-schema.ts:90-99). The cortex oracle
-   * additionally checks origin to exclude ast_symbol rows as defense-in-depth.
-   * That check is omitted here; only the 2-row existence check is kept.
+   * No-op when ids match, an entity is missing, or either is an ast_symbol —
+   * code-symbol identity is structural and must never be fuzzy-merged
+   * (defense in depth over the core engine's own exclusion).
    *
-   * source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py:19-43
    */
   mergeEntities(
     survivorId: number,
@@ -269,16 +268,18 @@ export class SqliteEntityMixin {
 
     if (survivorId === aliasId) return result;
 
-    // 2-row existence check: require both entities to be present.
-    // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — SELECT id FROM entities
+    // Require both entities present AND neither an ast_symbol — code symbols are
+    // structural identities, never fuzzy-merged.
+    // source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py:37-43
     const existingRows = this._rawConn
-      .prepare("SELECT id FROM entities WHERE id IN (?, ?)")
-      .all(survivorId, aliasId) as Array<{ id: number }>;
-    if (existingRows.length !== 2) return result;
+      .prepare("SELECT id, origin FROM entities WHERE id IN (?, ?)")
+      .all(survivorId, aliasId) as Array<{ id: number; origin: string | null }>;
+    const origins = new Map(existingRows.map((r) => [r.id, r.origin ?? "text_concept"]));
+    if (origins.size !== 2 || [...origins.values()].includes("ast_symbol")) return result;
 
     const doMerge = this._rawConn.transaction(() => {
       // Rewire memory_entities links: insert survivor links, dedup via OR IGNORE.
-      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — INSERT OR IGNORE
+      // source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py — INSERT OR IGNORE
       this._rawConn
         .prepare(
           "INSERT OR IGNORE INTO memory_entities (memory_id, entity_id) " +
@@ -287,26 +288,26 @@ export class SqliteEntityMixin {
         .run(survivorId, aliasId);
 
       // Delete the alias's memory_entities links.
-      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — DELETE FROM memory_entities
+      // source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py — DELETE FROM memory_entities
       const movedInfo = this._rawConn
         .prepare("DELETE FROM memory_entities WHERE entity_id = ?")
         .run(aliasId);
       const moved = movedInfo.changes;
 
       // Rewire relationship source references.
-      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE relationships source
+      // source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE relationships source
       const srcInfo = this._rawConn
         .prepare("UPDATE relationships SET source_entity_id = ? WHERE source_entity_id = ?")
         .run(survivorId, aliasId);
 
       // Rewire relationship target references.
-      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE relationships target
+      // source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE relationships target
       const tgtInfo = this._rawConn
         .prepare("UPDATE relationships SET target_entity_id = ? WHERE target_entity_id = ?")
         .run(survivorId, aliasId);
 
       // Delete self-loops created by the rewire.
-      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — DELETE self-loops
+      // source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py — DELETE self-loops
       this._rawConn
         .prepare(
           "DELETE FROM relationships WHERE source_entity_id = target_entity_id AND source_entity_id = ?",
@@ -314,7 +315,7 @@ export class SqliteEntityMixin {
         .run(survivorId);
 
       // Absorb alias heat/recency into survivor via MAX — bounded, not a sum.
-      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE entities heat
+      // source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE entities heat
       this._rawConn
         .prepare(
           "UPDATE entities SET " +
@@ -325,7 +326,7 @@ export class SqliteEntityMixin {
         .run(aliasId, aliasId, survivorId);
 
       // Tombstone the alias: archived=1, heat=0 (auditable, NOT deleted).
-      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE entities tombstone
+      // source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE entities tombstone
       this._rawConn
         .prepare("UPDATE entities SET archived = 1, heat = 0 WHERE id = ?")
         .run(aliasId);
@@ -341,7 +342,7 @@ export class SqliteEntityMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:148-166
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:148-166
    */
   getMemoriesMentioningEntity(entityName: string, limit = 20): Record<string, unknown>[] {
     // Try FTS5 first

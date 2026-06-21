@@ -6,12 +6,12 @@
  *   - Analogical bridges: regex-based extraction of analogy patterns in text
  *
  * Port of: mcp_server/core/bridge_finder.py
- * source: cortex@ed33435 mcp_server/core/bridge_finder.py
+ * source: cortex main mcp_server/core/bridge_finder.py
  */
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/core/bridge_finder.py:13
+// source: cortex main mcp_server/core/bridge_finder.py:13
 const ANALOGY_RE =
   /(like|similar to|analogous to|reminds me of|just as|the same way)\s+(?:a\s+)?(.{5,40})/gi;
 
@@ -48,7 +48,7 @@ export interface BrainIndexInput {
 /**
  * Build project → domain_id mapping.
  * Port of: mcp_server/core/bridge_finder.py::_build_project_domain_map
- * source: cortex@ed33435 mcp_server/core/bridge_finder.py:20
+ * source: cortex main mcp_server/core/bridge_finder.py:20
  */
 function buildProjectDomainMap(profiles: ProfilesInput | null | undefined): Record<string, string> {
   const mapping: Record<string, string> = {};
@@ -65,7 +65,7 @@ function buildProjectDomainMap(profiles: ProfilesInput | null | undefined): Reco
 /**
  * Resolve domain for a node.
  * Port of: mcp_server/core/bridge_finder.py::_resolve_domain
- * source: cortex@ed33435 mcp_server/core/bridge_finder.py:31
+ * source: cortex main mcp_server/core/bridge_finder.py:31
  */
 function resolveDomain(
   node: Record<string, unknown>,
@@ -82,7 +82,7 @@ function resolveDomain(
 /**
  * Extract analogy patterns from text.
  * Port of: mcp_server/core/bridge_finder.py::_extract_analogies
- * source: cortex@ed33435 mcp_server/core/bridge_finder.py:40
+ * source: cortex main mcp_server/core/bridge_finder.py:40
  */
 function extractAnalogies(
   text: string | null | undefined,
@@ -99,7 +99,7 @@ function extractAnalogies(
   const regex = new RegExp(ANALOGY_RE.source, ANALOGY_RE.flags);
   let match: RegExpExecArray | null;
   while ((match = regex.exec(text)) !== null) {
-    const start = Math.max(0, match.index - 60); // source: cortex@ed33435 bridge_finder.py:45
+    const start = Math.max(0, match.index - 60); // source: cortex main bridge_finder.py:45
     const sourceContext = text.slice(start, match.index).trim().slice(-60);
     results.push({
       nodeId,
@@ -114,7 +114,7 @@ function extractAnalogies(
 /**
  * Build a unified node map from memories and conversations.
  * Port of: mcp_server/core/bridge_finder.py::_build_node_map
- * source: cortex@ed33435 mcp_server/core/bridge_finder.py:58
+ * source: cortex main mcp_server/core/bridge_finder.py:58
  */
 function buildNodeMap(
   allMemories: Record<string, Record<string, unknown>>,
@@ -145,7 +145,7 @@ function buildNodeMap(
 /**
  * Create a canonical key for an ordered domain pair.
  * Port of: mcp_server/core/bridge_finder.py::_make_pair_key
- * source: cortex@ed33435 mcp_server/core/bridge_finder.py:86
+ * source: cortex main mcp_server/core/bridge_finder.py:86
  */
 function makePairKey(domainA: string, domainB: string): string {
   return domainA < domainB ? `${domainA}|||${domainB}` : `${domainB}|||${domainA}`;
@@ -154,7 +154,7 @@ function makePairKey(domainA: string, domainB: string): string {
 /**
  * Add a cross-domain edge to the pair accumulator.
  * Port of: mcp_server/core/bridge_finder.py::_accumulate_edge
- * source: cortex@ed33435 mcp_server/core/bridge_finder.py:93
+ * source: cortex main mcp_server/core/bridge_finder.py:93
  */
 function accumulateEdge(
   pairs: Record<string, {
@@ -184,7 +184,7 @@ function accumulateEdge(
   const pair = pairs[pairKey]!;
   pair.totalWeight += weight;
   pair.edgeCount += 1;
-  if (pair.examples.length < 5) { // source: cortex@ed33435 bridge_finder.py:116
+  if (pair.examples.length < 5) { // source: cortex main bridge_finder.py:116
     pair.examples.push({ fromId, toId });
   }
 }
@@ -192,7 +192,7 @@ function accumulateEdge(
 /**
  * Find cross-domain structural edges and aggregate by domain pair.
  * Port of: mcp_server/core/bridge_finder.py::_collect_structural_pairs
- * source: cortex@ed33435 mcp_server/core/bridge_finder.py:119
+ * source: cortex main mcp_server/core/bridge_finder.py:119
  */
 function collectStructuralPairs(
   nodes: Record<string, { domainId: string; body: string; crossRefs: unknown[] }>,
@@ -242,7 +242,7 @@ function collectStructuralPairs(
 /**
  * Extract text analogies from all nodes, grouped by domain.
  * Port of: mcp_server/core/bridge_finder.py::_collect_analogies_by_domain
- * source: cortex@ed33435 mcp_server/core/bridge_finder.py:144
+ * source: cortex main mcp_server/core/bridge_finder.py:144
  */
 function collectAnalogiesByDomain(
   nodes: Record<string, { domainId: string; body: string; crossRefs: unknown[] }>,
@@ -269,7 +269,7 @@ function collectAnalogiesByDomain(
 /**
  * Add structural bridge entries (both directions) into result.
  * Port of: mcp_server/core/bridge_finder.py::_merge_structural_bridges
- * source: cortex@ed33435 mcp_server/core/bridge_finder.py:162
+ * source: cortex main mcp_server/core/bridge_finder.py:162
  */
 function mergeStructuralBridges(
   structuralPairs: Record<string, {
@@ -302,7 +302,7 @@ function mergeStructuralBridges(
 /**
  * Add analogical bridge entries into result.
  * Port of: mcp_server/core/bridge_finder.py::_merge_analogical_bridges
- * source: cortex@ed33435 mcp_server/core/bridge_finder.py:186
+ * source: cortex main mcp_server/core/bridge_finder.py:186
  */
 function mergeAnalogicalBridges(
   analogiesByDomain: Record<
@@ -327,7 +327,7 @@ function mergeAnalogicalBridges(
         toDomain: "text-analogy",
         pattern,
         weight: items.length,
-        examples: items.slice(0, 5).map((i) => ({ // source: cortex@ed33435 bridge_finder.py:208
+        examples: items.slice(0, 5).map((i) => ({ // source: cortex main bridge_finder.py:208
           nodeId: i.nodeId,
           sourceContext: i.sourceContext,
           targetConcept: i.targetConcept,
@@ -348,7 +348,7 @@ function mergeAnalogicalBridges(
  *   empty map when no cross-domain connections found.
  *
  * Port of: mcp_server/core/bridge_finder.py::find_bridges
- * source: cortex@ed33435 mcp_server/core/bridge_finder.py:215
+ * source: cortex main mcp_server/core/bridge_finder.py:215
  */
 export function findBridges(
   profiles: ProfilesInput | null | undefined,

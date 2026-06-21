@@ -1,7 +1,7 @@
 /**
  * Modern Hopfield Networks for energy-based associative memory retrieval.
  *
- * Port of: cortex@bc0ae4f mcp_server/core/hopfield.py
+ * Port of: cortex main mcp_server/core/hopfield.py
  *
  * source: Ramsauer et al. (2021) "Hopfield Networks is All You Need"
  *         https://arxiv.org/abs/2008.02217
@@ -17,19 +17,19 @@
 /**
  * Default inverse temperature for Hopfield attention.
  * Higher beta = sharper (more winner-take-all) retrieval.
- * source: cortex@bc0ae4f mcp_server/core/hopfield.py (default beta=8.0, empirical tuning)
+ * source: cortex main mcp_server/core/hopfield.py (default beta=8.0, empirical tuning)
  */
 export const DEFAULT_BETA = 8.0;
 
 /**
  * Default number of top-k results to return.
- * source: cortex@bc0ae4f mcp_server/core/hopfield.py (default top_k=10)
+ * source: cortex main mcp_server/core/hopfield.py (default top_k=10)
  */
 export const DEFAULT_TOP_K = 10;
 
 /**
  * Default number of iterations for pattern completion dynamics.
- * source: cortex@bc0ae4f mcp_server/core/hopfield.py (default iterations=5)
+ * source: cortex main mcp_server/core/hopfield.py (default iterations=5)
  */
 export const DEFAULT_ITERATIONS = 5;
 
@@ -55,7 +55,7 @@ export interface PatternMatrix {
 /**
  * Numerically stable softmax over logits.
  * post: all output values sum to 1.0 (within floating-point error).
- * source: cortex@bc0ae4f mcp_server/core/hopfield.py:22-26
+ * source: cortex main mcp_server/core/hopfield.py:22-26
  */
 function softmax(logits: Float64Array): Float64Array {
   let max = -Infinity;
@@ -82,7 +82,7 @@ function softmax(logits: Float64Array): Float64Array {
  *
  * post: sum of result ≈ 1.0; many entries are exactly 0.0.
  * source: Martins & Astudillo (2016) https://arxiv.org/abs/1602.02068
- *         cortex@bc0ae4f mcp_server/core/hopfield.py:29-46
+ *         cortex main mcp_server/core/hopfield.py:29-46
  */
 function sparsemax(logits: Float64Array): Float64Array {
   const n = logits.length;
@@ -105,7 +105,7 @@ function sparsemax(logits: Float64Array): Float64Array {
 
 /**
  * Numerically stable log-sum-exp.
- * source: cortex@bc0ae4f mcp_server/core/hopfield.py:49-52
+ * source: cortex main mcp_server/core/hopfield.py:49-52
  */
 function logSumExp(x: Float64Array): number {
   let max = -Infinity;
@@ -154,7 +154,7 @@ function matVecMul(rows: Float64Array[], query: Float64Array): Float64Array {
  * pre:  embeddings is a list of (memory_id, float[]) pairs
  * post: returned rows are L2-normalized; patternIds.length === rows.length
  *
- * source: cortex@bc0ae4f mcp_server/core/hopfield.py:55-83
+ * source: cortex main mcp_server/core/hopfield.py:55-83
  */
 export function buildPatternMatrix(
   embeddings: Array<[number, number[]]>,
@@ -178,9 +178,9 @@ export function buildPatternMatrix(
  * post: result.length <= topK; scores are softmax attention weights summing to 1
  *
  * source: Ramsauer et al. (2021) eq. 1;
- *         cortex@bc0ae4f mcp_server/core/hopfield.py:86-117
+ *         cortex main mcp_server/core/hopfield.py:86-117
  *
- * @param beta - Inverse temperature. source: cortex@bc0ae4f hopfield.py (default 8.0 — empirical tuning)
+ * @param beta - Inverse temperature. source: cortex main hopfield.py (default 8.0 — empirical tuning)
  */
 export function retrieve(
   queryEmbedding: number[],
@@ -210,7 +210,7 @@ export function retrieve(
  * pre:  matrix.rows.length > 0
  * post: only entries with weight > 0 are returned; length <= topK
  *
- * source: Martins & Astudillo (2016); cortex@bc0ae4f hopfield.py:120-147
+ * source: Martins & Astudillo (2016); cortex main hopfield.py:120-147
  */
 export function retrieveSparse(
   queryEmbedding: number[],
@@ -243,7 +243,7 @@ export function retrieveSparse(
  * pre:  partialEmbedding.length > 0
  * post: returned vector has same length; is L2-normalized
  *
- * source: Ramsauer et al. (2021) §3.1; cortex@bc0ae4f hopfield.py:150-178
+ * source: Ramsauer et al. (2021) §3.1; cortex main hopfield.py:150-178
  */
 export function patternCompletion(
   partialEmbedding: number[],
@@ -289,7 +289,7 @@ export function patternCompletion(
  * post: returned value is a real number (lower = more familiar to the network)
  *
  * source: Ramsauer et al. (2021) eq. 4;
- *         cortex@bc0ae4f mcp_server/core/hopfield.py:181-206
+ *         cortex main mcp_server/core/hopfield.py:181-206
  */
 export function computeEnergy(
   queryEmbedding: number[],

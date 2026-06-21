@@ -2,7 +2,7 @@
 /**
  * Retrieval signal computation for HDC, Hopfield, SR, and Spreading Activation.
  *
- * Port of: cortex@ed33435 mcp_server/core/retrieval_signals.py
+ * Port of: cortex main mcp_server/core/retrieval_signals.py
  *
  * Spreading activation and SR co-access use PL/pgSQL stored procedures
  * for server-side computation. Hopfield and HDC stay client-side.
@@ -20,7 +20,7 @@ import {
 import type { EmbeddingEngine, MemoryStore } from "./port.js";
 
 // ── Settings interface (mirrors Python settings object) ───────────────────
-// source: cortex@ed33435 mcp_server/core/retrieval_signals.py:31-48
+// source: cortex main mcp_server/core/retrieval_signals.py:31-48
 
 export interface RetrievalSignalSettings {
   HOPFIELD_BETA: number;
@@ -31,7 +31,7 @@ export interface RetrievalSignalSettings {
 }
 
 // ── Store interface extensions (optional PG-path methods) ─────────────────
-// source: cortex@ed33435 mcp_server/core/retrieval_signals.py:31-83
+// source: cortex main mcp_server/core/retrieval_signals.py:31-83
 
 export interface ExtendedMemoryStore extends MemoryStore {
   getHotEmbeddings?(
@@ -58,7 +58,7 @@ export interface ExtendedMemoryStore extends MemoryStore {
 /**
  * Hopfield network + HDC signals.
  *
- * Port of: cortex@ed33435 mcp_server/core/retrieval_signals.py:30-62
+ * Port of: cortex main mcp_server/core/retrieval_signals.py:30-62
  *
  * precondition: store implements getHotEmbeddings; embeddings implements encode
  * postcondition: hop and hdc are ranked (id, score) lists, possibly empty on
@@ -85,7 +85,7 @@ export async function computeHopfieldHdc(
     try {
       if (typeof store.getHotEmbeddings === "function") {
         // Use PG-side batch embedding fetch (single round trip)
-        // source: cortex@ed33435 mcp_server/core/retrieval_signals.py:40-50
+        // source: cortex main mcp_server/core/retrieval_signals.py:40-50
         const pairs = await store.getHotEmbeddings(minHeat, pool * 2);
         const embPairs: Array<[number, number[]]> = [];
         for (const [mid, emb] of pairs) {
@@ -110,14 +110,14 @@ export async function computeHopfieldHdc(
 
   try {
     if (hotMems.length > 0) {
-      // source: cortex@ed33435 mcp_server/core/retrieval_signals.py:53-59
+      // source: cortex main mcp_server/core/retrieval_signals.py:53-59
       // computeHdcScores(query, pairs, dim=1024, threshold)
-      // source: cortex@ed33435 mcp_server/core/retrieval_signals.py:54-59
+      // source: cortex main mcp_server/core/retrieval_signals.py:54-59
       const raw = computeHdcScores(
         query,
         hotMems.map((m): [number, string] => [m.id, m.content ?? ""]),
-        1024, // source: cortex@ed33435 mcp_server/core/hdc_encoder.py:27 — HDC_DIM default
-        0.05, // source: cortex@ed33435 mcp_server/core/retrieval_signals.py:56 — HDC threshold
+        1024, // source: cortex main mcp_server/core/hdc_encoder.py:27 — HDC_DIM default
+        0.05, // source: cortex main mcp_server/core/retrieval_signals.py:56 — HDC threshold
       );
       // Normalize from [-1, 1] to [0, 1]
       hdc = raw.map(([mid, s]): [number, number] => [mid, (s + 1.0) / 2.0]);
@@ -134,7 +134,7 @@ export async function computeHopfieldHdc(
 /**
  * Successor Representation + Spreading Activation signals.
  *
- * Port of: cortex@ed33435 mcp_server/core/retrieval_signals.py:65-83
+ * Port of: cortex main mcp_server/core/retrieval_signals.py:65-83
  *
  * SA: single PL/pgSQL call (spread_activation_memories).
  * SR: PG-side co-access fetch + client-side scoring.
@@ -156,7 +156,7 @@ export async function computeGraphSignals(
 
 /**
  * Successor Representation from PG-side temporal co-access.
- * Port of: cortex@ed33435 mcp_server/core/retrieval_signals.py:86-106
+ * Port of: cortex main mcp_server/core/retrieval_signals.py:86-106
  *
  * precondition: vecResults is possibly empty; store may lack getTemporalCoAccess
  * postcondition: returns empty list on any error or missing method
@@ -171,7 +171,7 @@ async function computeSr(
     if (typeof store.getTemporalCoAccess !== "function") return [];
 
     // Use PG-side co-access query (single round trip)
-    // source: cortex@ed33435 mcp_server/core/retrieval_signals.py:92-98
+    // source: cortex main mcp_server/core/retrieval_signals.py:92-98
     const pairs = await store.getTemporalCoAccess(2.0, 1, 100);
     if (pairs.length === 0) return [];
 
@@ -181,8 +181,8 @@ async function computeSr(
       if (!g.has(memA)) g.set(memA, new Map());
       if (!g.has(memB)) g.set(memB, new Map());
       g.get(memA)?.set(memB, proximity);
-      // source: cortex@ed33435 mcp_server/core/retrieval_signals.py:100
-      g.get(memB)?.set(memA, proximity * 0.45); // back-link weaker; source: cortex@ed33435 mcp_server/core/retrieval_signals.py:100
+      // source: cortex main mcp_server/core/retrieval_signals.py:100
+      g.get(memB)?.set(memA, proximity * 0.45); // back-link weaker; source: cortex main mcp_server/core/retrieval_signals.py:100
     }
 
     const seeds = vecResults.slice(0, 3).map(([m]) => m);
@@ -194,7 +194,7 @@ async function computeSr(
 
 /**
  * Compute SR scores from a co-access graph and seed memories.
- * Port of: cortex@ed33435 mcp_server/core/cognitive_map.py::compute_sr_scores
+ * Port of: cortex main mcp_server/core/cognitive_map.py::compute_sr_scores
  *
  * precondition: seeds is non-empty; graph maps id→{id→weight}
  * postcondition: returns ranked (id, score) list of length <= topK
@@ -223,7 +223,7 @@ function computeSrScores(
 /**
  * Spreading Activation via PL/pgSQL spread_activation_memories.
  *
- * Port of: cortex@ed33435 mcp_server/core/retrieval_signals.py:109-130
+ * Port of: cortex main mcp_server/core/retrieval_signals.py:109-130
  *
  * Single server-side call replacing:
  *   1. get_all_entities
@@ -316,7 +316,7 @@ async function computeClientSideSa(
 /**
  * Extract query terms for SA seed resolution.
  * Mirrors Python's extract_query_entities + token fallback.
- * source: cortex@ed33435 mcp_server/core/retrieval_signals.py:120-127
+ * source: cortex main mcp_server/core/retrieval_signals.py:120-127
  */
 function extractQueryTerms(query: string): string[] {
   const words = query.split(/\s+/).filter((w) => w.length > 2);

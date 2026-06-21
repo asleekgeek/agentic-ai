@@ -6,7 +6,7 @@
  * separate from db.ts so the SessionStart hook's curation path
  * can evolve without churn on the broader memory helpers.
  *
- * source: cortex@4883307 mcp_server/hooks/session_start.py:219-231
+ * source: cortex main mcp_server/hooks/session_start.py:219-231
  */
 
 type PgClient = {
@@ -43,7 +43,7 @@ export interface CuratorMemorySnapshot {
  * ``last_accessed DESC NULLS LAST, created_at DESC`` so recently-
  * touched topics dominate the cluster pool.
  *
- * source: cortex@4883307 mcp_server/hooks/session_start.py:219-231
+ * source: cortex main mcp_server/hooks/session_start.py:219-231
  *         ("SELECT ... FROM memories WHERE NOT is_stale ORDER BY
  *           last_accessed DESC NULLS LAST, created_at DESC LIMIT 500")
  */

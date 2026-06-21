@@ -3,7 +3,7 @@
  *
  * Ports: infrastructure/sqlite_store_rules.py (lines 1-70)
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py
+ * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py
  */
 
 import type { Database as DatabaseType } from "better-sqlite3";
@@ -11,7 +11,7 @@ import type { Database as DatabaseType } from "better-sqlite3";
 /**
  * Memory rule persistence operations on SQLite.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:9-70
+ * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:9-70
  */
 export class SqliteRuleMixin {
   protected _rawConn!: DatabaseType;
@@ -19,7 +19,7 @@ export class SqliteRuleMixin {
   /**
    * Insert a memory rule and return its id.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:14-31
+   * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:14-31
    */
   insertRule(data: Record<string, unknown>): number {
     const result = this._rawConn
@@ -42,7 +42,7 @@ export class SqliteRuleMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:33-39
+   * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:33-39
    */
   getRulesForScope(scope: string): Record<string, unknown>[] {
     return this._rawConn
@@ -54,7 +54,7 @@ export class SqliteRuleMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:41-45
+   * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:41-45
    */
   getAllActiveRules(): Record<string, unknown>[] {
     return this._rawConn
@@ -65,7 +65,7 @@ export class SqliteRuleMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:47-69
+   * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:47-69
    */
   updateRule(ruleId: number, updates: Record<string, unknown>): void {
     const allowed = new Set([

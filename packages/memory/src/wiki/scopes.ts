@@ -11,7 +11,7 @@
  *
  * Pure data + types. No I/O.
  *
- * source: cortex@4883307 mcp_server/core/wiki_coverage.py:SCOPES
+ * source: cortex main mcp_server/core/wiki_coverage.py:SCOPES
  */
 // ── Constants ──────────────────────────────────────────────────────────
 
@@ -43,7 +43,7 @@ import { GUIDE_SCOPES } from "./scopes-guides.js";
  * + ADR/PRD + onboarding. Composed with ``GUIDE_SCOPES`` below to form
  * the full SCOPES catalogue.
  *
- * source: cortex@4883307 mcp_server/core/wiki_coverage.py:96-343 (SCOPES)
+ * source: cortex main mcp_server/core/wiki_coverage.py:96-343 (SCOPES)
  */
 const CORTEX_SCOPES: readonly _ScopeT[] = [
   {
@@ -226,7 +226,7 @@ const CORTEX_SCOPES: readonly _ScopeT[] = [
  * helpers). Adding a scope is a deliberate policy edit, not an
  * emergent property of tag drift.
  *
- * source: cortex@4883307 mcp_server/core/wiki_coverage.py:96-343
+ * source: cortex main mcp_server/core/wiki_coverage.py:96-343
  * source: ./scopes-guides.ts — Diátaxis + operations + governance
  */
 export const SCOPES: readonly _ScopeT[] = [...CORTEX_SCOPES, ...GUIDE_SCOPES];

@@ -24,7 +24,7 @@
  * Ablation: CORTEX_ABLATE_DENDRITIC_CLUSTERS=1 causes findBestBranch to
  * return null (guard is in the recall-handler entry point).
  *
- * Port of: cortex@bc0ae4f mcp_server/core/dendritic_clusters.py
+ * Port of: cortex main mcp_server/core/dendritic_clusters.py
  *
  * source: Kastellakis G et al. (2015) "Synaptic clustering within dendrites:
  *         An emerging theory of memory formation."
@@ -44,7 +44,7 @@
  * integer IDs produces numerically different affinity scores than Jaccard over
  * name strings, causing systematically incorrect branch assignments.
  * Fix: entitySignature is now Set<string> (entity names), matching Python.
- * source: cortex@ed33435 mcp_server/core/dendritic_clusters.py:44-67
+ * source: cortex main mcp_server/core/dendritic_clusters.py:44-67
  *         (entity_signature typed as set[str])
  */
 export interface DendriticBranch {
@@ -71,32 +71,32 @@ export interface FindBranchOptions {
 /**
  * Minimum Jaccard similarity (0.7 entity + 0.3 tag) for a memory to be
  * admitted to an existing branch.
- * source: cortex@bc0ae4f mcp_server/core/dendritic_computation.py:54
+ * source: cortex main mcp_server/core/dendritic_computation.py:54
  *         (BRANCH_ADMISSION_THRESHOLD — engineering constant, no paper)
  */
 export const BRANCH_ADMISSION_THRESHOLD = 0.3;
 
 /**
  * Weight of entity Jaccard similarity in branch affinity.
- * source: cortex@bc0ae4f mcp_server/core/dendritic_clusters.py:67 (engineering constant, no paper)
+ * source: cortex main mcp_server/core/dendritic_clusters.py:67 (engineering constant, no paper)
  */
 const ENTITY_WEIGHT = 0.7;
 
 /**
  * Weight of tag Jaccard similarity in branch affinity.
- * source: cortex@bc0ae4f mcp_server/core/dendritic_clusters.py:67 (engineering constant, no paper)
+ * source: cortex main mcp_server/core/dendritic_clusters.py:67 (engineering constant, no paper)
  */
 const TAG_WEIGHT = 0.3;
 
 /**
  * Rounding precision factor for avgHeat (round to 4 decimal places).
- * source: cortex@bc0ae4f mcp_server/core/dendritic_clusters.py:128 (round(new_avg, 4))
+ * source: cortex main mcp_server/core/dendritic_clusters.py:128 (round(new_avg, 4))
  */
-const ROUND_4DP = 10000; // source: cortex@bc0ae4f mcp_server/core/dendritic_clusters.py:128 (round(new_avg, 4) → 4 decimal places = 10^4)
+const ROUND_4DP = 10000; // source: cortex main mcp_server/core/dendritic_clusters.py:128 (round(new_avg, 4) → 4 decimal places = 10^4)
 
 /**
  * Maximum memories per branch before splitting.
- * source: cortex@bc0ae4f mcp_server/core/dendritic_computation.py:55
+ * source: cortex main mcp_server/core/dendritic_computation.py:55
  *         (MAX_BRANCH_SIZE — engineering constant, no paper)
  */
 export const MAX_BRANCH_SIZE = 15;
@@ -109,7 +109,7 @@ export const MAX_BRANCH_SIZE = 15;
  *
  * post: result is in [0.0, 1.0]
  *
- * source: cortex@bc0ae4f mcp_server/shared/similarity.py::jaccard_similarity
+ * source: cortex main mcp_server/shared/similarity.py::jaccard_similarity
  */
 function jaccardSimilarity<T>(a: Set<T>, b: Set<T>): number {
   if (a.size === 0 && b.size === 0) return 0.0;
@@ -133,7 +133,7 @@ function jaccardSimilarity<T>(a: Set<T>, b: Set<T>): number {
  *       of entity names (not IDs) — matching Python set[str] contract.
  * post: returned value is in [0, 1]
  *
- * source: cortex@ed33435 mcp_server/core/dendritic_clusters.py:44-67
+ * source: cortex main mcp_server/core/dendritic_clusters.py:44-67
  *         Weights 0.7/0.3 — engineering choice (no paper citation)
  */
 export function computeBranchAffinity(
@@ -161,7 +161,7 @@ export function computeBranchAffinity(
  * post: returned branch has affinity >= threshold and size < maxSize,
  *       or null if no such branch exists
  *
- * source: cortex@bc0ae4f mcp_server/core/dendritic_clusters.py:70-100
+ * source: cortex main mcp_server/core/dendritic_clusters.py:70-100
  *
  * @param disabled - Pass true for ablation mode (always returns null).
  */
@@ -195,7 +195,7 @@ export function findBestBranch(
  * Add a memory to a branch, updating its signatures.
  * Returns a new branch — original is not mutated.
  *
- * source: cortex@bc0ae4f mcp_server/core/dendritic_clusters.py:103-130
+ * source: cortex main mcp_server/core/dendritic_clusters.py:103-130
  */
 export function addMemoryToBranch(
   branch: DendriticBranch,
@@ -208,7 +208,7 @@ export function addMemoryToBranch(
   const newEntities = new Set([...branch.entitySignature, ...memoryEntities]);
   const newTags = new Set([...branch.tagSignature, ...memoryTags]);
   const n = newIds.length;
-  // source: cortex@bc0ae4f dendritic_clusters.py:128 (round(new_avg, 4))
+  // source: cortex main dendritic_clusters.py:128 (round(new_avg, 4))
   const newAvg =
     Math.round(((branch.avgHeat * (n - 1) + memoryHeat) / n) * ROUND_4DP) / ROUND_4DP;
   return {
@@ -226,7 +226,7 @@ export function addMemoryToBranch(
 /**
  * Create a new branch with one founding memory.
  *
- * source: cortex@bc0ae4f mcp_server/core/dendritic_clusters.py:133-149
+ * source: cortex main mcp_server/core/dendritic_clusters.py:133-149
  */
 export function createBranch(
   branchId: string,

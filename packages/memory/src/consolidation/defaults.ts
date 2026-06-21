@@ -16,7 +16,7 @@
  * package, so the worker couldn't import them. With this module both
  * consumers depend on the same source of truth.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/config.py — settings
+ * source: cortex main mcp_server/infrastructure/config.py — settings
  * source: cortex/mcp_server/handlers/consolidation/ — handler defaults
  */
 
@@ -32,20 +32,20 @@ import type {
 // Cold-memory threshold: heat below this value is candidate for
 // compression/deletion. Tuned on the 2026-04 audit so half-life ~14d
 // at default decay factor 0.95 places ``cold'' at ~0.2.
-// source: cortex@ed33435 config.py COLD_THRESHOLD default
+// source: cortex main config.py COLD_THRESHOLD default
 const DEFAULT_COLD_THRESHOLD = 0.2;
 
 // Per-cycle decay multiplier. 0.95 = ~14-day half-life over the
 // daily-consolidate cadence. Below 0.9 caused thrashing in the audit
 // because hot pages cooled below the cold-threshold within a week.
-// source: cortex@ed33435 config.py DECAY_FACTOR default
+// source: cortex main config.py DECAY_FACTOR default
 const DEFAULT_DECAY_FACTOR = 0.95;
 
 // Compression cadence: gist after 48h, tag after 7d. Mirrors Cortex's
 // production settings. Hours are the consolidation pipeline's unit.
-// source: cortex@ed33435 config.py COMPRESSION_GIST_AGE_HOURS default
+// source: cortex main config.py COMPRESSION_GIST_AGE_HOURS default
 const DEFAULT_COMPRESSION_GIST_AGE_HOURS = 48;
-// source: cortex@ed33435 config.py COMPRESSION_TAG_AGE_HOURS default (7 days)
+// source: cortex main config.py COMPRESSION_TAG_AGE_HOURS default (7 days)
 const DEFAULT_COMPRESSION_TAG_AGE_HOURS = 168;
 
 export const DEFAULT_CONSOLIDATION_SETTINGS: ConsolidationSettings = {
@@ -67,7 +67,7 @@ export const DEFAULT_CONSOLIDATION_SETTINGS: ConsolidationSettings = {
  * returns ``[]``; the rest of the pipeline (decay, plasticity,
  * pruning, CLS, memify) is unaffected.
  *
- * source: cortex@ed33435 mcp_server/handlers/consolidation/ —
+ * source: cortex main mcp_server/handlers/consolidation/ —
  *         null-engine pattern used when embeddings are absent
  */
 export const NULL_EMBEDDING_ENGINE: ConsolidationEmbeddingEngine = {

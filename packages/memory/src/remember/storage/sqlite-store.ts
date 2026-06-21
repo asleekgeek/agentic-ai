@@ -175,7 +175,10 @@ CREATE TABLE IF NOT EXISTS entities (
   created_at TEXT NOT NULL DEFAULT (datetime('now')),
   last_accessed TEXT NOT NULL DEFAULT (datetime('now')),
   heat REAL DEFAULT 1.0,
-  archived INTEGER DEFAULT 0
+  archived INTEGER DEFAULT 0,
+  -- Provenance mirror of the PG schema: 'ast_symbol' vs 'text_concept'.
+  -- Consumed by core.entity_dedup to exempt code symbols from fuzzy dedup.
+  origin TEXT NOT NULL DEFAULT 'text_concept'
 )`;
 
 const RELATIONSHIPS_DDL = `
@@ -393,7 +396,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
       ["memories", "heat_base_set_at", "TEXT NOT NULL DEFAULT ''"],
       ["memories", "no_decay", "INTEGER NOT NULL DEFAULT 0"],
       // Supersession edges (MEM-G1): plain INTEGER, NULL default → byte-identical.
-      // source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:336-337
+      // source: cortex main mcp_server/infrastructure/sqlite_schema.py:336-337
       ["memories", "supersedes_id", "INTEGER"],
       ["memories", "superseded_by_id", "INTEGER"],
     ];
@@ -501,9 +504,10 @@ export class SqliteMemoryStore implements MemoryStoreExt {
       `SELECT * FROM entities WHERE name = ? LIMIT 1`,
     );
 
+    // source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:41-54 — origin column (no on-conflict upgrade, mirrors oracle sqlite)
     this._stmtUpsertEntity = this._db.prepare(`
-      INSERT INTO entities (name, type, domain, created_at, last_accessed)
-        VALUES (?, ?, ?, ?, ?)
+      INSERT INTO entities (name, type, domain, origin, created_at, last_accessed)
+        VALUES (?, ?, ?, ?, ?, ?)
       ON CONFLICT(name) DO UPDATE
         SET last_accessed = excluded.last_accessed
       RETURNING id`);
@@ -555,7 +559,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
     );
 
     // Supersession back-pointer (MEM-G1): newId in SET, oldId in WHERE.
-    // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store.py:set_superseded_by
+    // source: cortex main mcp_server/infrastructure/sqlite_store.py:set_superseded_by
     this._stmtSetSupersededBy = this._db.prepare(
       `UPDATE memories SET superseded_by_id = ? WHERE id = ?`,
     );
@@ -616,7 +620,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
       arousal: data.arousal ?? 0.0,
       dominant_emotion: data.dominant_emotion ?? "neutral",
       // Supersession forward edge (MEM-G1): null unless curation supersedes.
-      // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store.py:insert_memory
+      // source: cortex main mcp_server/infrastructure/sqlite_store.py:insert_memory
       supersedes_id: data.supersedes_id ?? null,
     };
 
@@ -737,7 +741,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
    * postcondition: memories.content = content AND memories.tags = JSON.stringify(tags).
    *   Single prepared-statement run — atomic within SQLite's default autocommit.
    *
-   * source: cortex@f2b9f99 mcp_server/handlers/anchor.py:143-146
+   * source: cortex main mcp_server/handlers/anchor.py:143-146
    *   UPDATE memories SET … tags = %s::jsonb, content = %s … WHERE id = %s
    */
   updateMemoryContent(memoryId: number, content: string, tags: string[]): void {
@@ -747,7 +751,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   /**
    * Close the supersession back-pointer (MEM-G1): stamp the OLD memory's
    * superseded_by_id with the NEW memory id. newId in SET, oldId in WHERE.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store.py:set_superseded_by
+   * source: cortex main mcp_server/infrastructure/sqlite_store.py:set_superseded_by
    */
   setSupersededBy(oldId: number, newId: number): void {
     this._stmtSetSupersededBy.run(newId, oldId);
@@ -900,10 +904,10 @@ export class SqliteMemoryStore implements MemoryStoreExt {
    * out of `build_expanded_query` (a space-joined token bag) — both produce
    * a permissive disjunctive match.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:232-242
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:232-242
    * source: https://www.sqlite.org/fts5.html#full_text_query_syntax — FTS5 query grammar
    */
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:232 — default limit=20 (top-20 FTS hits)
+  // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:232 — default limit=20 (top-20 FTS hits)
   searchFts(query: string, limit = 20): Array<[number, number]> { // eslint-disable-line @typescript-eslint/no-magic-numbers
     const sanitised = sanitiseFts5Query(query);
     if (!sanitised) return [];
@@ -976,9 +980,10 @@ export class SqliteMemoryStore implements MemoryStoreExt {
     };
   }
 
-  upsertEntity(name: string, type: string, domain: string): number {
+  upsertEntity(name: string, type: string, domain: string, origin = "text_concept"): number {
     const now = nowIso();
-    const row = this._stmtUpsertEntity.get(name, type, domain, now, now) as
+    const o = origin === "ast_symbol" ? "ast_symbol" : "text_concept";
+    const row = this._stmtUpsertEntity.get(name, type, domain, o, now, now) as
       | { id: number }
       | undefined;
     return row?.id ?? 0;
@@ -1001,8 +1006,8 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   // source: liskov@24cb6e2 — same pattern applied to other PG/SQLite method pairs.
 
   /** Async upsert entity — thin wrapper; SQLite executes synchronously. */
-  upsertEntityAsync(name: string, type: string, domain: string): Promise<number> {
-    return Promise.resolve(this.upsertEntity(name, type, domain));
+  upsertEntityAsync(name: string, type: string, domain: string, origin = "text_concept"): Promise<number> {
+    return Promise.resolve(this.upsertEntity(name, type, domain, origin));
   }
 
   /** Async getEntityByName — thin wrapper; SQLite executes synchronously. */
@@ -1178,7 +1183,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   // ── Decay / stats ──────────��───────────────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:108-112
+   * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:108-112
    */
   getAllMemoriesForDecay(): Record<string, unknown>[] {
     return this._db
@@ -1187,7 +1192,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:78-86
+   * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:78-86
    */
   // source: sqlite_store_queries.py:79
   getAllMemoriesForValidation(limit = 1000): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
@@ -1199,7 +1204,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   // ── Domain / directory / hot queries ──────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:19-27
+   * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:19-27
    */
   // source: sqlite_store_queries.py:21
   getMemoriesForDomain(domain: string, minHeat = 0.05, limit = 50): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
@@ -1212,7 +1217,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:29-37
+   * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:29-37
    */
   // source: sqlite_store_queries.py:30
   getMemoriesForDirectory(directory: string, minHeat = 0.05): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
@@ -1225,7 +1230,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:39-57
+   * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:39-57
    */
   // source: sqlite_store_queries.py:41
   getHotMemories(minHeat = 0.7, limit = 20, includeBenchmarks = false): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
@@ -1246,7 +1251,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   // ── Consolidation stage queries ─────────────────────────────���──────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:157
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:157
    */
   // source: sqlite_store_stats.py:108
   getMemoriesByStage(stage: string, limit = 100): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
@@ -1259,7 +1264,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:70-84
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:70-84
    */
   updateMemoryConsolidation(
     memoryId: number,
@@ -1278,7 +1283,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:86-106
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:86-106
    */
   insertStageTransitionsBatch(rows: Record<string, unknown>[]): number {
     if (rows.length === 0) return 0;
@@ -1305,7 +1310,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   /**
    * Update stage_entered_at for a memory row.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py — cascade stage logic
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py — cascade stage logic
    */
   updateStageEnteredAt(memoryId: number, enteredAt: string): void {
     this._db
@@ -1316,7 +1321,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   // ── CLS queries ────────────────────────���───────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:183-199
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:183-199
    */
   // source: sqlite_store_stats.py:184
   getEpisodicMemories(domain = "", directory = "", limit = 500): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
@@ -1331,7 +1336,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:201-217
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:201-217
    */
   // source: sqlite_store_stats.py:201
   getSemanticMemories(domain = "", limit = 500): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
@@ -1352,7 +1357,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:219-224
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:219-224
    */
   updateMemoryStoreType(memoryId: number, storeType: string): void {
     this._db
@@ -1363,7 +1368,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   // ── Entity queries for consolidation ──────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:99-111
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:99-111
    */
   getAllEntities(opts?: { minHeat?: number; includeArchived?: boolean }): Record<string, unknown>[] {
     // source: sqlite_store_entities.py:99
@@ -1379,7 +1384,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:19-37
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:19-37
    */
   updateEntitiesHeatBatch(updates: Array<[number, number]>): void {
     if (updates.length === 0) return;
@@ -1391,7 +1396,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py:39-48
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entities.py:39-48
    */
   archiveEntitiesBatch(entityIds: number[]): number {
     if (entityIds.length === 0) return 0;
@@ -1411,11 +1416,10 @@ export class SqliteMemoryStore implements MemoryStoreExt {
    *   alias are retargeted to survivor; self-loops deleted; survivor absorbs alias
    *   heat/recency via MAX (bounded — never a sum); alias tombstoned (archived=1, heat=0).
    *
-   * DEVIATION: agentic-ai entities has NO 'origin' column (confirmed by
-   * pg-schema-tables.ts:75-84 and sqlite-schema.ts:90-99). The cortex oracle's
-   * ast_symbol defense-in-depth guard is omitted; only the 2-row existence check is kept.
+   * No-op when ids equal, an entity is missing, or either is an ast_symbol —
+   * code-symbol identity is structural and must never be fuzzy-merged.
    *
-   * source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py:19-43
    */
   mergeEntities(
     survivorId: number,
@@ -1431,16 +1435,18 @@ export class SqliteMemoryStore implements MemoryStoreExt {
 
     if (survivorId === aliasId) return result;
 
-    // 2-row existence check: require both entities to be present.
-    // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — SELECT id FROM entities
+    // Require both entities present AND neither an ast_symbol — code symbols are
+    // structural identities, never fuzzy-merged.
+    // source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py:37-43
     const existingRows = this._db
-      .prepare("SELECT id FROM entities WHERE id IN (?, ?)")
-      .all(survivorId, aliasId) as Array<{ id: number }>;
-    if (existingRows.length !== 2) return result;
+      .prepare("SELECT id, origin FROM entities WHERE id IN (?, ?)")
+      .all(survivorId, aliasId) as Array<{ id: number; origin: string | null }>;
+    const origins = new Map(existingRows.map((r) => [r.id, r.origin ?? "text_concept"]));
+    if (origins.size !== 2 || [...origins.values()].includes("ast_symbol")) return result;
 
     const doMerge = this._db.transaction(() => {
       // Rewire memory_entities links: dedup via OR IGNORE.
-      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — INSERT OR IGNORE
+      // source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py — INSERT OR IGNORE
       this._db
         .prepare(
           "INSERT OR IGNORE INTO memory_entities (memory_id, entity_id) " +
@@ -1449,26 +1455,26 @@ export class SqliteMemoryStore implements MemoryStoreExt {
         .run(survivorId, aliasId);
 
       // Delete the alias's memory_entities links.
-      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — DELETE FROM memory_entities
+      // source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py — DELETE FROM memory_entities
       const movedInfo = this._db
         .prepare("DELETE FROM memory_entities WHERE entity_id = ?")
         .run(aliasId);
       const moved = movedInfo.changes;
 
       // Rewire relationship source references.
-      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE relationships source
+      // source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE relationships source
       const srcInfo = this._db
         .prepare("UPDATE relationships SET source_entity_id = ? WHERE source_entity_id = ?")
         .run(survivorId, aliasId);
 
       // Rewire relationship target references.
-      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE relationships target
+      // source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE relationships target
       const tgtInfo = this._db
         .prepare("UPDATE relationships SET target_entity_id = ? WHERE target_entity_id = ?")
         .run(survivorId, aliasId);
 
       // Delete self-loops created by the rewire.
-      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — DELETE self-loops
+      // source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py — DELETE self-loops
       this._db
         .prepare(
           "DELETE FROM relationships WHERE source_entity_id = target_entity_id AND source_entity_id = ?",
@@ -1476,7 +1482,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
         .run(survivorId);
 
       // Absorb alias heat/recency into survivor via MAX — bounded, not a sum.
-      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE entities heat
+      // source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE entities heat
       this._db
         .prepare(
           "UPDATE entities SET " +
@@ -1487,7 +1493,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
         .run(aliasId, aliasId, survivorId);
 
       // Tombstone the alias: archived=1, heat=0 (auditable, NOT deleted).
-      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE entities tombstone
+      // source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE entities tombstone
       this._db
         .prepare("UPDATE entities SET archived = 1, heat = 0 WHERE id = ?")
         .run(aliasId);
@@ -1505,7 +1511,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   // ── Relationship queries ──────────────────────────────��────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:105-112
+   * source: cortex main mcp_server/infrastructure/pg_store_relationships.py:105-112
    */
   getAllRelationships(): Record<string, unknown>[] {
     return this._db
@@ -1520,7 +1526,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   /**
    * Find co-accessed entity pairs for a set of memory IDs.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:154-162
+   * source: cortex main mcp_server/infrastructure/pg_store_queries.py:154-162
    */
   findCoAccessedPairs(memoryIds: number[]): Array<[number, number]> {
     if (memoryIds.length === 0) return [];
@@ -1537,7 +1543,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py
+   * source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py
    */
   updateRelationshipsWeightBatch(updates: Array<[number, number]>): void {
     if (updates.length === 0) return;
@@ -1549,7 +1555,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py
+   * source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py
    */
   deleteRelationshipsBatch(ids: number[]): number {
     if (ids.length === 0) return 0;
@@ -1563,7 +1569,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   /**
    * Insert a raw relationship record.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py
+   * source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py
    */
   insertRelationship(rel: Record<string, unknown>): void {
     const now = nowIso();
@@ -1580,11 +1586,11 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   /**
    * Reinforce or create a relationship between two entity names.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:133-207
+   * source: cortex main mcp_server/infrastructure/pg_store_relationships.py:133-207
    */
   reinforceOrCreateRelationship(entityA: string, entityB: string, _learningRate: number): void {
     // Simplified SQLite version: upsert a co_retrieval relationship.
-    // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py
+    // source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py
     //   — reinforce_or_create_relationship
     const srcRow = this._db
       .prepare("SELECT id FROM entities WHERE LOWER(name) = LOWER(?) LIMIT 1")
@@ -1606,7 +1612,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   // ── Hippocampal transfer ───────────────────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py — transfer candidates
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py — transfer candidates
    */
   // source: sqlite_store_stats.py
   getTransferCandidates(limit = 50): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
@@ -1634,7 +1640,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   // ── Recently accessed ─────────────────────────────��────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:90-101
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:90-101
    */
   // source: sqlite_store_stats.py:93
   getRecentlyAccessedMemories(limit = 20, minAccessCount = 1): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
@@ -1668,7 +1674,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   // ── Prospective memories ───────────────────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:39-42
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:39-42
    */
   getActiveProspectiveMemories(): Record<string, unknown>[] {
     return this._db
@@ -1690,7 +1696,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   // ── Replay count ───────────────────────��───────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:125-130
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:125-130
    */
   incrementReplayCount(memoryId: number): void {
     this._db
@@ -1701,7 +1707,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   // ── Archive / compression ─────────────────────���────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:114-132
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:114-132
    */
   insertArchive(row: Record<string, unknown>): void {
     try {
@@ -1722,7 +1728,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py — compression
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py — compression
    */
   updateMemoryCompression(
     memoryId: number,
@@ -1745,7 +1751,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
     // previous TS impl dropped it, leaving the compression cycle + curation-merge
     // with a stale vector. No-op when sqlite-vec is unavailable (upsertEmbedding
     // self-guards on this._hasVec).
-    // source: cortex@ed33435 mcp_server/infrastructure/pg_store.py:835-858 update_memory_compression
+    // source: cortex main mcp_server/infrastructure/pg_store.py:835-858 update_memory_compression
     if (embedding && embedding.byteLength > 0) {
       this.upsertEmbedding(memoryId, embedding);
     }
@@ -1764,7 +1770,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   // ── Consolidation log ──────────────────────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:228-241
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:228-241
    */
   logConsolidation(data: Record<string, unknown>): void {
     try {
@@ -1791,7 +1797,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
    * Insert a prospective memory record and return its id.
    *
    * postcondition: new row in prospective_memories with is_active = true.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
    */
   insertProspectiveMemory(data: Record<string, unknown>): number {
     const result = this._db
@@ -1815,7 +1821,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
   /**
    * Return the count of currently active prospective memory triggers.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:355
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:355
    */
   countActiveTriggers(): number {
     const row = this._db
@@ -1828,7 +1834,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
 
   /**
    * Insert a memory rule and return its id.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:14-31
+   * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:14-31
    */
   insertRule(data: Record<string, unknown>): number {
     const result = this._db
@@ -1852,7 +1858,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
 
   /**
    * Return all active rules ordered by scope and priority descending.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:41-45
+   * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:41-45
    */
   getAllActiveRules(): Record<string, unknown>[] {
     return this._db
@@ -1864,7 +1870,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
 
   /**
    * Return all active rules for a given scope.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:33-39
+   * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:33-39
    */
   getRulesForScope(scope: string): Record<string, unknown>[] {
     return this._db
@@ -1877,7 +1883,7 @@ export class SqliteMemoryStore implements MemoryStoreExt {
 
   /**
    * Return all rules including inactive ones.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:47-70
+   * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:47-70
    */
   getAllRulesIncludingInactive(): Record<string, unknown>[] {
     return this._db

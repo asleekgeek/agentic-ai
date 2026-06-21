@@ -4,13 +4,13 @@
  * Dimensions 1-3: activeReflective, sensingIntuitive, sequentialGlobal (CognitiveStyle)
  * Dimensions 4-9: thoroughness, autonomy, verbosity, riskTolerance, focusScope, iterationSpeed
  *
- * Port of: cortex@ed33435 mcp_server/core/persona_vector.py
+ * Port of: cortex main mcp_server/core/persona_vector.py
  */
 
 import { add, cosineSimilarity, scale, zeros } from "../shared/linear-algebra.js";
 
 // ── Dimension registry ────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/persona_vector.py:13-23
+// source: cortex main mcp_server/core/persona_vector.py:13-23
 
 export const PERSONA_DIMENSIONS = [
   "activeReflective",
@@ -31,7 +31,7 @@ export type PersonaVector = Record<PersonaDimension, number>;
 
 /**
  * Clamp value to [-1, 1].
- * source: cortex@ed33435 mcp_server/core/persona_vector.py:26-27
+ * source: cortex main mcp_server/core/persona_vector.py:26-27
  */
 function clamp(v: number): number {
   return Math.max(-1.0, Math.min(1.0, v));
@@ -39,7 +39,7 @@ function clamp(v: number): number {
 
 /**
  * Map value to [-1, 1]: below low=-1, above high=+1, linear between.
- * source: cortex@ed33435 mcp_server/core/persona_vector.py:30-38
+ * source: cortex main mcp_server/core/persona_vector.py:30-38
  */
 function normalizeSignal(value: number, low: number, high: number): number {
   if (value > high) return 1.0;
@@ -58,7 +58,7 @@ function normalizeSignal(value: number, low: number, high: number): number {
  * postcondition: returned object has all 6 behavioral dimension keys,
  *   values clamped to [-1, 1].
  *
- * source: cortex@ed33435 mcp_server/core/persona_vector.py:41-74
+ * source: cortex main mcp_server/core/persona_vector.py:41-74
  */
 function computeBehavioralDims(
   ss: Record<string, unknown>,
@@ -66,14 +66,14 @@ function computeBehavioralDims(
 ): Record<string, number> {
   const avgDuration = (ss["avgDuration"] as number | undefined) ?? 0;
   const avgTurns = (ss["avgTurns"] as number | undefined) ?? 0;
-  // source: cortex@ed33435 mcp_server/core/persona_vector.py:45-47
+  // source: cortex main mcp_server/core/persona_vector.py:45-47
   const durationSignal = normalizeSignal(avgDuration, 300000, 1800000);
   const turnsSignal = normalizeSignal(avgTurns, 5, 30);
   const thoroughness = clamp((durationSignal + turnsSignal) / 2);
 
   const agentRatio = ((tp["Agent"] as Record<string, number> | undefined)?.["ratio"]) ?? 0;
   const bashRatio = ((tp["Bash"] as Record<string, number> | undefined)?.["ratio"]) ?? 0;
-  const autonomy = clamp((agentRatio * 2 + bashRatio) - 0.5); // source: cortex@ed33435 mcp_server/core/persona_vector.py:51
+  const autonomy = clamp((agentRatio * 2 + bashRatio) - 0.5); // source: cortex main mcp_server/core/persona_vector.py:51
 
   const avgMessages = (ss["avgMessages"] as number | undefined) ?? 0;
   const verbosity = clamp(normalizeSignal(avgMessages, 5, 20) * 0.5);
@@ -100,7 +100,7 @@ function computeBehavioralDims(
  * precondition:  profile has metacognitive, sessionShape, toolPreferences keys.
  * postcondition: returned PersonaVector has all 9 PERSONA_DIMENSIONS set.
  *
- * source: cortex@ed33435 mcp_server/core/persona_vector.py:77-88
+ * source: cortex main mcp_server/core/persona_vector.py:77-88
  */
 export function buildPersonaVector(profile: Record<string, unknown>): PersonaVector {
   const mc = (profile["metacognitive"] ?? {}) as Record<string, number>;
@@ -126,7 +126,7 @@ export function buildPersonaVector(profile: Record<string, unknown>): PersonaVec
  * Convert a PersonaVector to a numeric array in dimension order.
  *
  * postcondition: returned array has PERSONA_DIMENSIONS.length elements.
- * source: cortex@ed33435 mcp_server/core/persona_vector.py:91-92
+ * source: cortex main mcp_server/core/persona_vector.py:91-92
  */
 export function personaToArray(pv: Record<string, number>): number[] {
   return PERSONA_DIMENSIONS.map((dim) => pv[dim] ?? 0);
@@ -136,7 +136,7 @@ export function personaToArray(pv: Record<string, number>): number[] {
  * Compute distance between two persona vectors (1 - cosine similarity).
  *
  * postcondition: result ∈ [0, 2] (cosine distance bound).
- * source: cortex@ed33435 mcp_server/core/persona_vector.py:95-96
+ * source: cortex main mcp_server/core/persona_vector.py:95-96
  */
 export function personaDistance(
   a: Record<string, number>,
@@ -151,7 +151,7 @@ export function personaDistance(
  * postcondition: returned object has magnitude, direction (per-dimension diffs),
  *   and interpretation (human-readable).
  *
- * source: cortex@ed33435 mcp_server/core/persona_vector.py:99-134
+ * source: cortex main mcp_server/core/persona_vector.py:99-134
  */
 export function personaDrift(
   oldPv: Record<string, number>,
@@ -177,7 +177,7 @@ export function personaDrift(
 
   const magnitude = 1 - cosineSimilarity(oldArr, newArr);
 
-  // source: cortex@ed33435 mcp_server/core/persona_vector.py:115-128
+  // source: cortex main mcp_server/core/persona_vector.py:115-128
   const dimLabels: Record<string, [string, string]> = {
     activeReflective: ["more reflective", "more active"],
     sensingIntuitive: ["more intuitive", "more sensing"],
@@ -203,7 +203,7 @@ export function personaDrift(
  * postcondition: returned PersonaVector is the normalized weighted sum;
  *   all dimensions clamped to [-1, 1].
  *
- * source: cortex@ed33435 mcp_server/core/persona_vector.py:137-152
+ * source: cortex main mcp_server/core/persona_vector.py:137-152
  */
 export function composePersonas(
   vectors: Record<string, number>[],
@@ -238,7 +238,7 @@ export function composePersonas(
  * postcondition: returns baseContext unchanged if no significant adjustments;
  *   otherwise appends steering sentences.
  *
- * source: cortex@ed33435 mcp_server/core/persona_vector.py:155-194
+ * source: cortex main mcp_server/core/persona_vector.py:155-194
  */
 export function steerContext(
   baseContext: string,
@@ -264,7 +264,7 @@ export function steerContext(
     iterationSpeed: "Take time to think through each step.",
   };
 
-  const driftThreshold = 0.2; // source: cortex@ed33435 mcp_server/core/persona_vector.py:162
+  const driftThreshold = 0.2; // source: cortex main mcp_server/core/persona_vector.py:162
   const sentences: string[] = [];
 
   for (const [dim, target] of Object.entries(targetAdjustments)) {

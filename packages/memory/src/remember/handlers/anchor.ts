@@ -22,10 +22,10 @@
 
 import type { MemoryStore } from "../storage/memory-store.js";
 
-// source: cortex@f2b9f99 mcp_server/handlers/anchor.py:102 — reason tag capped at 40 chars
+// source: cortex main mcp_server/handlers/anchor.py:102 — reason tag capped at 40 chars
 const ANCHOR_REASON_TAG_MAX_CHARS = 40;
 
-// source: cortex@f2b9f99 mcp_server/handlers/anchor.py:155 — content_preview is first 120 chars
+// source: cortex main mcp_server/handlers/anchor.py:155 — content_preview is first 120 chars
 const ANCHOR_CONTENT_PREVIEW_CHARS = 120;
 
 export interface AnchorRequest {

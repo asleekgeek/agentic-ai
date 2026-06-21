@@ -29,7 +29,7 @@
  *
  * Timeout: no hard Claude Code limit; we budget 30s (HOOK_TIMEOUTS_MS.SESSION_START).
  *
- * source: cortex@ed33435 mcp_server/hooks/session_start.py
+ * source: cortex main mcp_server/hooks/session_start.py
  * source: Smith & Vela (2001) context reinstatement d=0.28.
  * source: Wegner (1987) Transactive Memory Systems.
  */
@@ -82,7 +82,7 @@ const LOG_PREFIX = "[session-start-hook]";
  * ENOENT, which all callers already handle by returning null or 0.
  *
  * source: CPython docs — on Windows the launcher is "python", not "python3"
- * source: cortex@ed33435 mcp_server/infrastructure/pipeline_install_rust.py — _whichBin pattern
+ * source: cortex main mcp_server/infrastructure/pipeline_install_rust.py — _whichBin pattern
  */
 const PYTHON_BIN = process.env["CORTEX_PYTHON_BIN"] ?? (process.platform === "win32" ? "python" : "python3");
 
@@ -91,7 +91,7 @@ function log(msg: string): void {
 }
 
 // ── Config ────────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/hooks/session_start.py:29-33
+// source: cortex main mcp_server/hooks/session_start.py:29-33
 
 const config = loadHookConfig();
 const HOT_LIMIT = parseInt(
@@ -115,7 +115,7 @@ const ANCHOR_LIMIT = parseInt(
  * postcondition: returns parsed JSON from setup_db.py stdout, or null
  *   if the script is not found, exits non-zero, or produces invalid JSON.
  *
- * source: cortex@ed33435 mcp_server/hooks/session_start.py:58-82 (_try_setup_db)
+ * source: cortex main mcp_server/hooks/session_start.py:58-82 (_try_setup_db)
  */
 export function trySetupDb(): SetupResult | null {
   // Locate setup_db.py relative to this file or CLAUDE_PLUGIN_ROOT.
@@ -134,7 +134,7 @@ export function trySetupDb(): SetupResult | null {
       [scriptPath],
       {
         encoding: "utf-8",
-        timeout: 15_000, // source: cortex@ed33435 mcp_server/hooks/session_start.py:73 — 15s timeout for setup_db
+        timeout: 15_000, // source: cortex main mcp_server/hooks/session_start.py:73 — 15s timeout for setup_db
         env: { ...process.env, DATABASE_URL: databaseUrl },
       },
     );
@@ -158,7 +158,7 @@ export function trySetupDb(): SetupResult | null {
  * precondition:  pluginRoot is set and the Cortex Python package is installed.
  * postcondition: returns imported count ≥ 0; never throws.
  *
- * source: cortex@ed33435 mcp_server/hooks/session_start.py:307-332 (_auto_backfill)
+ * source: cortex main mcp_server/hooks/session_start.py:307-332 (_auto_backfill)
  */
 export function autoBackfill(): number {
   const { pluginRoot, databaseUrl } = loadHookConfig();
@@ -167,10 +167,10 @@ export function autoBackfill(): number {
     return 0;
   }
 
-  // source: cortex@ed33435 mcp_server/hooks/session_start.py:317-322 — backfill params
+  // source: cortex main mcp_server/hooks/session_start.py:317-322 — backfill params
   // max_files=100, min_importance=0.35 (importance threshold below which sessions are skipped)
-  const BACKFILL_MAX_FILES = 100; // source: cortex@ed33435 mcp_server/hooks/session_start.py:318
-  const BACKFILL_MIN_IMPORTANCE = "0.35"; // source: cortex@ed33435 mcp_server/hooks/session_start.py:319 — float, kept as string to pass into Python inline
+  const BACKFILL_MAX_FILES = 100; // source: cortex main mcp_server/hooks/session_start.py:318
+  const BACKFILL_MIN_IMPORTANCE = "0.35"; // source: cortex main mcp_server/hooks/session_start.py:319 — float, kept as string to pass into Python inline
 
   try {
     const result = spawnSync(
@@ -184,7 +184,7 @@ print(json.dumps({"backfilled": r.get("backfilled", 0), "cascade_advanced": r.ge
       ],
       {
         encoding: "utf-8",
-        timeout: 60_000, // source: cortex@ed33435 mcp_server/hooks/session_start.py — backfill budget; 60s for historical JSONL scan
+        timeout: 60_000, // source: cortex main mcp_server/hooks/session_start.py — backfill budget; 60s for historical JSONL scan
         env: {
           ...process.env,
           DATABASE_URL: databaseUrl,
@@ -217,7 +217,7 @@ print(json.dumps({"backfilled": r.get("backfilled", 0), "cascade_advanced": r.ge
  * postcondition: mcp-connections.json is updated if the pipeline is found
  *   and not already present; otherwise file is unchanged.
  *
- * source: cortex@ed33435 mcp_server/hooks/session_start.py:482-503 (_auto_wire_pipeline)
+ * source: cortex main mcp_server/hooks/session_start.py:482-503 (_auto_wire_pipeline)
  */
 export function autoWirePipeline(): void {
   const { pluginRoot } = loadHookConfig();
@@ -247,7 +247,7 @@ export function autoWirePipeline(): void {
       ["-c", PYTHON_AUTOWIRE_SCRIPT, pluginRoot],
       {
         encoding: "utf-8",
-        timeout: 5_000, // source: cortex@ed33435 mcp_server/hooks/session_start.py:482-503 — pipeline auto-wire is fast (config file write only)
+        timeout: 5_000, // source: cortex main mcp_server/hooks/session_start.py:482-503 — pipeline auto-wire is fast (config file write only)
         env: { ...process.env, PYTHONPATH: pluginRoot },
         shell: false,
       },
@@ -274,13 +274,13 @@ export function autoWirePipeline(): void {
  *   non-stale memory tagged with the project's code-graph tag, or null
  *   if no such memory exists or the DB is unreachable.
  *
- * source: cortex@ed33435 mcp_server/hooks/session_start.py:568-597 (_lookup_cached_graph_path)
+ * source: cortex main mcp_server/hooks/session_start.py:568-597 (_lookup_cached_graph_path)
  */
 export async function lookupCachedGraphPath(
   projectRoot: string,
 ): Promise<string | null> {
   // Derive the tag the Python side stores when indexing a codebase.
-  // source: cortex@ed33435 mcp_server/handlers/ingest_helpers.py:code_graph_tag
+  // source: cortex main mcp_server/handlers/ingest_helpers.py:code_graph_tag
   const safePath = projectRoot.replace(/[^a-zA-Z0-9._-]/g, "_");
   const tag = `code-graph:${safePath}`;
 
@@ -460,7 +460,7 @@ function resolveIngestWorkerPath(): string | null {
  * ``mcp_server.hooks.ingest_codebase_background`` literally, which
  * silently no-op'd on installs without Cortex's Python runtime.
  *
- * source: cortex@ed33435 mcp_server/hooks/session_start.py:506-565 (_maybe_background_reanalyze)
+ * source: cortex main mcp_server/hooks/session_start.py:506-565 (_maybe_background_reanalyze)
  * source: packages/memory/src/hooks/ingest-codebase-background.ts
  */
 /**
@@ -570,7 +570,7 @@ function maybeBackgroundReanalyze(): void {
  * precondition:  none — OS may not have the directory.
  * postcondition: returns total count ≥ 0; never throws.
  *
- * source: cortex@ed33435 mcp_server/hooks/session_start.py:242-251 (_count_session_files)
+ * source: cortex main mcp_server/hooks/session_start.py:242-251 (_count_session_files)
  */
 export function countSessionFiles(): number {
   const projectsDir = join(homedir(), ".claude", "projects");
@@ -601,20 +601,20 @@ export function countSessionFiles(): number {
  * precondition:  none — filesystem may be absent.
  * postcondition: returns list of detected sources; never throws.
  *
- * source: cortex@ed33435 mcp_server/hooks/session_start.py:257-301 (_detect_external_sources)
+ * source: cortex main mcp_server/hooks/session_start.py:257-301 (_detect_external_sources)
  */
 export function detectExternalSources(): ExternalSource[] {
   const sources: ExternalSource[] = [];
 
   // claude-mem SQLite
-  // source: cortex@ed33435 mcp_server/hooks/session_start.py:262-277
+  // source: cortex main mcp_server/hooks/session_start.py:262-277
   const claudeMemDb = join(homedir(), ".claude-mem", "claude-mem.db");
   if (existsSync(claudeMemDb)) {
     sources.push({ name: "claude-mem", count: 0, path: claudeMemDb });
   }
 
   // Cursor conversations
-  // source: cortex@ed33435 mcp_server/hooks/session_start.py:279-287
+  // source: cortex main mcp_server/hooks/session_start.py:279-287
   const cursorDir = join(homedir(), ".cursor");
   if (existsSync(cursorDir)) {
     try {
@@ -629,7 +629,7 @@ export function detectExternalSources(): ExternalSource[] {
   }
 
   // ChatGPT exports in Downloads
-  // source: cortex@ed33435 mcp_server/hooks/session_start.py:289-298
+  // source: cortex main mcp_server/hooks/session_start.py:289-298
   const downloads = join(homedir(), "Downloads");
   if (existsSync(downloads)) {
     try {
@@ -661,11 +661,11 @@ export async function processEvent(): Promise<void> {
 
 export async function main(): Promise<void> {
   // I1: pipeline auto-wire before DB connect — does not need the DB.
-  // source: cortex@ed33435 mcp_server/hooks/session_start.py:600-606
+  // source: cortex main mcp_server/hooks/session_start.py:600-606
   autoWirePipeline();
 
   // I2: background re-analysis: fire-and-forget when the graph is stale.
-  // source: cortex@ed33435 mcp_server/hooks/session_start.py:607-612
+  // source: cortex main mcp_server/hooks/session_start.py:607-612
   maybeBackgroundReanalyze();
 
   // I2 (G1): background consolidate: fire-and-forget when the
@@ -692,7 +692,7 @@ export async function main(): Promise<void> {
     log(`Empty database, ${sessionFiles} session files found`);
 
     // Auto-backfill on first run when session history exists.
-    // source: cortex@ed33435 mcp_server/hooks/session_start.py:640-654
+    // source: cortex main mcp_server/hooks/session_start.py:640-654
     let autoImportedCount: number | undefined;
     if (sessionFiles > 0) {
       log(`Empty DB with ${sessionFiles} session files — auto-backfilling...`);
@@ -755,7 +755,7 @@ export async function main(): Promise<void> {
   }
 
   // Always check for importable external sources.
-  // source: cortex@ed33435 mcp_server/hooks/session_start.py:675-693
+  // source: cortex main mcp_server/hooks/session_start.py:675-693
   try {
     const sources = detectExternalSources();
     if (sources.length > 0) {

@@ -10,26 +10,26 @@
  *   Dayan (1993) "Improving Generalization for Temporal Difference Learning"
  *   Stachenfeld et al. (2017) "The Hippocampus as a Predictive Map"
  *
- * source: cortex@ed33435 mcp_server/core/cognitive_map.py
+ * source: cortex main mcp_server/core/cognitive_map.py
  */
 
 // ── SR parameters ─────────────────────────────────────────────────────────────
 
 /**
  * Temporal decay for SR update: discount for co-access distance.
- * source: cortex@ed33435 mcp_server/core/cognitive_map.py:22
+ * source: cortex main mcp_server/core/cognitive_map.py:22
  */
 const SR_DISCOUNT = 0.9;
 
 /**
  * Session window: memories accessed within this many hours are co-access candidates.
- * source: cortex@ed33435 mcp_server/core/cognitive_map.py:25
+ * source: cortex main mcp_server/core/cognitive_map.py:25
  */
 const CO_ACCESS_WINDOW_HOURS = 2.0;
 
 /**
  * Maximum BFS depth for navigate_memory tool.
- * source: cortex@ed33435 mcp_server/core/cognitive_map.py:28
+ * source: cortex main mcp_server/core/cognitive_map.py:28
  */
 const MAX_NAVIGATE_DEPTH = 3;
 
@@ -63,7 +63,7 @@ export interface MemoryWithAccess {
  * precondition: discount in (0, 1)
  * postcondition: all weights > 0; graph is bidirectional
  *
- * source: cortex@ed33435 mcp_server/core/cognitive_map.py:34-66
+ * source: cortex main mcp_server/core/cognitive_map.py:34-66
  */
 export function buildCoAccessGraph(
   accessSequences: number[][],
@@ -100,7 +100,7 @@ export function buildCoAccessGraph(
 
 /**
  * Parse ISO timestamp to Unix float, return 0 on error.
- * source: cortex@ed33435 mcp_server/core/cognitive_map.py:69-79
+ * source: cortex main mcp_server/core/cognitive_map.py:69-79
  */
 function parseIsoTimestamp(s: string): number {
   try {
@@ -120,7 +120,7 @@ function parseIsoTimestamp(s: string): number {
  * precondition: memories have numeric id and ISO last_accessed string
  * postcondition: graph is symmetric with weights in (0, 1]
  *
- * source: cortex@ed33435 mcp_server/core/cognitive_map.py:106-122
+ * source: cortex main mcp_server/core/cognitive_map.py:106-122
  */
 export function buildTemporalCoAccess(
   memoriesWithAccessTime: MemoryWithAccess[],
@@ -169,7 +169,7 @@ export function buildTemporalCoAccess(
  * precondition: seedMemoryIds is non-empty; top_k >= 1
  * postcondition: result length <= topK; sorted descending by score; seeds absent
  *
- * source: cortex@ed33435 mcp_server/core/cognitive_map.py:128-163
+ * source: cortex main mcp_server/core/cognitive_map.py:128-163
  */
 export function computeSrScores(
   seedMemoryIds: number[],
@@ -213,7 +213,7 @@ export function computeSrScores(
  * precondition: startMemoryId exists in srGraph or graph is non-empty
  * postcondition: visited does not contain startMemoryId; all hops >= 1
  *
- * source: cortex@ed33435 mcp_server/core/cognitive_map.py:189-228
+ * source: cortex main mcp_server/core/cognitive_map.py:189-228
  */
 export function navigateFrom(
   startMemoryId: number,
@@ -260,7 +260,7 @@ export function navigateFrom(
 
 /**
  * Apply force-directed spring relaxation to positions in-place.
- * source: cortex@ed33435 mcp_server/core/cognitive_map.py:235-260
+ * source: cortex main mcp_server/core/cognitive_map.py:235-260
  */
 function springRelax(
   positions: number[][],
@@ -304,7 +304,7 @@ function springRelax(
  *
  * postcondition: returned coordinates are in [-1, 1]; keys = memoryIds
  *
- * source: cortex@ed33435 mcp_server/core/cognitive_map.py:263-300
+ * source: cortex main mcp_server/core/cognitive_map.py:263-300
  */
 export function projectTo2d(
   srGraph: SrGraph,

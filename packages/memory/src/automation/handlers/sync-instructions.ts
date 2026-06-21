@@ -14,7 +14,7 @@
  *         section with at most max_insights bullet points derived from hot memories.
  *         File is created if absent. On dry_run=true, no file is written.
  *
- * source: cortex@ed33435 mcp_server/handlers/sync_instructions.py
+ * source: cortex main mcp_server/handlers/sync_instructions.py
  */
 
 import * as fs from "node:fs";
@@ -22,7 +22,7 @@ import * as path from "node:path";
 
 // Structural store interface — no cross-layer import needed.
 // Matches the subset of recall/port.ts MemoryStore used here.
-// source: cortex@ed33435 mcp_server/handlers/sync_instructions.py — store.get_memories_for_directory / get_hot_memories
+// source: cortex main mcp_server/handlers/sync_instructions.py — store.get_memories_for_directory / get_hot_memories
 interface SyncMemoryStore {
   getMemoriesForDirectory(directory: string, minHeat: number): Promise<Array<{
     content?: string | null;
@@ -37,7 +37,7 @@ interface SyncMemoryStore {
 }
 
 // ── Schema ────────────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/sync_instructions.py schema
+// source: cortex main mcp_server/handlers/sync_instructions.py schema
 
 export const schema = {
   title: "Sync instructions",
@@ -88,16 +88,16 @@ export const schema = {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/handlers/sync_instructions.py:_SECTION_START
+// source: cortex main mcp_server/handlers/sync_instructions.py:_SECTION_START
 const SECTION_START = "<!-- cortex:memory-insights:start -->";
-// source: cortex@ed33435 mcp_server/handlers/sync_instructions.py:_SECTION_END
+// source: cortex main mcp_server/handlers/sync_instructions.py:_SECTION_END
 const SECTION_END = "<!-- cortex:memory-insights:end -->";
 
-// source: cortex@ed33435 mcp_server/handlers/sync_instructions.py:_DECISION_RE
+// source: cortex main mcp_server/handlers/sync_instructions.py:_DECISION_RE
 const DECISION_RE =
   /\b(decided|chose|switching|migrated|using|adopted|went with|replaced)\b/i;
 
-// source: cortex@ed33435 mcp_server/handlers/sync_instructions.py:_extract_insights — truncate at 120 chars
+// source: cortex main mcp_server/handlers/sync_instructions.py:_extract_insights — truncate at 120 chars
 const INSIGHT_MAX_CHARS = 120;
 
 // ── Insight extraction ────────────────────────────────────────────────────────
@@ -108,7 +108,7 @@ const INSIGHT_MAX_CHARS = 120;
  * Prefers decisions (by DECISION_RE keyword match), then high-importance,
  * then high-heat.
  *
- * source: cortex@ed33435 mcp_server/handlers/sync_instructions.py:_extract_insights
+ * source: cortex main mcp_server/handlers/sync_instructions.py:_extract_insights
  */
 function extractInsights(
   memories: Array<{ content?: string | null; heat?: number | null; importance?: number | null }>,
@@ -146,7 +146,7 @@ function extractInsights(
 /**
  * Build the CLAUDE.md section content.
  *
- * source: cortex@ed33435 mcp_server/handlers/sync_instructions.py:_build_section
+ * source: cortex main mcp_server/handlers/sync_instructions.py:_build_section
  */
 function buildSection(insights: string[]): string {
   const lines = [
@@ -173,7 +173,7 @@ interface UpdateResult {
 /**
  * Insert or replace the memory insights section in CLAUDE.md.
  *
- * source: cortex@ed33435 mcp_server/handlers/sync_instructions.py:_update_claude_md
+ * source: cortex main mcp_server/handlers/sync_instructions.py:_update_claude_md
  */
 function updateClaudeMd(
   claudeMdPath: string,
@@ -220,7 +220,7 @@ function updateClaudeMd(
 /**
  * Find CLAUDE.md in directory or one level up.
  *
- * source: cortex@ed33435 mcp_server/handlers/sync_instructions.py:_find_claude_md
+ * source: cortex main mcp_server/handlers/sync_instructions.py:_find_claude_md
  */
 function findClaudeMd(directory: string): string {
   const resolved = path.resolve(directory);
@@ -249,7 +249,7 @@ export interface SyncInstructionsResult {
 /**
  * Sync memory insights into CLAUDE.md.
  *
- * source: cortex@ed33435 mcp_server/handlers/sync_instructions.py:handler
+ * source: cortex main mcp_server/handlers/sync_instructions.py:handler
  */
 export async function syncInstructionsHandler(
   args: Record<string, unknown> | null | undefined,

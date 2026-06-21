@@ -43,12 +43,12 @@ export const QueryIntentSchema = z.enum([
 ]);
 
 // ── Schema bounds ──────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/recall.py schema
+// source: cortex main mcp_server/handlers/recall.py schema
 const MAX_RESULTS_LIMIT = 100;
 const MAX_RESULTS_DEFAULT = 10;
-const MIN_HEAT_DEFAULT = 0.05; // source: cortex@ed33435 mcp_server/handlers/recall.py schema
-const DEFAULT_IMPORTANCE = 0.5; // source: cortex@ed33435 mcp_server/shared/types.py — default importance
-// source: cortex@ed33435 mcp_server/handlers/recall_hierarchical.py schema
+const MIN_HEAT_DEFAULT = 0.05; // source: cortex main mcp_server/handlers/recall.py schema
+const DEFAULT_IMPORTANCE = 0.5; // source: cortex main mcp_server/shared/types.py — default importance
+// source: cortex main mcp_server/handlers/recall_hierarchical.py schema
 const MEMORY_IDS_MAX = 5000;
 const CLUSTER_THRESHOLD_DEFAULT = 0.6;
 
@@ -66,31 +66,31 @@ export const RecallRequestSchema = z.object({
   // curated content (ADRs, lessons, conventions) surfaces in the first
   // few results. Set true for debugging / replay tooling that needs the
   // raw memory feed.
-  // source: cortex@f425157 mcp_server/handlers/recall.py — include_low_signal default=False
+  // source: cortex main mcp_server/handlers/recall.py — include_low_signal default=False
   include_low_signal: z.boolean().default(false),
   // Default false: when true, inline a one-hop relation walk per recalled
   // memory: ``related.versions`` (supersession-chain neighbors) and
   // ``related.entities`` (directly related entities via the knowledge graph).
   // A cheap mid-tier enrichment between flat recall and the full context
   // assembler. OFF in all benchmark loaders — never touches benchmarked scores.
-  // source: cortex@6fbf723d mcp_server/handlers/recall.py — include_related default=False
-  // source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:inline_related_neighbors
+  // source: cortex main mcp_server/handlers/recall.py — include_related default=False
+  // source: cortex main mcp_server/handlers/recall_helpers.py:inline_related_neighbors
   include_related: z.boolean().optional().default(false),
 });
 
 export type RecallRequest = z.infer<typeof RecallRequestSchema>;
 
 // ── Inline relation-walk types (MEM-G4) ───────────────────────────────────
-// source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_version_neighbors
-// source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_entity_neighbors
-// source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:inline_related_neighbors
+// source: cortex main mcp_server/handlers/recall_helpers.py:_version_neighbors
+// source: cortex main mcp_server/handlers/recall_helpers.py:_entity_neighbors
+// source: cortex main mcp_server/handlers/recall_helpers.py:inline_related_neighbors
 
 export const VersionNeighborSchema = z.object({
   memory_id: z.number().int(),
   // "supersedes" | "superseded_by"
   edge: z.string(),
   // first 160 chars of neighbor content
-  // source: cortex@6fbf723d recall_helpers.py:_GIST_CHARS = 160
+  // source: cortex main recall_helpers.py:_GIST_CHARS = 160
   gist: z.string(),
 });
 
@@ -131,12 +131,12 @@ export const RecallResultSchema = z.object({
   surprise: z.number().default(0.0),
   recency_boost: z.number().default(0.0),
   // Present only when include_related=true (MEM-G4).
-  // source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:inline_related_neighbors
+  // source: cortex main mcp_server/handlers/recall_helpers.py:inline_related_neighbors
   related: RelatedNeighborsSchema.optional(),
   // Budget-extension fields: present and true only when boundPayload truncated
   // this item's content to fit the host response cap. memory_id survives so the
   // full body stays fetchable by id.
-  // source: cortex@bc5af469 mcp_server/handlers/recall.py:62-73 (outputSchema items)
+  // source: cortex main mcp_server/handlers/recall.py:62-73 (outputSchema items)
   truncated: z.boolean().optional(),
   content_length: z.number().int().optional(),
 });
@@ -155,7 +155,7 @@ export const MultiSignalSignalsSchema = z.object({
   // Hopfield/HDC/SR/SA signals are populated only by the Python/PG path
   // (pg_recall_hopfield et al. stored procedures). The TS path leaves these
   // empty and fuses on vector+fts+heat+bm25+ngram.
-  // source: cortex@ed33435 mcp_server/core/pg_recall.py:recall
+  // source: cortex main mcp_server/core/pg_recall.py:recall
   hopfield: z.array(z.tuple([z.number().int(), z.number()])).default([]),
   hdc: z.array(z.tuple([z.number().int(), z.number()])).default([]),
   sr: z.array(z.tuple([z.number().int(), z.number()])).default([]),
@@ -182,7 +182,7 @@ export const RecallResponseSchema = z.object({
   // Phase-0 bounded-IO rename (results→memories, total→count, query_intent→intent):
   // the legacy aliases byte-duplicated every memory on the wire (50% pure
   // duplication, 2026-06-09 audit). Consumers read the schema-aligned keys.
-  // source: cortex@bc5af469 mcp_server/handlers/recall.py:464-484 (Phase-0 commit 1810d291)
+  // source: cortex main mcp_server/handlers/recall.py:464-484 (Phase-0 commit 1810d291)
   memories: z.array(RecallResultSchema),
   count: z.number().int(),
   intent: QueryIntentSchema,
@@ -192,7 +192,7 @@ export const RecallResponseSchema = z.object({
   // Number of memories filtered as low-signal (auto-captures, backfill
   // imports, stage reports). Surfaced so callers see how much was
   // dropped — useful for debugging "why didn't I get the result I expected".
-  // source: cortex@f425157 mcp_server/handlers/recall.py — low_signal_dropped
+  // source: cortex main mcp_server/handlers/recall.py — low_signal_dropped
   low_signal_dropped: z.number().int().default(0),
   // Running count of items dropped from the tail when content truncation alone
   // could not fit the response budget. source: cortex core/response_budget.py:267
@@ -293,7 +293,7 @@ export interface MemoryItem {
   embedding: number[] | null;
   // Supersession edges (MEM-G1): populated by _normalizeRow so the include_related
   // version walk (recall-helpers.ts:versionNeighbors) can read them off getMemory.
-  // source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_version_neighbors
+  // source: cortex main mcp_server/handlers/recall_helpers.py:_version_neighbors
   supersedes_id?: number | null;
   superseded_by_id?: number | null;
   memory_id?: number;

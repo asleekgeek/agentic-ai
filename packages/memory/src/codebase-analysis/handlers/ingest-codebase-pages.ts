@@ -87,7 +87,7 @@ export function writeProcessPages(
    * 100% of reference/codebase/. Filter them out: a Process page
    * without symbols has nothing to document.
    *
-   * source: cortex@83a6834 mcp_server/handlers/ingest_codebase_pages.py:54-85
+   * source: cortex main mcp_server/handlers/ingest_codebase_pages.py:54-85
    */
   const written: string[] = [];
   let skippedEmpty = 0;
@@ -111,7 +111,7 @@ export function writeProcessPages(
   if (skippedEmpty > 0) {
     // Structured operator-facing audit line — to STDERR, never stdout: stdout is
     // the MCP JSON-RPC channel and a stray line there corrupts the framing.
-    // source: cortex@83a6834 logger.info("skipped %d empty process pages")
+    // source: cortex main logger.info("skipped %d empty process pages")
     // source: packages/mcp-servers/memory/src/index.ts header (stderr-only rule)
     console.error(
       `[ingest-codebase-pages] skipped ${skippedEmpty} empty process pages (symbol_count=0)`,

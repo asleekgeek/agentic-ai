@@ -13,7 +13,7 @@
  *                 Admission semaphore default: Semaphore(1) per tool.
  *
  * Port of: mcp_server/handlers/latency_class.py
- * source: cortex@ed33435 mcp_server/handlers/latency_class.py
+ * source: cortex main mcp_server/handlers/latency_class.py
  * source: docs/program/phase-5-pool-admission-design.md §1.1, ADR-0045 R6
  */
 
@@ -26,7 +26,7 @@ export type LatencyClass = "interactive" | "batch";
 /**
  * Canonical tool → class map. Any tool not listed here falls through to
  * the classify() heuristic.
- * source: cortex@ed33435 mcp_server/handlers/latency_class.py:36
+ * source: cortex main mcp_server/handlers/latency_class.py:36
  */
 const LATENCY_CLASS: Record<string, LatencyClass> = {
   // ── Interactive (hot path) ────────────────────────────────────────
@@ -76,7 +76,7 @@ const LATENCY_CLASS: Record<string, LatencyClass> = {
 
 // Default semaphore capacity per class. Per-tool overrides live in the
 // admission middleware (step 5).
-// source: cortex@ed33435 mcp_server/handlers/latency_class.py:85
+// source: cortex main mcp_server/handlers/latency_class.py:85
 export const DEFAULT_SEMAPHORE: Record<LatencyClass, number> = {
   interactive: 4,
   batch: 1,
@@ -95,7 +95,7 @@ export const DEFAULT_SEMAPHORE: Record<LatencyClass, number> = {
  * postcondition: returns "interactive" or "batch".
  *
  * Port of: mcp_server/handlers/latency_class.py::classify
- * source: cortex@ed33435 mcp_server/handlers/latency_class.py:92
+ * source: cortex main mcp_server/handlers/latency_class.py:92
  */
 export function classify(toolName: string): LatencyClass {
   if (toolName in LATENCY_CLASS) {
@@ -123,7 +123,7 @@ export function classify(toolName: string): LatencyClass {
  * Return every tool name in the registry. For tests and audits.
  *
  * Port of: mcp_server/handlers/latency_class.py::all_registered_tools
- * source: cortex@ed33435 mcp_server/handlers/latency_class.py:121
+ * source: cortex main mcp_server/handlers/latency_class.py:121
  */
 export function allRegisteredTools(): string[] {
   return Object.keys(LATENCY_CLASS).sort();

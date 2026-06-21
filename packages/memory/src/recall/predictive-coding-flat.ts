@@ -6,7 +6,7 @@
  *
  * Pure business logic — no I/O.
  *
- * Port of: cortex@ed33435 mcp_server/core/predictive_coding_flat.py
+ * Port of: cortex main mcp_server/core/predictive_coding_flat.py
  *
  * References:
  *   Friston K (2005) A theory of cortical responses.
@@ -14,7 +14,7 @@
  */
 
 // ── Shared regex patterns ─────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:19-23
+// source: cortex main mcp_server/core/predictive_coding_flat.py:19-23
 
 const CODE_BLOCK_RE = /```[\s\S]*?```|`[^`\n]+`/g;
 const FILE_PATH_RE = /(?:\.{0,2}\/)?(?:[\w@.-]+\/)+[\w@.-]+\.\w+/g;
@@ -79,7 +79,7 @@ const SIGNAL_ROUND_SCALE = 1e4;
  * precondition:  similarities is an array of floats in [0, 1].
  * postcondition: result ∈ [0, 1]. Returns 0.5 when similarities is empty.
  *
- * source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:29-33
+ * source: cortex main mcp_server/core/predictive_coding_flat.py:29-33
  */
 export function computeEmbeddingNovelty(similarities: number[]): number {
   if (similarities.length === 0) return EMBEDDING_NOVELTY_DEFAULT;
@@ -95,7 +95,7 @@ export function computeEmbeddingNovelty(similarities: number[]): number {
  * precondition:  newEntityNames is an iterable of strings.
  * postcondition: result ∈ [0, 1]. Returns 0.5 when newEntityNames is empty.
  *
- * source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:39-47
+ * source: cortex main mcp_server/core/predictive_coding_flat.py:39-47
  */
 export function computeEntityNovelty(
   newEntityNames: string[] | Set<string>,
@@ -117,7 +117,7 @@ export function computeEntityNovelty(
  * precondition:  hoursSinceSimilar >= 0 or null.
  * postcondition: result ∈ [0, 1]. Returns 0.8 when hours is null (unknown = likely novel).
  *
- * source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:53-59
+ * source: cortex main mcp_server/core/predictive_coding_flat.py:53-59
  *   Formula: 1 - exp(-hours / 24.0); time constant = 24 hours
  */
 export function computeTemporalNovelty(
@@ -133,7 +133,7 @@ export function computeTemporalNovelty(
 /**
  * Extract structural shape features from content.
  *
- * source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:65-86
+ * source: cortex main mcp_server/core/predictive_coding_flat.py:65-86
  */
 function structuralFeatures(content: string): Record<string, number> {
   const n = Math.max(content.length, 1);
@@ -160,7 +160,7 @@ function structuralFeatures(content: string): Record<string, number> {
  * precondition:  recentContents is an array of strings.
  * postcondition: result ∈ [0, 1]. Returns 0.7 when recentContents is empty.
  *
- * source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:89-101
+ * source: cortex main mcp_server/core/predictive_coding_flat.py:89-101
  */
 export function computeStructuralNovelty(
   content: string,
@@ -187,7 +187,7 @@ export function computeStructuralNovelty(
  * precondition:  all inputs ∈ [0, 1].
  * postcondition: result ∈ [0, 1].
  *
- * source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:107-119
+ * source: cortex main mcp_server/core/predictive_coding_flat.py:107-119
  *   Weights: embedding=0.40, entity=0.25, temporal=0.20, structural=0.15
  */
 export function computeNoveltyScore(
@@ -210,7 +210,7 @@ export function computeNoveltyScore(
  * Structured dict of all signal values for observability.
  *
  * postcondition: returned object has all five signal keys, values rounded to 4dp.
- * source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:122-136
+ * source: cortex main mcp_server/core/predictive_coding_flat.py:122-136
  */
 export function describeSignals(
   embedding: number,

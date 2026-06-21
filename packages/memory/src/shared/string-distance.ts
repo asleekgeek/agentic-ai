@@ -1,7 +1,7 @@
 /**
  * Edit-distance and prefix-weighted string similarity — dependency-free.
  *
- * Port of: cortex bc5af469 mcp_server/shared/string_distance.py
+ * Port of: cortex main mcp_server/shared/string_distance.py
  *
  * Sources:
  *   - Jaro similarity: Jaro, M. A. (1989). "Advances in record linkage
@@ -17,9 +17,9 @@
  * non-negative integers.
  */
 
-// source: cortex bc5af469 mcp_server/shared/string_distance.py:15  (Winkler 1990, p)
+// source: cortex main mcp_server/shared/string_distance.py:15  (Winkler 1990, p)
 const WINKLER_SCALING = 0.1;
-// source: cortex bc5af469 mcp_server/shared/string_distance.py:16  (Winkler 1990, l capped at 4)
+// source: cortex main mcp_server/shared/string_distance.py:16  (Winkler 1990, l capped at 4)
 const WINKLER_MAX_PREFIX = 4;
 
 // ─── internal helpers ─────────────────────────────────────────────────────────

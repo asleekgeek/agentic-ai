@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-magic-numbers -- all numeric defaults are literal ports from cortex@ed33435 */
+/* eslint-disable @typescript-eslint/no-magic-numbers -- all numeric defaults are literal ports from cortex main */
 /**
  * sqlite-store-queries.ts — Memory query mixin for SqliteMemoryStore.
  *
@@ -6,7 +6,7 @@
  *
  * Ports: infrastructure/sqlite_store_queries.py (lines 1-153)
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py
+ * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py
  */
 
 import type { Database as DatabaseType } from "better-sqlite3";
@@ -14,7 +14,7 @@ import type { Database as DatabaseType } from "better-sqlite3";
 /**
  * Read-only memory queries on SQLite.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:10-153
+ * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:10-153
  */
 export class SqliteQueryMixin {
   protected _rawConn!: DatabaseType;
@@ -25,11 +25,11 @@ export class SqliteQueryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:19-27
+   * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:19-27
    */
   getMemoriesForDomain(
     domain: string,
-    minHeat = 0.05, // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:21
+    minHeat = 0.05, // source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:21
     limit = 50,
   ): Record<string, unknown>[] {
     const rows = this._rawConn
@@ -42,11 +42,11 @@ export class SqliteQueryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:29-37
+   * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:29-37
    */
   getMemoriesForDirectory(
     directory: string,
-    minHeat = 0.05, // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:30
+    minHeat = 0.05, // source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:30
   ): Record<string, unknown>[] {
     const rows = this._rawConn
       .prepare(
@@ -58,7 +58,7 @@ export class SqliteQueryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:39-57
+   * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:39-57
    */
   getHotMemories(
     minHeat = 0.7,
@@ -87,7 +87,7 @@ export class SqliteQueryMixin {
   /**
    * Return memories that have embeddings in the vec table.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:59-76
+   * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:59-76
    */
   getAllMemoriesWithEmbeddings(): Record<string, unknown>[] {
     const rows = this._rawConn
@@ -110,10 +110,10 @@ export class SqliteQueryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:78-86
+   * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:78-86
    */
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:79
-  getAllMemoriesForValidation(limit = 1000): Record<string, unknown>[] { // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:79
+  // source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:79
+  getAllMemoriesForValidation(limit = 1000): Record<string, unknown>[] { // source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:79
     const rows = this._rawConn
       .prepare(
         "SELECT * FROM memories WHERE NOT is_stale " +
@@ -124,7 +124,7 @@ export class SqliteQueryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:88-96
+   * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:88-96
    */
   getMemoriesCreatedAfter(
     isoTimestamp: string,
@@ -140,7 +140,7 @@ export class SqliteQueryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:98-106
+   * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:98-106
    */
   getMemoriesInTimeWindow(
     centerTime: string,
@@ -149,14 +149,14 @@ export class SqliteQueryMixin {
     const rows = this._rawConn
       .prepare(
         "SELECT * FROM memories WHERE " +
-          "ABS((julianday(created_at) - julianday(?)) * 1440) <= ?", // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:103; 1440 = minutes per day
+          "ABS((julianday(created_at) - julianday(?)) * 1440) <= ?", // source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:103; 1440 = minutes per day
       )
       .all(centerTime, windowMinutes) as Record<string, unknown>[];
     return rows.map((r) => this._normalizeMemoryRow(r));
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:108-112
+   * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:108-112
    */
   getAllMemoriesForDecay(): Record<string, unknown>[] {
     const rows = this._rawConn
@@ -178,7 +178,7 @@ export class SqliteQueryMixin {
    *
    * SQLite lacks jsonb operators — filter in JS then delete by ID.
    *
-   * source: cortex@fdc78f7 mcp_server/infrastructure/sqlite_store_queries.py:114-152 (issue #16)
+   * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:114-152 (issue #16)
    */
   deleteMemoriesByTag(tag: string, domain?: string): number {
     const rows = (domain === undefined

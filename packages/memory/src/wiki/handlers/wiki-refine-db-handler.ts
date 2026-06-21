@@ -13,7 +13,7 @@
  *
  * For the in-process LLM-only handler see wiki-refine-handler.ts.
  *
- * source: cortex@ed33435 mcp_server/handlers/wiki_refine.py
+ * source: cortex main mcp_server/handlers/wiki_refine.py
  */
 
 import * as crypto from "node:crypto";
@@ -39,7 +39,7 @@ const PROMPT_HASH_LEN = 16;
 // ── Tool schemas ──────────────────────────────────────────────────────────────
 
 /**
- * source: cortex@ed33435 mcp_server/handlers/wiki_refine.py:48-69 (schema_get)
+ * source: cortex main mcp_server/handlers/wiki_refine.py:48-69 (schema_get)
  */
 export const schemaGet = {
   description:
@@ -64,7 +64,7 @@ export const schemaGet = {
 } as const;
 
 /**
- * source: cortex@ed33435 mcp_server/handlers/wiki_refine.py:207-250 (schema_refine)
+ * source: cortex main mcp_server/handlers/wiki_refine.py:207-250 (schema_refine)
  */
 export const schemaRefine = {
   description:
@@ -139,7 +139,7 @@ export interface RefineSubmitArgs {
  * Precondition:  memoryId is a positive integer; db is a live WikiDbClient.
  * Postcondition: returns all claim_events rows for this memory, ordered by id.
  *
- * source: cortex@ed33435 mcp_server/handlers/wiki_refine.py:77-100 (_claims_for_memory)
+ * source: cortex main mcp_server/handlers/wiki_refine.py:77-100 (_claims_for_memory)
  */
 async function claimsForMemory(
   db: WikiDbClient,
@@ -160,7 +160,7 @@ async function claimsForMemory(
  * Precondition:  wikiRoot is a valid directory path; kind is a non-empty string.
  * Postcondition: returns a contract dict; unknown kinds return empty sections.
  *
- * source: cortex@ed33435 mcp_server/handlers/wiki_refine.py:103-122 (_kind_contract)
+ * source: cortex main mcp_server/handlers/wiki_refine.py:103-122 (_kind_contract)
  */
 function kindContract(
   wikiRoot: string,
@@ -199,7 +199,7 @@ function kindContract(
  *
  * Exported for white-box unit tests (validateAgainstContractForTest alias).
  *
- * source: cortex@ed33435 mcp_server/handlers/wiki_refine.py:253-265 (_validate_against_contract)
+ * source: cortex main mcp_server/handlers/wiki_refine.py:253-265 (_validate_against_contract)
  */
 export function validateAgainstContractForTest(
   sections: ReadonlyArray<{ readonly heading: string; readonly body: string }>,
@@ -235,7 +235,7 @@ function validateAgainstContract(
  * Postcondition: on success returns draft + kind_contract + source_claims;
  *                on list returns {drafts, count}; returns {error} on miss.
  *
- * source: cortex@ed33435 mcp_server/handlers/wiki_refine.py:125-201 (handler_get)
+ * source: cortex main mcp_server/handlers/wiki_refine.py:125-201 (handler_get)
  */
 export async function handlerGet(
   db: WikiDbClient,
@@ -322,7 +322,7 @@ export async function handlerGet(
  * Postcondition: on success updates wiki.drafts and inserts a wiki.memos row;
  *                returns {draft_id, updated, synth_model, synth_prompt_hash}.
  *
- * source: cortex@ed33435 mcp_server/handlers/wiki_refine.py:268-337 (handler_refine)
+ * source: cortex main mcp_server/handlers/wiki_refine.py:268-337 (handler_refine)
  */
 export async function handlerRefine(
   db: WikiDbClient,

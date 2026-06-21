@@ -6,7 +6,7 @@
  * a directory, or all memories.
  *
  * Port of: mcp_server/handlers/validate_memory.py
- * source: cortex@ed33435 mcp_server/handlers/validate_memory.py
+ * source: cortex main mcp_server/handlers/validate_memory.py
  */
 
 import * as fs from "node:fs";
@@ -52,7 +52,7 @@ export interface ValidateMemoryStore {
 }
 
 // ── Schema ─────────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/validate_memory.py:22
+// source: cortex main mcp_server/handlers/validate_memory.py:22
 
 export const schema = {
   title: "Validate memory",
@@ -67,7 +67,7 @@ export const schema = {
     "memories outright), `rate_memory` (user verdict on usefulness, not " +
     "filesystem reality), and `wiki_consolidate` (wiki pages, not " +
     "memories). Mutates is_stale unless dry_run=true. Latency varies " +
-    // source: cortex@ed33435 mcp_server/handlers/validate_memory.py — measured p50/p99 latency range
+    // source: cortex main mcp_server/handlers/validate_memory.py — measured p50/p99 latency range
     "(~100ms-30s depending on scope and ref count). Returns {validated, " +
     "stale_found, stale_updated, dry_run, reports: per-memory breakdown}.",
   inputSchema: {
@@ -79,7 +79,7 @@ export const schema = {
         description: "Validate a single memory by its integer ID.",
         minimum: 1,
         // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-        examples: [42, 1024], // source: cortex@ed33435 mcp_server/handlers/validate_memory.py — example IDs for schema documentation
+        examples: [42, 1024], // source: cortex main mcp_server/handlers/validate_memory.py — example IDs for schema documentation
       },
       domain: {
         type: "string",
@@ -104,7 +104,7 @@ export const schema = {
           "Score in [0,1] above which a memory is marked is_stale. " +
           "0 = mark anything with one missing reference; 1 = mark " +
           "only memories with all references missing.",
-        default: 0.5, // source: cortex@ed33435 mcp_server/handlers/validate_memory.py:70
+        default: 0.5, // source: cortex main mcp_server/handlers/validate_memory.py:70
         minimum: 0.0,
         maximum: 1.0,
         // eslint-disable-next-line @typescript-eslint/no-magic-numbers
@@ -124,7 +124,7 @@ export const schema = {
 /**
  * Check if a path ref exists via multiple resolution strategies.
  * Port of: mcp_server/handlers/validate_memory.py::_path_exists
- * source: cortex@ed33435 mcp_server/handlers/validate_memory.py:121
+ * source: cortex main mcp_server/handlers/validate_memory.py:121
  */
 export function pathExists(ref: string, base: string): boolean {
   const p = path.resolve(ref);
@@ -143,7 +143,7 @@ export function pathExists(ref: string, base: string): boolean {
 /**
  * Return the subset of refs that exist on the filesystem.
  * Port of: mcp_server/handlers/validate_memory.py::_resolve_existing_paths
- * source: cortex@ed33435 mcp_server/handlers/validate_memory.py:105
+ * source: cortex main mcp_server/handlers/validate_memory.py:105
  */
 export function resolveExistingPaths(refs: string[], baseDir: string): Set<string> {
   const existing = new Set<string>();
@@ -164,7 +164,7 @@ export function resolveExistingPaths(refs: string[], baseDir: string): Set<strin
 /**
  * Determine which memories to validate based on args.
  * Port of: mcp_server/handlers/validate_memory.py::_select_memories
- * source: cortex@ed33435 mcp_server/handlers/validate_memory.py:141
+ * source: cortex main mcp_server/handlers/validate_memory.py:141
  */
 export async function selectMemories(
   args: ValidateMemoryArgs,
@@ -175,12 +175,12 @@ export async function selectMemories(
     return mem ? [mem] : [];
   }
   if (args.domain) {
-    return store.getMemoriesForDomain(args.domain, { minHeat: 0.0, limit: 500 }); // source: cortex@ed33435 validate_memory.py:148
+    return store.getMemoriesForDomain(args.domain, { minHeat: 0.0, limit: 500 }); // source: cortex main validate_memory.py:148
   }
   if (args.directory) {
     return store.getMemoriesForDirectory(args.directory, { minHeat: 0.0 });
   }
-  return store.getAllMemoriesForValidation({ limit: 1000 }); // source: cortex@ed33435 validate_memory.py:153
+  return store.getAllMemoriesForValidation({ limit: 1000 }); // source: cortex main validate_memory.py:153
 }
 
 // ── Ref extraction ─────────────────────────────────────────────────────────
@@ -211,7 +211,7 @@ export function collectAllRefs(memories: Record<string, unknown>[]): string[] {
 /**
  * Assess each memory for staleness.
  * Port of: mcp_server/handlers/validate_memory.py::_assess_memories
- * source: cortex@ed33435 mcp_server/handlers/validate_memory.py:159
+ * source: cortex main mcp_server/handlers/validate_memory.py:159
  */
 export function assessMemories(
   memories: Record<string, unknown>[],
@@ -242,7 +242,7 @@ export function assessMemories(
       missing_refs: missingRefs,
       changed_refs: 0,
       // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-      staleness_score: Math.round(stalenessScore * 10000) / 10000, // source: cortex@ed33435 mcp_server/handlers/validate_memory.py — 4 decimal places (×10000 round)
+      staleness_score: Math.round(stalenessScore * 10000) / 10000, // source: cortex main mcp_server/handlers/validate_memory.py — 4 decimal places (×10000 round)
       is_stale: isStale,
       reason,
     };
@@ -263,7 +263,7 @@ export function assessMemories(
  *   mutates is_stale for stale_ids unless dry_run=true.
  *
  * Port of: mcp_server/handlers/validate_memory.py::_handler_impl
- * source: cortex@ed33435 mcp_server/handlers/validate_memory.py:195
+ * source: cortex main mcp_server/handlers/validate_memory.py:195
  */
 export async function handler(
   args: ValidateMemoryArgs | null | undefined,
@@ -272,7 +272,7 @@ export async function handler(
   const a = args ?? {};
   const baseDir = a.base_dir ?? (typeof process !== "undefined" ? process.cwd() : "/");
   // eslint-disable-next-line @typescript-eslint/no-magic-numbers
-  const threshold = Number(a.staleness_threshold ?? 0.5); // source: cortex@ed33435 validate_memory.py:199
+  const threshold = Number(a.staleness_threshold ?? 0.5); // source: cortex main validate_memory.py:199
   const dryRun = Boolean(a.dry_run ?? false);
 
   const memories = await selectMemories(a, store);

@@ -2,7 +2,7 @@
 /**
  * Cross-encoder reranking via FlashRank ONNX.
  *
- * Port of: cortex@ed33435 mcp_server/core/reranker.py
+ * Port of: cortex main mcp_server/core/reranker.py
  *
  * FlashRank (ms-marco-MiniLM-L-12-v2) provides fast cross-encoder reranking.
  * Validated through LongMemEval and LoCoMo where it improves MRR by 5-15%.
@@ -22,9 +22,9 @@
  *
  * ENGINEERING DEFAULTS (not paper-prescribed):
  *   - alpha=0.70: BEAM ablation (0.30→0.511, 0.50→0.529, 0.55→0.535, 0.70→0.542)
- *     source: cortex@ed33435 mcp_server/core/reranker.py:43-46
- *   - gate_threshold=0.15: source: cortex@ed33435 mcp_server/core/reranker.py:47
- *   - suppression=0.1: source: cortex@ed33435 mcp_server/core/reranker.py:48
+ *     source: cortex main mcp_server/core/reranker.py:43-46
+ *   - gate_threshold=0.15: source: cortex main mcp_server/core/reranker.py:47
+ *   - suppression=0.1: source: cortex main mcp_server/core/reranker.py:48
  *
  * Implementation note — onnxruntime version:
  *   @xenova/transformers@2.17.2 bundles onnxruntime-node@1.14.0, which produces
@@ -45,7 +45,7 @@ import { join } from "path";
 import { tmpdir } from "os";
 
 // ── Platt calibration interface ───────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/platt_calibration.py
+// source: cortex main mcp_server/core/platt_calibration.py
 
 interface PlattParams {
   A: number;
@@ -56,7 +56,7 @@ interface PlattParams {
 /**
  * Apply Platt sigmoid calibration to a raw CE score.
  * P(useful | raw_score) = 1 / (1 + exp(A * raw_score + B))
- * source: cortex@ed33435 mcp_server/core/platt_calibration.py
+ * source: cortex main mcp_server/core/platt_calibration.py
  */
 function calibrateScore(
   rawScore: number,
@@ -78,20 +78,20 @@ function calibrateScore(
 /**
  * Compute confidence that retrieval found relevant results.
  *
- * Port of: cortex@ed33435 mcp_server/core/reranker.py:66-87
+ * Port of: cortex main mcp_server/core/reranker.py:66-87
  *
  * Binary threshold gate: if max CE score >= threshold, results are
  * considered sufficient (confidence=1.0). Otherwise, all scores are
  * suppressed by a fixed multiplier.
  *
- * Constants — source: cortex@ed33435 mcp_server/core/reranker.py:83-86
+ * Constants — source: cortex main mcp_server/core/reranker.py:83-86
  *   gate_threshold = 0.15
  *   suppression    = 0.1
  */
 function computeRetrievalConfidence(
   ceScores: number[],
-  gateThreshold = 0.15, // source: cortex@ed33435 mcp_server/core/reranker.py:83
-  suppression = 0.1,    // source: cortex@ed33435 mcp_server/core/reranker.py:84
+  gateThreshold = 0.15, // source: cortex main mcp_server/core/reranker.py:83
+  suppression = 0.1,    // source: cortex main mcp_server/core/reranker.py:84
 ): number {
   if (ceScores.length === 0) return suppression;
   const maxCe = Math.max(...ceScores);
@@ -104,9 +104,9 @@ function computeRetrievalConfidence(
 /**
  * Compute per-query alpha from CE score distribution.
  *
- * Port of: cortex@ed33435 mcp_server/core/reranker.py:90-129
+ * Port of: cortex main mcp_server/core/reranker.py:90-129
  *
- * Constants — source: cortex@ed33435 mcp_server/core/reranker.py:124-127
+ * Constants — source: cortex main mcp_server/core/reranker.py:124-127
  *   max_boost  = 0.15
  *   spread_low = 0.3   (below this → keep base_alpha)
  *   spread_denom = 0.7 (for linear normalization above 0.3)
@@ -118,11 +118,11 @@ function computeAdaptiveAlpha(
   if (ceScores.length < 2) return baseAlpha;
 
   const spread = Math.max(...ceScores) - Math.min(...ceScores);
-  // source: cortex@ed33435 mcp_server/core/reranker.py:123
+  // source: cortex main mcp_server/core/reranker.py:123
   const MAX_BOOST = 0.15;
-  if (spread < 0.3) return baseAlpha; // source: cortex@ed33435 mcp_server/core/reranker.py:124
+  if (spread < 0.3) return baseAlpha; // source: cortex main mcp_server/core/reranker.py:124
   // Linear boost above spread=0.3, capped at max_boost
-  // source: cortex@ed33435 mcp_server/core/reranker.py:126-128
+  // source: cortex main mcp_server/core/reranker.py:126-128
   const normalized = Math.min((spread - 0.3) / 0.7, 1.0);
   return Math.min(baseAlpha + MAX_BOOST * normalized, 1.0);
 }
@@ -132,7 +132,7 @@ function computeAdaptiveAlpha(
 /**
  * Blend WRRF scores with cross-encoder scores, scaled by confidence.
  *
- * Port of: cortex@ed33435 mcp_server/core/reranker.py:132-160
+ * Port of: cortex main mcp_server/core/reranker.py:132-160
  *
  * precondition: candidates and ceScores are aligned by index
  * postcondition: result is sorted descending by blended score;
@@ -152,7 +152,7 @@ function blendScores(
   const confidence = computeRetrievalConfidence(rawCeList);
 
   // Per-query adaptive alpha based on CE score distribution
-  // source: cortex@ed33435 mcp_server/core/reranker.py:148
+  // source: cortex main mcp_server/core/reranker.py:148
   const effectiveAlpha = adaptive
     ? computeAdaptiveAlpha(rawCeList, alpha)
     : alpha;
@@ -196,7 +196,7 @@ function blendScores(
 // verified 2026-05-06 for all 5 pairs). Load the FlashRank model file from the
 // standard flashrank cache dir (same path Python's flashrank.Ranker uses).
 //
-// source: cortex@ed33435 mcp_server/core/reranker.py:50-63 — flashrank.Ranker singleton
+// source: cortex main mcp_server/core/reranker.py:50-63 — flashrank.Ranker singleton
 // source: flashrank.Config.default_cache_dir = /tmp (flashrank.Config module)
 // source: Nogueira & Cho (2019) "Passage Re-ranking with BERT" — CE rerank pattern
 
@@ -270,7 +270,7 @@ async function ensureReranker(): Promise<{ session: OrtSession; tokenizer: Xenov
     const modelPath = join(FLASHRANK_CACHE_DIR, FLASHRANK_MODEL_NAME, FLASHRANK_ONNX_FILE);
     if (!existsSync(modelPath)) {
       // Model not downloaded — mirror Python's flashrank graceful fallback.
-      // source: cortex@ed33435 mcp_server/core/reranker.py:60-63
+      // source: cortex main mcp_server/core/reranker.py:60-63
       _rerankerFailed = true;
       return null;
     }
@@ -311,7 +311,7 @@ export function _resetRerankerCache(): void {
 /**
  * Score a batch of (query, passage) pairs using the FlashRank ONNX model.
  *
- * Port of: cortex@ed33435 mcp_server/core/reranker.py:219-243 (encode_batch path)
+ * Port of: cortex main mcp_server/core/reranker.py:219-243 (encode_batch path)
  *
  * Tokenization: Xenova tokenizer with text_pair option (equivalent to
  * FlashRank's tokenizer.encode_batch([[query, passage], ...]) invocation).
@@ -363,13 +363,13 @@ async function scorePairs(
 /**
  * Rerank candidates using FlashRank cross-encoder.
  *
- * Port of: cortex@ed33435 mcp_server/core/reranker.py:164-207
+ * Port of: cortex main mcp_server/core/reranker.py:164-207
  *
  * precondition: candidates is a ranked list of (memory_id, wrrf_score)
  * postcondition: returns list of same or fewer length, sorted by blended score;
  *   returns input unchanged when the cross-encoder is unavailable (graceful degradation)
  *
- * Constants — source: cortex@ed33435 mcp_server/core/reranker.py:167-172
+ * Constants — source: cortex main mcp_server/core/reranker.py:167-172
  *   alpha         = 0.70 (BEAM ablation optimum)
  *   max_content_len = 1200
  *   adaptive      = false (disabled by default pending ablation validation)
@@ -379,10 +379,10 @@ export async function rerankResults(
   query: string,
   candidates: Array<[number, number]>,
   contentLookup: Record<number, string>,
-  alpha = 0.70,           // source: cortex@ed33435 mcp_server/core/reranker.py:168
-  maxContentLen = 1200,   // source: cortex@ed33435 mcp_server/core/reranker.py:169 — max_content_len
-  adaptive = false,       // source: cortex@ed33435 mcp_server/core/reranker.py:170
-  applyPlatt = false,     // source: cortex@ed33435 mcp_server/core/reranker.py:171
+  alpha = 0.70,           // source: cortex main mcp_server/core/reranker.py:168
+  maxContentLen = 1200,   // source: cortex main mcp_server/core/reranker.py:169 — max_content_len
+  adaptive = false,       // source: cortex main mcp_server/core/reranker.py:170
+  applyPlatt = false,     // source: cortex main mcp_server/core/reranker.py:171
 ): Promise<Array<[number, number]>> {
   if (candidates.length === 0) return candidates;
   const ctx = await ensureReranker();
@@ -398,7 +398,7 @@ export async function rerankResults(
   } catch {
     // Per-call failure (ONNX runtime error, OOM, etc.) — mirror Python's
     // try/except fallback to first-stage ranking.
-    // source: cortex@ed33435 mcp_server/core/reranker.py:201-202
+    // source: cortex main mcp_server/core/reranker.py:201-202
     return candidates;
   }
 }
@@ -406,14 +406,14 @@ export async function rerankResults(
 /**
  * Return a single raw FlashRank CE score for (query, content).
  *
- * Port of: cortex@ed33435 mcp_server/core/reranker.py:209-226
+ * Port of: cortex main mcp_server/core/reranker.py:209-226
  *
  * Returns null if the cross-encoder is unavailable or encoding fails.
  */
 export async function getRawCeScore(
   query: string,
   content: string,
-  maxContentLen = 1200, // source: cortex@ed33435 mcp_server/core/reranker.py:221
+  maxContentLen = 1200, // source: cortex main mcp_server/core/reranker.py:221
 ): Promise<number | null> {
   if (!query || !content) return null;
   const ctx = await ensureReranker();

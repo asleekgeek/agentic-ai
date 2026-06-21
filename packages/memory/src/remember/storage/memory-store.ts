@@ -177,7 +177,7 @@ export interface MemoryStore {
    * Used by the anchor handler to write the `[ANCHOR: <reason>]` prefix
    * and the `_anchor` tag set atomically.
    *
-   * source: cortex@f2b9f99 mcp_server/handlers/anchor.py:141-146
+   * source: cortex main mcp_server/handlers/anchor.py:141-146
    */
   updateMemoryContent(memoryId: number, content: string, tags: string[]): void;
 
@@ -190,7 +190,7 @@ export interface MemoryStore {
    * postcondition: memories.superseded_by_id = newMemoryId for row oldMemoryId; no
    *   other column or row is modified.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store.py:set_superseded_by (517-528)
+   * source: cortex main mcp_server/infrastructure/pg_store.py:set_superseded_by (517-528)
    */
   setSupersededBy(oldMemoryId: number, newMemoryId: number): void;
 
@@ -315,8 +315,8 @@ export interface MemoryStore {
   /** Lookup an entity by name. Returns null if not found. */
   getEntityByName(name: string): EntityRecord | null;
 
-  /** Upsert an entity; return its id. */
-  upsertEntity(name: string, type: string, domain: string): number;
+  /** Upsert an entity; return its id. origin defaults to 'text_concept'. */
+  upsertEntity(name: string, type: string, domain: string, origin?: string): number;
 
   /** Link a memory to an entity. Idempotent (ON CONFLICT DO NOTHING). */
   linkMemoryEntity(memoryId: number, entityId: number): void;
@@ -367,8 +367,8 @@ export interface MemoryStore {
    */
   insertMemoryAsync?(data: MemoryInsertData): Promise<number>;
 
-  /** Async upsert entity — safe on both backends. */
-  upsertEntityAsync?(name: string, type: string, domain: string): Promise<number>;
+  /** Async upsert entity — safe on both backends. origin defaults to 'text_concept'. */
+  upsertEntityAsync?(name: string, type: string, domain: string, origin?: string): Promise<number>;
 
   /** Async getEntityByName — safe on both backends. */
   getEntityByNameAsync?(name: string): Promise<EntityRecord | null>;
@@ -426,8 +426,8 @@ export interface MemoryStore {
 export interface MemoryStoreExt extends MemoryStore {
   // ── Decay / stats ──────────────────────────────────────────────────────
   //
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:108-112
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:107-109
+  // source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:108-112
+  // source: cortex main mcp_server/infrastructure/pg_store_queries.py:107-109
 
   /**
    * Return all non-stale memories for the decay pipeline.
@@ -435,16 +435,16 @@ export interface MemoryStoreExt extends MemoryStore {
    * postcondition: returns every row where is_stale = false.
    *   Neither backend returns [] unconditionally.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:161
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:78
+   * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:161
+   * source: cortex main mcp_server/infrastructure/pg_store_queries.py:78
    */
   getAllMemoriesForDecay(): Record<string, unknown>[];
 
   /**
    * Return all non-stale memories for validation audit.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:116
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:56
+   * source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:116
+   * source: cortex main mcp_server/infrastructure/pg_store_queries.py:56
    */
   getAllMemoriesForValidation(limit?: number): Record<string, unknown>[];
 
@@ -463,8 +463,8 @@ export interface MemoryStoreExt extends MemoryStore {
 
   // ── Domain / directory / hot queries ──────────────────────────────────
   //
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_queries.py:19-86
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:8-41
+  // source: cortex main mcp_server/infrastructure/sqlite_store_queries.py:19-86
+  // source: cortex main mcp_server/infrastructure/pg_store_queries.py:8-41
 
   /** Return memories for a domain ordered by heat descending. */
   getMemoriesForDomain(domain: string, minHeat?: number, limit?: number): Record<string, unknown>[];
@@ -477,8 +477,8 @@ export interface MemoryStoreExt extends MemoryStore {
 
   // ── Recall (full-text search) ──────────────────────────────────────────
   //
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:232-242
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py (FTS via tsvector)
+  // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:232-242
+  // source: cortex main mcp_server/infrastructure/pg_store_queries.py (FTS via tsvector)
 
   /**
    * Full-text search. Returns (memory_id, score) pairs ordered by relevance.
@@ -488,15 +488,15 @@ export interface MemoryStoreExt extends MemoryStore {
    *
    * postcondition: returns [] if no matches; never throws for empty query.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:232
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:232
    * source: PostgreSQL 11+ websearch_to_tsquery — https://www.postgresql.org/docs/current/textsearch-controls.html#TEXTSEARCH-PARSING-QUERIES
    */
   searchFts(query: string, limit?: number): Array<[number, number]>;
 
   // ── Consolidation stage queries ────────────────────────────────────────
   //
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:157-178
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:79-96
+  // source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:157-178
+  // source: cortex main mcp_server/infrastructure/pg_store_stats.py:79-96
 
   /** Return memories in a given consolidation stage. */
   getMemoriesByStage(stage: string, limit?: number): Record<string, unknown>[];
@@ -518,8 +518,8 @@ export interface MemoryStoreExt extends MemoryStore {
 
   // ── CLS queries ────────────────────────────────────────────────────────
   //
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:183-217
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:136-162
+  // source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:183-217
+  // source: cortex main mcp_server/infrastructure/pg_store_stats.py:136-162
 
   /** Return episodic memories, optionally filtered by domain/directory. */
   getEpisodicMemories(domain?: string, directory?: string, limit?: number): Record<string, unknown>[];
@@ -532,8 +532,8 @@ export interface MemoryStoreExt extends MemoryStore {
 
   // ── Entity queries for consolidation ──────────────────────────────────
   //
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_entities.py
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py
+  // source: cortex main mcp_server/infrastructure/sqlite_store_entities.py
+  // source: cortex main mcp_server/infrastructure/pg_store_entities.py
 
   /** Return all entities, optionally filtered by minHeat. */
   getAllEntities(opts?: { minHeat?: number; includeArchived?: boolean }): Record<string, unknown>[];
@@ -549,19 +549,18 @@ export interface MemoryStoreExt extends MemoryStore {
    * drop self-loops, absorb heat/recency via MAX, tombstone alias (archived=1, heat=0).
    * All mutations are atomic (one transaction). No-op when ids equal or either missing.
    *
-   * DEVIATION: agentic-ai entities has NO 'origin' column — the cortex oracle's
-   * ast_symbol defense-in-depth guard (pg-schema-tables.ts:75-84, sqlite-schema.ts:90-99)
-   * is omitted; only the 2-row existence check is retained.
+   * No-op when ids equal, an entity is missing, or either is an ast_symbol —
+   * code-symbol identity is structural and must never be fuzzy-merged.
    *
-   * source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py
-   * source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py
+   * source: cortex main mcp_server/infrastructure/pg_store_entity_merge.py
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py
    */
   mergeEntities(survivorId: number, aliasId: number): { merged: boolean; survivor_id: number; alias_id: number; memory_links_moved: number; relationships_rewired: number };
 
   // ── Relationship queries ───────────────────────────────────────────────
   //
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py
+  // source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py
+  // source: cortex main mcp_server/infrastructure/pg_store_relationships.py
 
   /** Return all relationships. */
   getAllRelationships(): Record<string, unknown>[];
@@ -583,8 +582,8 @@ export interface MemoryStoreExt extends MemoryStore {
 
   // ── Plasticity / hippocampal transfer ─────────────────────────────────
   //
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py
+  // source: cortex main mcp_server/infrastructure/sqlite_store_stats.py
+  // source: cortex main mcp_server/infrastructure/pg_store_stats.py
 
   /** Return memories that are candidates for hippocampal transfer. */
   getTransferCandidates(limit?: number): Record<string, unknown>[];
@@ -597,8 +596,8 @@ export interface MemoryStoreExt extends MemoryStore {
   /**
    * Return recently accessed memories.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:90-101
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:48-52
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:90-101
+   * source: cortex main mcp_server/infrastructure/pg_store_stats.py:48-52
    */
   getRecentlyAccessedMemories(limit?: number, minAccessCount?: number): Record<string, unknown>[];
 
@@ -635,7 +634,7 @@ export interface MemoryStoreExt extends MemoryStore {
   /**
    * Update memory content (compressed form) and optionally store embedding.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py (compression)
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py (compression)
    */
   updateMemoryCompression(
     memoryId: number,
@@ -661,50 +660,50 @@ export interface MemoryStoreExt extends MemoryStore {
 
   // ── Prospective memory write ───────────────────────────────────────────
   //
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:29-36
+  // source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+  // source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:29-36
 
   /**
    * Insert a prospective memory record and return its id.
    *
    * postcondition: new row in prospective_memories with is_active = true.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:insertProspectiveMemory
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:insertProspectiveMemory
    */
   insertProspectiveMemory(data: Record<string, unknown>): number;
 
   /**
    * Return the count of currently active prospective memory triggers.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:countActiveTriggers
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:countActiveTriggers
    */
   countActiveTriggers(): number;
 
   // ── Rules ─────────────────────────────────────────────────────────────
   //
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_rules.py
+  // source: cortex main mcp_server/infrastructure/sqlite_store_rules.py
+  // source: cortex main mcp_server/infrastructure/pg_store_rules.py
 
   /**
    * Insert a memory rule and return its id.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:insertRule
+   * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:insertRule
    */
   insertRule(data: Record<string, unknown>): number;
 
   /**
    * Return all active rules, optionally filtered by scope.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:getAllActiveRules
+   * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:getAllActiveRules
    */
   getAllActiveRules(): Record<string, unknown>[];
 
   /**
    * Return all active rules for a given scope.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:getRulesForScope
+   * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:getRulesForScope
    */
   getRulesForScope(scope: string): Record<string, unknown>[];
 
   /**
    * Return all rules including inactive ones (for admin/audit).
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:getAllRulesIncludingInactive
+   * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:getAllRulesIncludingInactive
    */
   getAllRulesIncludingInactive(): Record<string, unknown>[];
 

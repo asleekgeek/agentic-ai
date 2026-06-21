@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-magic-numbers -- all numeric defaults are literal ports from cortex@ed33435 */
+/* eslint-disable @typescript-eslint/no-magic-numbers -- all numeric defaults are literal ports from cortex main */
 /**
  * sqlite-store-stats.ts — Stats, diagnostics, consolidation, oscillatory state mixin.
  *
  * Ports: infrastructure/sqlite_store_stats.py (lines 1-254)
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py
+ * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py
  */
 
 import type { Database as DatabaseType } from "better-sqlite3";
@@ -12,7 +12,7 @@ import type { Database as DatabaseType } from "better-sqlite3";
 /**
  * Diagnostics, consolidation stages, CLS queries on SQLite.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:9-254
+ * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:9-254
  */
 export class SqliteStatsMixin {
   protected _rawConn!: DatabaseType;
@@ -25,7 +25,7 @@ export class SqliteStatsMixin {
   // ── Counts ─────────────────────────────────────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:20-34
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:20-34
    */
   countMemories(): Record<string, number> {
     const row = this._rawConn
@@ -34,9 +34,9 @@ export class SqliteStatsMixin {
                 COUNT(*) AS total,
                 SUM(CASE WHEN store_type = 'episodic' THEN 1 ELSE 0 END) AS episodic,
                 SUM(CASE WHEN store_type = 'semantic' THEN 1 ELSE 0 END) AS semantic,
-                -- // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:26 — 0.05 heat threshold
+                -- // source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:26 — 0.05 heat threshold
                 SUM(CASE WHEN heat_base >= 0.05 THEN 1 ELSE 0 END) AS active,
-                -- // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:27 — 0.05 heat threshold
+                -- // source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:27 — 0.05 heat threshold
                 SUM(CASE WHEN heat_base < 0.05 THEN 1 ELSE 0 END) AS archived,
                 SUM(CASE WHEN is_stale THEN 1 ELSE 0 END) AS stale,
                 SUM(CASE WHEN is_protected THEN 1 ELSE 0 END) AS protected
@@ -50,7 +50,7 @@ export class SqliteStatsMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:36-40
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:36-40
    */
   getAvgHeat(): number {
     const row = this._rawConn
@@ -60,7 +60,7 @@ export class SqliteStatsMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:42-47
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:42-47
    */
   getDomainCounts(): Record<string, number> {
     const rows = this._rawConn
@@ -75,7 +75,7 @@ export class SqliteStatsMixin {
   // ── Dashboard ──────────────────────────────────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:51-56
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:51-56
    */
   getRecentMemories(limit = 20): Record<string, unknown>[] {
     const rows = this._rawConn
@@ -85,7 +85,7 @@ export class SqliteStatsMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:58-66
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:58-66
    */
   getRecentlyAccessedMemories(
     limit = 20,
@@ -103,7 +103,7 @@ export class SqliteStatsMixin {
   // ── Consolidation ──────────────────────────────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:70-84
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:70-84
    */
   updateMemoryConsolidation(
     memoryId: number,
@@ -124,7 +124,7 @@ export class SqliteStatsMixin {
   /**
    * Batch-insert cascade stage-transition rows via executemany.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:86-106
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:86-106
    */
   insertStageTransitionsBatch(rows: Record<string, unknown>[]): number {
     if (rows.length === 0) return 0;
@@ -151,10 +151,10 @@ export class SqliteStatsMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:108-116
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:108-116
    */
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:108
-  getMemoriesByStage(stage: string, limit = 100): Record<string, unknown>[] { // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:108
+  // source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:108
+  getMemoriesByStage(stage: string, limit = 100): Record<string, unknown>[] { // source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:108
     const rows = this._rawConn
       .prepare(
         "SELECT * FROM memories WHERE consolidation_stage = ? " +
@@ -165,7 +165,7 @@ export class SqliteStatsMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:118-123
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:118-123
    */
   getStageCounts(): Record<string, number> {
     const rows = this._rawConn
@@ -178,7 +178,7 @@ export class SqliteStatsMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:125-130
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:125-130
    */
   incrementReplayCount(memoryId: number): void {
     this._rawConn
@@ -191,7 +191,7 @@ export class SqliteStatsMixin {
   // ── Oscillatory State ──────────────────────────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:134-139
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:134-139
    */
   saveOscillatoryState(stateJson: string): void {
     this._rawConn
@@ -202,7 +202,7 @@ export class SqliteStatsMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:141-145
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:141-145
    */
   loadOscillatoryState(): string | null {
     const row = this._rawConn
@@ -214,7 +214,7 @@ export class SqliteStatsMixin {
   // ── Interference ───────────────────────────────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:149-159
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:149-159
    */
   getSimilarMemoriesForInterference(
     domain: string,
@@ -231,7 +231,7 @@ export class SqliteStatsMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:161-178
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:161-178
    */
   updateMemoryInterference(
     memoryId: number,
@@ -255,12 +255,12 @@ export class SqliteStatsMixin {
   // ── CLS Queries ────────────────────────────────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:183-199
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:183-199
    */
   getEpisodicMemories(
     domain = "",
     directory = "",
-    limit = 500, // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:184
+    limit = 500, // source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:184
   ): Record<string, unknown>[] {
     const conditions = ["store_type = 'episodic'", "NOT is_stale"];
     const params: unknown[] = [];
@@ -283,10 +283,10 @@ export class SqliteStatsMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:201-217
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:201-217
    */
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:201
-  getSemanticMemories(domain = "", limit = 500): Record<string, unknown>[] { // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:201
+  // source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:201
+  getSemanticMemories(domain = "", limit = 500): Record<string, unknown>[] { // source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:201
     let rows: Record<string, unknown>[];
     if (domain) {
       rows = this._rawConn
@@ -308,7 +308,7 @@ export class SqliteStatsMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:219-224
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:219-224
    */
   updateMemoryStoreType(memoryId: number, storeType: string): void {
     this._rawConn
@@ -319,7 +319,7 @@ export class SqliteStatsMixin {
   // ── Consolidation Log ──────────────────────────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:228-241
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:228-241
    */
   logConsolidation(data: Record<string, unknown>): number {
     const result = this._rawConn
@@ -338,7 +338,7 @@ export class SqliteStatsMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:243-247
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:243-247
    */
   getLastConsolidation(): string | null {
     const row = this._rawConn
@@ -350,7 +350,7 @@ export class SqliteStatsMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:249-253
    */
   countActiveTriggers(): number {
     const row = this._rawConn

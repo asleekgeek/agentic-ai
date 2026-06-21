@@ -16,7 +16,7 @@
  *
  * Layer: import (infrastructure helpers; no compose-root dependencies).
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py
+ * source: cortex main mcp_server/handlers/backfill_helpers.py
  */
 
 import * as crypto from "node:crypto";
@@ -28,17 +28,17 @@ import type { MemoryStore } from "../remember/storage/memory-store.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:file_hash (65536 = 64 KiB)
+// source: cortex main mcp_server/handlers/backfill_helpers.py:file_hash (65536 = 64 KiB)
 const HASH_READ_BYTES = 65536; // source: IEC 80000-13:2008 §21-12
 
-// source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:file_hash — h.hexdigest()[:16]
+// source: cortex main mcp_server/handlers/backfill_helpers.py:file_hash — h.hexdigest()[:16]
 const HASH_HEX_LENGTH = 16;
 
-// source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:discover_files — limit = max_files * 3
+// source: cortex main mcp_server/handlers/backfill_helpers.py:discover_files — limit = max_files * 3
 const DISCOVER_MULTIPLIER = 3; // source: backfill_helpers.py:discover_files
 
 // ── Core concept keywords ─────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:_CORE_CONCEPTS
+// source: cortex main mcp_server/handlers/backfill_helpers.py:_CORE_CONCEPTS
 
 const CORE_CONCEPTS: Readonly<Record<string, readonly string[]>> = {
   predictive_coding: ["predictive coding", "write gate", "novelty score", "embedding novelty"],
@@ -79,7 +79,7 @@ const CORE_CONCEPTS: Readonly<Record<string, readonly string[]>> = {
  * Pre:  store is a connected SQLiteMemoryStore.
  * Post: backfill_log table exists (idempotent CREATE TABLE IF NOT EXISTS).
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:ensure_backfill_log
+ * source: cortex main mcp_server/handlers/backfill_helpers.py:ensure_backfill_log
  */
 export function ensureBackfillLog(store: MemoryStore): void {
   try {
@@ -110,7 +110,7 @@ export function ensureBackfillLog(store: MemoryStore): void {
  * Pre:  store is a connected MemoryStore (PG or SQLite).
  * Post: backfill_log table exists in the backing database.
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:ensure_backfill_log
+ * source: cortex main mcp_server/handlers/backfill_helpers.py:ensure_backfill_log
  * source: engineer@41e5778 — *Async-when-available pattern for PG/SQLite parity.
  */
 export async function ensureBackfillLogAsync(store: MemoryStore): Promise<void> {
@@ -143,7 +143,7 @@ export async function ensureBackfillLogAsync(store: MemoryStore): Promise<void> 
 /**
  * Check whether a file has already been backfilled (async, PG/SQLite parity).
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:is_already_backfilled
+ * source: cortex main mcp_server/handlers/backfill_helpers.py:is_already_backfilled
  * source: engineer@41e5778 — *Async-when-available pattern.
  */
 export async function isAlreadyBackfilledAsync(
@@ -174,7 +174,7 @@ export async function isAlreadyBackfilledAsync(
 /**
  * Record that a file has been backfilled (async, PG/SQLite parity).
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:mark_backfilled
+ * source: cortex main mcp_server/handlers/backfill_helpers.py:mark_backfilled
  * source: engineer@41e5778 — *Async-when-available pattern.
  */
 export async function markBackfilledAsync(
@@ -213,7 +213,7 @@ export async function markBackfilledAsync(
  * Pre:  filePath exists and is readable.
  * Post: returns a 16-char hex string (truncated SHA-256).
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:file_hash
+ * source: cortex main mcp_server/handlers/backfill_helpers.py:file_hash
  */
 export function fileHash(filePath: string): string {
   const buf = new Uint8Array(HASH_READ_BYTES);
@@ -234,7 +234,7 @@ export function fileHash(filePath: string): string {
  * Pre:  store has a backfill_log table.
  * Post: returns true iff the stored hash matches currentHash.
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:is_already_backfilled
+ * source: cortex main mcp_server/handlers/backfill_helpers.py:is_already_backfilled
  */
 export function isAlreadyBackfilled(
   store: MemoryStore,
@@ -261,7 +261,7 @@ export function isAlreadyBackfilled(
  * Pre:  store has a backfill_log table; fhash is 16 hex chars.
  * Post: backfill_log row is upserted for filePath.
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:mark_backfilled
+ * source: cortex main mcp_server/handlers/backfill_helpers.py:mark_backfilled
  */
 export function markBackfilled(
   store: MemoryStore,
@@ -306,7 +306,7 @@ export interface BackfillFileEntry {
  * Pre:  projectsDir exists (or function returns []).
  * Post: returns at most max_files * DISCOVER_MULTIPLIER entries, sorted newest-first.
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:discover_files
+ * source: cortex main mcp_server/handlers/backfill_helpers.py:discover_files
  */
 export function discoverBackfillFiles(
   projectFilter: string,
@@ -388,7 +388,7 @@ function _rglob(dir: string, ext: string): string[] {
  *
  * Delegates to detectDomainFromPath (same logic as domain-detector.ts).
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:slug_to_domain
+ * source: cortex main mcp_server/handlers/backfill_helpers.py:slug_to_domain
  */
 export function slugToDomain(slug: string): string {
   // Convert slug (-Users-alice-code-cortex) back to a path then extract domain.
@@ -404,7 +404,7 @@ export function slugToDomain(slug: string): string {
  * Pre:  content is a string (possibly empty).
  * Post: returns a list of CORE_CONCEPTS keys whose keywords appear in content.
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:find_concepts
+ * source: cortex main mcp_server/handlers/backfill_helpers.py:find_concepts
  */
 export function findConcepts(content: string): string[] {
   const lower = content.toLowerCase();
@@ -428,7 +428,7 @@ export function findConcepts(content: string): string[] {
  * sync methods (SqliteMemoryStore). This matches the *Async-when-available
  * pattern from engineer@41e5778 — PG sync methods throw via _runSync().
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py:link_concepts
+ * source: cortex main mcp_server/handlers/backfill_helpers.py:link_concepts
  * source: engineer@41e5778 — *Async-when-available pattern for PG/SQLite parity.
  */
 export async function linkConcepts(

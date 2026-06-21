@@ -54,7 +54,7 @@ const DEFAULT_IMPORTANCE = 0.5;
 // here. Removing the stubs eliminates the drift Feynman traced as one of
 // two structural causes for the cortex-bench MRR gap.
 //
-// source: cortex@ed33435 mcp_server/core/memory_decomposer.py:decompose_memory
+// source: cortex main mcp_server/core/memory_decomposer.py:decompose_memory
 //   + extract_conversational_entities + build_entity_summary
 import {
   decomposeMemory,
@@ -72,7 +72,7 @@ import {
 // postcondition: returned object has the four `has_*` keys plus the
 //   per-call dynamic keys produced by extractConversationalEntities.
 //
-// source: cortex@ed33435 mcp_server/core/memory_decomposer.py:147 (extract_conversational_entities)
+// source: cortex main mcp_server/core/memory_decomposer.py:147 (extract_conversational_entities)
 export function detectEntityFlags(content: string): ConversationalEntities {
   return extractConversationalEntities(content);
 }
@@ -126,7 +126,7 @@ export async function ingestMemory(
   const rawContent = memory.content ?? "";
   if (!rawContent.trim()) return [];
 
-  // source: cortex@ed33435 mcp_server/core/memory_decomposer.py:decompose_memory
+  // source: cortex main mcp_server/core/memory_decomposer.py:decompose_memory
   //   The Python ingest path always calls decompose_memory which returns
   //   MemoryChunk objects with full ConversationalEntities (persons,
   //   quoted_terms, has_*). The TS port now uses the same code path.
@@ -146,7 +146,7 @@ export async function ingestMemory(
 
     // Build embedding text: entity-summary prefix improves targeting.
     // Format matches Python: "People: ... | Topics: ... | Type: ..."
-    // source: cortex@ed33435 mcp_server/core/memory_decomposer.py:build_entity_summary
+    // source: cortex main mcp_server/core/memory_decomposer.py:build_entity_summary
     const entitySummary = buildEntitySummaryFromEntities(entities);
     const embedText = entitySummary
       ? `${entitySummary}\n${chunkContent}`
@@ -221,7 +221,7 @@ export async function ingestMemory(
     // requires a separate upsertEmbedding call.  The Python source stores
     // embeddings inline in insert_memory (PG column) but for the SQLite adapter
     // we must call upsertEmbedding after insert.
-    // source: cortex@82b15b3 mcp_server/core/memory_ingest.py:119 (embed stored inline)
+    // source: cortex main mcp_server/core/memory_ingest.py:119 (embed stored inline)
     // source: packages/memory/src/remember/storage/sqlite-store.ts:insertMemory (no vec upsert)
     if (emb !== null && typeof (store as unknown as Record<string, unknown>)["upsertEmbedding"] === "function") {
       (store as unknown as { upsertEmbedding(id: number, emb: Buffer): void }).upsertEmbedding(mid, emb);
@@ -275,6 +275,6 @@ export async function ingestMemoriesBatch(
  * Python-format "People: ... | Topics: ... | Type: ...". Backwards-compat
  * for any caller that imported `buildEntitySummary` from this module.
  *
- * source: cortex@ed33435 mcp_server/core/memory_decomposer.py:build_entity_summary
+ * source: cortex main mcp_server/core/memory_decomposer.py:build_entity_summary
  */
 export { buildEntitySummary } from "./memory-decomposer.js";

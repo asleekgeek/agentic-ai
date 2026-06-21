@@ -6,7 +6,7 @@
  * pairs so it scales linearly with N regardless of how many memories exist.
  *
  * Port of: mcp_server/handlers/memories_page.py
- * source: cortex@ed33435 mcp_server/handlers/memories_page.py
+ * source: cortex main mcp_server/handlers/memories_page.py
  */
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -67,30 +67,30 @@ export interface MemoriesPageResult {
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/handlers/memories_page.py:37
+// source: cortex main mcp_server/handlers/memories_page.py:37
 const SORT_ORDER_BY: Record<string, string> = {
   heat: "heat_base DESC, id DESC",
   recent: "created_at DESC, id DESC",
   oldest: "created_at ASC, id ASC",
 };
 
-// source: cortex@ed33435 mcp_server/handlers/memories_page.py:43
+// source: cortex main mcp_server/handlers/memories_page.py:43
 const SORT_KEY_COLUMN: Record<string, string> = {
   heat: "heat_base",
   recent: "created_at",
   oldest: "created_at",
 };
 
-// source: cortex@ed33435 mcp_server/handlers/memories_page.py:48
+// source: cortex main mcp_server/handlers/memories_page.py:48
 const SORT_DIRECTION: Record<string, string> = {
   heat: "<",
   recent: "<",
   oldest: ">",
 };
 
-// source: cortex@ed33435 mcp_server/handlers/memories_page.py:54
+// source: cortex main mcp_server/handlers/memories_page.py:54
 const DEFAULT_LIMIT = 50;
-// source: cortex@ed33435 mcp_server/handlers/memories_page.py:55
+// source: cortex main mcp_server/handlers/memories_page.py:55
 const MAX_LIMIT = 200;
 
 // Base64url padding: every group of 4 characters; (4 - len%4) % 4 gives 0..3 pad chars.
@@ -113,7 +113,7 @@ const IMPORTANCE_URGENCY_THRESHOLD = 0.75;
 
 /**
  * Decode a base64url cursor string.
- * source: cortex@ed33435 mcp_server/handlers/memories_page.py:58
+ * source: cortex main mcp_server/handlers/memories_page.py:58
  */
 export function decodeCursor(s: string | null | undefined): Record<string, unknown> | null {
   if (!s) return null;
@@ -128,7 +128,7 @@ export function decodeCursor(s: string | null | undefined): Record<string, unkno
 
 /**
  * Encode a cursor payload as base64url.
- * source: cortex@ed33435 mcp_server/handlers/memories_page.py:68
+ * source: cortex main mcp_server/handlers/memories_page.py:68
  */
 export function encodeCursor(payload: Record<string, unknown>): string {
   const raw = JSON.stringify(payload);
@@ -143,12 +143,12 @@ export function encodeCursor(payload: Record<string, unknown>): string {
  * populated with safe defaults.
  *
  * Port of: mcp_server/handlers/memories_page.py::_row_to_node
- * source: cortex@ed33435 mcp_server/handlers/memories_page.py:86
+ * source: cortex main mcp_server/handlers/memories_page.py:86
  */
 export function rowToNode(row: Record<string, unknown>): MemoryNode {
   const val = Number(row["emotional_valence"] ?? 0);
   let emotion: string | null = null;
-  // source: cortex@ed33435 mcp_server/handlers/memories_page.py:94
+  // source: cortex main mcp_server/handlers/memories_page.py:94
   if (val >= EMOTION_HIGH_VALENCE_THRESHOLD) emotion = "satisfaction";
   else if (val >= EMOTION_LOW_VALENCE_THRESHOLD) emotion = "discovery";
   else if (val <= EMOTION_HIGH_NEGATIVE_THRESHOLD) emotion = "frustration";
@@ -203,7 +203,7 @@ export interface BuildQueryOptions {
  * Build the SQL query string for memories pagination.
  *
  * Port of: mcp_server/handlers/memories_page.py::_build_query
- * source: cortex@ed33435 mcp_server/handlers/memories_page.py:133
+ * source: cortex main mcp_server/handlers/memories_page.py:133
  */
 export function buildQuery(opts: BuildQueryOptions): string {
   const where: string[] = ["NOT is_stale"];
@@ -227,7 +227,7 @@ export function buildQuery(opts: BuildQueryOptions): string {
   if (opts.hasMinHeat) where.push("heat_base >= $min_heat");
   if (opts.hasEmotion) {
     // Four-bucket CASE-style WHERE clause.
-    // source: cortex@ed33435 mcp_server/handlers/memories_page.py:168
+    // source: cortex main mcp_server/handlers/memories_page.py:168
     where.push(
       "((" +
         `  $emotion = 'urgent' AND importance >= ${IMPORTANCE_URGENCY_THRESHOLD}` +
@@ -266,7 +266,7 @@ export function buildQuery(opts: BuildQueryOptions): string {
  *   page_count + sort; never throws (errors propagate to caller).
  *
  * Port of: mcp_server/handlers/memories_page.py::serve (query logic)
- * source: cortex@ed33435 mcp_server/handlers/memories_page.py:194
+ * source: cortex main mcp_server/handlers/memories_page.py:194
  */
 export function serveMemoriesPage(
   query: MemoriesPageQuery,
@@ -315,7 +315,7 @@ export function serveMemoriesPage(
   if (minHeat !== null) params.push(minHeat);
   if (emotion !== null) {
     // Four placeholders for the four-bucket CASE-style WHERE clause.
-    // source: cortex@ed33435 mcp_server/handlers/memories_page.py:249
+    // source: cortex main mcp_server/handlers/memories_page.py:249
     params.push(emotion, emotion, emotion, emotion);
   }
   // Over-fetch by 1 so we can detect "more pages exist" without a count.

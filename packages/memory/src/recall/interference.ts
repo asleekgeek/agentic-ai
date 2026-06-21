@@ -3,8 +3,8 @@
  * Interference management — orthogonalization, retrieval suppression,
  * domain metrics, proactive and retroactive interference detection.
  *
- * Port of: cortex@ed33435 mcp_server/core/interference.py (lines 1-331)
- *          cortex@ed33435 mcp_server/core/interference_detection.py (lines 1-339)
+ * Port of: cortex main mcp_server/core/interference.py (lines 1-331)
+ *          cortex main mcp_server/core/interference_detection.py (lines 1-339)
  *
  * Memory interference is the primary cause of forgetting in both biological
  * and artificial systems. Detection helpers (proactive, retroactive) are
@@ -37,14 +37,14 @@ import { cosineSimilarity, dot, norm, normalize } from "./vector-similarity.js";
  * Rate at which each orthogonalization step removes the interfering
  * projection component. 0.15 yields ~3-6 sleep cycles to fully separate
  * two memories at sim > 0.7. Hand-tuned; no direct biological equivalent.
- * source: cortex@ed33435 mcp_server/core/interference.py:59
+ * source: cortex main mcp_server/core/interference.py:59
  */
-const _ORTHOGONALIZATION_RATE = 0.15; // source: cortex@ed33435 mcp_server/core/interference.py:59
+const _ORTHOGONALIZATION_RATE = 0.15; // source: cortex main mcp_server/core/interference.py:59
 
 /**
  * Floor similarity — orthogonalization stops here to preserve meaningful
  * semantic overlap. Hand-tuned to prevent over-separation.
- * source: cortex@ed33435 mcp_server/core/interference.py:63
+ * source: cortex main mcp_server/core/interference.py:63
  */
 const _MIN_ORTHOGONAL_SIMILARITY = 0.2;
 
@@ -53,7 +53,7 @@ const _MIN_ORTHOGONAL_SIMILARITY = 0.2;
  * Simplified from Norman et al. 2007's oscillating g parameter.
  * In the full model, g oscillates between ~0.4 (g_high) and ~0.1 (g_low).
  * Our fixed 0.3 approximates the time-averaged effect. Hand-tuned.
- * source: cortex@ed33435 mcp_server/core/interference.py:69
+ * source: cortex main mcp_server/core/interference.py:69
  */
 const _RETRIEVAL_SUPPRESSION = 0.3;
 
@@ -61,34 +61,34 @@ const _RETRIEVAL_SUPPRESSION = 0.3;
  * Cosine similarity threshold above which two memories are considered
  * to be interfering. Hand-tuned; corresponds roughly to the point where
  * pattern separation mechanisms would engage in hippocampus (Yassa & Stark 2011).
- * source: cortex@ed33435 mcp_server/core/interference.py:73
+ * source: cortex main mcp_server/core/interference.py:73
  */
 const _INTERFERENCE_THRESHOLD = 0.7;
 
 // ── Detection-only constants ──────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/interference_detection.py:46-60
+// source: cortex main mcp_server/core/interference_detection.py:46-60
 
 /**
  * Discount applied when memories are in different directory contexts.
  * Models context-dependent interference (Anderson & Neely 1996).
  * Hand-tuned.
- * source: cortex@ed33435 mcp_server/core/interference_detection.py:53
+ * source: cortex main mcp_server/core/interference_detection.py:53
  */
 const _CONTEXT_DISCOUNT = 0.3;
 
 /**
  * Score above which interference is considered critical.
  * Hand-tuned.
- * source: cortex@ed33435 mcp_server/core/interference_detection.py:59
+ * source: cortex main mcp_server/core/interference_detection.py:59
  */
-const _CRITICAL_INTERFERENCE = 0.85; // source: cortex@ed33435 mcp_server/core/interference_detection.py:59
+const _CRITICAL_INTERFERENCE = 0.85; // source: cortex main mcp_server/core/interference_detection.py:59
 
 // ── Orthogonalization Helpers ─────────────────────────────────────────────
 
 /**
  * Remove a fraction of vec's projection onto basis.
  *
- * Port of: cortex@ed33435 mcp_server/core/interference.py:79-91
+ * Port of: cortex main mcp_server/core/interference.py:79-91
  *
  * Implements a simplified version of the sleep-dependent orthogonalization
  * described in Yassa & Stark 2011. Each call removes rate * 0.5 of the
@@ -103,7 +103,7 @@ function projectAway(
   rate: number,
 ): number[] {
   const basisNormSq = basis.reduce((s, v) => s + v * v, 0);
-  if (basisNormSq < 1e-10) return [...vec]; // source: cortex@ed33435 mcp_server/core/interference.py:86 — degenerate basis guard
+  if (basisNormSq < 1e-10) return [...vec]; // source: cortex main mcp_server/core/interference.py:86 — degenerate basis guard
   const projCoeff = (dot(vec, basis) / basisNormSq) * rate * 0.5; // source: interference.py:89
   const result = vec.map((v, i) => v - projCoeff * (basis[i] ?? 0));
   return result;
@@ -111,17 +111,17 @@ function projectAway(
 
 /**
  * Normalize vec to unit length, falling back if degenerate.
- * Port of: cortex@ed33435 mcp_server/core/interference.py:94-97
+ * Port of: cortex main mcp_server/core/interference.py:94-97
  */
 function renormalize(vec: number[], fallback: number[]): number[] {
   const n = norm(vec);
-  if (n > 1e-10) return normalize(vec); // source: cortex@ed33435 mcp_server/core/interference.py:95 — degenerate vector guard
+  if (n > 1e-10) return normalize(vec); // source: cortex main mcp_server/core/interference.py:95 — degenerate vector guard
   return [...fallback];
 }
 
 /**
  * Interpolate back toward originals if similarity dropped too far.
- * Port of: cortex@ed33435 mcp_server/core/interference.py:100-114
+ * Port of: cortex main mcp_server/core/interference.py:100-114
  *
  * precondition: currentSim > newSim (otherwise this is a no-op)
  * postcondition: returned sim is >= minSimilarity (if possible)
@@ -139,7 +139,7 @@ function backoffToMinimum(
     1.0,
     Math.max(
       0.0,
-      (minSimilarity - newSim) / Math.max(currentSim - newSim, 1e-10), // source: cortex@ed33435 mcp_server/core/interference.py:107 — division-by-zero guard
+      (minSimilarity - newSim) / Math.max(currentSim - newSim, 1e-10), // source: cortex main mcp_server/core/interference.py:107 — division-by-zero guard
     ),
   );
   const blendedA = newA.map(
@@ -159,7 +159,7 @@ function backoffToMinimum(
 /**
  * Gradually push two interfering embeddings apart (sleep-dependent).
  *
- * Port of: cortex@ed33435 mcp_server/core/interference.py:119-164
+ * Port of: cortex main mcp_server/core/interference.py:119-164
  *
  * Models the offline orthogonalization component of interference resolution.
  * In Norman et al. 2007, competing representations are separated via
@@ -172,7 +172,7 @@ function backoffToMinimum(
  * precondition: embeddingA and embeddingB have equal length
  * postcondition: remaining_sim in [minSimilarity, 1.0] (or 0 if lengths differ)
  *
- * Constants — source: cortex@ed33435 mcp_server/core/interference.py:120-121
+ * Constants — source: cortex main mcp_server/core/interference.py:120-121
  *   rate           = 0.15 (_ORTHOGONALIZATION_RATE)
  *   min_similarity = 0.2  (_MIN_ORTHOGONAL_SIMILARITY)
  */
@@ -216,7 +216,7 @@ export function orthogonalizePair(
     );
   }
 
-  // source: cortex@ed33435 mcp_server/core/interference.py:163
+  // source: cortex main mcp_server/core/interference.py:163
   return [finalA, finalB, parseFloat(newSim.toFixed(6))];
 }
 
@@ -225,7 +225,7 @@ export function orthogonalizePair(
 /**
  * Compute retrieval suppression from competing memories.
  *
- * Port of: cortex@ed33435 mcp_server/core/interference.py:169-213
+ * Port of: cortex main mcp_server/core/interference.py:169-213
  *
  * Simplified lateral inhibition consistent with Norman et al. 2007.
  * In the full LCA model, units with higher activation suppress units
@@ -237,7 +237,7 @@ export function orthogonalizePair(
  * precondition: targetScore >= 0; competitorScores are non-negative
  * postcondition: result in [0, targetScore]
  *
- * Constants — source: cortex@ed33435 mcp_server/core/interference.py:169
+ * Constants — source: cortex main mcp_server/core/interference.py:169
  *   suppression_factor = 0.3 (_RETRIEVAL_SUPPRESSION)
  */
 export function computeRetrievalSuppression(
@@ -268,7 +268,7 @@ interface PairwiseStats {
 
 /**
  * Compute max similarities and interference pair counts.
- * Port of: cortex@ed33435 mcp_server/core/interference.py:218-240
+ * Port of: cortex main mcp_server/core/interference.py:218-240
  *
  * precondition: embeddings has >= 2 vectors; all same length; n <= embeddings.length
  * postcondition: maxSims.length === n; interferencePairs <= totalPairs
@@ -303,12 +303,12 @@ function computePairwiseStats(
 /**
  * Classify interference pressure level from average score.
  *
- * Port of: cortex@ed33435 mcp_server/core/interference.py:244-254
+ * Port of: cortex main mcp_server/core/interference.py:244-254
  *
  * Thresholds are hand-tuned based on observed domain statistics.
  * No direct mapping to Norman et al. 2007 parameters.
  *
- * source: cortex@ed33435 mcp_server/core/interference.py:244-254
+ * source: cortex main mcp_server/core/interference.py:244-254
  *   critical: avg_score >= 0.5
  *   high:     avg_score >= 0.3
  *   medium:   avg_score >= 0.1
@@ -331,20 +331,20 @@ const _LOW_PRESSURE = {
 /**
  * Compute aggregate interference metrics for a domain.
  *
- * Port of: cortex@ed33435 mcp_server/core/interference.py:262-296
+ * Port of: cortex main mcp_server/core/interference.py:262-296
  *
  * precondition: embeddings has >= 2 vectors of equal length
  * postcondition: all numeric fields rounded to 4 decimal places;
  *   pressure_level is one of "low" | "medium" | "high" | "critical"
  *
- * Constants — source: cortex@ed33435 mcp_server/core/interference.py:265-266
+ * Constants — source: cortex main mcp_server/core/interference.py:265-266
  *   threshold    = 0.7  (_INTERFERENCE_THRESHOLD)
  *   sample_limit = 100
  */
 export function computeDomainInterferencePressure(
   embeddings: number[][],
   threshold = _INTERFERENCE_THRESHOLD,
-  sampleLimit = 100, // source: cortex@ed33435 mcp_server/core/interference.py:266
+  sampleLimit = 100, // source: cortex main mcp_server/core/interference.py:266
 ): {
   mean_max_similarity: number;
   interfering_pair_fraction: number;
@@ -376,11 +376,11 @@ export function computeDomainInterferencePressure(
 }
 
 // ── DETECTION — Resolution Hints ─────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/interference_detection.py:63-93
+// source: cortex main mcp_server/core/interference_detection.py:63-93
 
 /**
  * Suggest resolution strategy for proactive interference.
- * Port of: cortex@ed33435 mcp_server/core/interference_detection.py:66-76
+ * Port of: cortex main mcp_server/core/interference_detection.py:66-76
  */
 function suggestPiResolution(
   score: number,
@@ -395,7 +395,7 @@ function suggestPiResolution(
 
 /**
  * Suggest resolution strategy for retroactive interference.
- * Port of: cortex@ed33435 mcp_server/core/interference_detection.py:79-91
+ * Port of: cortex main mcp_server/core/interference_detection.py:79-91
  */
 function suggestRiResolution(
   score: number,
@@ -424,19 +424,19 @@ function jaccardSimilarity<T>(a: Set<T>, b: Set<T>): number {
 
 /**
  * Compute proactive interference score from component signals.
- * Port of: cortex@ed33435 mcp_server/core/interference_detection.py:100-128
+ * Port of: cortex main mcp_server/core/interference_detection.py:100-128
  *
  * precondition: sim, entityOverlap, heatFactor in [0, 1]; stage is known
  * postcondition: result in [0, ~1.5]; higher = stronger interference
  *
- * Stage factors — source: cortex@ed33435 mcp_server/core/interference_detection.py:115-122
+ * Stage factors — source: cortex main mcp_server/core/interference_detection.py:115-122
  *   consolidated: 1.2
  *   late_ltp:     1.0
  *   early_ltp:    0.8
  *   labile:       0.5
  *   default:      0.7
  *
- * Component weights — source: cortex@ed33435 mcp_server/core/interference_detection.py:125
+ * Component weights — source: cortex main mcp_server/core/interference_detection.py:125
  *   sim: 0.4, entity_overlap: 0.25, heat_factor: 0.2, stage_factor: 0.15
  */
 function computePiScore(
@@ -455,7 +455,7 @@ function computePiScore(
   const stageFactor = stageFactors[stage] ?? 0.7;
 
   return (
-    // source: cortex@ed33435 mcp_server/core/interference_detection.py:125 — weights sim=0.4 entity=0.25 heat=0.2 stage=0.15
+    // source: cortex main mcp_server/core/interference_detection.py:125 — weights sim=0.4 entity=0.25 heat=0.2 stage=0.15
     (sim * 0.4 + entityOverlap * 0.25 + heatFactor * 0.2 + stageFactor * 0.15) *
     contextMatch
   );
@@ -463,7 +463,7 @@ function computePiScore(
 
 /**
  * Context discount: different directories reduce interference.
- * Port of: cortex@ed33435 mcp_server/core/interference_detection.py:131-138
+ * Port of: cortex main mcp_server/core/interference_detection.py:131-138
  */
 function computePiContextMatch(mem: Record<string, unknown>): number {
   if (
@@ -486,7 +486,7 @@ interface InterferenceDescriptor {
 
 /**
  * Build a proactive interference result dict.
- * Port of: cortex@ed33435 mcp_server/core/interference_detection.py:141-149
+ * Port of: cortex main mcp_server/core/interference_detection.py:141-149
  */
 function buildPiResult(
   mem: Record<string, unknown>,
@@ -507,7 +507,7 @@ function buildPiResult(
 
 /**
  * Evaluate one existing memory for proactive interference.
- * Port of: cortex@ed33435 mcp_server/core/interference_detection.py:152-175
+ * Port of: cortex main mcp_server/core/interference_detection.py:152-175
  */
 function evaluatePiCandidate(
   mem: Record<string, unknown>,
@@ -548,12 +548,12 @@ function evaluatePiCandidate(
 /**
  * Detect old memories that may interfere with encoding a new memory.
  *
- * Port of: cortex@ed33435 mcp_server/core/interference_detection.py:178-212
+ * Port of: cortex main mcp_server/core/interference_detection.py:178-212
  *
  * precondition: existingMemories each have 'embedding', 'entities', 'heat', 'id'
  * postcondition: result sorted descending by interference_score
  *
- * Constants — source: cortex@ed33435 mcp_server/core/interference_detection.py:178
+ * Constants — source: cortex main mcp_server/core/interference_detection.py:178
  *   threshold = 0.7 (_INTERFERENCE_THRESHOLD)
  */
 export function detectProactiveInterference(
@@ -618,10 +618,10 @@ interface RetroactiveDescriptor {
 /**
  * Compute how vulnerable an old memory is to overwriting.
  *
- * Port of: cortex@ed33435 mcp_server/core/interference_detection.py:223-241
+ * Port of: cortex main mcp_server/core/interference_detection.py:223-241
  *
  * Formula: (1 - resistance) * (1 - heat * 0.5) * (1 - importance * 0.3)
- * source: cortex@ed33435 mcp_server/core/interference_detection.py:237-238
+ * source: cortex main mcp_server/core/interference_detection.py:237-238
  */
 function computeVulnerability(
   oldStage: string,
@@ -635,7 +635,7 @@ function computeVulnerability(
 
 /**
  * Evaluate one existing memory for retroactive interference risk.
- * Port of: cortex@ed33435 mcp_server/core/interference_detection.py:244-271
+ * Port of: cortex main mcp_server/core/interference_detection.py:244-271
  */
 function evaluateRiCandidate(
   mem: Record<string, unknown>,
@@ -659,7 +659,7 @@ function evaluateRiCandidate(
   const overwritePressure = newImportance * sim;
   const riskScore = vulnerability * overwritePressure;
 
-  // Hand-tuned threshold — source: cortex@ed33435 mcp_server/core/interference_detection.py:269
+  // Hand-tuned threshold — source: cortex main mcp_server/core/interference_detection.py:269
   if (riskScore <= 0.2) return null;
 
   return {
@@ -676,13 +676,13 @@ function evaluateRiCandidate(
 /**
  * Detect old memories at risk of being overwritten by a new memory.
  *
- * Port of: cortex@ed33435 mcp_server/core/interference_detection.py:274-309
+ * Port of: cortex main mcp_server/core/interference_detection.py:274-309
  *
  * precondition: existingMemories each have 'embedding', 'heat', 'importance',
  *   'consolidation_stage', 'id' fields
  * postcondition: result sorted descending by risk_score
  *
- * Constants — source: cortex@ed33435 mcp_server/core/interference_detection.py:274
+ * Constants — source: cortex main mcp_server/core/interference_detection.py:274
  *   threshold = 0.7 (_INTERFERENCE_THRESHOLD)
  */
 export function detectRetroactiveInterference(

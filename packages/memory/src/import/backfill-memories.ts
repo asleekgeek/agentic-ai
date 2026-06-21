@@ -17,8 +17,8 @@
  *         Idempotent — re-running with the same files skips already-processed
  *         hashes unless force_reprocess=true.
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_memories.py
- * source: cortex@ed33435 mcp_server/handlers/backfill_helpers.py
+ * source: cortex main mcp_server/handlers/backfill_memories.py
+ * source: cortex main mcp_server/handlers/backfill_helpers.py
  */
 
 import { readFullBounded } from "./scanner.js";
@@ -39,7 +39,7 @@ import type { MemoryStore } from "../remember/storage/memory-store.js";
 import type { RememberHandler } from "./types.js";
 
 // ── Schema ────────────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/backfill_memories.py schema
+// source: cortex main mcp_server/handlers/backfill_memories.py schema
 
 export const schema = {
   title: "Backfill memories",
@@ -112,7 +112,7 @@ interface ParsedArgs {
   forceReprocess: boolean;
 }
 
-/** source: cortex@ed33435 mcp_server/handlers/backfill_memories.py:_parse_args */
+/** source: cortex main mcp_server/handlers/backfill_memories.py:_parse_args */
 function parseArgs(args: Record<string, unknown> | null | undefined): ParsedArgs {
   const a = args ?? {};
   return {
@@ -134,7 +134,7 @@ function parseArgs(args: Record<string, unknown> | null | undefined): ParsedArgs
  * Preserves original session timestamp AND computes age-decayed initial heat
  * so a 6-month-old conversation imports at heat ~0.3 rather than 1.0.
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_memories.py:_import_single_item
+ * source: cortex main mcp_server/handlers/backfill_memories.py:_import_single_item
  * source: issue #14 P1 — age-decayed initial heat fix
  */
 async function importSingleItem(
@@ -187,7 +187,7 @@ async function importSingleItem(
  * session_ran_command, discussion_touched_file, co_occurrence) for every
  * tool_use block in the session transcript.
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_memories.py:_import_file
+ * source: cortex main mcp_server/handlers/backfill_memories.py:_import_file
  * source: Cortex workflow_graph_source_jsonl.py — graph entity emission per session
  */
 async function importFile(
@@ -253,7 +253,7 @@ interface DryRunEntry {
 /**
  * Build a preview entry for dry-run mode.
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_memories.py:_build_dry_run_preview
+ * source: cortex main mcp_server/handlers/backfill_memories.py:_build_dry_run_preview
  */
 function buildDryRunPreview(
   filePath: string,
@@ -293,7 +293,7 @@ interface FilteredCandidate {
  *
  * Async to support PG isAlreadyBackfilledAsync (queryRawAsync).
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_memories.py:_filter_candidates
+ * source: cortex main mcp_server/handlers/backfill_memories.py:_filter_candidates
  * source: engineer@41e5778 — *Async-when-available pattern for PG/SQLite parity.
  */
 async function filterCandidates(
@@ -353,7 +353,7 @@ export type BackfillResponse = BackfillDryRunResponse | BackfillImportResponse;
  * Post: discovered files are processed up to maxFiles; processed hashes are
  *       recorded in backfill_log.
  *
- * source: cortex@ed33435 mcp_server/handlers/backfill_memories.py:handler
+ * source: cortex main mcp_server/handlers/backfill_memories.py:handler
  */
 export async function backfillMemoriesHandler(
   args: Record<string, unknown> | null | undefined,

@@ -43,7 +43,7 @@ import { PgMemoryStore } from "../remember/storage/pg-store.js";
 import { runCascadeAdvancement } from "../consolidation/stages/cascade.js";
 
 const LOG_PREFIX = "[methodology-hook]";
-// source: cortex@ed33435 mcp_server/hooks/session_lifecycle.py:69 — cap session log at 1000 entries
+// source: cortex main mcp_server/hooks/session_lifecycle.py:69 — cap session log at 1000 entries
 const MAX_SESSION_LOG_ENTRIES = 1000;
 
 function log(msg: string): void {
@@ -105,7 +105,7 @@ function saveSessionLog(log: Record<string, unknown>): void {
 // ── Domain resolution ─────────────────────────────────────────────────────
 
 // Number of path components to use for project ID derivation.
-// source: cortex@ed33435 mcp_server/shared/project_ids.py — last 2 path components as project ID
+// source: cortex main mcp_server/shared/project_ids.py — last 2 path components as project ID
 const PROJECT_ID_PATH_DEPTH = 2;
 
 function cwdToProjectId(cwd: string | undefined): string | null {
@@ -222,16 +222,16 @@ function appendSession(
  *
  * Non-blocking: logs errors but never throws.
  *
- * source: cortex@ed33435 mcp_server/hooks/session_lifecycle.py:103-151
+ * source: cortex main mcp_server/hooks/session_lifecycle.py:103-151
  * source: Borbely (1982) two-process model — consolidation pressure accumulates.
  * source: Tononi & Cirelli (2003) SHY — wakefulness builds synaptic weight.
  * source: Dewar et al. (2012) — rest after encoding boosts long-term retention.
  * source: McClelland et al. (1995) CLS — interleaved replay for hippocampal→cortical transfer.
  */
 // Depth thresholds from Python source.
-// source: cortex@ed33435 mcp_server/hooks/session_lifecycle.py:128-136
-const CONSOLIDATION_LIGHT_THRESHOLD = 5; // source: cortex@ed33435 mcp_server/hooks/session_lifecycle.py:129
-const CONSOLIDATION_STANDARD_THRESHOLD = 20; // source: cortex@ed33435 mcp_server/hooks/session_lifecycle.py:131
+// source: cortex main mcp_server/hooks/session_lifecycle.py:128-136
+const CONSOLIDATION_LIGHT_THRESHOLD = 5; // source: cortex main mcp_server/hooks/session_lifecycle.py:129
+const CONSOLIDATION_STANDARD_THRESHOLD = 20; // source: cortex main mcp_server/hooks/session_lifecycle.py:131
 
 async function runConsolidation(turnCount: number): Promise<void> {
   const mode =
@@ -246,7 +246,7 @@ async function runConsolidation(turnCount: number): Promise<void> {
 
   try {
     // All depth levels advance the cascade.
-    // source: cortex@ed33435 mcp_server/handlers/consolidation/cascade.py
+    // source: cortex main mcp_server/handlers/consolidation/cascade.py
     // source: Dewar et al. (2012) — rest after encoding boosts retention.
     const result = await runCascadeAdvancement({
       getMemoriesByStage: (stage, limit) =>

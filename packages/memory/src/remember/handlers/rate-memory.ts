@@ -28,13 +28,13 @@ import { getRawCeScore } from "../../recall/reranker.js";
 import { recordRating, sampleCount } from "../../recall/reranker-calibration.js";
 
 // Named constants — rationale for each value:
-// source: cortex@ed33435 mcp_server/handlers/rate_memory.py — confidence only
+// source: cortex main mcp_server/handlers/rate_memory.py — confidence only
 //   computed when access_count >= 3 (insufficient data before that).
 const CONFIDENCE_MIN_SAMPLES = 3;
 // source: Python round(..., 4) = multiply by 10000 then divide.
-// source: cortex@ed33435 mcp_server/handlers/rate_memory.py — round(confidence, 4)
+// source: cortex main mcp_server/handlers/rate_memory.py — round(confidence, 4)
 const CONFIDENCE_ROUNDING_FACTOR = 10000;
-// source: cortex@ed33435 mcp_server/handlers/rate_memory.py — content_preview = 80 chars
+// source: cortex main mcp_server/handlers/rate_memory.py — content_preview = 80 chars
 const RATE_CONTENT_PREVIEW_CHARS = 80;
 // z=1.0 for ~68% CI Wilson score lower bound.
 // source: Agresti & Coull (1998) "Approximate Is Better than Exact for Interval Estimation of Binomial Proportions" — z=1.0 approximation for 68% CI

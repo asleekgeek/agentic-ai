@@ -150,7 +150,7 @@ export class PgMemoryStore implements MemoryStoreExt {
     // use the *Async siblings (e.g. insertMemoryAsync, getMemoryAsync).
     // This matches Python semantics: Python callers also await the pool
     // coroutines; the sync interface is a type-level convenience only.
-    // Verified against cortex@f2b9f99 mcp_server/infrastructure/pg_store.py:
+    // Verified against cortex main mcp_server/infrastructure/pg_store.py:
     //   _execute wraps conn.execute() which is a psycopg async call;
     //   callers are all async def handlers.
     // Marker closed: PHASE_7_TRACKING.md Group D row 4 (2026-04-27).
@@ -217,7 +217,7 @@ export class PgMemoryStore implements MemoryStoreExt {
         $16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27,$28,$29,$30
       ) RETURNING id`,
       // $2::jsonb — tags is JSON.stringify(array), must be cast to jsonb
-      // source: cortex@82b15b3 mcp_server/infrastructure/pg_store.py:insert_memory
+      // source: cortex main mcp_server/infrastructure/pg_store.py:insert_memory
       //   json.dumps(tags) stored as JSONB column
       [
         data.content,
@@ -251,7 +251,7 @@ export class PgMemoryStore implements MemoryStoreExt {
         data.arousal ?? 0.0,
         data.dominant_emotion ?? "neutral",
         // Supersession forward edge (MEM-G1): null unless curation supersedes.
-        // source: cortex@ed33435 mcp_server/infrastructure/pg_store.py:insert_memory
+        // source: cortex main mcp_server/infrastructure/pg_store.py:insert_memory
         data.supersedes_id ?? null,
       ],
     );
@@ -312,8 +312,8 @@ export class PgMemoryStore implements MemoryStoreExt {
    * precondition: pool is open; recall_memories function is installed in DB.
    * postcondition: returns rows ordered by descending score.
    *
-   * source: cortex@82b15b3 mcp_server/infrastructure/pg_store.py:recall_memories
-   * source: cortex@82b15b3 mcp_server/infrastructure/pg_schema.py:RECALL_MEMORIES_LAZY_FN
+   * source: cortex main mcp_server/infrastructure/pg_store.py:recall_memories
+   * source: cortex main mcp_server/infrastructure/pg_schema.py:RECALL_MEMORIES_LAZY_FN
    */
   async recallMemoriesAsync(params: RecallMemoriesParams): Promise<RecallMemoryRow[]> {
     return this.runAsync((client) => callRecallMemories(client, params));
@@ -322,7 +322,7 @@ export class PgMemoryStore implements MemoryStoreExt {
   /**
    * Delete memories where is_benchmark = TRUE.
    * Used by the bench harness to clean up between conversations.
-   * source: cortex@82b15b3 benchmarks/lib/bench_db.py:_purge_stale_benchmark_data
+   * source: cortex main benchmarks/lib/bench_db.py:_purge_stale_benchmark_data
    */
   async clearBenchmarkMemoriesAsync(): Promise<void> {
     await this.runAsync(async (client) => {
@@ -400,7 +400,7 @@ export class PgMemoryStore implements MemoryStoreExt {
    * write (forward edge supersedes_id is set at insert).
    *
    * Footgun (mirrored verbatim from Python): newId goes in SET, oldId in WHERE.
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store.py:set_superseded_by (517-528)
+   * source: cortex main mcp_server/infrastructure/pg_store.py:set_superseded_by (517-528)
    */
   setSupersededBy(_oldId: number, _newId: number): void {
     this._runSync(async (c) => this._setSupersededByOnClient(c, _oldId, _newId));
@@ -502,7 +502,7 @@ export class PgMemoryStore implements MemoryStoreExt {
    * Used by the anchor handler to write the `[ANCHOR: <reason>]` prefix
    * and the `_anchor` tag set in one round-trip.
    *
-   * source: cortex@f2b9f99 mcp_server/handlers/anchor.py:143-146
+   * source: cortex main mcp_server/handlers/anchor.py:143-146
    *   UPDATE memories SET … tags = %s::jsonb, content = %s … WHERE id = %s
    */
   updateMemoryContent(memoryId: number, content: string, tags: string[]): void {
@@ -761,7 +761,7 @@ export class PgMemoryStore implements MemoryStoreExt {
   // Sync signatures call _runSync (throws at runtime) — use *Async variants
   // from async MCP handlers (same pattern as all other PG CRUD methods).
   //
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py
+  // source: cortex main mcp_server/infrastructure/pg_store_entities.py
 
   getEntityByName(_name: string): EntityRecord | null {
     return this._runSync(async (c) => {
@@ -781,19 +781,19 @@ export class PgMemoryStore implements MemoryStoreExt {
    * Upsert an entity; return its id.
    *
    * postcondition: returns id > 0 for the entity.
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:50-80
+   * source: cortex main mcp_server/infrastructure/pg_store_entities.py:50-80
    */
-  upsertEntity(_name: string, _type: string, _domain: string): number {
-    return this._runSync(async (c) => pgInsertEntity(c, { name: _name, type: _type, domain: _domain }));
+  upsertEntity(_name: string, _type: string, _domain: string, _origin = "text_concept"): number {
+    return this._runSync(async (c) => pgInsertEntity(c, { name: _name, type: _type, domain: _domain, origin: _origin }));
   }
 
-  async upsertEntityAsync(name: string, type: string, domain: string): Promise<number> {
-    return this.runAsync((c) => pgInsertEntity(c, { name, type, domain }));
+  async upsertEntityAsync(name: string, type: string, domain: string, origin = "text_concept"): Promise<number> {
+    return this.runAsync((c) => pgInsertEntity(c, { name, type, domain, origin }));
   }
 
   /**
    * Link a memory to an entity. Idempotent.
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py — memory_entities INSERT
+   * source: cortex main mcp_server/infrastructure/pg_store_entities.py — memory_entities INSERT
    */
   linkMemoryEntity(_memoryId: number, _entityId: number): void {
     void this.runAsync((c) =>
@@ -815,7 +815,7 @@ export class PgMemoryStore implements MemoryStoreExt {
 
   /**
    * Upsert a typed relationship between two entities.
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:52-69
+   * source: cortex main mcp_server/infrastructure/pg_store_relationships.py:52-69
    */
   upsertRelationship(
     _sourceEntityId: number,
@@ -837,7 +837,7 @@ export class PgMemoryStore implements MemoryStoreExt {
    * Return all schema records for a domain.
    *
    * LSP-VIOLATION CLOSED: previously returned []. Now delegates to PG.
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:285-305
+   * source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:285-305
    */
   getSchemasForDomain(_domain: string): Array<Record<string, unknown>> {
     return this._runSync(async (c) => pgGetSchemasForDomain(c, _domain));
@@ -854,7 +854,7 @@ export class PgMemoryStore implements MemoryStoreExt {
    * table listed as "not yet created"). The pg-schema-tables.ts includes this
    * table; pg-store-stats.ts implements loadOscillatoryState. Wire it here.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:143-147
+   * source: cortex main mcp_server/infrastructure/pg_store_stats.py:143-147
    */
   loadOscillatoryState(): string | null {
     return this._runSync(async (c) => pgLoadOscillatoryState(c));
@@ -868,7 +868,7 @@ export class PgMemoryStore implements MemoryStoreExt {
    * Persist oscillatory clock state JSON string.
    *
    * LSP-VIOLATION CLOSED: previously a no-op.
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:135-141
+   * source: cortex main mcp_server/infrastructure/pg_store_stats.py:135-141
    */
   saveOscillatoryState(_stateJson: string): void {
     void this.runAsync((c) => pgSaveOscillatoryState(c, _stateJson));
@@ -888,7 +888,7 @@ export class PgMemoryStore implements MemoryStoreExt {
   /**
    * Return all non-stale memories for the decay pipeline.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:107-109
+   * source: cortex main mcp_server/infrastructure/pg_store_queries.py:107-109
    */
   getAllMemoriesForDecay(): Record<string, unknown>[] {
     return this._runSync(async (c) => pgGetAllMemoriesForDecay(c));
@@ -899,7 +899,7 @@ export class PgMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:77-85
+   * source: cortex main mcp_server/infrastructure/pg_store_queries.py:77-85
    */
   // source: pg_store_queries.py:78
   getAllMemoriesForValidation(limit = 1000): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
@@ -912,7 +912,7 @@ export class PgMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:20-28
+   * source: cortex main mcp_server/infrastructure/pg_store_queries.py:20-28
    */
   // source: pg_store_queries.py:21
   getMemoriesForDomain(domain: string, minHeat = 0.05, limit = 50): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
@@ -925,7 +925,7 @@ export class PgMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:30-38
+   * source: cortex main mcp_server/infrastructure/pg_store_queries.py:30-38
    */
   // source: pg_store_queries.py:31
   getMemoriesForDirectory(directory: string, minHeat = 0.05): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
@@ -938,7 +938,7 @@ export class PgMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:40-61
+   * source: cortex main mcp_server/infrastructure/pg_store_queries.py:40-61
    */
   // source: pg_store_queries.py:41
   getHotMemories(minHeat = 0.7, limit = 20, includeBenchmarks = false): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
@@ -958,7 +958,7 @@ export class PgMemoryStore implements MemoryStoreExt {
   //
   // source: PostgreSQL 11+ websearch_to_tsquery
   //   https://www.postgresql.org/docs/current/textsearch-controls.html#TEXTSEARCH-PARSING-QUERIES
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store.py — FTS via tsvector column
+  // source: cortex main mcp_server/infrastructure/pg_store.py — FTS via tsvector column
 
   /**
    * Full-text search via PostgreSQL tsvector.
@@ -1009,10 +1009,10 @@ export class PgMemoryStore implements MemoryStoreExt {
   // ── MemoryStoreExt: consolidation stage queries ────────────────────────
   //
   // LSP-VIOLATION CLOSED (#6): consolidation pipeline silently no-ops on PG.
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py
+  // source: cortex main mcp_server/infrastructure/pg_store_stats.py
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:79-87
+   * source: cortex main mcp_server/infrastructure/pg_store_stats.py:79-87
    */
   // source: pg_store_stats.py:110
   getMemoriesByStage(stage: string, limit = 100): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
@@ -1025,7 +1025,7 @@ export class PgMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:55-61
+   * source: cortex main mcp_server/infrastructure/pg_store_stats.py:55-61
    */
   updateMemoryConsolidation(
     memoryId: number,
@@ -1052,7 +1052,7 @@ export class PgMemoryStore implements MemoryStoreExt {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:63-76
+   * source: cortex main mcp_server/infrastructure/pg_store_stats.py:63-76
    */
   insertStageTransitionsBatch(rows: Record<string, unknown>[]): number {
     void this.runAsync((c) =>
@@ -1073,7 +1073,7 @@ export class PgMemoryStore implements MemoryStoreExt {
   /**
    * Update stage_entered_at timestamp.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py — cascade stage logic
+   * source: cortex main mcp_server/infrastructure/pg_store_stats.py — cascade stage logic
    */
   updateStageEnteredAt(memoryId: number, enteredAt: string): void {
     void this.runAsync((c) =>
@@ -1083,7 +1083,7 @@ export class PgMemoryStore implements MemoryStoreExt {
 
   // ── MemoryStoreExt: CLS queries ────────────────────────────────────────
   //
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:136-162
+  // source: cortex main mcp_server/infrastructure/pg_store_stats.py:136-162
 
   // source: pg_store_stats.py:185
   getEpisodicMemories(domain = "", directory = "", limit = 500): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
@@ -1111,7 +1111,7 @@ export class PgMemoryStore implements MemoryStoreExt {
 
   // ── MemoryStoreExt: entity queries for consolidation ───────────────────
   //
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py
+  // source: cortex main mcp_server/infrastructure/pg_store_entities.py
 
   getAllEntities(opts?: { minHeat?: number; includeArchived?: boolean }): Record<string, unknown>[] {
     return this._runSync(async (c) => pgGetAllEntities(c, opts?.minHeat, opts?.includeArchived));
@@ -1136,7 +1136,7 @@ export class PgMemoryStore implements MemoryStoreExt {
    * The sync variant calls _runSync (throws at runtime from async contexts).
    * Use mergeEntitiesAsync from async consolidation cycles.
    *
-   * source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py
+   * source: cortex main mcp_server/infrastructure/pg_store_entity_merge.py
    */
   mergeEntities(survivorId: number, aliasId: number): { merged: boolean; survivor_id: number; alias_id: number; memory_links_moved: number; relationships_rewired: number } {
     return this._runSync((c) => pgMergeEntities(c, survivorId, aliasId));
@@ -1148,7 +1148,7 @@ export class PgMemoryStore implements MemoryStoreExt {
 
   // ── MemoryStoreExt: relationship queries ───────────────────────────────
   //
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py
+  // source: cortex main mcp_server/infrastructure/pg_store_relationships.py
 
   getAllRelationships(): Record<string, unknown>[] {
     return this._runSync(async (c) => pgGetAllRelationships(c));
@@ -1211,7 +1211,7 @@ export class PgMemoryStore implements MemoryStoreExt {
 
   // ── MemoryStoreExt: hippocampal transfer ───────────────────────────────
   //
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py
+  // source: cortex main mcp_server/infrastructure/pg_store_stats.py
 
   // source: pg_store_stats.py
   getTransferCandidates(limit = 50): Record<string, unknown>[] { // eslint-disable-line @typescript-eslint/no-magic-numbers
@@ -1219,7 +1219,7 @@ export class PgMemoryStore implements MemoryStoreExt {
       const result = await c.query(
         // Hippocampal transfer candidates: episodic memories with high
         // hippocampal_dependency that are ready for semantic extraction.
-        // source: cortex@ed33435 mcp_server/core/cls_transfer.py — transfer eligibility
+        // source: cortex main mcp_server/core/cls_transfer.py — transfer eligibility
         `SELECT * FROM memories
          WHERE store_type = 'episodic'
            AND hippocampal_dependency > 0.5
@@ -1372,7 +1372,7 @@ export class PgMemoryStore implements MemoryStoreExt {
     // impl dropped it, leaving the compression cycle + curation-merge with a stale
     // vector. We only overwrite when a fresh embedding is supplied (null → keep
     // the existing vector rather than NULL it, since no caller intends a wipe).
-    // source: cortex@ed33435 mcp_server/infrastructure/pg_store.py:835-858 update_memory_compression
+    // source: cortex main mcp_server/infrastructure/pg_store.py:835-858 update_memory_compression
     if (embedding && embedding.byteLength > 0) {
       const dim = embedding.byteLength / FLOAT32_BYTES_PER_ELEMENT;
       const floats = new Float32Array(embedding.buffer, embedding.byteOffset, dim);
@@ -1388,7 +1388,7 @@ export class PgMemoryStore implements MemoryStoreExt {
       );
       return;
     }
-    // source: cortex@ed33435 mcp_server/infrastructure/pg_store.py:835-858 (content-only branch)
+    // source: cortex main mcp_server/infrastructure/pg_store.py:835-858 (content-only branch)
     void this.runAsync((c) =>
       c.query(
         `UPDATE memories SET content = $1, compressed = TRUE,
@@ -1466,7 +1466,7 @@ export class PgMemoryStore implements MemoryStoreExt {
 
   /**
    * Async variant — returns the real row id.
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:22-38
+   * source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:22-38
    */
   async insertProspectiveMemoryAsync(data: Record<string, unknown>): Promise<number> {
     return this.runAsync((c) =>
@@ -1484,7 +1484,7 @@ export class PgMemoryStore implements MemoryStoreExt {
   /**
    * Sync façade for countActiveTriggers. Returns 0 on PG (fire-and-forget).
    * Use countActiveTriggersAsync for the real count.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
+   * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:249-253
    */
   countActiveTriggers(): number {
     // PG cannot block for the count in the sync path. Return 0 as a safe default.
@@ -1494,7 +1494,7 @@ export class PgMemoryStore implements MemoryStoreExt {
 
   /**
    * Async variant — returns the real trigger count.
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_stats.py:190
+   * source: cortex main mcp_server/infrastructure/pg_store_stats.py:190
    */
   async countActiveTriggersAsync(): Promise<number> {
     return this.runAsync((c) => pgCountActiveTriggers(c));
@@ -1505,7 +1505,7 @@ export class PgMemoryStore implements MemoryStoreExt {
   /**
    * Sync façade — fires-and-forgets the async insertRule. Returns 0 on PG.
    * Use insertRuleAsync for the real id.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:14-31
+   * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:14-31
    */
   insertRule(data: Record<string, unknown>): number {
     void this.runAsync((c) =>
@@ -1524,7 +1524,7 @@ export class PgMemoryStore implements MemoryStoreExt {
 
   /**
    * Async variant — returns the real rule id.
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_rules.py
+   * source: cortex main mcp_server/infrastructure/pg_store_rules.py
    */
   async insertRuleAsync(data: Record<string, unknown>): Promise<number> {
     return this.runAsync((c) =>
@@ -1543,7 +1543,7 @@ export class PgMemoryStore implements MemoryStoreExt {
   /**
    * Sync façade — fires-and-forgets. Returns [] on PG.
    * Use getAllActiveRulesAsync for real data.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:41-45
+   * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:41-45
    */
   getAllActiveRules(): Record<string, unknown>[] {
     // source: ADR-0042 — sync path unsupported on PG; callers use getAllActiveRulesAsync
@@ -1557,7 +1557,7 @@ export class PgMemoryStore implements MemoryStoreExt {
   /**
    * Sync façade — returns [] on PG.
    * Use getRulesForScopeAsync for real data.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:33-39
+   * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:33-39
    */
   getRulesForScope(scope: string): Record<string, unknown>[] {
     void scope; // suppress unused warning
@@ -1572,7 +1572,7 @@ export class PgMemoryStore implements MemoryStoreExt {
   /**
    * Sync façade — returns [] on PG.
    * Use getAllRulesIncludingInactiveAsync for real data.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py admin listing
+   * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py admin listing
    */
   getAllRulesIncludingInactive(): Record<string, unknown>[] {
     // source: ADR-0042 — sync path unsupported on PG; callers use getAllRulesIncludingInactiveAsync

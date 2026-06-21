@@ -3,7 +3,7 @@
  * Post-WRRF recall pipeline stages — paper-first-class reordering steps.
  * Part 1 of 2 (stages: HOPFIELD, HDC, SPREADING_ACTIVATION, DENDRITIC_CLUSTERS).
  *
- * Port of: cortex@ed33435 mcp_server/core/recall_pipeline.py:1-533
+ * Port of: cortex main mcp_server/core/recall_pipeline.py:1-533
  *
  * Each stage takes a candidates list (the output of the PG WRRF fusion) and
  * returns a possibly-reordered/expanded list. Stages are gated by
@@ -31,7 +31,7 @@ import { computeHdcScores } from "./hdc-encoder.js";
 
 /**
  * Returns true when CORTEX_ABLATE_<MECH>=1 in the environment.
- * Port of: cortex@ed33435 mcp_server/core/ablation.py::is_mechanism_disabled
+ * Port of: cortex main mcp_server/core/ablation.py::is_mechanism_disabled
  */
 function isMechanismDisabled(mech: string): boolean {
   if (typeof process === "undefined") return false;
@@ -42,7 +42,7 @@ function isMechanismDisabled(mech: string): boolean {
 
 // RRF constant from Cormack et al. (SIGIR 2009). The paper recommends k=60
 // as a robust default across heterogeneous rankers.
-// source: cortex@ed33435 mcp_server/core/recall_pipeline.py:38
+// source: cortex main mcp_server/core/recall_pipeline.py:38
 const _RRF_K = 60;
 
 function envFloat(name: string, defaultVal: number): number {
@@ -54,26 +54,26 @@ function envFloat(name: string, defaultVal: number): number {
 }
 
 // Per-mechanism blend weights.
-// source: cortex@ed33435 mcp_server/core/recall_pipeline.py:81-83
+// source: cortex main mcp_server/core/recall_pipeline.py:81-83
 // Calibration outcome: tasks/blend-weight-calibration.md Results §A (2026-05-02)
 const _HOPFIELD_BETA = envFloat(
   "CORTEX_HOPFIELD_BETA",
-  0.30, // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:82 — confirmed near-optimum
+  0.30, // source: cortex main mcp_server/core/recall_pipeline.py:82 — confirmed near-optimum
 );
 const _HDC_BETA = envFloat(
   "CORTEX_HDC_BETA",
-  0.20, // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:85 — confirmed near-optimum
+  0.20, // source: cortex main mcp_server/core/recall_pipeline.py:85 — confirmed near-optimum
 );
 const _SA_BETA = envFloat(
   "CORTEX_SA_BETA",
-  0.25, // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:88 — confirmed near-optimum
+  0.25, // source: cortex main mcp_server/core/recall_pipeline.py:88 — confirmed near-optimum
 );
 
 // Dendritic multiplicative range — bounded perturbation from Poirazi (2003)
-// source: cortex@ed33435 mcp_server/core/recall_pipeline.py:95-97
+// source: cortex main mcp_server/core/recall_pipeline.py:95-97
 const _DENDRITIC_DELTA = envFloat(
   "CORTEX_DENDRITIC_DELTA",
-  0.10, // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:97 — confirmed near-optimum
+  0.10, // source: cortex main mcp_server/core/recall_pipeline.py:97 — confirmed near-optimum
 );
 
 // ── Types ─────────────────────────────────────────────────────────────────
@@ -119,7 +119,7 @@ export interface CandidateStore {
 /**
  * Blend the existing candidate order with a mechanism's rank vector.
  *
- * Port of: cortex@ed33435 mcp_server/core/recall_pipeline.py:136-166
+ * Port of: cortex main mcp_server/core/recall_pipeline.py:136-166
  *
  * mechRanks maps memory_id → rank within the mechanism's output (0 = best).
  * Candidates absent from mechRanks keep their relevance rank only.
@@ -159,7 +159,7 @@ export function rrfBlend(
 /**
  * Reorder candidates by Hopfield attention rank, RRF-blended with WRRF.
  *
- * Port of: cortex@ed33435 mcp_server/core/recall_pipeline.py:174-239
+ * Port of: cortex main mcp_server/core/recall_pipeline.py:174-239
  *
  * The Hopfield pattern matrix is built from the candidates' own embeddings
  * (fetched from the store in one bulk PG call). Falls back to per-id
@@ -169,7 +169,7 @@ export function rrfBlend(
  * postcondition: result is same or expanded set, sorted by blended score;
  *   returns input unchanged when ablated or qEmb is null or no pairs found
  *
- * Constants — source: cortex@ed33435 mcp_server/core/recall_pipeline.py:174-181
+ * Constants — source: cortex main mcp_server/core/recall_pipeline.py:174-181
  *   hopfield_beta (Hopfield softmax temp) = 8.0
  *   blend_beta                            = _HOPFIELD_BETA = 0.30
  */
@@ -178,7 +178,7 @@ export async function hopfieldComplete(
   qEmb: number[] | null,
   store: CandidateStore | null,
   embeddingDim: number,
-  hopfieldBeta = 8.0,          // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:181
+  hopfieldBeta = 8.0,          // source: cortex main mcp_server/core/recall_pipeline.py:181
   blendBeta = _HOPFIELD_BETA,
 ): Promise<Candidate[]> {
   if (isMechanismDisabled("HOPFIELD")) return candidates;
@@ -232,7 +232,7 @@ export async function hopfieldComplete(
 /**
  * Reorder candidates by HDC similarity, RRF-blended with WRRF.
  *
- * Port of: cortex@ed33435 mcp_server/core/recall_pipeline.py:247-276
+ * Port of: cortex main mcp_server/core/recall_pipeline.py:247-276
  *
  * Each candidate's content is encoded as a bipolar hypervector;
  * HDC similarity = dot/dim.
@@ -240,7 +240,7 @@ export async function hopfieldComplete(
  * precondition: candidates is non-empty
  * postcondition: returns input unchanged when ablated or no HDC scores
  *
- * Constants — source: cortex@ed33435 mcp_server/core/recall_pipeline.py:251
+ * Constants — source: cortex main mcp_server/core/recall_pipeline.py:251
  *   blend_beta = _HDC_BETA = 0.20
  *   threshold  = -1.0 (keep all ranks)
  */
@@ -253,13 +253,13 @@ export function hdcRerank(
   if (candidates.length === 0) return candidates;
 
   // HDC_DIM default (1024) — dim, then threshold=-1.0 to keep all ranks
-  // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:271
+  // source: cortex main mcp_server/core/recall_pipeline.py:271
   const contentPairs: Array<[number, string]> = candidates.map((c) => [
     c.memory_id,
     (c.content ?? ""),
   ]);
-  // source: cortex@ed33435 mcp_server/core/hdc_encoder.py:27 HDC_DIM=1024
-  const hdc = computeHdcScores(query, contentPairs, 1024, -1.0); // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:271 threshold=-1.0
+  // source: cortex main mcp_server/core/hdc_encoder.py:27 HDC_DIM=1024
+  const hdc = computeHdcScores(query, contentPairs, 1024, -1.0); // source: cortex main mcp_server/core/recall_pipeline.py:271 threshold=-1.0
   if (hdc.length === 0) return candidates;
 
   const mechRanks = new Map<number, number>(
@@ -275,7 +275,7 @@ export function hdcRerank(
 /**
  * Expand the candidate pool with SA-reachable memories, then RRF blend.
  *
- * Port of: cortex@ed33435 mcp_server/core/recall_pipeline.py:285-365
+ * Port of: cortex main mcp_server/core/recall_pipeline.py:285-365
  *
  * Calls spread_activation_memories PL/pgSQL stored procedure (server-side
  * BFS over the entity graph). Memories already in candidates get an SA rank;
@@ -285,7 +285,7 @@ export function hdcRerank(
  * postcondition: result may be longer than input (new SA-discovered memories
  *   appended); sorted by blended score; returns input unchanged when ablated
  *
- * Constants — source: cortex@ed33435 mcp_server/core/recall_pipeline.py:285-295
+ * Constants — source: cortex main mcp_server/core/recall_pipeline.py:285-295
  *   decay      = 0.65
  *   threshold  = 0.1
  *   max_depth  = 3
@@ -297,11 +297,11 @@ export async function spreadingActivationExpand(
   candidates: Candidate[],
   query: string,
   store: CandidateStore | null,
-  decay = 0.65,      // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:290
-  threshold = 0.1,   // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:291
-  maxDepth = 3,      // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:292
-  maxResults = 50,   // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:293
-  minHeat = 0.05,    // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:294
+  decay = 0.65,      // source: cortex main mcp_server/core/recall_pipeline.py:290
+  threshold = 0.1,   // source: cortex main mcp_server/core/recall_pipeline.py:291
+  maxDepth = 3,      // source: cortex main mcp_server/core/recall_pipeline.py:292
+  maxResults = 50,   // source: cortex main mcp_server/core/recall_pipeline.py:293
+  minHeat = 0.05,    // source: cortex main mcp_server/core/recall_pipeline.py:294
   blendBeta = _SA_BETA,
 ): Promise<Candidate[]> {
   if (isMechanismDisabled("SPREADING_ACTIVATION")) return candidates;
@@ -484,7 +484,7 @@ function jaccardSim(a: Set<number | string>, b: Set<number | string>): number {
 /**
  * Apply branch-affinity multiplicative modulation to candidate scores.
  *
- * Port of: cortex@ed33435 mcp_server/core/recall_pipeline.py:448-532
+ * Port of: cortex main mcp_server/core/recall_pipeline.py:448-532
  *
  * Computes weighted Jaccard affinity (0.7 entity + 0.3 tag — same weights
  * as dendritic_clusters.compute_branch_affinity). The score is multiplied
@@ -497,7 +497,7 @@ function jaccardSim(a: Set<number | string>, b: Set<number | string>): number {
  * postcondition: each score multiplied by factor in [1-delta, 1+delta];
  *   result sorted descending by new score; returns input unchanged when ablated
  *
- * Constants — source: cortex@ed33435 mcp_server/core/recall_pipeline.py:453
+ * Constants — source: cortex main mcp_server/core/recall_pipeline.py:453
  *   entity weight = 0.7
  *   tag weight    = 0.3
  *   delta         = _DENDRITIC_DELTA = 0.10
@@ -550,7 +550,7 @@ export async function dendriticModulate(
         ? jaccardSim(qTokens, cTags)
         : 0.0;
 
-    // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:525
+    // source: cortex main mcp_server/core/recall_pipeline.py:525
     const affinity = 0.7 * entSim + 0.3 * tagSim;
     const factor = 1.0 + delta * (2.0 * affinity - 1.0);
     return { ...c, score: (c.score ?? 0.0) * factor };

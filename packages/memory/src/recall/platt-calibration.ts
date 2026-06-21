@@ -16,7 +16,7 @@
  * log-likelihood, which is the standard stable approach for Platt's
  * 2-parameter sigmoid.
  *
- * Port of: cortex@ed33435 mcp_server/core/platt_calibration.py
+ * Port of: cortex main mcp_server/core/platt_calibration.py
  *
  * Reference:
  *   Platt, J. C. (1999). "Probabilistic outputs for support vector
@@ -27,9 +27,9 @@
 // ── Defaults ──────────────────────────────────────────────────────────────
 // source: parity with mcp_server/core/platt_calibration.py:34-38 (conventional Newton-Raphson implementation defaults; Platt 1999 §2.1 describes the algorithm, not these specific thresholds)
 
-export const MIN_SAMPLES = 50;          // source: cortex@ed33435 mcp_server/core/platt_calibration.py:36
-export const MAX_ITERATIONS = 100;      // source: cortex@ed33435 mcp_server/core/platt_calibration.py:37
-export const CONVERGENCE_TOL = 1e-6;   // source: cortex@ed33435 mcp_server/core/platt_calibration.py:38
+export const MIN_SAMPLES = 50;          // source: cortex main mcp_server/core/platt_calibration.py:36
+export const MAX_ITERATIONS = 100;      // source: cortex main mcp_server/core/platt_calibration.py:37
+export const CONVERGENCE_TOL = 1e-6;   // source: cortex main mcp_server/core/platt_calibration.py:38
 
 // ── Numerical constants ────────────────────────────────────────────────────
 
@@ -52,7 +52,7 @@ const DISCRIMINATION_DEFAULT = 0.5;
  *   - nSamples is the training-set size at fit time.
  *   - When applied: P = 1 / (1 + exp(A * raw_score + B)).
  *
- * source: cortex@ed33435 mcp_server/core/platt_calibration.py:41-53
+ * source: cortex main mcp_server/core/platt_calibration.py:41-53
  */
 export interface PlattParams {
   readonly A: number;
@@ -62,7 +62,7 @@ export interface PlattParams {
 
 /**
  * One (raw_score, label) pair from user rate_memory feedback.
- * source: cortex@ed33435 mcp_server/core/platt_calibration.py:59-68
+ * source: cortex main mcp_server/core/platt_calibration.py:59-68
  */
 export interface TrainingSample {
   rawScore: number;
@@ -73,7 +73,7 @@ export interface TrainingSample {
 
 /**
  * Numerically stable sigmoid.
- * source: cortex@ed33435 mcp_server/core/platt_calibration.py:74-81
+ * source: cortex main mcp_server/core/platt_calibration.py:74-81
  */
 function sigmoid(x: number): number {
   if (x >= 0) {
@@ -86,7 +86,7 @@ function sigmoid(x: number): number {
 
 /**
  * Predicted P(useful | s) under parameters (A, B).
- * source: cortex@ed33435 mcp_server/core/platt_calibration.py:83-85
+ * source: cortex main mcp_server/core/platt_calibration.py:83-85
  */
 function predictPlatt(A: number, B: number, s: number): number {
   return sigmoid(-(A * s + B));
@@ -109,7 +109,7 @@ function predictPlatt(A: number, B: number, s: number): number {
  *   Hess = sum_i p_i * (1 - p_i) * [[s_i^2, s_i], [s_i, 1]]
  *   [A, B] -= Hess^-1 @ grad
  *
- * source: cortex@ed33435 mcp_server/core/platt_calibration.py:88-164
+ * source: cortex main mcp_server/core/platt_calibration.py:88-164
  */
 export function fitPlatt(
   samples: TrainingSample[],
@@ -175,7 +175,7 @@ export function fitPlatt(
  * postcondition: returns rawScore unchanged when params is null (no-op fallback);
  *   otherwise returns a probability in (0, 1) via sigmoid(-(A*s + B)).
  *
- * source: cortex@ed33435 mcp_server/core/platt_calibration.py:170-180
+ * source: cortex main mcp_server/core/platt_calibration.py:170-180
  */
 export function calibrateScore(
   rawScore: number,
@@ -187,7 +187,7 @@ export function calibrateScore(
 
 /**
  * Vectorised apply for a list of raw CE scores.
- * source: cortex@ed33435 mcp_server/core/platt_calibration.py:183-190
+ * source: cortex main mcp_server/core/platt_calibration.py:183-190
  */
 export function calibrateScores(
   rawScores: number[],
@@ -203,7 +203,7 @@ export function calibrateScores(
  * precondition:  usefulScores and notUsefulScores are float arrays.
  * postcondition: result ∈ [0, 1]. Returns 0.5 when either list is empty.
  *
- * source: cortex@ed33435 mcp_server/core/platt_calibration.py:196-221
+ * source: cortex main mcp_server/core/platt_calibration.py:196-221
  */
 export function pairwiseDiscrimination(
   params: PlattParams | null,

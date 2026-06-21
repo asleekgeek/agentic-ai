@@ -13,7 +13,7 @@
  * function is ported 1:1. Pure-function helpers depend only on their
  * arguments; stateful helpers receive the store as an explicit parameter.
  *
- * source: cortex@ed33435 mcp_server/handlers/remember_helpers.py
+ * source: cortex main mcp_server/handlers/remember_helpers.py
  *
  * Correctness contract (module-level):
  *   pre:  all exported functions are called with validated, non-null arguments
@@ -34,70 +34,70 @@ import {
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:MOOD_EMA_ALPHA
+// source: cortex main mcp_server/handlers/remember_helpers.py:MOOD_EMA_ALPHA
 // Engineering default; calibration pending (see module comment in Python source).
 // Published psychophysics constant for mood drift EMA at session timescale not
 // located as of April 2026 (Bower 1981 Am. Psychologist 36(2) prescribes
 // mood-congruent recall qualitatively, not a time-constant).
 const MOOD_EMA_ALPHA = 0.3;
 
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:_BUILD_INSERT_RECORD
+// source: cortex main mcp_server/handlers/remember_helpers.py:_BUILD_INSERT_RECORD
 const DEFAULT_CONSOLIDATION_STAGE = "labile";
 const DEFAULT_HIPPOCAMPAL_DEPENDENCY = 1.0;
 
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py — round(x, 4) throughout
+// source: cortex main mcp_server/handlers/remember_helpers.py — round(x, 4) throughout
 const ROUND_FACTOR = 1e4;
 
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:compute_similarities — top-K for similarity
+// source: cortex main mcp_server/handlers/remember_helpers.py:compute_similarities — top-K for similarity
 const SIMILARITY_TOP_K = 5;
 
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:evaluateGate — default novelty when no signal
+// source: cortex main mcp_server/handlers/remember_helpers.py:evaluateGate — default novelty when no signal
 const DEFAULT_NOVELTY = 0.5;
 
 // source: SI — 3600 seconds per hour, standard conversion
 const MS_PER_HOUR = 3_600_000;
 
-// source: cortex@ed33435 mcp_server/core/write_gate.py:compute_temporal_novelty — 168h = 7 days half-life
+// source: cortex main mcp_server/core/write_gate.py:compute_temporal_novelty — 168h = 7 days half-life
 const TEMPORAL_HALF_LIFE_HOURS = 168;
 
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:evaluateGate — recent memory pool size
+// source: cortex main mcp_server/handlers/remember_helpers.py:evaluateGate — recent memory pool size
 const RECENT_MEMORIES_LIMIT = 10;
 
-// source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:compute_novelty_score — 4-signal weights
+// source: cortex main mcp_server/core/predictive_coding_flat.py:compute_novelty_score — 4-signal weights
 const EMB_WEIGHT = 0.4;
 const ENT_WEIGHT = 0.2;
 const TEMP_WEIGHT = 0.2;
 const STRUCT_WEIGHT = 0.2;
 
-// source: cortex@ed33435 mcp_server/core/thermodynamics.py:compute_importance — content length buckets
+// source: cortex main mcp_server/core/thermodynamics.py:compute_importance — content length buckets
 const LEN_THRESHOLD_SHORT = 50;
-const LEN_THRESHOLD_MEDIUM = 200; // source: cortex@ed33435 mcp_server/core/thermodynamics.py:compute_importance — medium bucket
-const LEN_THRESHOLD_LONG = 500; // source: cortex@ed33435 mcp_server/core/thermodynamics.py:compute_importance — long bucket
+const LEN_THRESHOLD_MEDIUM = 200; // source: cortex main mcp_server/core/thermodynamics.py:compute_importance — medium bucket
+const LEN_THRESHOLD_LONG = 500; // source: cortex main mcp_server/core/thermodynamics.py:compute_importance — long bucket
 const IMPORTANCE_SHORT = 0.3;
 const IMPORTANCE_MEDIUM = 0.5;
 const IMPORTANCE_LONG = 0.6;
 const IMPORTANCE_VERY_LONG = 0.7;
 
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:try_curation — store.search_vectors(embedding, top_k=3)
+// source: cortex main mcp_server/handlers/remember_helpers.py:try_curation — store.search_vectors(embedding, top_k=3)
 const CURATION_TOP_K = 3;
 // Jaccard word-overlap gate for the merge/supersede branch (decideCurationAction's
-// hasTextualOverlap argument). source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:try_curation — overlap > 0.5
+// hasTextualOverlap argument). source: cortex main mcp_server/handlers/remember_helpers.py:try_curation — overlap > 0.5
 const CURATION_OVERLAP_THRESHOLD = 0.5;
 
-// source: cortex@ed33435 mcp_server/core/write_gate.py:apply_emotional_tagging — arousal levels
+// source: cortex main mcp_server/core/write_gate.py:apply_emotional_tagging — arousal levels
 const EMOTIONAL_AROUSAL_NEGATIVE = 0.8;
 const EMOTIONAL_AROUSAL_POSITIVE = 0.6;
-// source: cortex@ed33435 mcp_server/core/write_gate.py:apply_emotional_tagging — importance boost magnitudes
+// source: cortex main mcp_server/core/write_gate.py:apply_emotional_tagging — importance boost magnitudes
 const EMOTIONAL_BOOST_NEGATIVE = 0.15;
 const EMOTIONAL_BOOST_POSITIVE = 0.1;
 
-// source: cortex@ed33435 mcp_server/core/write_gate.py:apply_emotional_tagging — heat multiplier
+// source: cortex main mcp_server/core/write_gate.py:apply_emotional_tagging — heat multiplier
 const EMOTIONAL_HEAT_BOOST_FACTOR = 0.5;
 
-// source: cortex@ed33435 mcp_server/shared/vader.py:vader_compound — polarity shift
+// source: cortex main mcp_server/shared/vader.py:vader_compound — polarity shift
 const VALENCE_SHIFT = 0.3;
 
-// source: cortex@ed33435 mcp_server/core/thermodynamics.py:compute_importance — error/critical importance
+// source: cortex main mcp_server/core/thermodynamics.py:compute_importance — error/critical importance
 const IMPORTANCE_ERROR = 0.9;
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -178,7 +178,7 @@ export interface InsertRecord {
 // (they are optional extensions on PgMemoryStore). We use structural
 // typing with an optional-method interface to avoid a hard dependency.
 //
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:update_user_mood_ema
+// source: cortex main mcp_server/handlers/remember_helpers.py:update_user_mood_ema
 
 export interface MoodStore {
   getUserMood?(): number | null;
@@ -210,7 +210,7 @@ const NEGATIVE_KW = new Set([
  * Pre:  text is a string (possibly empty).
  * Post: returns a float in [-1.0, 1.0]. Pure function — no side effects.
  *
- * source: cortex@ed33435 mcp_server/shared/vader.py:vader_compound
+ * source: cortex main mcp_server/shared/vader.py:vader_compound
  *         (proxy — full vaderSentiment not available in TS runtime)
  */
 export function approximateVaderCompound(text: string): number {
@@ -228,7 +228,7 @@ export function approximateVaderCompound(text: string): number {
 }
 
 // ── compute_similarities ──────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:compute_similarities
+// source: cortex main mcp_server/handlers/remember_helpers.py:compute_similarities
 
 /**
  * Compute vector similarities for the top-5 nearest neighbours.
@@ -258,7 +258,7 @@ export function computeSimilarities(
 }
 
 // ── computeEntityInfo ────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:compute_entity_info
+// source: cortex main mcp_server/handlers/remember_helpers.py:compute_entity_info
 
 /**
  * Extract entities and compute entity novelty score.
@@ -281,7 +281,7 @@ export function computeEntityInfo(
     // Lightweight entity extraction — capitalized tokens (port of the
     // regex branch of knowledge_graph.extract_entities; spaCy NER
     // is not available in TS runtime).
-    // source: cortex@ed33435 mcp_server/core/knowledge_graph.py:extract_entities
+    // source: cortex main mcp_server/core/knowledge_graph.py:extract_entities
     const tokens = content.match(/\b[A-Z][a-z]{2,}\b/g) ?? [];
     const STOPWORDS = new Set([
       "The", "A", "An", "I", "It", "This", "That", "We", "They",
@@ -310,7 +310,7 @@ export function computeEntityInfo(
   }
 
   // Entity novelty: fraction of entities that are NEW
-  // source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:compute_entity_novelty
+  // source: cortex main mcp_server/core/predictive_coding_flat.py:compute_entity_novelty
   const entityNovelty =
     names.length === 0 ? DEFAULT_NOVELTY : (names.length - known.size) / names.length;
 
@@ -318,7 +318,7 @@ export function computeEntityInfo(
 }
 
 // ── computeGateDecision ───────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:_compute_gate_decision
+// source: cortex main mcp_server/handlers/remember_helpers.py:_compute_gate_decision
 
 /**
  * Determine whether to store based on novelty score and bypass rules.
@@ -336,7 +336,7 @@ export function computeGateDecision(
   threshold: number,
 ): { shouldStore: boolean; gateReason: string; effectiveThreshold: number } {
   // Bypass rules: force, decision tags, error/important tags
-  // source: cortex@ed33435 mcp_server/core/write_gate.py:determine_bypass
+  // source: cortex main mcp_server/core/write_gate.py:determine_bypass
   const contentLower = content.toLowerCase();
   const tagSet = new Set(tags.map((t) => t.toLowerCase()));
 
@@ -361,7 +361,7 @@ export function computeGateDecision(
 }
 
 // ── evaluateGate ─────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:evaluate_gate
+// source: cortex main mcp_server/handlers/remember_helpers.py:evaluate_gate
 
 /**
  * Compute all novelty signals and gate decision.
@@ -385,12 +385,12 @@ export function evaluateGate(
     computeEntityInfo(content, store);
 
   // Embedding novelty: mean distance from existing memories
-  // source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:compute_embedding_novelty
+  // source: cortex main mcp_server/core/predictive_coding_flat.py:compute_embedding_novelty
   const embNov =
     sims.length === 0 ? DEFAULT_NOVELTY : 1.0 - sims.reduce((a, b) => a + b, 0) / sims.length;
 
   // Temporal novelty: time since most similar memory was created
-  // source: cortex@ed33435 mcp_server/core/write_gate.py:compute_temporal_novelty
+  // source: cortex main mcp_server/core/write_gate.py:compute_temporal_novelty
   let tempNov = DEFAULT_NOVELTY;
   if (vecHits.length > 0) {
     try {
@@ -401,7 +401,7 @@ export function evaluateGate(
           const hoursSince =
             (Date.now() - new Date(mem.created_at).getTime()) / MS_PER_HOUR;
           // Half-life 168h (7 days); novelty saturates at 1.0 after that
-          // source: cortex@ed33435 mcp_server/core/write_gate.py:compute_temporal_novelty
+          // source: cortex main mcp_server/core/write_gate.py:compute_temporal_novelty
           tempNov = Math.min(1.0, hoursSince / TEMPORAL_HALF_LIFE_HOURS);
         }
       }
@@ -411,7 +411,7 @@ export function evaluateGate(
   }
 
   // Structural novelty: n-gram overlap with recent memories
-  // source: cortex@ed33453 mcp_server/core/predictive_coding_flat.py:compute_structural_novelty
+  // source: cortex main mcp_server/core/predictive_coding_flat.py:compute_structural_novelty
   let structNov = DEFAULT_NOVELTY;
   try {
     // getHotMemories is available on extended stores; fallback to empty on missing method
@@ -430,11 +430,11 @@ export function evaluateGate(
   }
 
   // Combined novelty score: weighted average of 4 signals
-  // source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:compute_novelty_score
+  // source: cortex main mcp_server/core/predictive_coding_flat.py:compute_novelty_score
   const score = EMB_WEIGHT * embNov + ENT_WEIGHT * entNov + TEMP_WEIGHT * tempNov + STRUCT_WEIGHT * structNov;
 
   // Importance from content/tags
-  // source: cortex@ed33435 mcp_server/core/thermodynamics.py:compute_importance
+  // source: cortex main mcp_server/core/thermodynamics.py:compute_importance
   const importance = estimateImportance(content, tags);
 
   const { shouldStore, gateReason, effectiveThreshold } = computeGateDecision(
@@ -464,7 +464,7 @@ export function evaluateGate(
 }
 
 // ── estimateImportance ────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/thermodynamics.py:compute_importance
+// source: cortex main mcp_server/core/thermodynamics.py:compute_importance
 
 /**
  * Estimate importance from content length and tags.
@@ -494,7 +494,7 @@ export function estimateImportance(content: string, tags: string[]): number {
 }
 
 // ── tryCurationAsync (MEM-G1: curation-on-write) ──────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:try_curation (341-367)
+// source: cortex main mcp_server/handlers/remember_helpers.py:try_curation (341-367)
 
 /**
  * Minimal embedder port for the write path: encode one text into a float vector.
@@ -536,8 +536,8 @@ export interface CurationDecision {
  *       (Python except→create).
  *
  * Mirrors Cortex try_curation(content, embedding, force, store, emb_engine, tags, heat).
- * source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:try_curation (341-367), _do_merge (370-385)
- * source: cortex@ed33435 mcp_server/core/curation.py:decide_curation_action,detect_contradictions
+ * source: cortex main mcp_server/handlers/remember_helpers.py:try_curation (341-367), _do_merge (370-385)
+ * source: cortex main mcp_server/core/curation.py:decide_curation_action,detect_contradictions
  */
 export async function tryCurationAsync(
   content: string,
@@ -573,7 +573,7 @@ export async function tryCurationAsync(
       const action = decideCurationAction(sim, overlap > CURATION_OVERLAP_THRESHOLD);
       if (action === "merge") {
         // Contradiction → supersede (retain both rows); else faithful merge.
-        // source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:351-362
+        // source: cortex main mcp_server/handlers/remember_helpers.py:351-362
         const contradictions = detectContradictions(content, [
           { id: cand.id, content: cand.content },
         ]);
@@ -584,7 +584,7 @@ export async function tryCurationAsync(
         // candidate's embedding + compression flags so the stored vector matches
         // the new text; heat = max(candidate, modulated). Tags are NOT touched
         // (Cortex _do_merge updates content + embedding + heat only).
-        // source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:370-385 _do_merge
+        // source: cortex main mcp_server/handlers/remember_helpers.py:370-385 _do_merge
         const merged = mergeContents(cand.content, content);
         let mergedEmb: Buffer | null = null;
         if (embedder) {
@@ -612,7 +612,7 @@ export async function tryCurationAsync(
 }
 
 // ── buildInsertRecord ─────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:_build_insert_record
+// source: cortex main mcp_server/handlers/remember_helpers.py:_build_insert_record
 
 /**
  * Build the memory record dict for insertion.
@@ -667,7 +667,7 @@ export function buildInsertRecord(
     schema_match_score: mod.schema_match,
     schema_id: mod.schema_id,
     hippocampal_dependency: DEFAULT_HIPPOCAMPAL_DEPENDENCY,
-    arousal: etag && "arousal" in etag ? Math.round(etag.arousal * ROUND_FACTOR) / ROUND_FACTOR : 0.0, // source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:_build_insert_record — 4-decimal rounding
+    arousal: etag && "arousal" in etag ? Math.round(etag.arousal * ROUND_FACTOR) / ROUND_FACTOR : 0.0, // source: cortex main mcp_server/handlers/remember_helpers.py:_build_insert_record — 4-decimal rounding
     dominant_emotion: etag?.dominant_emotion ?? "neutral",
     agent_context: agentContext,
     is_global: isGlobal,
@@ -680,7 +680,7 @@ export function buildInsertRecord(
 }
 
 // ── applyModulations ────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:apply_modulations
+// source: cortex main mcp_server/handlers/remember_helpers.py:apply_modulations
 
 /**
  * Apply oscillatory, emotional, and thermodynamic modulations.
@@ -698,12 +698,12 @@ export function applyModulations(
 ): ModulationResult {
   // Oscillatory context: use a static theta=DEFAULT_NOVELTY (no live clock in TS port
   // because oscillatory_clock.ts is not yet wired here).
-  // source: cortex@ed33435 mcp_server/core/write_gate.py:apply_oscillatory_context
+  // source: cortex main mcp_server/core/write_gate.py:apply_oscillatory_context
   const theta = DEFAULT_NOVELTY;
   const encMod = 1.0;
 
   // Emotional tagging: detect valence from content
-  // source: cortex@ed33435 mcp_server/core/write_gate.py:apply_emotional_tagging
+  // source: cortex main mcp_server/core/write_gate.py:apply_emotional_tagging
   let etag: EmotionalTagResult | null = null;
   const lower = content.toLowerCase();
   const isPositive =
@@ -725,7 +725,7 @@ export function applyModulations(
   }
 
   // VADER-style valence from tags/content
-  // source: cortex@ed33435 mcp_server/shared/vader.py:vader_compound
+  // source: cortex main mcp_server/shared/vader.py:vader_compound
   const tagSet = new Set(tags.map((t) => t.toLowerCase()));
   let adjustedValence = valence;
   if (tagSet.has("decision") || isPositive) adjustedValence = Math.min(1.0, adjustedValence + VALENCE_SHIFT);
@@ -745,7 +745,7 @@ export function applyModulations(
 }
 
 // ── linkIfNeeded ────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:_link_if_needed
+// source: cortex main mcp_server/handlers/remember_helpers.py:_link_if_needed
 
 /**
  * Insert a derived_from relationship for link actions.
@@ -769,7 +769,7 @@ export function linkIfNeeded(
 }
 
 // ── runPostStore ────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:_run_post_store
+// source: cortex main mcp_server/handlers/remember_helpers.py:_run_post_store
 
 /**
  * Run post-insert operations: entities and relationships.
@@ -800,7 +800,7 @@ export function runPostStore(
 }
 
 // ── isDecisionContent ────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/thermodynamics.py:is_decision_content
+// source: cortex main mcp_server/core/thermodynamics.py:is_decision_content
 
 /**
  * Classify content as a decision (is_protected=true).
@@ -822,12 +822,12 @@ export function isDecisionContent(content: string): boolean {
 }
 
 // ── classifyStoreType ────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/dual_store_cls.py:classify_memory
+// source: cortex main mcp_server/core/dual_store_cls.py:classify_memory
 
 /**
  * Classify memory into episodic/semantic/procedural/working.
  *
- * source: cortex@ed33435 mcp_server/core/dual_store_cls.py:classify_memory
+ * source: cortex main mcp_server/core/dual_store_cls.py:classify_memory
  * (CLS dual-store classification — lightweight heuristic port)
  */
 export function classifyStoreType(
@@ -853,7 +853,7 @@ export function classifyStoreType(
 }
 
 // ── updateUserMoodEma ────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:update_user_mood_ema
+// source: cortex main mcp_server/handlers/remember_helpers.py:update_user_mood_ema
 
 /**
  * EMA-update the user's session-level mood from VADER on user content.
@@ -877,7 +877,7 @@ export function classifyStoreType(
  *   mutate user_mood because their content does not reflect the user's
  *   affective state at recall time.
  *
- * source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:update_user_mood_ema
+ * source: cortex main mcp_server/handlers/remember_helpers.py:update_user_mood_ema
  */
 export function updateUserMoodEma(
   content: string,

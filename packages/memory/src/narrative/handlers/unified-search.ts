@@ -1,7 +1,7 @@
 /**
  * Handler: unified_search — RRF-fuse Cortex memory recall with AP code search.
  *
- * Port of: cortex@ed33435 mcp_server/handlers/unified_search.py
+ * Port of: cortex main mcp_server/handlers/unified_search.py
  *
  * Composition root: cortex.recall (WRRF semantic memory via recallHandler) +
  * AP code-symbol search (CodebasePort) → core.unified_search_fusion.fuse →
@@ -17,7 +17,7 @@
  *
  * RRF formula: score(d) = Σ_r 1 / (k + rank_r(d))
  * source: Cormack, Clarke, Buettcher (2009) SIGIR — K=60 canonical value.
- * source: cortex@ed33435 mcp_server/handlers/unified_search.py — canonical contract
+ * source: cortex main mcp_server/handlers/unified_search.py — canonical contract
  */
 
 import { z } from "zod";
@@ -31,16 +31,16 @@ import type { EmbeddingEngine, MemoryStore } from "../../recall/port.js";
 import type { RecallResult } from "../../recall/types.js";
 import type { CodebasePort, SearchCodebaseInput } from "@agentic/core";
 
-// source: cortex@ed33435 unified_search.py:103 — ap limit = max(top_n*2, top_n)
+// source: cortex main unified_search.py:103 — ap limit = max(top_n*2, top_n)
 const AP_LIMIT_MULTIPLIER = 2;
 // source: MCP_TOOLS.md §unified_search max_results upper bound
 const MAX_RESULTS_CAP = 50; // source: MCP_TOOLS.md §unified_search max=50
 // source: MCP_TOOLS.md §unified_search max_results lower bound
 const MIN_RESULTS = 1; // source: MCP_TOOLS.md §unified_search min=1
 const DEFAULT_MAX_RESULTS = 10; // source: MCP_TOOLS.md §unified_search default max_results=10
-// source: cortex@ed33435 unified_search.py:95 — recall asks for 2× top_n
+// source: cortex main unified_search.py:95 — recall asks for 2× top_n
 const RECALL_OVERFETCH_MULTIPLIER = 2;
-// source: cortex@ed33435 unified_search.py — recall min_heat floor for unified leg
+// source: cortex main unified_search.py — recall min_heat floor for unified leg
 const UNIFIED_RECALL_MIN_HEAT = 0.0;
 
 export const UnifiedSearchRequestSchema = z.object({
@@ -49,16 +49,16 @@ export const UnifiedSearchRequestSchema = z.object({
   max_results: z.number().int().min(MIN_RESULTS).max(MAX_RESULTS_CAP).default(DEFAULT_MAX_RESULTS),
   // source: Cormack, Clarke, Buettcher (2009) SIGIR — K=60 canonical
   k:           z.number().int().min(1).default(DEFAULT_K),
-  // source: cortex@ed33435 unified_search.py — optional graph_path for AP leg
+  // source: cortex main unified_search.py — optional graph_path for AP leg
   graph_path:  z.string().optional(),
 });
 export type UnifiedSearchRequest = z.infer<typeof UnifiedSearchRequestSchema>;
 
 /**
- * UnifiedSearchResponse matches cortex@ed33435 unified_search.py response
+ * UnifiedSearchResponse matches cortex main unified_search.py response
  * contract (lines 111-122): status / query / sources / counts / results / k.
  * Fused records carry the fusion body plus ``rrf_score`` and ``source_ranks``.
- * source: cortex@ed33435 mcp_server/handlers/unified_search.py:111-122
+ * source: cortex main mcp_server/handlers/unified_search.py:111-122
  */
 export interface UnifiedSearchResponse {
   status: "ok" | "partial";
@@ -77,7 +77,7 @@ export interface UnifiedSearchDeps {
   /**
    * Optional AP code search port. When absent, AP leg is skipped and status
    * is "partial" (mirrors unified_search.py is_enabled() False branch).
-   * source: cortex@ed33435 unified_search.py — ap_client is None guard
+   * source: cortex main unified_search.py — ap_client is None guard
    */
   codebasePort?: CodebasePort;
 }
@@ -85,7 +85,7 @@ export interface UnifiedSearchDeps {
 /**
  * Tag recall results with a fusion-friendly ``id`` and ``source``, preserving
  * the retriever's own ordering (the one RRF consumes).
- * source: cortex@ed33435 unified_search.py:70-82 _prep_memories
+ * source: cortex main unified_search.py:70-82 _prep_memories
  */
 function prepMemories(
   results: ReadonlyArray<RecallResult>,
@@ -102,7 +102,7 @@ function prepMemories(
 /**
  * Map AP symbols to fusion-friendly records ordered by the AP ranking,
  * tagging each with ``symbol:<file>::<name>`` ids.
- * source: cortex@ed33435 unified_search.py:13-15 — AP id convention
+ * source: cortex main unified_search.py:13-15 — AP id convention
  */
 function prepApHits(symbols: Record<string, unknown>[]): Record<string, unknown>[] {
   return symbols.map((sym) => {
@@ -121,7 +121,7 @@ function prepApHits(symbols: Record<string, unknown>[]): Record<string, unknown>
 /**
  * Run the AP code-search leg. Returns [] on absence or failure (graceful
  * degradation — unified_search.py wraps the AP call defensively).
- * source: cortex@ed33435 unified_search.py:101-104
+ * source: cortex main unified_search.py:101-104
  */
 async function searchApLeg(
   deps: UnifiedSearchDeps,
@@ -138,7 +138,7 @@ async function searchApLeg(
     return apResult.results as Record<string, unknown>[];
   } catch {
     // AP leg failure non-fatal — graceful degradation.
-    // source: cortex@ed33435 unified_search.py — AP call guarded
+    // source: cortex main unified_search.py — AP call guarded
     return [];
   }
 }
@@ -152,7 +152,7 @@ async function searchApLeg(
  *   results = fused list (≤ max_results), each carrying rrf_score + source_ranks.
  *   counts.cortex = recall hits; counts.ap = AP hits; counts.fused = result count.
  *
- * source: cortex@ed33435 mcp_server/handlers/unified_search.py:85-136
+ * source: cortex main mcp_server/handlers/unified_search.py:85-136
  */
 export async function unifiedSearchHandler(
   deps: UnifiedSearchDeps,
@@ -162,7 +162,7 @@ export async function unifiedSearchHandler(
   const { query, domain, max_results: topN, k, graph_path } = args;
 
   // Cortex leg: ask recall for 2× top_n so the fusion has room.
-  // source: cortex@ed33435 unified_search.py:93-96
+  // source: cortex main unified_search.py:93-96
   const recallResp = await recallHandler(
     {
       query,
@@ -179,11 +179,11 @@ export async function unifiedSearchHandler(
     DEFAULT_RECALL_SETTINGS,
   );
   // Phase-0 rename: recall now exposes `memories` (was `results`).
-  // source: cortex@bc5af469 mcp_server/handlers/recall.py:468 + unified_search.py:97
+  // source: cortex main mcp_server/handlers/recall.py:468 + unified_search.py:97
   const memories = prepMemories(recallResp.memories);
 
   // AP leg (optional). is_enabled() ≙ codebasePort present + graph_path given.
-  // source: cortex@ed33435 unified_search.py:99-104
+  // source: cortex main unified_search.py:99-104
   const apEnabled = deps.codebasePort !== undefined && graph_path !== undefined && graph_path.length > 0;
   const apHits = prepApHits(
     await searchApLeg(deps, query, graph_path, Math.max(topN * AP_LIMIT_MULTIPLIER, topN)),
@@ -206,7 +206,7 @@ export async function unifiedSearchHandler(
   // `content` (truncated items keep the memory:<id> fusion id for full recall),
   // AP symbol hits carry it in `snippet`; both weighted by score. counts.fused
   // is recomputed after the budget may have dropped tail items.
-  // source: cortex@bc5af469 mcp_server/handlers/unified_search.py:127-135
+  // source: cortex main mcp_server/handlers/unified_search.py:127-135
   boundPayload(response, [
     listTarget("results", "content", "score"),
     listTarget("results", "snippet", "score"),

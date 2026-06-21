@@ -1,7 +1,7 @@
 /**
  * Telemetry — lightweight per-process counters for reads + writes.
  *
- * Port of: cortex@ed33435 mcp_server/core/telemetry.py
+ * Port of: cortex main mcp_server/core/telemetry.py
  *
  * Captures empirical workload distribution (read/write ratio, latency
  * per op kind, cumulative byte-volume, success/failure split) so the
@@ -21,7 +21,7 @@
  *                  appended on success or silently dropped on I/O error;
  *                  no exception escapes to the handler.
  *
- * source: cortex@ed33435 mcp_server/core/telemetry.py
+ * source: cortex main mcp_server/core/telemetry.py
  */
 
 import { appendFileSync, mkdirSync } from "node:fs";
@@ -29,16 +29,16 @@ import { join } from "node:path";
 import { homedir } from "node:os";
 
 // ── Log path ──────────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/telemetry.py:44 — _LOG_PATH
+// source: cortex main mcp_server/core/telemetry.py:44 — _LOG_PATH
 const METHODOLOGY_DIR = join(homedir(), ".claude", "methodology");
 const LOG_PATH = join(METHODOLOGY_DIR, "telemetry.jsonl");
 
 // ── Numeric constants ─────────────────────────────────────────────────────────
 // Rounding factor: 1000 = round to 3 decimal places via (x * 1000) / 1000.
-// source: cortex@ed33435 mcp_server/core/telemetry.py:104 — round(..., 3) = 3 decimal places
-const ROUND_3DP = 1000; // source: cortex@ed33435 mcp_server/core/telemetry.py:104,161-163,167
+// source: cortex main mcp_server/core/telemetry.py:104 — round(..., 3) = 3 decimal places
+const ROUND_3DP = 1000; // source: cortex main mcp_server/core/telemetry.py:104,161-163,167
 // Unix timestamp uses seconds (not ms): Date.now() is ms, divide by 1000 to get seconds.
-// source: cortex@ed33435 mcp_server/core/telemetry.py:101 — ts: time.time() returns seconds
+// source: cortex main mcp_server/core/telemetry.py:101 — ts: time.time() returns seconds
 const MS_PER_SECOND = 1000; // source: standard — 1000ms = 1s
 
 try {
@@ -48,13 +48,13 @@ try {
 }
 
 // ── Opt-out ───────────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/telemetry.py:56-58 — CORTEX_TELEMETRY_DISABLED
+// source: cortex main mcp_server/core/telemetry.py:56-58 — CORTEX_TELEMETRY_DISABLED
 function _disabled(): boolean {
   return process.env["CORTEX_TELEMETRY_DISABLED"] === "1";
 }
 
 // ── Counter shape ─────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/telemetry.py:82-90 — counter fields
+// source: cortex main mcp_server/core/telemetry.py:82-90 — counter fields
 
 interface Counter {
   count: number;
@@ -69,7 +69,7 @@ interface Counter {
 
 // ── In-memory store ───────────────────────────────────────────────────────────
 // JS is single-threaded: no lock needed (no race between event-loop ticks).
-// source: cortex@ed33435 mcp_server/core/telemetry.py:52-53 — _lock + _counters
+// source: cortex main mcp_server/core/telemetry.py:52-53 — _lock + _counters
 
 const _counters = new Map<string, Counter>();
 
@@ -84,7 +84,7 @@ const _counters = new Map<string, Counter>();
  * precondition:  op is non-empty string; latencyMs >= 0.
  * postcondition: counter for op updated; JSONL line appended best-effort.
  *
- * source: cortex@ed33435 mcp_server/core/telemetry.py:61-116 — record()
+ * source: cortex main mcp_server/core/telemetry.py:61-116 — record()
  */
 export function record(
   op: string,
@@ -114,12 +114,12 @@ export function record(
 
   // JSONL append is best-effort — a full disk or permission error must never
   // break the handler. The in-memory counters are already updated.
-  // source: cortex@ed33435 mcp_server/core/telemetry.py:111-116 — OSError swallowed
+  // source: cortex main mcp_server/core/telemetry.py:111-116 — OSError swallowed
   try {
     const line = JSON.stringify({
-      ts:           Date.now() / MS_PER_SECOND, // source: Unix timestamp in seconds, cortex@ed33435 mcp_server/core/telemetry.py:101
+      ts:           Date.now() / MS_PER_SECOND, // source: Unix timestamp in seconds, cortex main mcp_server/core/telemetry.py:101
       op,
-      latency_ms:   Math.round(latencyMs * ROUND_3DP) / ROUND_3DP, // source: cortex@ed33435 mcp_server/core/telemetry.py:104
+      latency_ms:   Math.round(latencyMs * ROUND_3DP) / ROUND_3DP, // source: cortex main mcp_server/core/telemetry.py:104
       bytes_in:     bytesIn,
       bytes_out:    bytesOut,
       result_count: resultCount,
@@ -135,7 +135,7 @@ export function record(
 
 /**
  * Return a copy of the current counters for inspection.
- * source: cortex@ed33435 mcp_server/core/telemetry.py:119-122 — snapshot()
+ * source: cortex main mcp_server/core/telemetry.py:119-122 — snapshot()
  */
 export function snapshot(): Record<string, Record<string, number>> {
   const result: Record<string, Record<string, number>> = {};
@@ -146,7 +146,7 @@ export function snapshot(): Record<string, Record<string, number>> {
 }
 
 // ── Read/write op sets ────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/telemetry.py:125-132 — _READ_OPS, _WRITE_OPS
+// source: cortex main mcp_server/core/telemetry.py:125-132 — _READ_OPS, _WRITE_OPS
 
 const _READ_OPS = new Set([
   "recall",
@@ -167,7 +167,7 @@ const _WRITE_OPS = new Set([
 
 /**
  * Compute reads / max(writes, 1) over the current counters.
- * source: cortex@ed33435 mcp_server/core/telemetry.py:135-145 — ratio_reads_writes()
+ * source: cortex main mcp_server/core/telemetry.py:135-145 — ratio_reads_writes()
  */
 export function ratioReadsWrites(snap?: Record<string, Record<string, number>>): number {
   const s = snap ?? snapshot();
@@ -185,7 +185,7 @@ export function ratioReadsWrites(snap?: Record<string, Record<string, number>>):
 
 /**
  * Wipe the in-memory counters. The on-disk JSONL is not touched.
- * source: cortex@ed33435 mcp_server/core/telemetry.py:148-151 — reset()
+ * source: cortex main mcp_server/core/telemetry.py:148-151 — reset()
  */
 export function reset(): void {
   _counters.clear();
@@ -195,7 +195,7 @@ export function reset(): void {
 
 /**
  * Snapshot + computed read/write ratio + per-op average latency.
- * source: cortex@ed33435 mcp_server/core/telemetry.py:154-170 — summary()
+ * source: cortex main mcp_server/core/telemetry.py:154-170 — summary()
  */
 export function summary(): {
   counters:             Record<string, Record<string, number>>;
@@ -208,9 +208,9 @@ export function summary(): {
   const derived: Record<string, { avg_latency_ms: number; max_latency_ms: number }> = {};
   for (const [op, c] of Object.entries(snap)) {
     const count = Math.max(c["count"] ?? 0, 1);
-    // source: cortex@ed33435 mcp_server/core/telemetry.py:161-163 — round(latency_ms_sum/count, 3), round(max, 3)
+    // source: cortex main mcp_server/core/telemetry.py:161-163 — round(latency_ms_sum/count, 3), round(max, 3)
     derived[op] = {
-      // source: cortex@ed33435 mcp_server/core/telemetry.py:161-162 — round(sum/count, 3), round(max, 3)
+      // source: cortex main mcp_server/core/telemetry.py:161-162 — round(sum/count, 3), round(max, 3)
       avg_latency_ms: Math.round((c["latency_ms_sum"] ?? 0) / count * ROUND_3DP) / ROUND_3DP,
       max_latency_ms: Math.round((c["latency_ms_max"] ?? 0) * ROUND_3DP) / ROUND_3DP,
     };
@@ -218,7 +218,7 @@ export function summary(): {
   return {
     counters:           snap,
     derived,
-    // source: cortex@ed33435 mcp_server/core/telemetry.py:167 — round(ratio_reads_writes, 3)
+    // source: cortex main mcp_server/core/telemetry.py:167 — round(ratio_reads_writes, 3)
     ratio_reads_writes: Math.round(ratioReadsWrites(snap) * ROUND_3DP) / ROUND_3DP,
     log_path:           LOG_PATH,
     disabled:           _disabled(),

@@ -33,7 +33,7 @@
  * Pure business logic — no I/O.
  *
  * Port of: mcp_server/core/cascade_advancement.py
- * source: cortex@ed33435 mcp_server/core/cascade_advancement.py
+ * source: cortex main mcp_server/core/cascade_advancement.py
  */
 
 import { isMechanismDisabled, Mechanism } from "./ablation.js";
@@ -59,7 +59,7 @@ const CONSOLIDATED = ConsolidationStage.CONSOLIDATED;
 const RECONSOLIDATING = ConsolidationStage.RECONSOLIDATING;
 
 // Minimum dwell hours per stage (from cascade_stages.py StageProperties).
-// source: cortex@ed33435 mcp_server/core/cascade_stages.py (imported by cascade_advancement.py)
+// source: cortex main mcp_server/core/cascade_stages.py (imported by cascade_advancement.py)
 const STAGE_MIN_DWELL_HOURS: Record<string, number> = {
   labile: 0.0,
   early_ltp: 1.0,
@@ -69,7 +69,7 @@ const STAGE_MIN_DWELL_HOURS: Record<string, number> = {
 };
 
 // Systems consolidation stages (Tse 2007 applies to these two).
-// source: cortex@ed33435 mcp_server/core/cascade_advancement.py:141
+// source: cortex main mcp_server/core/cascade_advancement.py:141
 const SYSTEMS_STAGES = new Set<string>([LATE_LTP, CONSOLIDATED]);
 
 // ── Schema-acceleration constants ─────────────────────────────────────────
@@ -166,16 +166,16 @@ const RECONSOLIDATION_STABILITY_FACTOR = 0.3;
  *   At schema_match=0.0: no acceleration.
  *   Engineering approximation — Tse 2007 provides no equation.
  *   The 15.0 constant matches the experimental ~10-15x magnitude.
- *   // source: cortex@ed33435 mcp_server/core/cascade_advancement.py:144
+ *   // source: cortex main mcp_server/core/cascade_advancement.py:144
  *
  * For earlier stages: Modest linear factor (hand-tuned, no paper basis).
- *   // source: cortex@ed33435 mcp_server/core/cascade_advancement.py:147
+ *   // source: cortex main mcp_server/core/cascade_advancement.py:147
  *
  * precondition:  stage is one of the 5 consolidation stage names; schemaMatch in [0, 1].
  * postcondition: returns a non-negative float (hours).
  *
  * Port of: mcp_server/core/cascade_advancement.py::_effective_min_dwell
- * source: cortex@ed33435 mcp_server/core/cascade_advancement.py:122
+ * source: cortex main mcp_server/core/cascade_advancement.py:122
  */
 export function effectiveMinDwell(
   stage: string,
@@ -185,11 +185,11 @@ export function effectiveMinDwell(
   if (SYSTEMS_STAGES.has(stage)) {
     // Tse et al. (2007): ~15x acceleration for schema-consistent memories.
     // Engineering approximation: exponential gives diminishing returns.
-    const schemaFactor = Math.pow(SCHEMA_ACCEL_BASE, -schemaMatch); // source: cortex@ed33435 cascade_advancement.py:144
+    const schemaFactor = Math.pow(SCHEMA_ACCEL_BASE, -schemaMatch); // source: cortex main cascade_advancement.py:144
     return baseDwell * schemaFactor;
   }
   // Earlier stages: modest acceleration (hand-tuned)
-  const schemaFactor = 1.0 - schemaMatch * EARLY_SCHEMA_ATTENUATION; // source: cortex@ed33435 cascade_advancement.py:147
+  const schemaFactor = 1.0 - schemaMatch * EARLY_SCHEMA_ATTENUATION; // source: cortex main cascade_advancement.py:147
   return baseDwell * schemaFactor;
 }
 
@@ -207,14 +207,14 @@ export function effectiveMinDwell(
  *   - importance > 0.3 (moderately important)
  *
  * // source: Frey U, Morris RGM (1997) Synaptic tagging and LTP. Nature 385:533-536
- * // source: cortex@ed33435 mcp_server/core/cascade_advancement.py:43
+ * // source: cortex main mcp_server/core/cascade_advancement.py:43
  */
 function checkLabileAdvancement(
   dopamineLevel: number,
   importance: number,
 ): [boolean, string, number] {
-  const daReady = dopamineLevel >= DEFAULT_DOPAMINE_LEVEL; // source: cortex@ed33435 cascade_advancement.py:58
-  const importanceReady = importance > LABILE_IMPORTANCE_THRESHOLD; // source: cortex@ed33435 cascade_advancement.py:59
+  const daReady = dopamineLevel >= DEFAULT_DOPAMINE_LEVEL; // source: cortex main cascade_advancement.py:58
+  const importanceReady = importance > LABILE_IMPORTANCE_THRESHOLD; // source: cortex main cascade_advancement.py:59
   const readiness = Math.min(1.0, (dopamineLevel - LABILE_READINESS_DA_OFFSET) / LABILE_READINESS_DA_SCALE + importance * LABILE_READINESS_IMPORTANCE_WEIGHT);
   if (daReady || importanceReady) {
     return [true, EARLY_LTP, readiness];
@@ -234,14 +234,14 @@ function checkLabileAdvancement(
  *   - importance > 0.4 (strong encoding)
  *
  * // source: Kandel ER (2001) The molecular biology of memory storage.
- * // source: cortex@ed33435 mcp_server/core/cascade_advancement.py:66
+ * // source: cortex main mcp_server/core/cascade_advancement.py:66
  */
 function checkEarlyLtpAdvancement(
   replayCount: number,
   importance: number,
 ): [boolean, string, number] {
-  const replayReady = replayCount >= 1; // source: cortex@ed33435 cascade_advancement.py:81
-  const importanceBoost = importance > EARLY_LTP_IMPORTANCE_THRESHOLD; // source: cortex@ed33435 cascade_advancement.py:82
+  const replayReady = replayCount >= 1; // source: cortex main cascade_advancement.py:81
+  const importanceBoost = importance > EARLY_LTP_IMPORTANCE_THRESHOLD; // source: cortex main cascade_advancement.py:82
   const readiness = Math.min(1.0, replayCount / 2.0 + importance * EARLY_LTP_READINESS_IMPORTANCE_WEIGHT);
   if (replayReady || importanceBoost) {
     return [true, LATE_LTP, readiness];
@@ -260,13 +260,13 @@ function checkEarlyLtpAdvancement(
  *   - replayCount >= replayThreshold (3 normally, 1 with schema >= 0.5)
  *
  * // source: Tse D et al. (2007) Science 316:76-82
- * // source: cortex@ed33435 mcp_server/core/cascade_advancement.py:89
+ * // source: cortex main mcp_server/core/cascade_advancement.py:89
  */
 function checkLateLtpAdvancement(
   replayCount: number,
   schemaMatch: number,
 ): [boolean, string, number] {
-  const replayThreshold = schemaMatch < LATE_LTP_SCHEMA_FAST_THRESHOLD ? LATE_LTP_REPLAY_THRESHOLD_NORMAL : LATE_LTP_REPLAY_THRESHOLD_SCHEMA; // source: cortex@ed33435 cascade_advancement.py:103
+  const replayThreshold = schemaMatch < LATE_LTP_SCHEMA_FAST_THRESHOLD ? LATE_LTP_REPLAY_THRESHOLD_NORMAL : LATE_LTP_REPLAY_THRESHOLD_SCHEMA; // source: cortex main cascade_advancement.py:103
   const replayReady = replayCount >= replayThreshold;
   const readiness = Math.min(1.0, replayCount / Math.max(replayThreshold, 1));
   if (replayReady) {
@@ -279,7 +279,7 @@ function checkLateLtpAdvancement(
  * Check RECONSOLIDATING -> EARLY_LTP re-stabilization.
  *
  * // source: Nader K et al. (2000) Nature 406:722-726
- * // source: cortex@ed33435 mcp_server/core/cascade_advancement.py:111
+ * // source: cortex main mcp_server/core/cascade_advancement.py:111
  */
 function checkReconsolidatingAdvancement(
   hoursInStage: number,
@@ -326,7 +326,7 @@ export interface AdvancementReadinessResult {
  *   When CASCADE ablated: always returns (false, currentStage, 0.0).
  *
  * Port of: mcp_server/core/cascade_advancement.py::compute_advancement_readiness
- * source: cortex@ed33435 mcp_server/core/cascade_advancement.py:151
+ * source: cortex main mcp_server/core/cascade_advancement.py:151
  */
 export function computeAdvancementReadiness(
   currentStage: string,
@@ -428,19 +428,19 @@ export function computeAdvancementReadiness(
  *   triggered=true only for CONSOLIDATED or LATE_LTP stages.
  *
  * Port of: mcp_server/core/cascade_advancement.py::trigger_reconsolidation
- * source: cortex@ed33435 mcp_server/core/cascade_advancement.py:192
+ * source: cortex main mcp_server/core/cascade_advancement.py:192
  */
 export function triggerReconsolidation(
   currentStage: string,
   mismatchScore: number,
   stability: number = DEFAULT_STABILITY,
-  mismatchThreshold: number = DEFAULT_MISMATCH_THRESHOLD, // source: cortex@ed33435 cascade_advancement.py:197
+  mismatchThreshold: number = DEFAULT_MISMATCH_THRESHOLD, // source: cortex main cascade_advancement.py:197
 ): [boolean, string] {
   if (currentStage !== CONSOLIDATED && currentStage !== LATE_LTP) {
     return [false, currentStage];
   }
 
-  const effectiveThreshold = mismatchThreshold + stability * RECONSOLIDATION_STABILITY_FACTOR; // source: cortex@ed33435 cascade_advancement.py:222
+  const effectiveThreshold = mismatchThreshold + stability * RECONSOLIDATION_STABILITY_FACTOR; // source: cortex main cascade_advancement.py:222
 
   if (mismatchScore >= effectiveThreshold) {
     return [true, RECONSOLIDATING];

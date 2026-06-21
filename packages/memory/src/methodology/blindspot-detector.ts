@@ -8,7 +8,7 @@
  *
  * Pure business logic — no I/O.
  *
- * source: cortex@ed33435 mcp_server/core/blindspot_detector.py
+ * source: cortex main mcp_server/core/blindspot_detector.py
  */
 
 import type { BlindSpot } from "./types.js";
@@ -22,7 +22,7 @@ import {
 
 /**
  * All known work categories.
- * source: cortex@ed33435 mcp_server/core/blindspot_detector.py ALL_CATEGORIES (via CATEGORY_RULES)
+ * source: cortex main mcp_server/core/blindspot_detector.py ALL_CATEGORIES (via CATEGORY_RULES)
  */
 export const ALL_CATEGORIES = [
   "bug-fix",
@@ -41,7 +41,7 @@ export type WorkCategory = typeof ALL_CATEGORIES[number];
 
 /**
  * Common tools to check for blind spots.
- * source: cortex@ed33435 mcp_server/core/blindspot_detector.py COMMON_TOOLS
+ * source: cortex main mcp_server/core/blindspot_detector.py COMMON_TOOLS
  */
 export const COMMON_TOOLS = [
   "Read",
@@ -57,7 +57,7 @@ export const COMMON_TOOLS = [
 
 /**
  * Relevance mapping: which categories each tool is relevant to.
- * source: cortex@ed33435 mcp_server/core/blindspot_detector.py TOOL_CATEGORY_RELEVANCE
+ * source: cortex main mcp_server/core/blindspot_detector.py TOOL_CATEGORY_RELEVANCE
  */
 export const TOOL_CATEGORY_RELEVANCE: Readonly<Record<string, readonly string[]>> = {
   Read: ["bug-fix", "research", "debug", "refactor", "docs"],
@@ -170,7 +170,7 @@ function globalExplorationRatio(allConversations: ConversationRecord[]): number 
 
 /**
  * Detect category blind spots (<5% threshold).
- * source: cortex@ed33435 mcp_server/core/blindspot_detector.py _detect_category_blind_spots:115-138
+ * source: cortex main mcp_server/core/blindspot_detector.py _detect_category_blind_spots:115-138
  */
 function detectCategoryBlindSpots(
   domainConversations: ConversationRecord[],
@@ -199,7 +199,7 @@ function detectCategoryBlindSpots(
 
 /**
  * Detect tool blind spots for tools relevant to domain but rarely used.
- * source: cortex@ed33435 mcp_server/core/blindspot_detector.py _detect_tool_blind_spots:141-176
+ * source: cortex main mcp_server/core/blindspot_detector.py _detect_tool_blind_spots:141-176
  */
 function detectToolBlindSpots(
   domainConversations: ConversationRecord[],
@@ -238,7 +238,7 @@ function detectToolBlindSpots(
 
 /**
  * Detect pattern blind spots: missing exploration, deep-work, quick-iteration.
- * source: cortex@ed33435 mcp_server/core/blindspot_detector.py _detect_pattern_blind_spots:179-210
+ * source: cortex main mcp_server/core/blindspot_detector.py _detect_pattern_blind_spots:179-210
  */
 function detectPatternBlindSpots(
   domainConversations: ConversationRecord[],
@@ -284,7 +284,7 @@ function detectPatternBlindSpots(
  *               allConversations includes all domains (used for global ratios)
  * postcondition: returns a flat array of BlindSpot entries (no duplicates within type)
  *
- * source: cortex@ed33435 mcp_server/core/blindspot_detector.py:218-231
+ * source: cortex main mcp_server/core/blindspot_detector.py:218-231
  */
 export function detectBlindSpotsFull(
   domainConversations: ConversationRecord[],

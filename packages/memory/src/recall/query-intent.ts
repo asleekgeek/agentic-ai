@@ -315,7 +315,7 @@ export function computeRetrievalWeights(
 
 // ── Per-signal WRRF weight expansion (port of retrieval_dispatch.py) ──
 
-// source: cortex@ed33435 mcp_server/core/retrieval_dispatch.py:86-91 — base
+// source: cortex main mcp_server/core/retrieval_dispatch.py:86-91 — base
 //   weight constants. Multiplied by intent-derived modifiers then expanded
 //   across the 9 actual signals fused by the recall handler.
 const FUSION_BASE_VECTOR = 1.0;
@@ -325,7 +325,7 @@ const FUSION_BASE_HEAT = 0.3;
 /**
  * Expand intent weights into the per-signal WRRF weight map the fuser uses.
  *
- * Mirrors cortex@ed33435 retrieval_dispatch.py::_base_weights — the Python
+ * Mirrors cortex main retrieval_dispatch.py::_base_weights — the Python
  * recall pipeline never fuses with the raw intent dictionary; it always
  * passes through this expansion so derived signals (hopfield/hdc/sr/bm25/
  * ngram) get sensible weights proportional to their parent (vector / fts /
@@ -340,7 +340,7 @@ const FUSION_BASE_HEAT = 0.3;
  * postcondition: returned object has weights for every signal the recall
  *   handler emits: vector, fts, heat, hopfield, hdc, sr, sa, bm25, ngram.
  *
- * source: cortex@ed33435 mcp_server/core/retrieval_dispatch.py:_base_weights:86-91
+ * source: cortex main mcp_server/core/retrieval_dispatch.py:_base_weights:86-91
  */
 export function expandSignalWeights(
   intentWeights: SignalWeights,

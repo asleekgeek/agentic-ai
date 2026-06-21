@@ -2,7 +2,7 @@
 /**
  * Text scoring signals: BM25, n-gram phrase matching, keyword overlap.
  *
- * Port of: cortex@ed33435 mcp_server/core/scoring.py
+ * Port of: cortex main mcp_server/core/scoring.py
  *
  * BM25 parameters match ai-architect's PostgreSQL ts_rank (k1=1.5, b=0.75).
  * N-gram weights match ai-architect config (trigram=0.4, bigram=0.35, content=0.25).
@@ -11,7 +11,7 @@
  */
 
 // ── Stopwords ─────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/scoring.py:14-52
+// source: cortex main mcp_server/core/scoring.py:14-52
 
 const _STOPWORDS = new Set<string>([
   "the",
@@ -65,7 +65,7 @@ const _STOPWORDS = new Set<string>([
 
 /**
  * Whitespace + punctuation tokenizer with stopword filtering.
- * Port of: cortex@ed33435 mcp_server/core/scoring.py:55-57
+ * Port of: cortex main mcp_server/core/scoring.py:55-57
  */
 export function tokenize(text: string): string[] {
   const words = text.toLowerCase().match(/\w+/g) ?? [];
@@ -74,7 +74,7 @@ export function tokenize(text: string): string[] {
 
 /**
  * Tokenizer without stopword filtering (for BM25 term frequency).
- * Port of: cortex@ed33435 mcp_server/core/scoring.py:60-62
+ * Port of: cortex main mcp_server/core/scoring.py:60-62
  */
 export function tokenizeRaw(text: string): string[] {
   return text.toLowerCase().match(/\w+/g) ?? [];
@@ -92,7 +92,7 @@ interface Bm25Stats {
 
 /**
  * Pre-compute BM25 corpus statistics.
- * Port of: cortex@ed33435 mcp_server/core/scoring.py:65-76
+ * Port of: cortex main mcp_server/core/scoring.py:65-76
  */
 function buildBm25Stats(documents: string[]): Bm25Stats {
   const docTokens = documents.map((d) => tokenizeRaw(d));
@@ -112,7 +112,7 @@ function buildBm25Stats(documents: string[]): Bm25Stats {
 
 /**
  * Score a single document against query terms.
- * Port of: cortex@ed33435 mcp_server/core/scoring.py:79-91
+ * Port of: cortex main mcp_server/core/scoring.py:79-91
  *
  * precondition: qTerms is non-empty; tokens, dl, avgDl, df are from the
  *   same corpus; n >= 1; k1 > 0; 0 <= b <= 1
@@ -149,20 +149,20 @@ type float = number;
 /**
  * BM25 scores normalized to [0, 1]. Okapi BM25 with IDF smoothing.
  *
- * Port of: cortex@ed33435 mcp_server/core/scoring.py:94-106
+ * Port of: cortex main mcp_server/core/scoring.py:94-106
  *
  * precondition: documents is a non-empty list of strings
  * postcondition: returns list of same length as documents; each value in [0,1]
  *
- * Constants — source: cortex@ed33435 mcp_server/core/scoring.py:94
+ * Constants — source: cortex main mcp_server/core/scoring.py:94
  *   k1 = 1.5 (matches ai-architect PostgreSQL ts_rank)
  *   b  = 0.75 (matches ai-architect PostgreSQL ts_rank)
  */
 export function computeBm25Scores(
   query: string,
   documents: string[],
-  k1 = 1.5, // source: cortex@ed33435 mcp_server/core/scoring.py:95 — matches pg ts_rank
-  b = 0.75, // source: cortex@ed33435 mcp_server/core/scoring.py:96 — matches pg ts_rank
+  k1 = 1.5, // source: cortex main mcp_server/core/scoring.py:95 — matches pg ts_rank
+  b = 0.75, // source: cortex main mcp_server/core/scoring.py:96 — matches pg ts_rank
 ): number[] {
   const qTerms = tokenizeRaw(query);
   if (qTerms.length === 0 || documents.length === 0) {
@@ -180,7 +180,7 @@ export function computeBm25Scores(
 
 /**
  * Extract character n-grams from token sequence.
- * Port of: cortex@ed33435 mcp_server/core/scoring.py:109-113
+ * Port of: cortex main mcp_server/core/scoring.py:109-113
  */
 function extractNgrams(tokens: string[], n: number): Set<string> {
   if (tokens.length < n) return new Set();
@@ -195,7 +195,7 @@ function extractNgrams(tokens: string[], n: number): Set<string> {
 
 /**
  * Simple keyword overlap ratio.
- * Port of: cortex@ed33435 mcp_server/core/scoring.py:116-120
+ * Port of: cortex main mcp_server/core/scoring.py:116-120
  *
  * postcondition: result in [0, 1]; 0 when query is empty
  */
@@ -213,12 +213,12 @@ export function computeKeywordOverlap(query: string, document: string): number {
 /**
  * Combined trigram + bigram + content-word overlap score.
  *
- * Port of: cortex@ed33435 mcp_server/core/scoring.py:123-141
+ * Port of: cortex main mcp_server/core/scoring.py:123-141
  *
  * precondition: query and document are strings (may be empty)
  * postcondition: result in [0, 1]; 0 when either tokenizes to empty
  *
- * Constants — source: cortex@ed33435 mcp_server/core/scoring.py:128
+ * Constants — source: cortex main mcp_server/core/scoring.py:128
  *   trigram weight = 0.4   (matches ai-architect config)
  *   bigram  weight = 0.35  (matches ai-architect config)
  *   content weight = 0.25  (matches ai-architect config)
@@ -252,6 +252,6 @@ export function computeNgramScore(query: string, document: string): number {
   }
   const cw = qCw.size > 0 ? cwIntersect / Math.max(qCw.size, 1) : 0.0;
 
-  // source: cortex@ed33435 mcp_server/core/scoring.py:138-141
+  // source: cortex main mcp_server/core/scoring.py:138-141
   return 0.4 * tri + 0.35 * bi + 0.25 * cw;
 }

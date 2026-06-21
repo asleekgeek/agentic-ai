@@ -32,10 +32,10 @@ const AST_SUPPORTED = new Set(["python", "typescript", "javascript", "go", "rust
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-// source: cortex@f2b9f99 mcp_server/core/ast_parser.py — 16-hex-char SHA-256 prefix for content dedup
+// source: cortex main mcp_server/core/ast_parser.py — 16-hex-char SHA-256 prefix for content dedup
 const CONTENT_HASH_HEX_CHARS = 16;
 
-// source: cortex@f2b9f99 mcp_server/core/ast_parser.py — 200-char docstring/comment truncation cap
+// source: cortex main mcp_server/core/ast_parser.py — 200-char docstring/comment truncation cap
 const DOCSTRING_MAX_CHARS = 200;
 
 // ── Substrate availability ─────────────────────────────────────────────────
@@ -76,7 +76,7 @@ export function parseFileAst(path: string, content: Buffer): FileAnalysis {
    *   FileAnalysis with imports, definitions, and content hash.
    */
   const language = detectLanguage(path);
-  const contentHash = createHash("sha256").update(content).digest("hex").slice(0, CONTENT_HASH_HEX_CHARS); // source: cortex@f2b9f99 mcp_server/core/ast_parser.py — SHA-256 hash truncated to CONTENT_HASH_HEX_CHARS hex chars
+  const contentHash = createHash("sha256").update(content).digest("hex").slice(0, CONTENT_HASH_HEX_CHARS); // source: cortex main mcp_server/core/ast_parser.py — SHA-256 hash truncated to CONTENT_HASH_HEX_CHARS hex chars
   const text = content.toString("utf8");
 
   const extractorAndTree = _getExtractorAndTree(language, content);

@@ -17,10 +17,10 @@ type TsNode = any;
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/core/ast_extractors.py:_extract_python_func — sig[:120]
+// source: cortex main mcp_server/core/ast_extractors.py:_extract_python_func — sig[:120]
 const SIG_MAX_CHARS = 120;
 
-// source: cortex@ed33435 mcp_server/core/ast_extractors.py:extract_calls_generic — name length cap
+// source: cortex main mcp_server/core/ast_extractors.py:extract_calls_generic — name length cap
 const CALL_NAME_MAX_CHARS = 100;
 
 // ── Shared helpers ────────────────────────────────────────────────────────
@@ -133,7 +133,7 @@ function _extractPythonClass(
 /**
  * Extract JS/TS import declarations as one ImportInfo per named symbol.
  *
- * Parity target: cortex@ed33435 mcp_server/codebase/codebase_parser.py —
+ * Parity target: cortex main mcp_server/codebase/codebase_parser.py —
  *   Python emits one entity per named symbol in `from foo import A, B, C`
  *   (three entities, each linked to module `foo`).
  *
@@ -145,7 +145,7 @@ function _extractPythonClass(
  *   - Namespace imports (`import * as Foo from 'mod'`) → names: ["*"].
  *   - Side-effect imports (`import 'mod'`)             → names: [""].
  *
- * source: cortex@ed33435 mcp_server/codebase/codebase_parser.py:extractPythonImports
+ * source: cortex main mcp_server/codebase/codebase_parser.py:extractPythonImports
  *   (one-entity-per-named-symbol convention)
  */
 export function extractJsImports(root: TsNode, source: Buffer): ImportInfo[] {

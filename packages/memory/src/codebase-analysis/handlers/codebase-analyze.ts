@@ -87,11 +87,11 @@ export const schema = {
           "a positive cap only to bound runaway analysis on extremely " +
           "large monorepos.",
         // 0 = no limit. Positive values cap the walk via _collectBounded.
-        // source: cortex@2f42428 mcp_server/handlers/codebase_analyze.py:96 — default 0
+        // source: cortex main mcp_server/handlers/codebase_analyze.py:96 — default 0
         default: 0,
-        minimum: 0, // source: cortex@2f42428 mcp_server/handlers/codebase_analyze.py:97 — minimum 0
+        minimum: 0, // source: cortex main mcp_server/handlers/codebase_analyze.py:97 — minimum 0
         // eslint-disable-next-line @typescript-eslint/no-magic-numbers -- documentary JSON-schema examples
-        examples: [0, 500, 5000], // source: cortex@2f42428 mcp_server/handlers/codebase_analyze.py:99 — examples
+        examples: [0, 500, 5000], // source: cortex main mcp_server/handlers/codebase_analyze.py:99 — examples
       },
       max_file_size_kb: {
         type: "integer",
@@ -124,7 +124,7 @@ const CODEBASE_TAG = "codebase";
 const LANG_TAG_PREFIX = "lang:";
 // source: cortex Python source mcp_server/handlers/codebase_analyze.py — default values
 // 0 = no limit. Positive values cap the walk; see collectSourceFiles.
-// source: cortex@2f42428 mcp_server/handlers/codebase_analyze.py:131 — DEFAULT_MAX_FILES = 0
+// source: cortex main mcp_server/handlers/codebase_analyze.py:131 — DEFAULT_MAX_FILES = 0
 const DEFAULT_MAX_FILES = 0;
 const DEFAULT_MAX_FILE_SIZE_KB = 100; // source: cortex mcp_server/handlers/codebase_analyze.py — max_file_size_kb default=100
 // source: cortex mcp_server/handlers/codebase_analyze.py — top N symbols stored as tags per file

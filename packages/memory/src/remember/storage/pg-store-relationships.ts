@@ -1,6 +1,6 @@
 /**
  * pg-store-relationships.ts — Relationship CRUD for PgMemoryStore.
- * source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py
+ * source: cortex main mcp_server/infrastructure/pg_store_relationships.py
  */
 import type { PoolClient } from "pg";
 
@@ -9,7 +9,7 @@ export interface RelationshipData {
   weight?: number; is_causal?: boolean; confidence?: number; created_at?: string | null;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:15-35
+// source: cortex main mcp_server/infrastructure/pg_store_relationships.py:15-35
 export async function updateRelationshipsWeightBatch(client: PoolClient, updates: Array<[number, number]>): Promise<number> {
   if (updates.length === 0) return 0;
   await client.query(
@@ -18,7 +18,7 @@ export async function updateRelationshipsWeightBatch(client: PoolClient, updates
   return updates.length;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:37-50
+// source: cortex main mcp_server/infrastructure/pg_store_relationships.py:37-50
 export async function deleteRelationshipsBatch(client: PoolClient, relIds: number[]): Promise<number> {
   if (relIds.length === 0) return 0;
   await client.query("DELETE FROM relationships WHERE id = ANY($1::int[])", [relIds]);
@@ -31,7 +31,7 @@ export async function deleteRelationshipsBatch(client: PoolClient, relIds: numbe
 // conflict we refresh the edge instead of duplicating: keep the strongest
 // weight/confidence, mark it re-reinforced. The arbiter index (dedup-then-
 // CREATE UNIQUE INDEX migration) lives in pg-schema-indexes.ts MIGRATIONS_DDL.
-// source: cortex@bc5af469 mcp_server/infrastructure/pg_store_relationships.py:52-81
+// source: cortex main mcp_server/infrastructure/pg_store_relationships.py:52-81
 export async function insertRelationship(client: PoolClient, data: RelationshipData): Promise<number> {
   const result = await client.query<{ id: number }>(
     `INSERT INTO relationships (source_entity_id, target_entity_id, relationship_type, weight, is_causal, confidence, created_at, last_reinforced)
@@ -48,14 +48,14 @@ export async function insertRelationship(client: PoolClient, data: RelationshipD
   return row.id;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:71-73
+// source: cortex main mcp_server/infrastructure/pg_store_relationships.py:71-73
 export async function countRelationships(client: PoolClient): Promise<number> {
   return (await client.query<{ c: number }>("SELECT COUNT(*) AS c FROM relationships")).rows[0]?.c ?? 0;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:75-103
+// source: cortex main mcp_server/infrastructure/pg_store_relationships.py:75-103
 export async function getRelationshipsForEntity(
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:76
+// source: cortex main mcp_server/infrastructure/pg_store_relationships.py:76
   client: PoolClient, entityId: number, direction: "outgoing" | "incoming" | "both" = "both", limit = 50, // eslint-disable-line @typescript-eslint/no-magic-numbers
 ): Promise<Record<string, unknown>[]> {
   if (direction === "outgoing") {
@@ -75,7 +75,7 @@ export async function getRelationshipsForEntity(
     [entityId, entityId, limit])).rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:105-112
+// source: cortex main mcp_server/infrastructure/pg_store_relationships.py:105-112
 export async function getAllRelationships(client: PoolClient): Promise<Record<string, unknown>[]> {
   return (await client.query(
     `SELECT id, source_entity_id, target_entity_id, relationship_type, weight,
@@ -83,7 +83,7 @@ export async function getAllRelationships(client: PoolClient): Promise<Record<st
      FROM relationships`)).rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:114-122
+// source: cortex main mcp_server/infrastructure/pg_store_relationships.py:114-122
 export async function getRelationshipCounts(client: PoolClient): Promise<Map<number, number>> {
   const result = await client.query<{ entity_id: number; cnt: number }>(
     `SELECT entity_id, COUNT(*) AS cnt FROM (SELECT source_entity_id AS entity_id FROM relationships UNION ALL SELECT target_entity_id AS entity_id FROM relationships) sub GROUP BY entity_id`);
@@ -92,7 +92,7 @@ export async function getRelationshipCounts(client: PoolClient): Promise<Map<num
   return out;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:124-131
+// source: cortex main mcp_server/infrastructure/pg_store_relationships.py:124-131
 export async function getEntityRelationshipPairs(client: PoolClient): Promise<Set<string>> {
   const result = await client.query<{ source_name: string; target_name: string }>(
     `SELECT e1.name AS source_name, e2.name AS target_name FROM relationships r
@@ -101,9 +101,9 @@ export async function getEntityRelationshipPairs(client: PoolClient): Promise<Se
 }
 
 // Source: docs/program/phase-5-pool-admission-design.md Phase 2 B3.
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:133-207
+// source: cortex main mcp_server/infrastructure/pg_store_relationships.py:133-207
 export async function reinforceOrCreateRelationship(
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:137
+// source: cortex main mcp_server/infrastructure/pg_store_relationships.py:137
   client: PoolClient, sourceName: string, targetName: string, deltaWeight = 0.1, relType = "co_retrieval", // eslint-disable-line @typescript-eslint/no-magic-numbers
 ): Promise<void> {
   const src = (await client.query<{ id: number }>("SELECT id FROM entities WHERE LOWER(name) = LOWER($1) LIMIT 1", [sourceName])).rows[0];
@@ -112,17 +112,17 @@ export async function reinforceOrCreateRelationship(
   const sid = src.id;
   const tid = tgt.id;
 
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:168
+  // source: cortex main mcp_server/infrastructure/pg_store_relationships.py:168
   // 0.05 heat bump on co-activation (empirical default from Python source)
-  const HEAT_BUMP = 0.05; // source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:168
+  const HEAT_BUMP = 0.05; // source: cortex main mcp_server/infrastructure/pg_store_relationships.py:168
   await client.query(`UPDATE entities SET last_accessed = NOW(), heat = LEAST(1.0, heat + $1) WHERE id IN ($2, $3)`, [HEAT_BUMP, sid, tid]);
 
   if (relType === "co_retrieval") {
     const a = Math.min(sid, tid);
     const b = Math.max(sid, tid);
-    // source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:183
+    // source: cortex main mcp_server/infrastructure/pg_store_relationships.py:183
     // 0.05 facilitation increment on co-retrieval reinforcement
-    const FAC_STEP = 0.05; // source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:183
+    const FAC_STEP = 0.05; // source: cortex main mcp_server/infrastructure/pg_store_relationships.py:183
     await client.query(
       `INSERT INTO relationships (source_entity_id, target_entity_id, relationship_type, weight, facilitation, last_reinforced)
        VALUES ($1, $2, $3, $4, $5, NOW())
@@ -133,9 +133,9 @@ export async function reinforceOrCreateRelationship(
       [a, b, relType, deltaWeight, FAC_STEP]);
     return;
   }
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:192-196
+  // source: cortex main mcp_server/infrastructure/pg_store_relationships.py:192-196
   // 0.05 facilitation increment — empirical default from Python source
-  const updated = await client.query( // source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:192-196
+  const updated = await client.query( // source: cortex main mcp_server/infrastructure/pg_store_relationships.py:192-196
     `UPDATE relationships SET weight = LEAST(2.0, weight + $1), facilitation = LEAST(1.0, facilitation + 0.05), last_reinforced = NOW()
      WHERE source_entity_id = $2 AND target_entity_id = $3 AND relationship_type = $4`,
     [deltaWeight, sid, tid, relType]);

@@ -5,10 +5,10 @@
  * Previously these were SQLite-only, causing silent no-ops on PG
  * (history-constraint LSP violation — Liskov & Wing 1994, §4).
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:9-70
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
- * source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:22-38
+ * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:9-70
+ * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:249-253
+ * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+ * source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:22-38
  *   (insertProspectiveMemory PG async already existed; wrapped here for sync parity)
  */
 
@@ -33,7 +33,7 @@ export interface RuleInsertData {
  * postcondition: returned id > 0; row exists in memory_rules with
  *   is_active = data.is_active and all supplied fields written.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:14-31
+ * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:14-31
  *   SQL equivalent: INSERT INTO memory_rules (...) VALUES (...)
  * source: PostgreSQL INSERT ... RETURNING id
  *   https://www.postgresql.org/docs/current/sql-insert.html
@@ -67,7 +67,7 @@ export async function insertRule(client: PoolClient, data: RuleInsertData): Prom
  * postcondition: returns every row where is_active = true.
  *   Returns [] if no rules exist.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:41-45
+ * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:41-45
  *   SQL equivalent: SELECT * FROM memory_rules WHERE is_active ORDER BY scope, priority DESC
  */
 export async function getAllActiveRules(client: PoolClient): Promise<Record<string, unknown>[]> {
@@ -85,7 +85,7 @@ export async function getAllActiveRules(client: PoolClient): Promise<Record<stri
  * postcondition: returns rows where scope = $1 AND is_active = true,
  *   ordered by priority DESC. Returns [] if none exist.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py:33-39
+ * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py:33-39
  *   SQL equivalent: SELECT * FROM memory_rules WHERE scope = ? AND is_active ORDER BY priority DESC
  */
 export async function getRulesForScope(client: PoolClient, scope: string): Promise<Record<string, unknown>[]> {
@@ -104,7 +104,7 @@ export async function getRulesForScope(client: PoolClient, scope: string): Promi
  * postcondition: returns every row in memory_rules ordered by scope ASC,
  *   priority DESC. Returns [] if table is empty.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_rules.py
+ * source: cortex main mcp_server/infrastructure/sqlite_store_rules.py
  *   admin listing analogue (no exact Python line — derived from getAllActiveRules
  *   by removing the is_active filter; consistent with SQLite implementation above)
  */
@@ -123,7 +123,7 @@ export async function getAllRulesIncludingInactive(client: PoolClient): Promise<
  * postcondition: returns COUNT(*) WHERE is_active = true.
  *   Returns 0 if table is empty.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_stats.py:249-253
+ * source: cortex main mcp_server/infrastructure/sqlite_store_stats.py:249-253
  *   SQL equivalent: SELECT COUNT(*) FROM prospective_memories WHERE is_active
  * source: pg-store-stats.ts::countActiveTriggers (already existed as standalone fn)
  */
@@ -153,9 +153,9 @@ export interface ProspectiveMemoryInsertData {
  * postcondition: returned id > 0; row exists in prospective_memories
  *   with is_active = data.is_active (default true).
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+ * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
  *   SQL equivalent: INSERT INTO prospective_memories (...) VALUES (...)
- * source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:22-38
+ * source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:22-38
  *   (pre-existing async function; this module re-exports the same SQL with
  *   the typed interface matching the MemoryStoreExt contract)
  */

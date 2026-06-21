@@ -14,7 +14,7 @@
  * extraction helper used by Stage 2 in the recall pipeline.
  *
  * P2a fix (2026-05-04): ported the missing functions and constants from
- * cortex@ed33435 mcp_server/core/knowledge_graph.py:
+ * cortex main mcp_server/core/knowledge_graph.py:
  *   - VALID_REL_TYPES frozenset (13 relationship types)
  *   - ENTITY_TYPES frozenset (16 entity types)
  *   - findEntityPositions (private helper for detectCoOccurrences)
@@ -24,23 +24,23 @@
  *   - inferRelationships (public — typed edges from extracted entities)
  * Without these the knowledge graph had no co-occurrence or inferred edges.
  *
- * Port of: cortex@ed33435 mcp_server/core/knowledge_graph.py
+ * Port of: cortex main mcp_server/core/knowledge_graph.py
  */
 
 // ── Extraction patterns ──────────────────────────────────────────────────
 
-// source: cortex@bc0ae4f mcp_server/core/knowledge_graph.py:60-74
+// source: cortex main mcp_server/core/knowledge_graph.py:60-74
 
 /** Minimum entity name length for CamelCase extraction.
- *  source: cortex@bc0ae4f mcp_server/core/knowledge_graph.py:131 (len(name) > 2) */
+ *  source: cortex main mcp_server/core/knowledge_graph.py:131 (len(name) > 2) */
 const MIN_CAMEL_LEN = 2; // used as: name.length > MIN_CAMEL_LEN (i.e. > 2 → length >= 3)
 
 /** Minimum import name length to include.
- *  source: cortex@bc0ae4f mcp_server/core/knowledge_graph.py:85 (len(name) > 1) */
+ *  source: cortex main mcp_server/core/knowledge_graph.py:85 (len(name) > 1) */
 const MIN_IMPORT_NAME_LEN = 1; // used as: name.length > MIN_IMPORT_NAME_LEN
 
 /** Minimum token length for NL keyword extractor (Stage 2 Wave-2 bc0ae4f).
- *  source: cortex@bc0ae4f mcp_server/core/recall_pipeline.py:355 (len(token) >= 4) */
+ *  source: cortex main mcp_server/core/recall_pipeline.py:355 (len(token) >= 4) */
 const MIN_NL_TOKEN_LEN = 4;
 
 const IMPORT_FULL_RE = /(?:^|\n)\s*import\s+([\w.]+)/gm;
@@ -96,7 +96,7 @@ function extractDefinitionEntities(content: string): {
   let m: RegExpExecArray | null;
   while ((m = defRe.exec(content)) !== null) {
     const fname = m[1] ?? "";
-    // source: cortex@bc0ae4f knowledge_graph.py:102 (skip short private names)
+    // source: cortex main knowledge_graph.py:102 (skip short private names)
     if (fname.startsWith("_") && fname.length < MIN_CAMEL_LEN + 1) continue;
     definedFuncs.add(fname);
     entities.push([fname, "function", ""]);
@@ -164,7 +164,7 @@ function deduplicateEntities(
  * pre:  content is a string
  * post: returned list is deduplicated; order is insertion-stable
  *
- * source: cortex@bc0ae4f mcp_server/core/knowledge_graph.py:155-166
+ * source: cortex main mcp_server/core/knowledge_graph.py:155-166
  */
 export function extractEntities(content: string): ExtractedEntity[] {
   const importEntities = extractImportEntities(content);
@@ -182,7 +182,7 @@ export function extractEntities(content: string): ExtractedEntity[] {
 
 /**
  * Stopword set for the NL token extractor.
- * source: cortex@bc0ae4f mcp_server/shared/text.py (extract_keywords stopwords)
+ * source: cortex main mcp_server/shared/text.py (extract_keywords stopwords)
  */
 const NL_STOP_WORDS = new Set([
   "the", "a", "an", "is", "it", "in", "on", "at", "of", "to", "and", "or",
@@ -202,7 +202,7 @@ const NL_STOP_WORDS = new Set([
  * pre:  text is a string
  * post: all returned tokens are lowercase; deduplicated
  *
- * source: cortex@bc0ae4f mcp_server/core/recall_pipeline.py:311-370
+ * source: cortex main mcp_server/core/recall_pipeline.py:311-370
  *         (Stage 2 token fallback block)
  */
 export function extractKeywords(text: string): string[] {
@@ -218,11 +218,11 @@ export function extractKeywords(text: string): string[] {
   return [...new Set(tokens)];
 }
 
-// ── P2a additions (cortex@ed33435 knowledge_graph.py) ─────────────────────
+// ── P2a additions (cortex main knowledge_graph.py) ─────────────────────
 
 /**
  * Valid relationship types in the knowledge graph.
- * source: cortex@ed33435 mcp_server/core/knowledge_graph.py:18-34
+ * source: cortex main mcp_server/core/knowledge_graph.py:18-34
  */
 export const VALID_REL_TYPES: ReadonlySet<string> = new Set([
   "co_occurrence",
@@ -242,7 +242,7 @@ export const VALID_REL_TYPES: ReadonlySet<string> = new Set([
 
 /**
  * Recognized entity types in the knowledge graph.
- * source: cortex@ed33435 mcp_server/core/knowledge_graph.py:37-56
+ * source: cortex main mcp_server/core/knowledge_graph.py:37-56
  */
 export const ENTITY_TYPES: ReadonlySet<string> = new Set([
   "function",
@@ -270,7 +270,7 @@ export const ENTITY_TYPES: ReadonlySet<string> = new Set([
  * post: returns [(name, [positions, ...]), ...] for names that appear at
  *   least once; names with zero occurrences are omitted.
  *
- * source: cortex@ed33435 mcp_server/core/knowledge_graph.py:169-184
+ * source: cortex main mcp_server/core/knowledge_graph.py:169-184
  *         (_find_entity_positions)
  */
 function findEntityPositions(
@@ -303,7 +303,7 @@ function findEntityPositions(
  * pre:  posA and posB are non-empty integer arrays.
  * post: returned value is the minimum absolute difference across all pairs.
  *
- * source: cortex@ed33435 mcp_server/core/knowledge_graph.py:187-195
+ * source: cortex main mcp_server/core/knowledge_graph.py:187-195
  *         (_min_pair_distance)
  */
 function minPairDistance(posA: number[], posB: number[]): number {
@@ -321,11 +321,11 @@ function minPairDistance(posA: number[], posB: number[]): number {
   return minDist;
 }
 
-const CO_OCCURRENCE_WINDOW_CHARS = 500; // source: cortex@ed33435 mcp_server/core/knowledge_graph.py:198 (default window_chars=500)
+const CO_OCCURRENCE_WINDOW_CHARS = 500; // source: cortex main mcp_server/core/knowledge_graph.py:198 (default window_chars=500)
 
 // Rounding factor for 4 decimal places (round(x, 4) → x * 10^4 / 10^4).
-// source: cortex@ed33435 mcp_server/core/knowledge_graph.py:216 (round(proximity, 4))
-const ROUND_4DP = 10000; // source: cortex@ed33435 knowledge_graph.py:216
+// source: cortex main mcp_server/core/knowledge_graph.py:216 (round(proximity, 4))
+const ROUND_4DP = 10000; // source: cortex main knowledge_graph.py:216
 
 /**
  * Detect co-occurring entities within a character window.
@@ -338,7 +338,7 @@ const ROUND_4DP = 10000; // source: cortex@ed33435 knowledge_graph.py:216
  * post: returned triples have proximity score in (0, 1]; only pairs within
  *   windowChars characters are returned; proximity is rounded to 4dp.
  *
- * source: cortex@ed33435 mcp_server/core/knowledge_graph.py:198-218
+ * source: cortex main mcp_server/core/knowledge_graph.py:198-218
  *         (detect_co_occurrences)
  */
 export function detectCoOccurrences(
@@ -361,7 +361,7 @@ export function detectCoOccurrences(
       const [nameB, posB] = entryB;
       const minDist = minPairDistance(posA, posB);
       if (minDist <= windowChars) {
-        const proximity = Math.round((1.0 - minDist / windowChars) * ROUND_4DP) / ROUND_4DP; // source: cortex@ed33435 knowledge_graph.py:216 (round(proximity,4))
+        const proximity = Math.round((1.0 - minDist / windowChars) * ROUND_4DP) / ROUND_4DP; // source: cortex main knowledge_graph.py:216 (round(proximity,4))
         results.push([nameA, nameB, proximity]);
       }
     }
@@ -379,7 +379,7 @@ export function detectCoOccurrences(
  *   "dependency" → dependencies; ctx "resolved_by" → resolved; ctx
  *   "decided_to_use" → decisions.
  *
- * source: cortex@ed33435 mcp_server/core/knowledge_graph.py:221-241
+ * source: cortex main mcp_server/core/knowledge_graph.py:221-241
  *         (_group_entities_by_context)
  */
 function groupEntitiesByContext(entities: ExtractedEntity[]): {
@@ -411,7 +411,7 @@ function groupEntitiesByContext(entities: ExtractedEntity[]): {
 
 /**
  * Typed relationship returned by inferRelationships.
- * source: cortex@ed33435 mcp_server/core/knowledge_graph.py:244-281
+ * source: cortex main mcp_server/core/knowledge_graph.py:244-281
  */
 export interface KnowledgeGraphRelationship {
   source: string;
@@ -430,7 +430,7 @@ export interface KnowledgeGraphRelationship {
  * pre:  entities is a list of ExtractedEntity objects.
  * post: returned list contains only edges whose type is in VALID_REL_TYPES.
  *
- * source: cortex@ed33435 mcp_server/core/knowledge_graph.py:244-281
+ * source: cortex main mcp_server/core/knowledge_graph.py:244-281
  *         (infer_relationships)
  */
 export function inferRelationships(

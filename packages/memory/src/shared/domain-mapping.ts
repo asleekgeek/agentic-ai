@@ -32,26 +32,26 @@ export interface RepoInfo {
 // ── Constants ────────────────────────────────────────────────────────────────
 
 /** Length of the ".git" suffix stripped from remote URLs. */
-// source: cortex@ed33435 mcp_server/shared/domain_mapping.py:57-60 (_extract_repo_name)
+// source: cortex main mcp_server/shared/domain_mapping.py:57-60 (_extract_repo_name)
 const GIT_SUFFIX_LEN = 4; // ".git"
 
 /**
  * Minimum number of characters a shared hyphen-prefix must have to be
  * treated as a meaningful family name.
- * source: cortex@ed33435 mcp_server/shared/domain_mapping.py:117-120 (_shared_prefix docstring)
+ * source: cortex main mcp_server/shared/domain_mapping.py:117-120 (_shared_prefix docstring)
  */
 const MIN_PREFIX_LEN = 4;
 
 /**
  * Minimum fragment length included in the fragment index.
- * source: cortex@ed33435 mcp_server/shared/domain_mapping.py:221-223 (_build_fragment_index)
+ * source: cortex main mcp_server/shared/domain_mapping.py:221-223 (_build_fragment_index)
  */
 const MIN_FRAGMENT_LEN = 4;
 
 /**
  * Minimum character length for a slug to be treated as a path-like slug
  * (avoids false-positive slug matching on very short strings).
- * source: cortex@ed33435 mcp_server/shared/domain_mapping.py:298 (resolve_domain)
+ * source: cortex main mcp_server/shared/domain_mapping.py:298 (resolve_domain)
  */
 const MIN_SLUG_LEN = 10;
 
@@ -67,7 +67,7 @@ function getRemoteUrl(repoPath: string): string {
     return execFileSync(
       "git",
       ["-C", repoPath, "remote", "get-url", "origin"],
-      // source: cortex@ed33435 mcp_server/shared/domain_mapping.py:44 (timeout=3 seconds)
+      // source: cortex main mcp_server/shared/domain_mapping.py:44 (timeout=3 seconds)
       { timeout: 3000, stdio: ["pipe", "pipe", "pipe"], encoding: "utf-8", shell: false },
     ).toString().trim();
   } catch {
@@ -273,7 +273,7 @@ function gitRoot(path: string): string | null {
     return execFileSync(
       "git",
       ["-C", path, "rev-parse", "--show-toplevel"],
-      // source: cortex@ed33435 mcp_server/shared/domain_mapping.py:236 (timeout=3 seconds)
+      // source: cortex main mcp_server/shared/domain_mapping.py:236 (timeout=3 seconds)
       { timeout: 3000, stdio: ["pipe", "pipe", "pipe"], encoding: "utf-8", shell: false },
     ).toString().trim();
   } catch {
@@ -283,7 +283,7 @@ function gitRoot(path: string): string | null {
 
 // ── Registry (singleton cache) ───────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/shared/domain_mapping.py:252-258 (DomainRegistry dataclass)
+// source: cortex main mcp_server/shared/domain_mapping.py:252-258 (DomainRegistry dataclass)
 export interface DomainRegistry {
   readonly repos: RepoInfo[];
   readonly nameToCanonical: Map<string, string>;

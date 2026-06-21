@@ -1,7 +1,7 @@
 /**
  * AST-backed loader for the workflow graph (ADR-0046).
  *
- * source: cortex@f2b9f99 mcp_server/infrastructure/workflow_graph_source_ast.py:1-709
+ * source: cortex main mcp_server/infrastructure/workflow_graph_source_ast.py:1-709
  *
  * Re-synced 2026-04-28 (Phase 7 Group H) — ported Group 6 L6 AST uncap deltas:
  *   - Drop _MAX_SYMBOLS_PER_FILE LIMIT in load-all mode (paths=[]).
@@ -43,16 +43,16 @@ const _AP_SERVER = "codebase";
 // Per-file paranoid cap, applied ONLY when the caller specifies paths.
 // Load-all callers (paths=[]) get an uncapped query — the L6 viz pipeline
 // legitimately needs every symbol the AP graph holds.
-// source: cortex@f2b9f99 workflow_graph_source_ast.py:34
+// source: cortex main workflow_graph_source_ast.py:34
 const _MAX_SYMBOLS_PER_FILE = 500;
 
 // Default result limit for searchCodebase.
-// source: cortex@f2b9f99 workflow_graph_source_ast.py:414 — default limit=20
+// source: cortex main workflow_graph_source_ast.py:414 — default limit=20
 const _DEFAULT_SEARCH_LIMIT = 20;
 
 // AP's node labels carrying symbol semantics. Derived from stage-3
 // tree-sitter extractors; see automatised-pipeline/src/clustering.rs.
-// source: cortex@f2b9f99 workflow_graph_source_ast.py:167-199
+// source: cortex main workflow_graph_source_ast.py:167-199
 const _SYMBOL_LABELS = [
   // Core — Rust + Python (original set)
   "Function",
@@ -92,7 +92,7 @@ type _SymbolLabel = (typeof _SYMBOL_LABELS)[number];
 // Labels whose nodes don't expose qualified_name / name. The load query
 // falls back to id / path (or whatever the node DOES carry) so they still
 // flow into the graph.
-// source: cortex@f2b9f99 workflow_graph_source_ast.py:204
+// source: cortex main workflow_graph_source_ast.py:204
 const _NON_QUALIFIED_LABELS = new Set<string>(["Import"]);
 
 // ── Environment helpers ────────────────────────────────────────────────────
@@ -103,7 +103,7 @@ const _NON_QUALIFIED_LABELS = new Set<string>(["Import"]);
  * pre:  none
  * post: returns true iff CORTEX_MEMORY_AP_ENABLED is unset or != "0"
  *
- * source: cortex@f2b9f99 ap_bridge.py:46-67
+ * source: cortex main ap_bridge.py:46-67
  */
 function _isEnabled(): boolean {
   const raw = process.env["CORTEX_MEMORY_AP_ENABLED"];
@@ -121,7 +121,7 @@ function _isEnabled(): boolean {
  * pre:  _isEnabled() is true
  * post: each element is an absolute path to an existing graph file/dir
  *
- * source: cortex@f2b9f99 ap_bridge.py:89-138
+ * source: cortex main ap_bridge.py:89-138
  */
 function _resolveGraphPaths(): string[] {
   const paths: string[] = [];
@@ -178,7 +178,7 @@ function _resolveGraphPaths(): string[] {
  * pre:  payload is any value returned by callUpstream
  * post: each element is a Record<string, unknown> extracted from the payload
  *
- * source: cortex@f2b9f99 workflow_graph_source_ast.py:116-161
+ * source: cortex main workflow_graph_source_ast.py:116-161
  */
 function _asList(payload: unknown): Record<string, unknown>[] {
   const normalised = normaliseMcpPayload(payload);
@@ -225,7 +225,7 @@ function _asList(payload: unknown): Record<string, unknown>[] {
  * Every AP label from every supported language collapses into one of:
  * function · method · class · module · constant · import.
  *
- * source: cortex@f2b9f99 workflow_graph_source_ast.py:207-248
+ * source: cortex main workflow_graph_source_ast.py:207-248
  */
 function _symbolTypeFromLabel(label: string): string {
   const low = label.toLowerCase();
@@ -260,7 +260,7 @@ export class WorkflowGraphASTSource {
    * pre:  constructor can be called unconditionally; enabled() guards queries
    * post: loadSymbolsAsync / loadAstEdgesAsync return [] when AP is disabled / unreachable
    *
-   * source: cortex@f2b9f99 workflow_graph_source_ast.py:250-268
+   * source: cortex main workflow_graph_source_ast.py:250-268
    */
 
   enabled(): boolean {
@@ -281,7 +281,7 @@ export class WorkflowGraphASTSource {
      * pre:  _isEnabled() is true (checked at entry)
      * post: each row has file_path and qualified_name set; signature/language/line may be null
      *
-     * source: cortex@f2b9f99 workflow_graph_source_ast.py:269-297
+     * source: cortex main workflow_graph_source_ast.py:269-297
      */
     if (!_isEnabled()) return [];
     const graphPaths = _resolveGraphPaths();
@@ -309,7 +309,7 @@ export class WorkflowGraphASTSource {
      * pre:  _isEnabled() is true (checked at entry)
      * post: each row has {kind, src_file, src_name, dst_file, dst_name, confidence, reason}
      *
-     * source: cortex@f2b9f99 workflow_graph_source_ast.py:299-322
+     * source: cortex main workflow_graph_source_ast.py:299-322
      */
     if (!_isEnabled()) return [];
     const graphPaths = _resolveGraphPaths();
@@ -339,7 +339,7 @@ export class WorkflowGraphASTSource {
      * pre:  query is a non-empty string
      * post: each row has id, qualified_name, file_path, score, snippet, source
      *
-     * source: cortex@f2b9f99 workflow_graph_source_ast.py:409-451
+     * source: cortex main workflow_graph_source_ast.py:409-451
      */
     if (!_isEnabled() || !query.trim()) return [];
     const graphPaths = _resolveGraphPaths();
@@ -382,7 +382,7 @@ export class WorkflowGraphASTSource {
      * pre:  qualnames is a list of qualified names to check
      * post: each key maps to true iff the symbol exists in the AP graph
      *
-     * source: cortex@f2b9f99 workflow_graph_source_ast.py:453-513
+     * source: cortex main workflow_graph_source_ast.py:453-513
      */
     if (!_isEnabled()) return Object.fromEntries(qualnames.map((q) => [q, false]));
     const graphPaths = _resolveGraphPaths();
@@ -411,7 +411,7 @@ export class WorkflowGraphASTSource {
      * precondition:  paths may be [] (load-all mode) or a non-empty list
      * postcondition: each returned row has file_path + qualified_name set
      *
-     * source: cortex@f2b9f99 workflow_graph_source_ast.py:324-407
+     * source: cortex main workflow_graph_source_ast.py:324-407
      */
     const out: Record<string, unknown>[] = [];
 
@@ -429,7 +429,7 @@ export class WorkflowGraphASTSource {
     for (const label of _SYMBOL_LABELS) {
       // Import nodes don't carry qualified_name / name — they use id
       // (<file>::<modpath>) and path (the imported module).
-      // source: cortex@f2b9f99 workflow_graph_source_ast.py:354-361
+      // source: cortex main workflow_graph_source_ast.py:354-361
       let baseQuery: string;
       if (_NON_QUALIFIED_LABELS.has(label)) {
         baseQuery =
@@ -444,7 +444,7 @@ export class WorkflowGraphASTSource {
       }
 
       // No LIMIT in load-all mode (paths=[]). Per-file cap only when paths are given.
-      // source: cortex@f2b9f99 workflow_graph_source_ast.py:369-372
+      // source: cortex main workflow_graph_source_ast.py:369-372
       const query =
         paths.length > 0
           ? baseQuery + ` LIMIT ${_MAX_SYMBOLS_PER_FILE * paths.length}`
@@ -517,7 +517,7 @@ export class WorkflowGraphASTSource {
      * precondition:  graphPath is a valid AP graph path
      * postcondition: each row has {kind, src_file, src_name, dst_file, dst_name, confidence, reason}
      *
-     * source: cortex@f2b9f99 workflow_graph_source_ast.py:516-705
+     * source: cortex main workflow_graph_source_ast.py:516-705
      */
     const out: Record<string, unknown>[] = [];
 
@@ -542,7 +542,7 @@ export class WorkflowGraphASTSource {
     // Enumerate the full Cartesian product of label kinds AP could have
     // produced rel tables for. The narrower prior lists were the reason the
     // cortex viz showed ~4k imports instead of tens of thousands.
-    // source: cortex@f2b9f99 workflow_graph_source_ast.py:543-565
+    // source: cortex main workflow_graph_source_ast.py:543-565
     const _CALL_LABELS = ["Function", "Method", "Macro"] as const;
     const _IMPORT_TARGETS = _SYMBOL_LABELS; // File can import any symbol kind
     const _CONTAINER_LBLS = [
@@ -577,10 +577,10 @@ export class WorkflowGraphASTSource {
        * (Calls_* / Imports_* / Implements_* / Extends_* / Uses_*). Structural
        * tables (HasMethod_* / Defines_*) have no such columns.
        *
-       * source: cortex@f2b9f99 workflow_graph_source_ast.py:575-666
+       * source: cortex main workflow_graph_source_ast.py:575-666
        */
       // Import nodes (and _NON_QUALIFIED_LABELS) carry id instead of
-      // qualified_name. source: cortex@f2b9f99 py:591-613
+      // qualified_name. source: cortex main py:591-613
       let selectSrc: string;
       if (srcLbl === "File") {
         selectSrc = "src.id AS src_name";
@@ -643,7 +643,7 @@ export class WorkflowGraphASTSource {
         // (see automatised-pipeline resolver.rs:183). Strip them at the
         // infrastructure boundary. Remove this strip once AP fixes the
         // upstream quoting.
-        // source: cortex@f2b9f99 workflow_graph_source_ast.py:644-655
+        // source: cortex main workflow_graph_source_ast.py:644-655
         const confRaw = hasProvenance ? r["confidence"] : null;
         let confidence: number | null = null;
         if (confRaw !== null && confRaw !== undefined) {
@@ -660,7 +660,7 @@ export class WorkflowGraphASTSource {
       }
     };
 
-    // source: cortex@f2b9f99 workflow_graph_source_ast.py:668-676
+    // source: cortex main workflow_graph_source_ast.py:668-676
     for (const [s, d] of callsRels) {
       await runEdge("calls", `Calls_${s}_${d}`, s, d, true);
     }
@@ -675,12 +675,12 @@ export class WorkflowGraphASTSource {
     // file via this rel table; counts in the tens of thousands per
     // project. Without this, the cortex viz captures only the small
     // subset that AP managed to RESOLVE to in-graph symbols.
-    // source: cortex@f2b9f99 workflow_graph_source_ast.py:677-687
+    // source: cortex main workflow_graph_source_ast.py:677-687
     await runEdge("imports", "Defines_File_Import", "File", "Import", false);
 
     // Type-usage edges (Method/Function uses Struct/Class/etc).
     // Captured by AP's resolver and exposed as Uses_<src>_<dst>.
-    // source: cortex@f2b9f99 workflow_graph_source_ast.py:689-704
+    // source: cortex main workflow_graph_source_ast.py:689-704
     const _USES_SRC = ["Method", "Function"] as const;
     const _USES_DST = [
       "Struct", "Enum", "Trait", "Class", "Interface",
@@ -709,7 +709,7 @@ export class WorkflowGraphASTSource {
      * precondition:  qualnames is non-empty; graphPath exists
      * postcondition: every key in input appears in output
      *
-     * source: cortex@f2b9f99 workflow_graph_source_ast.py:471-513
+     * source: cortex main workflow_graph_source_ast.py:471-513
      */
     const out: Record<string, boolean> = Object.fromEntries(
       qualnames.map((q) => [q, false]),

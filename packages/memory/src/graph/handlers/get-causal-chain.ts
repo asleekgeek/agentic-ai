@@ -13,13 +13,13 @@
  *         chain.length ≤ max_edges (capped at 200).
  *         BFS terminates in ≤ max_depth hops (bounded by max_depth ≤ 10).
  *
- * source: cortex@ed33435 mcp_server/handlers/get_causal_chain.py
+ * source: cortex main mcp_server/handlers/get_causal_chain.py
  */
 
 import type { MemoryStore as RecallMemoryStore } from "../../recall/port.js";
 
 // ── Schema ────────────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/get_causal_chain.py schema
+// source: cortex main mcp_server/handlers/get_causal_chain.py schema
 
 export const schema = {
   title: "Get causal chain",
@@ -92,13 +92,13 @@ export const schema = {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/handlers/get_causal_chain.py:_handler_impl — max_depth = min(…, 5)
+// source: cortex main mcp_server/handlers/get_causal_chain.py:_handler_impl — max_depth = min(…, 5)
 const ABSOLUTE_MAX_DEPTH = 5; // source: get_causal_chain.py line 255
-// source: cortex@ed33435 mcp_server/handlers/get_causal_chain.py:_handler_impl — max_edges = min(…, 200)
+// source: cortex main mcp_server/handlers/get_causal_chain.py:_handler_impl — max_edges = min(…, 200)
 const ABSOLUTE_MAX_EDGES = 200; // source: get_causal_chain.py line 256
-// source: cortex@ed33435 mcp_server/handlers/get_causal_chain.py:_bfs_entity_graph — limit=20 rels per entity
+// source: cortex main mcp_server/handlers/get_causal_chain.py:_bfs_entity_graph — limit=20 rels per entity
 const RELS_PER_ENTITY_LIMIT = 20; // source: get_causal_chain.py:_bfs_entity_graph
-// source: cortex@ed33435 mcp_server/handlers/get_causal_chain.py:_get_related_memory_previews — limit=5
+// source: cortex main mcp_server/handlers/get_causal_chain.py:_get_related_memory_previews — limit=5
 const RELATED_MEMORY_LIMIT = 5; // source: get_causal_chain.py:_get_related_memory_previews
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -163,7 +163,7 @@ interface RelationshipRow {
 /**
  * Resolve starting entity by name.
  *
- * source: cortex@ed33435 mcp_server/handlers/get_causal_chain.py:_resolve_start_entity_by_name
+ * source: cortex main mcp_server/handlers/get_causal_chain.py:_resolve_start_entity_by_name
  */
 async function resolveByName(
   entityName: string,
@@ -178,7 +178,7 @@ async function resolveByName(
  * Pre:  memoryId is a positive integer.
  * Post: returns the first known entity extracted from the memory's content, or null.
  *
- * source: cortex@ed33435 mcp_server/handlers/get_causal_chain.py:_resolve_start_entity_from_memory
+ * source: cortex main mcp_server/handlers/get_causal_chain.py:_resolve_start_entity_from_memory
  */
 async function resolveFromMemory(
   memoryId: number,
@@ -208,7 +208,7 @@ async function resolveFromMemory(
  * Termination: depth increases monotonically; loop exits when depth ≥ maxDepth
  *              or edges.length ≥ maxEdges or queue is empty.
  *
- * source: cortex@ed33435 mcp_server/handlers/get_causal_chain.py:_bfs_entity_graph
+ * source: cortex main mcp_server/handlers/get_causal_chain.py:_bfs_entity_graph
  */
 async function bfsEntityGraph(
   startEntityId: number,
@@ -303,7 +303,7 @@ async function bfsEntityGraph(
 /**
  * Fetch memory previews mentioning an entity (FTS name lookup).
  *
- * source: cortex@ed33435 mcp_server/handlers/get_causal_chain.py:_get_related_memory_previews
+ * source: cortex main mcp_server/handlers/get_causal_chain.py:_get_related_memory_previews
  */
 async function getRelatedMemoryPreviews(
   store: RecallMemoryStore,
@@ -333,7 +333,7 @@ async function getRelatedMemoryPreviews(
 /**
  * Trace causal/dependency chain from an entity or memory.
  *
- * source: cortex@ed33435 mcp_server/handlers/get_causal_chain.py:_handler_impl
+ * source: cortex main mcp_server/handlers/get_causal_chain.py:_handler_impl
  */
 export async function getCausalChainHandler(
   args: Record<string, unknown> | null | undefined,
@@ -347,7 +347,7 @@ export async function getCausalChainHandler(
     return { chain: [], total_edges: 0, reason: "provide entity_name or memory_id" };
   }
 
-  // source: cortex@ed33435 get_causal_chain.py:255-256 — clamp to ABSOLUTE limits
+  // source: cortex main get_causal_chain.py:255-256 — clamp to ABSOLUTE limits
   const maxDepth = Math.min(Number(a["max_depth"] ?? 3), ABSOLUTE_MAX_DEPTH);
   const maxEdges = Math.min(Number(a["max_edges"] ?? 50), ABSOLUTE_MAX_EDGES);
   const direction = String(a["direction"] ?? "both");

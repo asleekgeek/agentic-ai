@@ -9,7 +9,7 @@
  *   3. annotations — readOnlyHint / destructiveHint /
  *      idempotentHint / openWorldHint (spec: MCP 2024-11-05+).
  *
- * source: cortex@ed33435 mcp_server/handlers/_tool_meta.py
+ * source: cortex main mcp_server/handlers/_tool_meta.py
  */
 
 // ── Annotation presets ────────────────────────────────────────────────────
@@ -90,7 +90,7 @@ export interface ToolSchema {
  *   outputSchema/output_schema are normalised to output_schema.
  *
  * Port of: mcp_server/handlers/_tool_meta.py::tool_kwargs
- * source: cortex@ed33435 mcp_server/handlers/_tool_meta.py:71
+ * source: cortex main mcp_server/handlers/_tool_meta.py:71
  */
 export function toolKwargs(schema: ToolSchema): Record<string, unknown> {
   const out: Record<string, unknown> = {};

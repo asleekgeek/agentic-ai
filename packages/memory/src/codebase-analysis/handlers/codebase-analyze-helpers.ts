@@ -92,7 +92,7 @@ function _fileMatches(
  * Bounded-candidate walk: take ``maxFiles * CANDIDATE_MULTIPLIER`` paths
  * then sort for deterministic ordering. See ADR-0045 §R2.
  *
- * source: cortex@2f42428 mcp_server/handlers/codebase_analyze_helpers.py::_collect_bounded
+ * source: cortex main mcp_server/handlers/codebase_analyze_helpers.py::_collect_bounded
  */
 function _collectBounded(
   root: string,
@@ -119,7 +119,7 @@ function _collectBounded(
 /**
  * Walk the entire tree, filter, then sort. Memory O(filteredCount).
  *
- * source: cortex@2f42428 mcp_server/handlers/codebase_analyze_helpers.py::_collect_unbounded
+ * source: cortex main mcp_server/handlers/codebase_analyze_helpers.py::_collect_unbounded
  */
 function _collectUnbounded(
   root: string,
@@ -161,7 +161,7 @@ export function collectSourceFiles(
    *     a known language (and satisfies ``languages`` if supplied),
    *     and whose size is ``<= maxBytes``.
    *
-   * source: cortex@2f42428 mcp_server/handlers/codebase_analyze_helpers.py::collect_source_files
+   * source: cortex main mcp_server/handlers/codebase_analyze_helpers.py::collect_source_files
    */
   const langFilter =
     languages && languages.length > 0 ? new Set(languages) : null;
@@ -207,7 +207,7 @@ function _extractFileHash(tags: string[]): [string, string] {
  * postcondition: returns Map from filePath → [memoryId, contentHash].
  *   Returns empty Map if no memories exist for the agent context (first run).
  *
- * source: cortex@ed33435 mcp_server/handlers/codebase_analyze_helpers.py:loadExistingHashes
+ * source: cortex main mcp_server/handlers/codebase_analyze_helpers.py:loadExistingHashes
  */
 export function loadExistingHashes(
   store: MemoryStore,
@@ -310,10 +310,14 @@ async function _getOrCreateEntity(
   } catch {
     // fall through to upsert
   }
+  // All entities created from codebase AST analysis (symbols, imports, files,
+  // classes) are tagged origin='ast_symbol' — exempt from fuzzy entity dedup
+  // (core.entity_dedup); identity is structural, not a fuzzy label.
+  // source: cortex main mcp_server/handlers/codebase_analyze_helpers.py:208-226
   if (store.upsertEntityAsync) {
-    return store.upsertEntityAsync(name, entityType, domain);
+    return store.upsertEntityAsync(name, entityType, domain, "ast_symbol");
   }
-  return store.upsertEntity(name, entityType, domain);
+  return store.upsertEntity(name, entityType, domain, "ast_symbol");
 }
 
 async function _persistSymbolEntities(
@@ -329,7 +333,7 @@ async function _persistSymbolEntities(
     const kind = VALID_KINDS.has(sym.kind) ? sym.kind : "function";
     const symEid = await _getOrCreateEntity(store, sym.name, kind, domain);
     entities++;
-    // source: cortex@ed33435 mcp_server/handlers/codebase_analyze_helpers.py:persist_entities
+    // source: cortex main mcp_server/handlers/codebase_analyze_helpers.py:persist_entities
     // Links each extracted symbol entity back to the originating memory so
     // memory_entities join table is populated and dashboard entity panels render.
     try {
@@ -379,7 +383,7 @@ async function _persistImportEntities(
   /**
    * Persist one dependency entity per named import symbol.
    *
-   * Parity: cortex@ed33435 mcp_server/codebase/codebase_parser.py:extractPythonImports
+   * Parity: cortex main mcp_server/codebase/codebase_parser.py:extractPythonImports
    *   Python emits one entity per named symbol (`from foo import A, B, C` → 3 entities).
    *   Each entity name is `module:symbol` (e.g. `foo:A`).
    *   Side-effect / namespace / empty imports fall back to the module name.
@@ -388,7 +392,7 @@ async function _persistImportEntities(
    * Postcondition: each named symbol from each ImportInfo becomes a distinct dependency
    *   entity linked to fileEid via an "imports" relationship.
    *
-   * source: cortex@ed33435 mcp_server/handlers/codebase_analyze_helpers.py:persist_entities
+   * source: cortex main mcp_server/handlers/codebase_analyze_helpers.py:persist_entities
    * source: liskov@24cb6e2 — *Async-when-available pattern for PG/SQLite parity.
    */
   let entities = 0;
@@ -402,11 +406,11 @@ async function _persistImportEntities(
 
     for (const sym of names) {
       // Entity name: `module:symbol` for named symbols; bare module for empty/wildcard.
-      // source: cortex@ed33435 mcp_server/codebase/codebase_parser.py — entity name is the symbol
+      // source: cortex main mcp_server/codebase/codebase_parser.py — entity name is the symbol
       const entityName = sym && sym !== "*" ? `${imp.module}:${sym}` : imp.module;
       const depEid = await _getOrCreateEntity(store, entityName, "dependency", domain);
       entities++;
-      // source: cortex@ed33435 mcp_server/handlers/codebase_analyze_helpers.py:persist_entities
+      // source: cortex main mcp_server/handlers/codebase_analyze_helpers.py:persist_entities
       // Same link: import-module entities tied to the file memory that declares them.
       try {
         if (store.linkMemoryEntityAsync) {
@@ -536,7 +540,7 @@ export async function persistEntities(
     const fileEid = await _getOrCreateEntity(store, analysis.path, "file", domain);
     entities++;
     // Link the file entity itself to the memory.
-    // source: cortex@ed33435 mcp_server/handlers/codebase_analyze_helpers.py:persist_entities
+    // source: cortex main mcp_server/handlers/codebase_analyze_helpers.py:persist_entities
     try {
       if (store.linkMemoryEntityAsync) {
         await store.linkMemoryEntityAsync(memoryId, fileEid);

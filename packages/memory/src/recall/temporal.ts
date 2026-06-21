@@ -6,11 +6,11 @@
  *
  * Pure business logic — no I/O.
  *
- * Port of: cortex@ed33435 mcp_server/core/temporal.py
+ * Port of: cortex main mcp_server/core/temporal.py
  */
 
 // ── Month name lookup ─────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/temporal.py:15-28
+// source: cortex main mcp_server/core/temporal.py:15-28
 
 const MONTH_NAMES: Record<string, number> = {
   january: 1, february: 2, march: 3, april: 4, may: 5, june: 6,
@@ -60,7 +60,7 @@ const DECIMAL_RADIX = 10;
 const CAPTURE_GROUP_3 = 3;
 
 // ── Regex constants ───────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/temporal.py:30-52
+// source: cortex main mcp_server/core/temporal.py:30-52
 
 const TEMPORAL_QUERY_RE = /\b(when|date|time|ago|before|after|during|january|february|march|april|may|june|july|august|september|october|november|december|yesterday|today|last|recent|week|month|year|\d{1,2}\s+\w+\s+\d{4}|\d{4}-\d{2}-\d{2})\b/gi;
 
@@ -81,7 +81,7 @@ const EMBEDDED_ISO_RE = /(\d{4})-(\d{2})-(\d{2})/;
  * Detect temporal intent in a query.
  *
  * postcondition: returns true iff at least one temporal keyword/pattern is found.
- * source: cortex@ed33435 mcp_server/core/temporal.py:55-57
+ * source: cortex main mcp_server/core/temporal.py:55-57
  */
 export function isTemporalQuery(query: string): boolean {
   const matches = query.match(TEMPORAL_QUERY_RE);
@@ -94,7 +94,7 @@ export function isTemporalQuery(query: string): boolean {
  * Extract date/month mentions from text.
  *
  * postcondition: returned array contains unique date mentions found in text.
- * source: cortex@ed33435 mcp_server/core/temporal.py:60-69
+ * source: cortex main mcp_server/core/temporal.py:60-69
  */
 export function extractDateHints(text: string): string[] {
   const hints = new Set<string>();
@@ -117,7 +117,7 @@ export function extractDateHints(text: string): string[] {
  *
  * precondition:  dateHints is an array of strings.
  * postcondition: result ∈ [0, 1].
- * source: cortex@ed33435 mcp_server/core/temporal.py:72-87
+ * source: cortex main mcp_server/core/temporal.py:72-87
  */
 export function computeTemporalProximity(
   docText: string,
@@ -146,7 +146,7 @@ export function computeTemporalProximity(
  * Try DD Month YYYY and Month DD, YYYY formats.
  * Returns a Date or null.
  *
- * source: cortex@ed33435 mcp_server/core/temporal.py:103-127
+ * source: cortex main mcp_server/core/temporal.py:103-127
  */
 function tryParseNamedDate(dateStr: string): Date | null {
   // Each regex's captures are required by its anchor pattern, so a match
@@ -182,7 +182,7 @@ function tryParseNamedDate(dateStr: string): Date | null {
  *
  * precondition:  dateStr is a non-empty string.
  * postcondition: returns a Date object or null if unparseable.
- * source: cortex@ed33435 mcp_server/core/temporal.py:130-139
+ * source: cortex main mcp_server/core/temporal.py:130-139
  */
 export function parseDate(dateStr: string): Date | null {
   if (!dateStr) return null;
@@ -202,7 +202,7 @@ export function parseDate(dateStr: string): Date | null {
  * Handles formats like '8 May 2023', 'May 8, 2023', ISO strings.
  *
  * postcondition: returns ISO string or null if unparseable.
- * source: cortex@ed33435 mcp_server/core/temporal.py:142-168
+ * source: cortex main mcp_server/core/temporal.py:142-168
  */
 export function normalizeDateToIso(raw: string): string | null {
   if (!raw || !raw.trim()) return null;
@@ -223,7 +223,7 @@ export function normalizeDateToIso(raw: string): string | null {
  *
  * precondition:  scaleDays > 0.
  * postcondition: result ∈ [0, 1].
- * source: cortex@ed33435 mcp_server/core/temporal.py:170-194
+ * source: cortex main mcp_server/core/temporal.py:170-194
  *   Formula: exp(-delta_days / scale_days); scale_days default = 14
  */
 export function computeDateDistanceScore(
@@ -258,7 +258,7 @@ export function computeDateDistanceScore(
  *
  * precondition:  halflifeDays > 0; cutoffDays > 0.
  * postcondition: result ∈ [0, boostMax]; returns 0 for age > cutoffDays.
- * source: cortex@ed33435 mcp_server/core/temporal.py:197-224
+ * source: cortex main mcp_server/core/temporal.py:197-224
  *   boost_max default = 0.15; halflife_days default = 30; cutoff_days default = 90
  */
 export function computeRecencyBoost(
@@ -279,7 +279,7 @@ export function computeRecencyBoost(
   }
   const ageDays = (now - ts) / MS_PER_DAY;
   if (ageDays < 0 || ageDays > cutoffDays) return 0.0;
-  // source: cortex@ed33435 mcp_server/core/temporal.py:224
+  // source: cortex main mcp_server/core/temporal.py:224
   // boost = boost_max * exp(-ln(2)/halflife * age)
   return boostMax * Math.exp(-(Math.LN2 / halflifeDays) * ageDays);
 }

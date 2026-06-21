@@ -3,7 +3,7 @@
  * PG recall: intent-adaptive retrieval + reconsolidation pipeline.
  * Part 2 of 2 (full recall() orchestration).
  *
- * Port of: cortex@ed33435 mcp_server/core/pg_recall.py:180-636
+ * Port of: cortex main mcp_server/core/pg_recall.py:180-636
  *
  * Two top-level functions are exposed:
  *
@@ -41,7 +41,7 @@ import type { EmbeddingEngine } from "./port.js";
 // ── Titans memory (test-time learning) ───────────────────────────────────
 // Behrouz et al., NeurIPS 2025 — neural associative memory M with
 // surprise-gated momentum S.
-// source: cortex@ed33435 mcp_server/core/pg_recall.py:24-28
+// source: cortex main mcp_server/core/pg_recall.py:24-28
 
 interface TitansMemory {
   update(qEmb: number[] | null, resultEmbs: number[][]): number;
@@ -61,12 +61,12 @@ function getTitans(): TitansMemory {
  * Source: Behrouz et al. (NeurIPS 2025) exact equations:
  *   S_t = eta * S_{t-1} - theta * grad_l(M_{t-1}; x_t)
  *   M_t = M_{t-1} - S_t
- * source: cortex@ed33435 mcp_server/core/pg_recall.py:391-400
+ * source: cortex main mcp_server/core/pg_recall.py:391-400
  */
 function createTitansMemory(): TitansMemory {
-  // Source: cortex@ed33435 mcp_server/core/titans_memory.py (default parameters)
+  // Source: cortex main mcp_server/core/titans_memory.py (default parameters)
   const eta = 0.9;    // momentum decay
-  const theta = 0.01; // source: cortex@ed33435 mcp_server/core/titans_memory.py — gradient step (engineering default)
+  const theta = 0.01; // source: cortex main mcp_server/core/titans_memory.py — gradient step (engineering default)
   let S = 0.0;
   let M = 0.0;
 
@@ -92,7 +92,7 @@ function createTitansMemory(): TitansMemory {
 
 /**
  * Return the user's session-level mood in [-1, +1], or null if absent.
- * Port of: cortex@ed33435 mcp_server/core/pg_recall.py:30-52
+ * Port of: cortex main mcp_server/core/pg_recall.py:30-52
  *
  * No get_user_mood() method exists in the current PgMemoryStore (April 2026),
  * so this returns null and MOOD_CONGRUENT_RERANK no-ops.
@@ -145,7 +145,7 @@ export interface PgStore extends CandidateStore, ReconsolidationStore {
 // ── _TYPE_INTENTS pool guarantee ──────────────────────────────────────────
 // ENGRAM (arxiv 2511.12960): typed memory pools prevent instruction/
 // preference memories from being drowned out by episodic memories.
-// source: cortex@ed33435 mcp_server/core/pg_recall.py:298-313
+// source: cortex main mcp_server/core/pg_recall.py:298-313
 
 const _TYPE_INTENTS: Partial<Record<string, string>> = {
   [QueryIntent.INSTRUCTION]: "instruction",
@@ -170,14 +170,14 @@ export interface RecallOptions {
 /**
  * Full PG-path retrieval: intent → weights → recall_memories → rerank.
  *
- * Port of: cortex@ed33435 mcp_server/core/pg_recall.py:185-405
+ * Port of: cortex main mcp_server/core/pg_recall.py:185-405
  *
  * precondition: store.recallMemories exists; embeddings is non-null or can
  *   be null (q_emb will be null, which degrades gracefully)
  * postcondition: result.length <= topK; every entry has memory_id + content +
  *   score; returns [] when store returns no candidates
  *
- * Constants — source: cortex@ed33435 mcp_server/core/pg_recall.py:197-204
+ * Constants — source: cortex main mcp_server/core/pg_recall.py:197-204
  *   rerank_alpha = 0.70 (BEAM ablation optimum)
  *   wrrf_k       = 60   (Cormack 2009)
  *   min_heat     = 0.01
@@ -192,10 +192,10 @@ export async function recall(
     domain = null,
     directory = null,
     agentTopic = null,
-    minHeat = 0.01, // source: cortex@ed33435 mcp_server/core/pg_recall.py:197
+    minHeat = 0.01, // source: cortex main mcp_server/core/pg_recall.py:197
     rerank = true,
-    rerankAlpha = 0.70,  // source: cortex@ed33435 mcp_server/core/pg_recall.py:202
-    wrrfK = 60,          // source: cortex@ed33435 mcp_server/core/pg_recall.py:203
+    rerankAlpha = 0.70,  // source: cortex main mcp_server/core/pg_recall.py:202
+    wrrfK = 60,          // source: cortex main mcp_server/core/pg_recall.py:203
     momentumState = null,
     includeGlobals = true,
   }: RecallOptions = {},
@@ -208,7 +208,7 @@ export async function recall(
   const weights = computePgWeights(intent, intentInfo.weights ?? {});
 
   // 3. Encode query
-  // source: cortex@ed33435 mcp_server/core/pg_recall.py:217-222
+  // source: cortex main mcp_server/core/pg_recall.py:217-222
   const qEmb = embeddings !== null ? await embeddings.encode(query) : null;
 
   // 4. PG recall_memories (server-side WRRF fusion)
@@ -230,7 +230,7 @@ export async function recall(
   if (candidates.length === 0) return [];
 
   // 4a. HOPFIELD (Ramsauer 2021 attention)
-  // source: cortex@ed33435 mcp_server/core/pg_recall.py:240-248
+  // source: cortex main mcp_server/core/pg_recall.py:240-248
   candidates = await hopfieldComplete(
     candidates,
     qEmb,
@@ -248,22 +248,22 @@ export async function recall(
   candidates = await dendriticModulate(candidates, query, store);
 
   // 4e. EMOTIONAL_RETRIEVAL — Bower 1981 mood-congruent recall
-  // source: cortex@ed33435 mcp_server/core/pg_recall.py:267-269
+  // source: cortex main mcp_server/core/pg_recall.py:267-269
   candidates = emotionalRetrievalRerank(candidates, query);
 
   // 4f. MOOD_CONGRUENT_RERANK — Bower 1981 mood-state-dependent recall
   // Returns identity when no mood signal exists.
-  // source: cortex@ed33435 mcp_server/core/pg_recall.py:272-274
+  // source: cortex main mcp_server/core/pg_recall.py:272-274
   candidates = moodCongruentRerank(candidates, getUserMood(store));
 
   // 4g. RECONSOLIDATION — Nader, Schafe & LeDoux (2000), Nature 406(6797).
   // MUST be the final post-WRRF stage so the mutation reflects the
   // FINAL ranking the user will see.
-  // source: cortex@ed33435 mcp_server/core/pg_recall.py:276-282
+  // source: cortex main mcp_server/core/pg_recall.py:276-282
   candidates = await reconsolidationApply(candidates, query, store);
 
   // 5. Client-side FlashRank reranking
-  // source: cortex@ed33435 mcp_server/core/pg_recall.py:285-296
+  // source: cortex main mcp_server/core/pg_recall.py:285-296
   if (rerank && candidates.length > 1) {
     const rankedPairs = candidates.map((c): [number, number] => [
       c.memory_id,
@@ -286,7 +286,7 @@ export async function recall(
   // ENGRAM (arxiv 2511.12960): typed memory pools prevent instruction/
   // preference memories from being drowned out by episodic memories.
   // Reserves 2 slots for tag-matched memories when intent matches.
-  // source: cortex@ed33435 mcp_server/core/pg_recall.py:298-313
+  // source: cortex main mcp_server/core/pg_recall.py:298-313
   const tagForIntent = _TYPE_INTENTS[intent];
   if (
     tagForIntent &&
@@ -313,21 +313,21 @@ export async function recall(
 
   // 7. Abstention gate — DISABLED.
   // v0.1 model regresses BEAM by -0.191 MRR on every category.
-  // source: cortex@ed33435 mcp_server/core/pg_recall.py:316-326
+  // source: cortex main mcp_server/core/pg_recall.py:316-326
 
   // 8. MMR diversity reranking — DISABLED after ablation.
-  // source: cortex@ed33435 mcp_server/core/pg_recall.py:327-338
+  // source: cortex main mcp_server/core/pg_recall.py:327-338
 
   // 9. Chronological reranking for event ordering queries.
   // ChronoRAG (Chen et al., 2025): blend relevance rank with
   // chronological rank via RRF (Cormack et al., 2009).
-  // source: cortex@ed33435 mcp_server/core/pg_recall.py:340-344
+  // source: cortex main mcp_server/core/pg_recall.py:340-344
   if (intent === QueryIntent.EVENT_ORDER && candidates.length > 1) {
     candidates = chronologicalRerank(candidates, 0.5, 60) as Candidate[];
   }
 
   // 10. Titans test-time learning (Behrouz et al., NeurIPS 2025)
-  // source: cortex@ed33435 mcp_server/core/pg_recall.py:346-358
+  // source: cortex main mcp_server/core/pg_recall.py:346-358
   if (momentumState !== null) {
     const titans = getTitans();
     const resultEmbs: number[][] = [];

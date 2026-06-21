@@ -17,7 +17,7 @@ import { boundPayload, listTarget, textTarget } from "../../recall/response-budg
  * Bounded I/O: fit the response to the host's tool-result budget. Hot-memory
  * and fired-trigger contents are cut first (they carry ids for full retrieval
  * via recall); the assembled `context` string is the other unbounded text.
- * source: cortex@bc5af469 mcp_server/handlers/query_methodology.py:276-293
+ * source: cortex main mcp_server/handlers/query_methodology.py:276-293
  *   (bound_payload([ListTarget("hotMemories", weight_key="heat"),
  *                   ListTarget("firedTriggers"), TextTarget("context")]))
  */

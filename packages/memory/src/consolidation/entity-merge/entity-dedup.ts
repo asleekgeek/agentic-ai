@@ -1,7 +1,7 @@
 /**
  * Fuzzy entity-graph deduplication — 3-pass exact / MinHash-LSH / Jaro-Winkler.
  *
- * Port of: cortex bc5af469 mcp_server/core/entity_dedup.py
+ * Port of: cortex main mcp_server/core/entity_dedup.py
  *
  * Collapses near-duplicate *concept* entities that the case-canonical insert
  * policy and exact-name DB upsert miss — whitespace and punctuation variants
@@ -72,7 +72,7 @@ export interface DedupResult {
 // Concept-ish types where spelling/spacing variants of one real-world entity
 // legitimately arise. Structural code symbols and file paths are exempt — their
 // identity is the symbol/path, not a fuzzy label.
-// source: cortex bc5af469 mcp_server/core/entity_dedup.py:45-46
+// source: cortex main mcp_server/core/entity_dedup.py:45-46
 export const FUZZY_ELIGIBLE_TYPES: ReadonlySet<string> = new Set([
   "technology",
   "decision",
@@ -89,7 +89,7 @@ export const FUZZY_ELIGIBLE_TYPES: ReadonlySet<string> = new Set([
  * "next step" toward the root in x's component tree. Path halving keeps the
  * tree flat.
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup.py:49-63
+ * source: cortex main mcp_server/core/entity_dedup.py:49-63
  */
 class UnionFind {
   private readonly _parent = new Map<string, string>();
@@ -151,7 +151,7 @@ class UnionFind {
  * Postcondition: returns String(id) if id is not null/undefined, else
  *                String(name ?? "").
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup.py:66-68
+ * source: cortex main mcp_server/core/entity_dedup.py:66-68
  */
 function mergeKey(entity: EntityInput): string {
   if (entity.id !== null && entity.id !== undefined) {
@@ -172,7 +172,7 @@ function mergeKey(entity: EntityInput): string {
  *                len(name), name) — i.e. maximising mention_count, then heat,
  *                then shortest name, then lexicographically first.
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup.py:71-82
+ * source: cortex main mcp_server/core/entity_dedup.py:71-82
  */
 function pickWinner(group: EntityInput[]): EntityInput {
   return group.reduce((best, cur) => {
@@ -198,7 +198,7 @@ function pickWinner(group: EntityInput[]): EntityInput {
  * Postcondition: entities sharing the same normalized label are unioned in uf;
  *                a merge record is appended for each pair after the first.
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup.py:121-131
+ * source: cortex main mcp_server/core/entity_dedup.py:121-131
  */
 function exactNormPass(
   group: EntityInput[],
@@ -241,7 +241,7 @@ function exactNormPass(
  *                entities with distinct norms and entropy >= ENTROPY_THRESHOLD,
  *                and normCache maps mergeKey → normalized label.
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup.py:134-144
+ * source: cortex main mcp_server/core/entity_dedup.py:134-144
  */
 function gatherCandidates(
   group: EntityInput[],
@@ -266,7 +266,7 @@ function gatherCandidates(
 /**
  * Index candidate sketches for sub-quadratic neighbor blocking.
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup.py:147-155
+ * source: cortex main mcp_server/core/entity_dedup.py:147-155
  */
 function buildLsh(
   candidates: EntityInput[],
@@ -284,7 +284,7 @@ function buildLsh(
       lsh.insert(key, m);
     } catch {
       // duplicate key already inserted — skip silently.
-      // source: cortex bc5af469 mcp_server/core/entity_dedup.py:153-154
+      // source: cortex main mcp_server/core/entity_dedup.py:153-154
     }
   }
   return [lsh, minhashes];
@@ -296,7 +296,7 @@ function buildLsh(
  * Precondition:  aNorm, bNorm are normalized entity labels.
  * Postcondition: returns (shouldMerge, score, reason).
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup.py:158-169
+ * source: cortex main mcp_server/core/entity_dedup.py:158-169
  */
 function verifyPair(
   aNorm: string,
@@ -316,7 +316,7 @@ function verifyPair(
 /**
  * MinHash/LSH blocking then Jaro-Winkler verification.
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup.py:172-188
+ * source: cortex main mcp_server/core/entity_dedup.py:172-188
  */
 function fuzzyPass(
   group: EntityInput[],
@@ -356,7 +356,7 @@ function fuzzyPass(
  * Postcondition: remap maps each non-winner key → winner key; survivors is
  *                the list of entities whose mergeKey is NOT in remap.
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup.py:191-202
+ * source: cortex main mcp_server/core/entity_dedup.py:191-202
  */
 function buildRemap(
   entities: EntityInput[],
@@ -399,7 +399,7 @@ function buildRemap(
  *   - survivors: entities remaining after collapsing aliases.
  *   No mutation of the input array or its elements.
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup.py:85-119
+ * source: cortex main mcp_server/core/entity_dedup.py:85-119
  */
 export function deduplicateEntities(
   entities: EntityInput[],
@@ -419,7 +419,7 @@ export function deduplicateEntities(
   const byType = new Map<string, EntityInput[]>();
   for (const e of entities) {
     // AST-extracted code symbols are exempt from fuzzy merging.
-    // source: cortex bc5af469 mcp_server/core/entity_dedup.py:100-101
+    // source: cortex main mcp_server/core/entity_dedup.py:100-101
     if ((e.origin ?? "text_concept") === "ast_symbol") continue;
     const type = e.type ?? "";
     if (eligibleTypes.has(type) && normalizeLabel(e.name)) {

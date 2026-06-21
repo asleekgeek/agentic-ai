@@ -14,14 +14,14 @@
  *
  * Pure business logic — no I/O.
  *
- * source: cortex@ed33435 mcp_server/core/emergence_tracker.py
+ * source: cortex main mcp_server/core/emergence_tracker.py
  */
 
 // ── Memory event ──────────────────────────────────────────────────────────────
 
 /**
  * A single event in a memory's lifecycle for tracking.
- * source: cortex@ed33435 mcp_server/core/emergence_tracker.py:29-39
+ * source: cortex main mcp_server/core/emergence_tracker.py:29-39
  */
 export interface MemoryEvent {
   memoryId: number;
@@ -49,7 +49,7 @@ export interface MemoryEvent {
  * precondition: accessTimes is sorted ascending; currentHeat in [0, 1]
  * postcondition: result in [0, 1]; returns 0.5 for fewer than 3 accesses
  *
- * source: cortex@ed33435 mcp_server/core/emergence_tracker.py:46-80
+ * source: cortex main mcp_server/core/emergence_tracker.py:46-80
  */
 export function computeSpacingBenefit(
   accessTimes: number[],
@@ -88,7 +88,7 @@ export interface TestingBenefitResult {
  * precondition: retrievalCount and reEncodeCount >= 0; currentHeat in [0, 1]
  * postcondition: retrieval_fraction in [0, 1]; testing_benefit in [0, 1]
  *
- * source: cortex@ed33435 mcp_server/core/emergence_tracker.py:86-105
+ * source: cortex main mcp_server/core/emergence_tracker.py:86-105
  */
 export function computeTestingBenefit(
   retrievalCount: number,
@@ -151,7 +151,7 @@ export interface SchemaAccelerationResult {
  *
  * postcondition: acceleration_ratio >= 0; ratio_defined indicates measurement validity
  *
- * source: cortex@ed33435 mcp_server/core/emergence_tracker.py:130-184
+ * source: cortex main mcp_server/core/emergence_tracker.py:130-184
  */
 export function computeSchemaAccelerationMetric(
   schemaConsistentMemories: MemoryForSchema[],
@@ -224,7 +224,7 @@ export interface PhaseLockingResult {
  *
  * postcondition: all fields are finite numbers >= 0
  *
- * source: cortex@ed33435 mcp_server/core/emergence_tracker.py:190-220
+ * source: cortex main mcp_server/core/emergence_tracker.py:190-220
  */
 export function computePhaseLockingBenefit(
   encodingPhaseMemories: MemoryForPhase[],

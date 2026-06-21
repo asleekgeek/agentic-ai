@@ -13,25 +13,25 @@
  *
  * Per-tool overrides tune budget up/down from class defaults.
  *
- * source: cortex@ed33435 mcp_server/handlers/admission.py
- * source: cortex@ed33435 mcp_server/handlers/latency_class.py
+ * source: cortex main mcp_server/handlers/admission.py
+ * source: cortex main mcp_server/handlers/latency_class.py
  * source: docs/program/phase-5-pool-admission-design.md §1.1 and §1.4
  * source: ADR-0045 R6
  */
 
 // ── Latency classes ───────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/latency_class.py
+// source: cortex main mcp_server/handlers/latency_class.py
 
 export type LatencyClass = "interactive" | "batch";
 
-// source: cortex@ed33435 mcp_server/handlers/latency_class.py:DEFAULT_SEMAPHORE
+// source: cortex main mcp_server/handlers/latency_class.py:DEFAULT_SEMAPHORE
 export const DEFAULT_SEMAPHORE: Record<LatencyClass, number> = {
   interactive: 4,
   batch: 1,
 };
 
 // Canonical tool → class map.
-// source: cortex@ed33435 mcp_server/handlers/latency_class.py:_LATENCY_CLASS
+// source: cortex main mcp_server/handlers/latency_class.py:_LATENCY_CLASS
 const LATENCY_CLASS: Record<string, LatencyClass> = {
   // Interactive (hot path)
   recall: "interactive",
@@ -78,7 +78,7 @@ const LATENCY_CLASS: Record<string, LatencyClass> = {
 };
 
 // Per-tool overrides on top of class defaults.
-// source: cortex@ed33435 mcp_server/handlers/admission.py:_OVERRIDES
+// source: cortex main mcp_server/handlers/admission.py:_OVERRIDES
 const OVERRIDES: Record<string, number> = {
   // Higher budget: read-only / very cheap
   recall: 8,
@@ -94,7 +94,7 @@ const OVERRIDES: Record<string, number> = {
  * Classify a tool into its latency class.
  *
  * Falls back to heuristic: batch markers or interactive by default.
- * source: cortex@ed33435 mcp_server/handlers/latency_class.py:classify
+ * source: cortex main mcp_server/handlers/latency_class.py:classify
  */
 export function classify(toolName: string): LatencyClass {
   if (toolName in LATENCY_CLASS) return LATENCY_CLASS[toolName] as LatencyClass;
@@ -109,7 +109,7 @@ export function classify(toolName: string): LatencyClass {
 
 /**
  * Return the declared budget for a tool.
- * source: cortex@ed33435 mcp_server/handlers/admission.py:_budget_for
+ * source: cortex main mcp_server/handlers/admission.py:_budget_for
  */
 export function budgetFor(toolName: string): number {
   if (toolName in OVERRIDES) return OVERRIDES[toolName] as number;
@@ -156,12 +156,12 @@ class AsyncSemaphore {
 }
 
 // Process-local semaphore cache — one per tool name.
-// source: cortex@ed33435 mcp_server/handlers/admission.py:_SEMS
+// source: cortex main mcp_server/handlers/admission.py:_SEMS
 const SEMS = new Map<string, AsyncSemaphore>();
 
 /**
  * Lazy-init per-tool semaphore on first use.
- * source: cortex@ed33435 mcp_server/handlers/admission.py:_get_semaphore
+ * source: cortex main mcp_server/handlers/admission.py:_get_semaphore
  */
 function getSemaphore(toolName: string): AsyncSemaphore {
   let sem = SEMS.get(toolName);
@@ -178,7 +178,7 @@ function getSemaphore(toolName: string): AsyncSemaphore {
  * Blocks when the tool's concurrent-call budget is exhausted. No
  * timeout — the admission semaphore is the backpressure signal.
  *
- * source: cortex@ed33435 mcp_server/handlers/admission.py:admit
+ * source: cortex main mcp_server/handlers/admission.py:admit
  *
  * Usage:
  *   const release = await admit("recall");
@@ -192,7 +192,7 @@ export async function admit(toolName: string): Promise<() => void> {
 
 /**
  * Return current budget for observability + tests.
- * source: cortex@ed33435 mcp_server/handlers/admission.py:current_budget
+ * source: cortex main mcp_server/handlers/admission.py:current_budget
  */
 export function currentBudget(toolName: string): number {
   return budgetFor(toolName);
@@ -200,7 +200,7 @@ export function currentBudget(toolName: string): number {
 
 /**
  * Drop all cached semaphores. For tests only.
- * source: cortex@ed33435 mcp_server/handlers/admission.py:reset_semaphores
+ * source: cortex main mcp_server/handlers/admission.py:reset_semaphores
  */
 export function resetSemaphores(): void {
   SEMS.clear();
@@ -208,7 +208,7 @@ export function resetSemaphores(): void {
 
 /**
  * Return all registered tool names. For tests and audits.
- * source: cortex@ed33435 mcp_server/handlers/latency_class.py:all_registered_tools
+ * source: cortex main mcp_server/handlers/latency_class.py:all_registered_tools
  */
 export function allRegisteredTools(): string[] {
   return Object.keys(LATENCY_CLASS).sort();

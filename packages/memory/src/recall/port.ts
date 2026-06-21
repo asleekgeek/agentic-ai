@@ -150,13 +150,13 @@ export interface MemoryStore {
   /**
    * Look up an entity by name (case-insensitive).
    * Returns null if not found. Used by Wave-2 NL token resolution.
-   * source: cortex@bc0ae4f mcp_server/core/recall_pipeline.py:336-368
+   * source: cortex main mcp_server/core/recall_pipeline.py:336-368
    */
   getEntityByName?(name: string): Promise<{ id: number; name: string } | null>;
 
   // ── Relation-walk methods (MEM-G4: inline_related_neighbors) ──────────────
-  // source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_entity_neighbors
-  // source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_version_neighbors
+  // source: cortex main mcp_server/handlers/recall_helpers.py:_entity_neighbors
+  // source: cortex main mcp_server/handlers/recall_helpers.py:_version_neighbors
 
   /**
    * Get all entities extracted from a specific memory.
@@ -167,7 +167,7 @@ export interface MemoryStore {
    * Returns empty array if the entities subsystem is unavailable or
    * no entities are linked to the memory.
    *
-   * source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_entity_neighbors
+   * source: cortex main mcp_server/handlers/recall_helpers.py:_entity_neighbors
    *   calls store.get_entities_for_memory(memory_id)
    */
   getEntitiesForMemory?(memoryId: number): Promise<Array<{
@@ -181,9 +181,9 @@ export interface MemoryStore {
    *
    * Returns neighbor entries ranked by weight descending.
    * ``direction`` is always "outgoing" in the Python source
-   * (cortex@6fbf723d recall_helpers.py:_entity_neighbors).
+   * (cortex main recall_helpers.py:_entity_neighbors).
    *
-   * source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_entity_neighbors
+   * source: cortex main mcp_server/handlers/recall_helpers.py:_entity_neighbors
    *   calls store.get_relationships_for_entity(ent["id"], direction="outgoing", limit=max_neighbors)
    */
   getRelationshipsForEntity?(

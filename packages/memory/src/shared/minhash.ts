@@ -36,10 +36,10 @@ import { createHash } from "node:crypto";
 // Constants
 // ---------------------------------------------------------------------------
 
-// source: cortex bc5af469 mcp_server/shared/minhash.py:21  (Broder 1997 hash family)
+// source: cortex main mcp_server/shared/minhash.py:21  (Broder 1997 hash family)
 const _MERSENNE_PRIME = (1n << 61n) - 1n;
 
-// source: cortex bc5af469 mcp_server/shared/minhash.py:22
+// source: cortex main mcp_server/shared/minhash.py:22
 const _HASH_MASK = 0xFFFF_FFFFn; // mask permuted values to 32 bits
 
 // ---------------------------------------------------------------------------
@@ -100,7 +100,7 @@ const _COEFFS_CACHE = new Map<number, CoeffPair>();
  * Deterministic across runs via splitmix64 seeded with 1n (fixed seed mirrors
  * Python RandomState(1) intent; values differ — see module docstring).
  *
- * source: cortex bc5af469 mcp_server/shared/minhash.py:27-31
+ * source: cortex main mcp_server/shared/minhash.py:27-31
  */
 function getCoeffs(numPerm: number): CoeffPair {
   const cached = _COEFFS_CACHE.get(numPerm);
@@ -130,7 +130,7 @@ function getCoeffs(numPerm: number): CoeffPair {
  *                across all update() calls, for permutation i.
  *                jaccard(other) returns a value in [0, 1].
  *
- * source: cortex bc5af469 mcp_server/shared/minhash.py:39-60
+ * source: cortex main mcp_server/shared/minhash.py:39-60
  */
 export class MinHash {
   readonly numPerm: number;
@@ -140,10 +140,10 @@ export class MinHash {
   private readonly _a: bigint[];
   private readonly _b: bigint[];
 
-  // source: cortex bc5af469 mcp_server/shared/minhash.py:54 (num_perm default = 128, datasketch standard)
+  // source: cortex main mcp_server/shared/minhash.py:54 (num_perm default = 128, datasketch standard)
   constructor(numPerm = 128) {
     this.numPerm = numPerm;
-    // source: cortex bc5af469 mcp_server/shared/minhash.py:44  (init to _HASH_MASK = 0xFFFFFFFF)
+    // source: cortex main mcp_server/shared/minhash.py:44  (init to _HASH_MASK = 0xFFFFFFFF)
     this.hashValues = new Array<number>(numPerm).fill(0xFFFF_FFFF);
     const coeffs = getCoeffs(numPerm);
     this._a = coeffs.a;
@@ -156,11 +156,11 @@ export class MinHash {
    * Precondition:  value is a UTF-8 string; we encode it internally.
    * Postcondition: for each i, hashValues[i] = min(previous, permuted[i]).
    *
-   * source: cortex bc5af469 mcp_server/shared/minhash.py:46-52
+   * source: cortex main mcp_server/shared/minhash.py:46-52
    */
   update(value: string): void {
     // SHA-1 first 4 bytes, little-endian uint32.
-    // source: cortex bc5af469 mcp_server/shared/minhash.py:48
+    // source: cortex main mcp_server/shared/minhash.py:48
     const digest = createHash("sha1")
       .update(Buffer.from(value, "utf8"))
       .digest();
@@ -175,7 +175,7 @@ export class MinHash {
       // _a, _b, hashValues are all length numPerm (constructor) and i < numPerm,
       // so every index is in-bounds — assert to drop noUncheckedIndexedAccess's
       // `undefined`. Python has no skip path; an out-of-range i is a real bug.
-      // source: cortex bc5af469 mcp_server/shared/minhash.py:50-51
+      // source: cortex main mcp_server/shared/minhash.py:50-51
       const permuted = Number(
         ((a[i]! * hv + b[i]!) % _MERSENNE_PRIME) & _HASH_MASK,
       );
@@ -192,7 +192,7 @@ export class MinHash {
    * Precondition:  this.numPerm === other.numPerm
    * Postcondition: result in [0, 1]
    *
-   * source: cortex bc5af469 mcp_server/shared/minhash.py:54-59
+   * source: cortex main mcp_server/shared/minhash.py:54-59
    */
   jaccard(other: MinHash): number {
     if (this.numPerm !== other.numPerm) {
@@ -221,14 +221,14 @@ export class MinHash {
  * Replaces scipy.integrate.quad (which the Python avoids for EDR/platform
  * reasons; we avoid it to keep this module dependency-free).
  *
- * source: cortex bc5af469 mcp_server/shared/minhash.py:63-66
+ * source: cortex main mcp_server/shared/minhash.py:63-66
  */
 function integrate(
   f: (s: number) => number,
   lo: number,
   hi: number,
 ): number {
-  // source: cortex bc5af469 mcp_server/shared/minhash.py:64  (n=128 Riemann grid)
+  // source: cortex main mcp_server/shared/minhash.py:64  (n=128 Riemann grid)
   const n = 128;
   const h = (hi - lo) / n;
   let sum = 0;
@@ -251,7 +251,7 @@ const _LSH_PARAMS_CACHE = new Map<string, [number, number]>();
  * Precondition:  0 < threshold < 1, numPerm >= 1
  * Postcondition: bands >= 1, rows >= 1, bands * rows <= numPerm
  *
- * source: cortex bc5af469 mcp_server/shared/minhash.py:69-90
+ * source: cortex main mcp_server/shared/minhash.py:69-90
  */
 export function optimalLshParams(
   threshold: number,
@@ -278,7 +278,7 @@ export function optimalLshParams(
         threshold,
         1.0,
       );
-      // source: cortex bc5af469 mcp_server/shared/minhash.py:85-87  (symmetric 0.5/0.5 weighting)
+      // source: cortex main mcp_server/shared/minhash.py:85-87  (symmetric 0.5/0.5 weighting)
       const err = 0.5 * fp + 0.5 * fn;
       if (err < bestErr) {
         bestErr = err;
@@ -306,7 +306,7 @@ export function optimalLshParams(
  * Postcondition (query):  result contains all keys that share ≥1 band
  *                         with the probe MinHash.
  *
- * source: cortex bc5af469 mcp_server/shared/minhash.py:93-118
+ * source: cortex main mcp_server/shared/minhash.py:93-118
  */
 export class MinHashLSH {
   private readonly _b: number;
@@ -315,7 +315,7 @@ export class MinHashLSH {
   private readonly _tables: Map<string, string[]>[];
   private readonly _keys = new Set<string>();
 
-  // source: cortex bc5af469 mcp_server/shared/minhash.py:124 (defaults: threshold 0.5, num_perm 128)
+  // source: cortex main mcp_server/shared/minhash.py:124 (defaults: threshold 0.5, num_perm 128)
   constructor(threshold = 0.5, numPerm = 128) {
     [this._b, this._r] = optimalLshParams(threshold, numPerm);
     this._tables = Array.from({ length: this._b }, () => new Map<string, string[]>());
@@ -324,7 +324,7 @@ export class MinHashLSH {
   /**
    * Insert a key and its MinHash sketch into the index.
    *
-   * source: cortex bc5af469 mcp_server/shared/minhash.py:106-112
+   * source: cortex main mcp_server/shared/minhash.py:106-112
    */
   insert(key: string, mh: MinHash): void {
     if (this._keys.has(key)) {
@@ -336,7 +336,7 @@ export class MinHashLSH {
       // Serialize the r hash values for band i as a comma-joined string.
       // Python uses .tobytes() on a uint64 slice; we use a string serialization
       // of the same 32-bit values — unambiguous and deterministic.
-      // source: cortex bc5af469 mcp_server/shared/minhash.py:109-111
+      // source: cortex main mcp_server/shared/minhash.py:109-111
       const bandKey = hv.slice(i * this._r, (i + 1) * this._r).join(",");
       const table = this._tables[i];
       if (table === undefined) continue;
@@ -352,7 +352,7 @@ export class MinHashLSH {
   /**
    * Return all keys sharing at least one band with the probe sketch.
    *
-   * source: cortex bc5af469 mcp_server/shared/minhash.py:114-118
+   * source: cortex main mcp_server/shared/minhash.py:114-118
    */
   query(mh: MinHash): string[] {
     const hv = mh.hashValues;

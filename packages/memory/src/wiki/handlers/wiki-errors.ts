@@ -20,7 +20,7 @@
  */
 /**
  * Thrown when a wiki handler requires a port not yet ported to TS.
- * source: cortex@ed33435 mcp_server/handlers/wiki_*.py — port-pending pattern
+ * source: cortex main mcp_server/handlers/wiki_*.py — port-pending pattern
  */
 export class PortPendingError extends Error {
   constructor(handlerName: string, pythonSource: string, blocker?: string) {

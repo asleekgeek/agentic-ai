@@ -13,7 +13,7 @@
  *
  * Pure business logic — no I/O.
  *
- * source: cortex@ed33435 mcp_server/core/metacognition.py
+ * source: cortex main mcp_server/core/metacognition.py
  */
 
 // ── Gap types ─────────────────────────────────────────────────────────────────
@@ -39,7 +39,7 @@ export interface KnowledgeGap {
  * precondition: entities have "id" and "name" fields
  * postcondition: severity = 0.6 for degree 0, 0.4 for degree 1
  *
- * source: cortex@ed33435 mcp_server/core/metacognition.py:21-49
+ * source: cortex main mcp_server/core/metacognition.py:21-49
  */
 export function detectIsolatedEntities(
   entities: Array<{ id: number; name: string }>,
@@ -67,7 +67,7 @@ export function detectIsolatedEntities(
  * precondition: memories have optional "heat" and "domain" fields
  * postcondition: severity capped at 0.9; only domains with >= minStale mems reported
  *
- * source: cortex@ed33435 mcp_server/core/metacognition.py:52-80
+ * source: cortex main mcp_server/core/metacognition.py:52-80
  */
 export function detectStaleRegions(
   memories: Array<{ heat?: number; domain?: string }>,
@@ -105,7 +105,7 @@ export function detectStaleRegions(
  * precondition: memories have optional "confidence" field
  * postcondition: returns [] if no low-confidence memories; severity capped at 0.8
  *
- * source: cortex@ed33435 mcp_server/core/metacognition.py:83-101
+ * source: cortex main mcp_server/core/metacognition.py:83-101
  */
 export function detectLowConfidence(
   memories: Array<{ confidence?: number }>,
@@ -134,7 +134,7 @@ export function detectLowConfidence(
  * precondition: coOccurringPairs and existingRelationships contain canonical name pairs
  * postcondition: severity capped at 0.7; entity_names includes first 5 unique entities
  *
- * source: cortex@ed33435 mcp_server/core/metacognition.py:104-135
+ * source: cortex main mcp_server/core/metacognition.py:104-135
  */
 export function detectMissingConnections(
   coOccurringPairs: Array<[string, string]>,
@@ -172,7 +172,7 @@ export function detectMissingConnections(
  * precondition: errorEntities are entities of type "error" or "exception"
  * postcondition: severity = 0.5 fixed; reports up to 5 entity names
  *
- * source: cortex@ed33435 mcp_server/core/metacognition.py:138-163
+ * source: cortex main mcp_server/core/metacognition.py:138-163
  */
 export function detectUnresolvedErrors(
   errorEntities: Array<{ id: number; name: string }>,
@@ -200,7 +200,7 @@ export function detectUnresolvedErrors(
  * precondition: all inputs are coherent (relationship_counts matches entities)
  * postcondition: result sorted descending by severity; may be empty
  *
- * source: cortex@ed33435 mcp_server/core/metacognition.py:166-185
+ * source: cortex main mcp_server/core/metacognition.py:166-185
  */
 export function detectAllGaps(
   entities: Array<{ id: number; name: string }>,

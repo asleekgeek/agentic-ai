@@ -17,7 +17,7 @@
  * Normally invoked automatically by the SessionEnd hook. Call manually
  * only when reconstructing offline sessions.
  *
- * source: cortex@ed33435 mcp_server/handlers/record_session_end.py
+ * source: cortex main mcp_server/handlers/record_session_end.py
  *
  * Correctness contract:
  *   pre:  args.session_id is a non-empty string.
@@ -43,35 +43,35 @@ import type {
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/handlers/record_session_end.py:_append_session_log — rolling cap
+// source: cortex main mcp_server/handlers/record_session_end.py:_append_session_log — rolling cap
 const SESSION_LOG_MAX = 1000;
 
 // source: SI — 60000ms per minute
 const MS_PER_MINUTE = 60000;
 
-// source: cortex@ed33435 mcp_server/handlers/record_session_end.py:_build_session_summary — truncation
+// source: cortex main mcp_server/handlers/record_session_end.py:_build_session_summary — truncation
 const SUMMARY_TOP_KEYWORDS = 10;
 const SUMMARY_TOP_TOOLS = 10;
 const SUMMARY_ROUND_DECIMALS = 10;
 
-// source: cortex@ed33435 mcp_server/handlers/record_session_end.py:_store_session_memory — tag limit
+// source: cortex main mcp_server/handlers/record_session_end.py:_store_session_memory — tag limit
 const MEMORY_TAG_KEYWORD_LIMIT = 5;
 
-// source: cortex@ed33435 mcp_server/core/session_critique.py:generate_critique — scoring constants
+// source: cortex main mcp_server/core/session_critique.py:generate_critique — scoring constants
 const CRITIQUE_NEUTRAL_SCORE = 0.5;
 const CRITIQUE_LONG_SESSION_TURNS = 50;
 const CRITIQUE_LONG_SESSION_PENALTY = 0.1;
-const CRITIQUE_LONG_DURATION_MINUTES = 120; // source: cortex@ed33435 mcp_server/core/session_critique.py — 2h session threshold
-const CRITIQUE_LONG_DURATION_PENALTY = 0.05; // source: cortex@ed33435 mcp_server/core/session_critique.py — 2h+ score penalty
+const CRITIQUE_LONG_DURATION_MINUTES = 120; // source: cortex main mcp_server/core/session_critique.py — 2h session threshold
+const CRITIQUE_LONG_DURATION_PENALTY = 0.05; // source: cortex main mcp_server/core/session_critique.py — 2h+ score penalty
 const CRITIQUE_NO_RECALL_PENALTY = 0.1;
-const CRITIQUE_NO_REMEMBER_PENALTY = 0.05; // source: cortex@ed33435 mcp_server/core/session_critique.py — no-remember score penalty
+const CRITIQUE_NO_REMEMBER_PENALTY = 0.05; // source: cortex main mcp_server/core/session_critique.py — no-remember score penalty
 const CRITIQUE_PRODUCTIVE_BONUS = 0.1;
 const CRITIQUE_MAX_SUGGESTIONS = 3;
 
-// source: cortex@ed33435 mcp_server/shared/project_ids.py:cwd_to_project_id — last N path components
+// source: cortex main mcp_server/shared/project_ids.py:cwd_to_project_id — last N path components
 const PROJECT_ID_PATH_PARTS = -2;
 
-// source: cortex@ed33435 mcp_server/core/profile_builder.py:apply_session_update — EMA alpha
+// source: cortex main mcp_server/core/profile_builder.py:apply_session_update — EMA alpha
 const EMA_ALPHA = 0.1;
 
 // Illustrative MCP-tool ``examples`` values for the JSON schema. These are
@@ -129,7 +129,7 @@ function saveSessionLog(log: { sessions: unknown[] }): void {
 }
 
 // ── Domain resolution ─────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/record_session_end.py:_resolve_domain
+// source: cortex main mcp_server/handlers/record_session_end.py:_resolve_domain
 
 /**
  * Resolve domain ID from explicit arg, cwd, or project.
@@ -154,7 +154,7 @@ function resolveDomain(
   }
 
   // Derive from label (lightweight port of domain_id_from_label)
-  // source: cortex@ed33435 mcp_server/shared/project_ids.py:domain_id_from_label
+  // source: cortex main mcp_server/shared/project_ids.py:domain_id_from_label
   const label = projectIdToLabel(projId);
   return domainIdFromLabel(label);
 }
@@ -178,7 +178,7 @@ function domainIdFromLabel(label: string): string {
 }
 
 // ── Session summary ───────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/record_session_end.py:_build_session_summary
+// source: cortex main mcp_server/handlers/record_session_end.py:_build_session_summary
 
 /**
  * Build a concise one-line summary of the session.
@@ -208,14 +208,14 @@ function buildSessionSummary(
 }
 
 // ── Memory tags ───────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/record_session_end.py:_build_memory_tags
+// source: cortex main mcp_server/handlers/record_session_end.py:_build_memory_tags
 
 function buildMemoryTags(category: string, keywords: string[]): string[] {
   return [...new Set(["session-summary", category, ...keywords.slice(0, MEMORY_TAG_KEYWORD_LIMIT)])];
 }
 
 // ── Categorize ────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/shared/categorizer.py:categorize
+// source: cortex main mcp_server/shared/categorizer.py:categorize
 
 const CATEGORY_KEYWORDS: Record<string, readonly string[]> = {
   debugging: ["bug", "error", "fix", "crash", "exception", "traceback"],
@@ -235,7 +235,7 @@ function categorize(text: string): string {
 }
 
 // ── Session entry ─────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/record_session_end.py:_build_session_entry
+// source: cortex main mcp_server/handlers/record_session_end.py:_build_session_entry
 
 function buildSessionEntry(
   sessionId: string,
@@ -265,7 +265,7 @@ function buildSessionEntry(
 }
 
 // ── Append session ────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/record_session_end.py:_append_session_log
+// source: cortex main mcp_server/handlers/record_session_end.py:_append_session_log
 
 function appendSessionLog(log: { sessions: unknown[] }, entry: Record<string, unknown>): void {
   log.sessions.push(entry);
@@ -276,8 +276,8 @@ function appendSessionLog(log: { sessions: unknown[] }, entry: Record<string, un
 }
 
 // ── EMA profile update ────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/record_session_end.py:_update_profile
-// source: cortex@ed33435 mcp_server/core/profile_builder.py:apply_session_update
+// source: cortex main mcp_server/handlers/record_session_end.py:_update_profile
+// source: cortex main mcp_server/core/profile_builder.py:apply_session_update
 
 /**
  * Apply incremental EMA profile update.
@@ -327,8 +327,8 @@ function updateProfile(
 }
 
 // ── Session critique ──────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/record_session_end.py:_try_generate_critique
-// source: cortex@ed33435 mcp_server/core/session_critique.py:generate_critique
+// source: cortex main mcp_server/handlers/record_session_end.py:_try_generate_critique
+// source: cortex main mcp_server/core/session_critique.py:generate_critique
 
 /**
  * Generate session self-critique (non-fatal).
@@ -349,7 +349,7 @@ function tryGenerateCritique(
     const suggestions: string[] = [];
 
     // Heuristic critique rules
-    // source: cortex@ed33435 mcp_server/core/session_critique.py:generate_critique
+    // source: cortex main mcp_server/core/session_critique.py:generate_critique
     if (tc > CRITIQUE_LONG_SESSION_TURNS) {
       score -= CRITIQUE_LONG_SESSION_PENALTY;
       suggestions.push("Long session — consider breaking into shorter focused sessions.");
@@ -384,7 +384,7 @@ function tryGenerateCritique(
 }
 
 // ── Schema ────────────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/record_session_end.py schema
+// source: cortex main mcp_server/handlers/record_session_end.py schema
 
 export const schema = {
   title: "Record session end (incremental profile update)",
@@ -473,7 +473,7 @@ type RememberHandler = (args: MemoryArgs) => Promise<{ stored?: boolean } | unde
 /**
  * Build remember-handler args for an episodic session memory.
  *
- * source: cortex@ed33435 mcp_server/handlers/record_session_end.py:_store_session_memory
+ * source: cortex main mcp_server/handlers/record_session_end.py:_store_session_memory
  */
 function buildSessionMemoryArgs(
   sessionId: string,
@@ -555,7 +555,7 @@ export type WriteTaskRecordAdapter = (
  * Self-contained: reads/writes profiles.json and session_log.json directly.
  * Used by legacy MCP wiring that does not inject a ProfilesStore.
  *
- * source: cortex@ed33435 mcp_server/handlers/record_session_end.py:handler
+ * source: cortex main mcp_server/handlers/record_session_end.py:handler
  */
 export async function recordSessionEnd(
   args: RecordSessionEndArgs,
@@ -634,7 +634,7 @@ export async function recordSessionEnd(
  * Post: the domain's EMA is updated; a session-summary memory is optionally stored.
  *       Returns { domain, profileUpdated, memoryStored, confidence, critique }.
  *
- * source: cortex@ed33435 mcp_server/handlers/record_session_end.py:handler
+ * source: cortex main mcp_server/handlers/record_session_end.py:handler
  */
 export async function recordSessionEndHandler(
   args: RecordSessionEndArgs,
@@ -680,7 +680,7 @@ export async function recordSessionEndHandler(
 
   // Map CritiqueResult (camelCase from update-profiles) → snake_case for the
   // shared RecordSessionEndResult interface.
-  // source: cortex@ed33435 mcp_server/handlers/record_session_end.py — critique keys
+  // source: cortex main mcp_server/handlers/record_session_end.py — critique keys
   const critiqueRaw = result.critique;
   const critique = critiqueRaw
     ? {

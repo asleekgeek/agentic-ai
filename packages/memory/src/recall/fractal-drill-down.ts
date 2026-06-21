@@ -9,9 +9,9 @@
  * Layer: core/recall (pure logic + store read, no network I/O).
  * Allowed imports: recall port types, vector-similarity, remember store port.
  *
- * source: cortex@ed33435 mcp_server/handlers/drill_down.py::_handler_impl
- * source: cortex@ed33435 mcp_server/core/fractal.py::drill_down
- * source: cortex@ed33435 mcp_server/core/fractal_clustering.py::build_l1_clusters
+ * source: cortex main mcp_server/handlers/drill_down.py::_handler_impl
+ * source: cortex main mcp_server/core/fractal.py::drill_down
+ * source: cortex main mcp_server/core/fractal_clustering.py::build_l1_clusters
  *         build_l2_clusters, agglomerative_cluster
  */
 
@@ -21,15 +21,15 @@ import type { MemoryItem } from "./types.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/handlers/drill_down.py:93 — domain limit 500
+// source: cortex main mcp_server/handlers/drill_down.py:93 — domain limit 500
 const DOMAIN_CANDIDATE_CAP = 500;
-// source: cortex@ed33435 mcp_server/core/fractal_clustering.py:150 — avg_heat fallback when heat unset
-const AVG_HEAT_FALLBACK = 0.5; // source: cortex@ed33435 fractal_clustering.py:150
-// source: cortex@ed33435 mcp_server/core/fractal.py default l1_threshold=0.6
+// source: cortex main mcp_server/core/fractal_clustering.py:150 — avg_heat fallback when heat unset
+const AVG_HEAT_FALLBACK = 0.5; // source: cortex main fractal_clustering.py:150
+// source: cortex main mcp_server/core/fractal.py default l1_threshold=0.6
 const DEFAULT_CLUSTER_THRESHOLD = 0.6;
-// source: cortex@ed33435 mcp_server/handlers/drill_down.py schema min_heat default 0.05
+// source: cortex main mcp_server/handlers/drill_down.py schema min_heat default 0.05
 const DEFAULT_MIN_HEAT = 0.05;
-// source: cortex@ed33435 mcp_server/core/fractal.py — 4 decimal rounding factor
+// source: cortex main mcp_server/core/fractal.py — 4 decimal rounding factor
 const ROUND_FACTOR = 10000;
 
 // ── Internal cluster types ────────────────────────────────────────────────────
@@ -64,7 +64,7 @@ export interface FractalHierarchy {
  * postcondition: every memory is assigned to exactly one L1 cluster;
  *   cluster IDs are stable lexicographic strings "L1-{i}".
  *
- * source: cortex@ed33435 mcp_server/core/fractal_clustering.py::agglomerative_cluster
+ * source: cortex main mcp_server/core/fractal_clustering.py::agglomerative_cluster
  *         build_l1_clusters
  */
 function buildL1Clusters(
@@ -103,7 +103,7 @@ function buildL1Clusters(
   return rawGroups.map((group, i) => {
     const avgHeat =
       group.length > 0
-        ? group.reduce((s, m) => s + (m.heat ?? AVG_HEAT_FALLBACK), 0) / group.length // source: cortex@ed33435 fractal_clustering.py:150-155
+        ? group.reduce((s, m) => s + (m.heat ?? AVG_HEAT_FALLBACK), 0) / group.length // source: cortex main fractal_clustering.py:150-155
         : 0;
     return {
       clusterId: `L1-${i}`,
@@ -122,7 +122,7 @@ function buildL1Clusters(
  * postcondition: every L1 cluster belongs to exactly one L2 cluster;
  *   cluster IDs are stable strings "L2-{j}".
  *
- * source: cortex@ed33435 mcp_server/core/fractal_clustering.py::build_l2_clusters
+ * source: cortex main mcp_server/core/fractal_clustering.py::build_l2_clusters
  *         _find_dominant_directory
  */
 function buildL2Clusters(l1Clusters: L1Cluster[]): L2Cluster[] {
@@ -177,7 +177,7 @@ function buildL2Clusters(l1Clusters: L1Cluster[]): L2Cluster[] {
  * precondition:  memories is non-empty.
  * postcondition: returns a FractalHierarchy with l1 and l2 maps populated.
  *
- * source: cortex@ed33435 mcp_server/core/fractal.py::build_hierarchy
+ * source: cortex main mcp_server/core/fractal.py::build_hierarchy
  */
 export function buildFractalHierarchy(
   memories: MemoryItem[],
@@ -198,24 +198,24 @@ export function buildFractalHierarchy(
 // ── Adaptive retrieval weighting constants (P2b) ──────────────────────────────
 
 // Query length thresholds (word counts) for level-weight selection.
-const SHORT_QUERY_THRESHOLD = 10; // source: cortex@ed33435 mcp_server/core/fractal.py:92 (word_count < 10)
-const LONG_QUERY_THRESHOLD = 30; // source: cortex@ed33435 mcp_server/core/fractal.py:94 (word_count > 30)
+const SHORT_QUERY_THRESHOLD = 10; // source: cortex main mcp_server/core/fractal.py:92 (word_count < 10)
+const LONG_QUERY_THRESHOLD = 30; // source: cortex main mcp_server/core/fractal.py:94 (word_count > 30)
 
 // Level weights for short queries (broad — L2 heavy).
-const SHORT_W0 = 0.3; // source: cortex@ed33435 fractal.py:93
-const SHORT_W1 = 0.5; // source: cortex@ed33435 fractal.py:93
-const SHORT_W2 = 1.0; // source: cortex@ed33435 fractal.py:93
+const SHORT_W0 = 0.3; // source: cortex main fractal.py:93
+const SHORT_W1 = 0.5; // source: cortex main fractal.py:93
+const SHORT_W2 = 1.0; // source: cortex main fractal.py:93
 
 // Level weights for long queries (specific — L0 heavy).
-const LONG_W0 = 1.0; // source: cortex@ed33435 fractal.py:95
-const LONG_W1 = 0.5; // source: cortex@ed33435 fractal.py:95
-const LONG_W2 = 0.3; // source: cortex@ed33435 fractal.py:95
+const LONG_W0 = 1.0; // source: cortex main fractal.py:95
+const LONG_W1 = 0.5; // source: cortex main fractal.py:95
+const LONG_W2 = 0.3; // source: cortex main fractal.py:95
 
 // Level weights for medium queries (balanced).
-const MED_W = 0.7; // source: cortex@ed33435 fractal.py:97
+const MED_W = 0.7; // source: cortex main fractal.py:97
 
 // Default maximum results returned by scoreAgainstHierarchy.
-const SCORE_HIERARCHY_MAX_RESULTS = 10; // source: cortex@ed33435 fractal.py:109 (max_results=10 default)
+const SCORE_HIERARCHY_MAX_RESULTS = 10; // source: cortex main fractal.py:109 (max_results=10 default)
 
 // ── Adaptive retrieval weighting (P2b additions) ──────────────────────────────
 
@@ -230,20 +230,20 @@ const SCORE_HIERARCHY_MAX_RESULTS = 10; // source: cortex@ed33435 fractal.py:109
  * precondition:  query is a string (may be empty).
  * postcondition: returned tuple sums > 0; all values are positive.
  *
- * source: cortex@ed33435 mcp_server/core/fractal.py:81-97 (compute_level_weights)
+ * source: cortex main mcp_server/core/fractal.py:81-97 (compute_level_weights)
  */
 export function computeLevelWeights(
   query: string,
 ): [number, number, number] {
   const wordCount = query.split(/\s+/).filter((w) => w.length > 0).length;
   if (wordCount < SHORT_QUERY_THRESHOLD) {
-    // source: cortex@ed33435 fractal.py:93 (word_count < 10 → broad)
+    // source: cortex main fractal.py:93 (word_count < 10 → broad)
     return [SHORT_W0, SHORT_W1, SHORT_W2];
   } else if (wordCount > LONG_QUERY_THRESHOLD) {
-    // source: cortex@ed33435 fractal.py:95 (word_count > 30 → specific)
+    // source: cortex main fractal.py:95 (word_count > 30 → specific)
     return [LONG_W0, LONG_W1, LONG_W2];
   }
-  // source: cortex@ed33435 fractal.py:97 (medium → balanced)
+  // source: cortex main fractal.py:97 (medium → balanced)
   return [MED_W, MED_W, MED_W];
 }
 
@@ -253,7 +253,7 @@ export function computeLevelWeights(
  * For each memory in the L0 level (raw memories), compute cosine similarity
  * against the query embedding, weighted by w0. Entries are added to results.
  *
- * source: cortex@ed33435 mcp_server/core/fractal.py:125-145 (_score_level_0)
+ * source: cortex main mcp_server/core/fractal.py:125-145 (_score_level_0)
  */
 function scoreLevelZero(
   hierarchy: FractalHierarchy,
@@ -265,7 +265,7 @@ function scoreLevelZero(
   // Level 0 members are the raw MemoryItem objects stored on L1 clusters
   // (the hierarchy as built here stores them on l1 cluster members).
   // Walk l1 clusters to access all individual memories at level 0.
-  // source: cortex@ed33435 fractal.py:133 (hierarchy["levels"].get(0, []))
+  // source: cortex main fractal.py:133 (hierarchy["levels"].get(0, []))
   for (const cluster of hierarchy.l1.values()) {
     for (const mem of cluster.members) {
       const emb = mem.embedding;
@@ -288,7 +288,7 @@ function scoreLevelZero(
  * For each L1 cluster, compute similarity of query to cluster centroid,
  * weighted by w1. Adds to existing L0 score if the memory was already scored.
  *
- * source: cortex@ed33435 mcp_server/core/fractal.py:148-172 (_score_level_1)
+ * source: cortex main mcp_server/core/fractal.py:148-172 (_score_level_1)
  */
 function scoreLevelOne(
   hierarchy: FractalHierarchy,
@@ -325,7 +325,7 @@ function scoreLevelOne(
  * weighted by w2. Distributes to all member memories via child L1 clusters.
  * Adds to existing score if the memory was already scored at L0 or L1.
  *
- * source: cortex@ed33435 mcp_server/core/fractal.py:174-201 (_score_level_2)
+ * source: cortex main mcp_server/core/fractal.py:174-201 (_score_level_2)
  */
 function scoreLevelTwo(
   hierarchy: FractalHierarchy,
@@ -377,7 +377,7 @@ export interface HierarchyScoreResult {
  * postcondition: returned list has at most maxResults entries; sorted by score
  *   descending; every entry has memoryId, score, levelScores, matchedLevel.
  *
- * source: cortex@ed33435 mcp_server/core/fractal.py:103-122 (score_against_hierarchy)
+ * source: cortex main mcp_server/core/fractal.py:103-122 (score_against_hierarchy)
  */
 export function scoreAgainstHierarchy(
   queryEmbedding: number[],
@@ -409,7 +409,7 @@ export function scoreAgainstHierarchy(
  * postcondition: returned array has length 0, 1, or 2; elements are cluster
  *   ID strings.
  *
- * source: cortex@ed33435 mcp_server/core/fractal.py:234-252 (roll_up)
+ * source: cortex main mcp_server/core/fractal.py:234-252 (roll_up)
  */
 export function rollUp(
   memoryId: number,
@@ -449,7 +449,7 @@ export function rollUp(
  * precondition:  clusterId follows format "L{level}-{index}".
  * postcondition: result is either L1 cluster summaries or memory-id leaves.
  *
- * source: cortex@ed33435 mcp_server/core/fractal.py::drill_down:207-231
+ * source: cortex main mcp_server/core/fractal.py::drill_down:207-231
  */
 function fractalDrillDown(
   clusterId: string,
@@ -530,7 +530,7 @@ export interface DrillDownResponse {
  *   Side-effect: updateMemoryAccess + incrementReplayCount called for each
  *   leaf memory returned (drives consolidation cascade).
  *
- * source: cortex@ed33435 mcp_server/handlers/drill_down.py::_handler_impl:159-198
+ * source: cortex main mcp_server/handlers/drill_down.py::_handler_impl:159-198
  */
 export async function drillDownHandler(
   args: DrillDownArgs,
@@ -541,7 +541,7 @@ export async function drillDownHandler(
   const minHeat = args.min_heat ?? DEFAULT_MIN_HEAT;
 
   // Fetch candidate memories
-  // source: cortex@ed33435 mcp_server/handlers/drill_down.py::_fetch_candidate_memories:87-97
+  // source: cortex main mcp_server/handlers/drill_down.py::_fetch_candidate_memories:87-97
   let memories: MemoryItem[];
   if (domain) {
     memories = await deps.store.getMemoriesForDomain(domain, minHeat, DOMAIN_CANDIDATE_CAP);
@@ -576,7 +576,7 @@ export async function drillDownHandler(
 
   if (isLeafLevel) {
     // Enrich leaves with full memory data
-    // source: cortex@ed33435 mcp_server/handlers/drill_down.py::_enrich_leaf_memories:100-119
+    // source: cortex main mcp_server/handlers/drill_down.py::_enrich_leaf_memories:100-119
     const ids = rawChildren.map((c) => c["memory_id"] as number).filter((id) => id != null);
     const mems = await deps.store.getByIds(ids);
     const memMap = new Map<number, MemoryItem>(mems.map((m) => [m.id, m]));
@@ -594,7 +594,7 @@ export async function drillDownHandler(
     });
 
     // Track replay for drilled-into memories — drives consolidation cascade
-    // source: cortex@ed33435 mcp_server/handlers/drill_down.py:183-190
+    // source: cortex main mcp_server/handlers/drill_down.py:183-190
     for (const child of enriched) {
       try {
         await deps.store.updateMemoryAccess(child.memory_id);
@@ -608,7 +608,7 @@ export async function drillDownHandler(
   }
 
   // Cluster-summary level
-  // source: cortex@ed33435 mcp_server/handlers/drill_down.py::_format_cluster_children:122-133
+  // source: cortex main mcp_server/handlers/drill_down.py::_format_cluster_children:122-133
   const clusterChildren: DrillDownClusterChild[] = rawChildren.map((c) => ({
     cluster_id: c["cluster_id"] as string,
     level: c["level"] as number,

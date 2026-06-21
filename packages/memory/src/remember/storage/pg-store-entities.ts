@@ -1,12 +1,12 @@
 /**
  * pg-store-entities.ts — Entity CRUD for PgMemoryStore.
- * source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py
+ * source: cortex main mcp_server/infrastructure/pg_store_entities.py
  */
 import type { PoolClient } from "pg";
 
 function canonicalize(name: string): string { return name.trim(); }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:19-37
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:19-37
 export async function updateEntitiesHeatBatch(client: PoolClient, updates: Array<[number, number]>): Promise<number> {
   if (updates.length === 0) return 0;
   await client.query(
@@ -16,47 +16,56 @@ export async function updateEntitiesHeatBatch(client: PoolClient, updates: Array
   return updates.length;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:39-48
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:39-48
 export async function archiveEntitiesBatch(client: PoolClient, entityIds: number[]): Promise<number> {
   if (entityIds.length === 0) return 0;
   await client.query("UPDATE entities SET heat = 0 WHERE id = ANY($1::int[])", [entityIds]);
   return entityIds.length;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:50-80
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:50-91
 export async function insertEntity(
   client: PoolClient,
-  data: { name: string; type: string; domain?: string; created_at?: string | null; heat?: number },
+  data: { name: string; type: string; domain?: string; origin?: string; created_at?: string | null; heat?: number },
 ): Promise<number> {
   const canonical = canonicalize(data.name);
-  const existing = await client.query<{ id: number }>(
-    "SELECT id FROM entities WHERE LOWER(name) = LOWER($1) LIMIT 1", [canonical]);
-  // source: cortex@ed33435 infrastructure/sqlite_store_entities.py — check existing entity
+  let origin = data.origin ?? "text_concept";
+  if (origin !== "ast_symbol" && origin !== "text_concept") origin = "text_concept";
+  // source: cortex main mcp_server/infrastructure/pg_store_entities.py:65-78 — origin-aware idempotent upsert
+  const existing = await client.query<{ id: number; origin: string }>(
+    "SELECT id, origin FROM entities WHERE LOWER(name) = LOWER($1) LIMIT 1", [canonical]);
   const existingRow = existing.rows[0];
-  if (existingRow != null) return existingRow.id;
+  if (existingRow != null) {
+    // ast_symbol is the safe superset: if any ingestion path marks this name a
+    // code symbol, keep it exempt from fuzzy dedup forever.
+    if (origin === "ast_symbol" && existingRow.origin !== "ast_symbol") {
+      await client.query("UPDATE entities SET origin = 'ast_symbol' WHERE id = $1", [existingRow.id]);
+    }
+    return existingRow.id;
+  }
   const result = await client.query<{ id: number }>(
-    `INSERT INTO entities (name, type, domain, created_at, last_accessed, heat)
-     VALUES ($1, $2, $3, COALESCE($4, NOW()), NOW(), $5) RETURNING id`,
-    [canonical, data.type, data.domain ?? "", data.created_at ?? null, data.heat ?? 1.0],
+    `INSERT INTO entities (name, type, domain, origin, created_at, last_accessed, heat)
+     VALUES ($1, $2, $3, $4, COALESCE($5, NOW()), NOW(), $6) RETURNING id`,
+    [canonical, data.type, data.domain ?? "", origin, data.created_at ?? null, data.heat ?? 1.0],
   );
   const row = result.rows[0];
   if (row == null) throw new Error("insertEntity: no id returned");
   return row.id;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:82-91
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:82-91
 export async function getEntityByName(client: PoolClient, name: string): Promise<Record<string, unknown> | null> {
   const result = await client.query("SELECT * FROM entities WHERE LOWER(name) = LOWER($1) LIMIT 1", [name]);
   return (result.rows[0] as Record<string, unknown> | undefined) ?? null;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:93-97
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:93-97
 export async function getEntityById(client: PoolClient, entityId: number): Promise<Record<string, unknown> | null> {
   const result = await client.query("SELECT * FROM entities WHERE id = $1", [entityId]);
   return (result.rows[0] as Record<string, unknown> | undefined) ?? null;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:99-111
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:99-111
 export async function getAllEntities(client: PoolClient, minHeat = 0.05, includeArchived = false): Promise<Record<string, unknown>[]> { // eslint-disable-line @typescript-eslint/no-magic-numbers
   const q = includeArchived
     ? "SELECT * FROM entities WHERE heat >= $1"
@@ -64,17 +73,17 @@ export async function getAllEntities(client: PoolClient, minHeat = 0.05, include
   return (await client.query(q, [minHeat])).rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:113-115
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:113-115
 export async function countEntities(client: PoolClient): Promise<number> {
   return (await client.query<{ c: number }>("SELECT COUNT(*) AS c FROM entities")).rows[0]?.c ?? 0;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:117-121
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:117-121
 export async function getEntitiesOfType(client: PoolClient, entityType: string): Promise<Record<string, unknown>[]> {
   return (await client.query("SELECT * FROM entities WHERE type = $1", [entityType])).rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:123-128
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:123-128
 export async function getDomainEntityCounts(client: PoolClient): Promise<Record<string, number>> {
   const result = await client.query<{ domain: string; count: number }>(
     "SELECT domain, COUNT(*) AS count FROM entities WHERE NOT archived GROUP BY domain ORDER BY count DESC");
@@ -83,8 +92,8 @@ export async function getDomainEntityCounts(client: PoolClient): Promise<Record<
   return out;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:130-143
-// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:130
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:130-143
+// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- source: cortex main mcp_server/infrastructure/pg_store_entities.py:130
 export async function getIsolatedEntities(client: PoolClient, limit = 20): Promise<Record<string, unknown>[]> {
   return (await client.query(
     `SELECT e.*, COALESCE(r.rel_count, 0) AS relationship_count FROM entities e
@@ -94,15 +103,15 @@ export async function getIsolatedEntities(client: PoolClient, limit = 20): Promi
   )).rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:145-150
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:145-150
 export async function getResolvedEntityIds(client: PoolClient): Promise<Set<number>> {
   const result = await client.query<{ source_entity_id: number }>(
     "SELECT DISTINCT source_entity_id FROM relationships WHERE relationship_type = 'resolved_by'");
   return new Set(result.rows.map((r) => r.source_entity_id));
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:152-174
-// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:152
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:152-174
+// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- source: cortex main mcp_server/infrastructure/pg_store_entities.py:152
 export async function getMemoriesMentioningEntity(client: PoolClient, entityName: string, limit = 20): Promise<Record<string, unknown>[]> {
   let result = await client.query(
     "SELECT * FROM memories WHERE content_tsv @@ phraseto_tsquery('english', $1) ORDER BY heat_base DESC LIMIT $2",
@@ -116,21 +125,21 @@ export async function getMemoriesMentioningEntity(client: PoolClient, entityName
   return result.rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:176-183
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:176-183
 export async function insertMemoryEntity(client: PoolClient, memoryId: number, entityId: number): Promise<void> {
   await client.query(
     "INSERT INTO memory_entities (memory_id, entity_id) VALUES ($1, $2) ON CONFLICT DO NOTHING",
     [memoryId, entityId]);
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:184-198
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:184-198
 export async function listMemoryEntityEdges(client: PoolClient): Promise<Array<{ memory_id: number; entity_id: number }>> {
   const result = await client.query<{ memory_id: number; entity_id: number }>(
     "SELECT memory_id, entity_id FROM memory_entities");
   return result.rows.filter((r) => r.memory_id != null && r.entity_id != null);
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:200-208
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:200-208
 export async function getEntitiesForMemory(client: PoolClient, memoryId: number): Promise<Record<string, unknown>[]> {
   return (await client.query(
     "SELECT e.* FROM entities e JOIN memory_entities me ON me.entity_id = e.id WHERE me.memory_id = $1 ORDER BY e.heat DESC",
@@ -138,7 +147,7 @@ export async function getEntitiesForMemory(client: PoolClient, memoryId: number)
 }
 
 // Source: Jaccard (1912) set similarity.
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:210-235
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:210-235
 export async function getEntityIdsForMemories(client: PoolClient, memoryIds: number[]): Promise<Map<number, Set<number>>> {
   if (memoryIds.length === 0) return new Map();
   const result = await client.query<{ memory_id: number; entity_id: number }>(
@@ -152,19 +161,17 @@ export async function getEntityIdsForMemories(client: PoolClient, memoryIds: num
   return out;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_entities.py:237-245
+// source: cortex main mcp_server/infrastructure/pg_store_entities.py:237-245
 export async function getMemoriesForEntity(client: PoolClient, entityId: number): Promise<Record<string, unknown>[]> {
   return (await client.query(
     "SELECT m.* FROM memories m JOIN memory_entities me ON me.memory_id = m.id WHERE me.entity_id = $1 ORDER BY m.heat_base DESC",
     [entityId])).rows as Record<string, unknown>[];
 }
 
-// source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py
-//
-// DEVIATION: agentic-ai entities has NO 'origin' column (confirmed by
-// pg-schema-tables.ts:75-84 and sqlite-schema.ts:90-99). The cortex oracle
-// additionally fetches origin to exclude ast_symbol rows as a defense-in-depth
-// guard. That check is omitted here; only the 2-row existence check is kept.
+// source: cortex main mcp_server/infrastructure/pg_store_entity_merge.py:23-56
+// No-op when ids match, either entity is missing, or either is an ast_symbol —
+// code-symbol identity is structural and must never be fuzzy-merged; defense in
+// depth over the core engine's own exclusion.
 export interface MergeEntitiesResult {
   merged: boolean;
   survivor_id: number;
@@ -193,19 +200,21 @@ export async function mergeEntities(
 
   if (survivorId === aliasId) return result;
 
-  // 2-row existence check: require both entities to be present.
-  // source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py — SELECT id from entities
-  const existsResult = await client.query<{ id: number }>(
-    "SELECT id FROM entities WHERE id = ANY($1::int[])",
+  // Require both entities present AND neither an ast_symbol — code symbols are
+  // structural identities, never fuzzy-merged.
+  // source: cortex main mcp_server/infrastructure/pg_store_entity_merge.py:50-56
+  const existsResult = await client.query<{ id: number; origin: string }>(
+    "SELECT id, origin FROM entities WHERE id = ANY($1::int[])",
     [[survivorId, aliasId]],
   );
-  if (existsResult.rows.length !== 2) return result;
+  const origins = new Map(existsResult.rows.map((r) => [r.id, r.origin ?? "text_concept"]));
+  if (origins.size !== 2 || [...origins.values()].includes("ast_symbol")) return result;
 
   try {
     await client.query("BEGIN");
 
     // Rewire memory_entities links: insert survivor links, dedup via ON CONFLICT.
-    // source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py — INSERT INTO memory_entities
+    // source: cortex main mcp_server/infrastructure/pg_store_entity_merge.py — INSERT INTO memory_entities
     await client.query(
       "INSERT INTO memory_entities (memory_id, entity_id) " +
         "SELECT memory_id, $1 FROM memory_entities WHERE entity_id = $2 " +
@@ -214,7 +223,7 @@ export async function mergeEntities(
     );
 
     // Delete the alias's memory_entities links.
-    // source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py — DELETE FROM memory_entities
+    // source: cortex main mcp_server/infrastructure/pg_store_entity_merge.py — DELETE FROM memory_entities
     const movedResult = await client.query<{ rowcount: number }>(
       "DELETE FROM memory_entities WHERE entity_id = $1",
       [aliasId],
@@ -222,27 +231,27 @@ export async function mergeEntities(
     const moved = movedResult.rowCount ?? 0;
 
     // Rewire relationship source references.
-    // source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py — UPDATE relationships source
+    // source: cortex main mcp_server/infrastructure/pg_store_entity_merge.py — UPDATE relationships source
     const srcResult = await client.query(
       "UPDATE relationships SET source_entity_id = $1 WHERE source_entity_id = $2",
       [survivorId, aliasId],
     );
     // Rewire relationship target references.
-    // source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py — UPDATE relationships target
+    // source: cortex main mcp_server/infrastructure/pg_store_entity_merge.py — UPDATE relationships target
     const tgtResult = await client.query(
       "UPDATE relationships SET target_entity_id = $1 WHERE target_entity_id = $2",
       [survivorId, aliasId],
     );
 
     // Delete self-loops created by the rewire.
-    // source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py — DELETE self-loops
+    // source: cortex main mcp_server/infrastructure/pg_store_entity_merge.py — DELETE self-loops
     await client.query(
       "DELETE FROM relationships WHERE source_entity_id = target_entity_id AND source_entity_id = $1",
       [survivorId],
     );
 
     // Absorb alias heat/recency into survivor via GREATEST — bounded, not a sum.
-    // source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py — UPDATE entities heat
+    // source: cortex main mcp_server/infrastructure/pg_store_entity_merge.py — UPDATE entities heat
     await client.query(
       "UPDATE entities SET " +
         "heat = GREATEST(heat, (SELECT heat FROM entities WHERE id = $1)), " +
@@ -252,7 +261,7 @@ export async function mergeEntities(
     );
 
     // Tombstone the alias: archived=true, heat=0 (auditable, NOT deleted).
-    // source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py — UPDATE entities tombstone
+    // source: cortex main mcp_server/infrastructure/pg_store_entity_merge.py — UPDATE entities tombstone
     await client.query(
       "UPDATE entities SET archived = TRUE, heat = 0 WHERE id = $1",
       [aliasId],

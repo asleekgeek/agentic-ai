@@ -33,7 +33,7 @@
  *   > auto curated."
  *   > "the anthropic key should be using the user session"
  *
- * source: cortex@47b818d mcp_server/handlers/curate_wiki.py
+ * source: cortex main mcp_server/handlers/curate_wiki.py
  */
 
 import {
@@ -71,16 +71,16 @@ import type {
 } from "../domain-coverage.js";
 import type { SourceRootResolverFn, ReadWikiPageBodyFn } from "../reauthor-jobs.js";
 
-// source: cortex@47b818d mcp_server/handlers/curate_wiki.py — defaults
+// source: cortex main mcp_server/handlers/curate_wiki.py — defaults
 // for limit, recent_only, memory_pool_size.
-const DEFAULT_LIMIT = 3; // source: cortex@47b818d mcp_server/handlers/curate_wiki.py:91 ("limit": {"default": 3})
-const DEFAULT_RECENT_ONLY = true; // source: cortex@47b818d mcp_server/handlers/curate_wiki.py:107 ("recent_only": {"default": True})
-const DEFAULT_MEMORY_POOL_SIZE = 500; // source: cortex@47b818d mcp_server/handlers/curate_wiki.py:114 ("memory_pool_size": {"default": 500})
+const DEFAULT_LIMIT = 3; // source: cortex main mcp_server/handlers/curate_wiki.py:91 ("limit": {"default": 3})
+const DEFAULT_RECENT_ONLY = true; // source: cortex main mcp_server/handlers/curate_wiki.py:107 ("recent_only": {"default": True})
+const DEFAULT_MEMORY_POOL_SIZE = 500; // source: cortex main mcp_server/handlers/curate_wiki.py:114 ("memory_pool_size": {"default": 500})
 
 // Minimum-pool-for-recent threshold: when the recently-accessed pool is
 // too thin (< 2× min_memories), the handler falls back to a broader
 // recent-by-creation pool.
-// source: cortex@47b818d mcp_server/handlers/curate_wiki.py:139 (`if len(memories) < min_memories * 2`)
+// source: cortex main mcp_server/handlers/curate_wiki.py:139 (`if len(memories) < min_memories * 2`)
 const RECENT_POOL_FALLBACK_FACTOR = 2;
 
 // ── Public types ────────────────────────────────────────────────────────
@@ -111,7 +111,7 @@ export interface CurateWikiArgs {
   readonly project_root?: string;
   // Cap on the number of source files scanned for coverage. 0 (the
   // default) means unbounded — match codebase_analyze's contract
-  // (cortex@2f42428).
+  // (cortex main).
   readonly max_files?: number;
   // ── Scope-coverage axis (G6 / G12) ──
   // When true, audit every domain against the 15 canonical scopes
@@ -215,7 +215,7 @@ export interface CurateWikiDeps {
    * page at absPath, or null when missing. When omitted, the handler
    * skips the "recently authored" filter (useful in tests).
    *
-   * source: cortex@4883307 mcp_server/core/auto_curator.py — filesystem-mtime check
+   * source: cortex main mcp_server/core/auto_curator.py — filesystem-mtime check
    */
   readonly pageMtime?: PageMtimeFn;
   /** Override for current-date injection in tests. Returns YYYY-MM-DD. */
@@ -291,7 +291,7 @@ export interface CurateWikiDeps {
 // ("decision-", "lesson-", "convention-", "spec-", "reference-"), and
 // drop the trailing "-md" that the original Cortex code happened to
 // strip after extension removal.
-// source: cortex@47b818d mcp_server/handlers/curate_wiki.py::_scan_existing_pages:166-176
+// source: cortex main mcp_server/handlers/curate_wiki.py::_scan_existing_pages:166-176
 const ID_PREFIX_RE = /^\d+-/;
 const KIND_PREFIX_RE = /^(decision|lesson|convention|spec|reference)-/;
 
@@ -316,7 +316,7 @@ function pageTopicKey(relPath: string): string | null {
  * path's slug (last component, minus extension, minus ID prefix,
  * minus kind prefix).
  *
- * source: cortex@47b818d mcp_server/handlers/curate_wiki.py::_scan_existing_pages
+ * source: cortex main mcp_server/handlers/curate_wiki.py::_scan_existing_pages
  */
 export function scanExistingPages(relPaths: readonly string[]): Map<string, string[]> {
   const index = new Map<string, string[]>();
@@ -355,10 +355,10 @@ async function fetchMemoryPool(
 
 // Top-N entities serialised per job. Matches the slice taken in the
 // authoring prompt; the consumer sees a stable wire field.
-// source: cortex@47b818d mcp_server/handlers/curate_wiki.py:_serialise_job:"c.entities[:8]"
+// source: cortex main mcp_server/handlers/curate_wiki.py:_serialise_job:"c.entities[:8]"
 const TOP_ENTITIES_PER_JOB = 8;
 // avg_heat is rounded to 3 decimals on the wire (1000 = 10^3).
-// source: cortex@47b818d mcp_server/handlers/curate_wiki.py:_serialise_job:"round(c.avg_heat, 3)"
+// source: cortex main mcp_server/handlers/curate_wiki.py:_serialise_job:"round(c.avg_heat, 3)"
 const HEAT_ROUND_PRECISION = 1000;
 
 function serialiseJob(job: CurationJob): CurationJobPayload {
@@ -390,7 +390,7 @@ function serialiseJob(job: CurationJob): CurationJobPayload {
  * postcondition: returns up to ``limit`` curation jobs; each carries
  *                the full prompt the in-session LLM should author from.
  *
- * source: cortex@47b818d mcp_server/handlers/curate_wiki.py::handler
+ * source: cortex main mcp_server/handlers/curate_wiki.py::handler
  */
 export async function handler(
   args: CurateWikiArgs,
@@ -470,7 +470,7 @@ export async function handler(
 
   // Skip clusters whose suggested page already exists and is fresh.
   // The filter runs only when a pageMtime adapter is wired — tests
-  // typically omit it. source: cortex@4883307 mcp_server/core/auto_curator.py
+  // typically omit it. source: cortex main mcp_server/core/auto_curator.py
   const clusters: CurationCluster[] = deps.pageMtime
     ? filterAuthoredClusters(rawClusters, deps.wikiRoot, deps.pageMtime)
     : rawClusters;
@@ -695,6 +695,6 @@ export const schema = {
 } as const;
 
 // Re-export so MCP tool registration can pick up the canonical default
-// without re-declaring them. source: cortex@47b818d (schema field defaults
+// without re-declaring them. source: cortex main (schema field defaults
 // derive from auto_curator constants).
 export { MAX_MEMORIES_PER_PROMPT, MIN_AVG_HEAT_FOR_PAGE, MIN_MEMORIES_PER_CLUSTER };

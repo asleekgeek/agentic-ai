@@ -1,7 +1,7 @@
 /**
  * pg-schema-functions.ts — PL/pgSQL stored procedures and getAllDdl().
  *
- * source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:570-1411
+ * source: cortex main mcp_server/infrastructure/pg_schema.py:570-1411
  * Pure DDL. Numeric constants extracted to named TS constants with citations.
  */
 
@@ -12,29 +12,29 @@ import {
 } from "./pg-schema-tables.js";
 import { INDEXES_DDL, MIGRATIONS_DDL } from "./pg-schema-indexes.js";
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:597
+// source: cortex main mcp_server/infrastructure/pg_schema.py:597
 // 0.95^(1/24) ≈ 0.99787 — converts daily decay factor to per-hour rate.
 // Source: docs/program/phase-3-a3-migration-design.md §2.
-const PG_P_FACTOR_DEFAULT = 0.99787; // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:597
+const PG_P_FACTOR_DEFAULT = 0.99787; // source: cortex main mcp_server/infrastructure/pg_schema.py:597
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:646
+// source: cortex main mcp_server/infrastructure/pg_schema.py:646
 // Yonelinas & Ritchey (2015) emotional enhancement coefficient = 0.30.
-const PG_EMOTIONAL_DAMPING = 0.30; // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:646
+const PG_EMOTIONAL_DAMPING = 0.30; // source: cortex main mcp_server/infrastructure/pg_schema.py:646
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:943
-const PG_SPREAD_DECAY_DEFAULT = 0.65; // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:943
+// source: cortex main mcp_server/infrastructure/pg_schema.py:943
+const PG_SPREAD_DECAY_DEFAULT = 0.65; // source: cortex main mcp_server/infrastructure/pg_schema.py:943
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:944
-const PG_SPREAD_THRESHOLD_DEFAULT = 0.10; // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:944
+// source: cortex main mcp_server/infrastructure/pg_schema.py:944
+const PG_SPREAD_THRESHOLD_DEFAULT = 0.10; // source: cortex main mcp_server/infrastructure/pg_schema.py:944
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:735
-const PG_MIN_HEAT_DEFAULT = 0.05; // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:735
+// source: cortex main mcp_server/infrastructure/pg_schema.py:735
+const PG_MIN_HEAT_DEFAULT = 0.05; // source: cortex main mcp_server/infrastructure/pg_schema.py:735
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:1065
-const PG_HOT_EMBEDDINGS_LIMIT = 500; // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:1065
+// source: cortex main mcp_server/infrastructure/pg_schema.py:1065
+const PG_HOT_EMBEDDINGS_LIMIT = 500; // source: cortex main mcp_server/infrastructure/pg_schema.py:1065
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:1095
-const PG_CO_ACCESS_LIMIT = 100; // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:1095
+// source: cortex main mcp_server/infrastructure/pg_schema.py:1095
+const PG_CO_ACCESS_LIMIT = 100; // source: cortex main mcp_server/infrastructure/pg_schema.py:1095
 
 // source: SI base unit (3600 seconds per hour)
 const SECS_PER_HOUR = 3600.0; // source: SI — International System of Units
@@ -42,15 +42,15 @@ const SECS_PER_HOUR = 3600.0; // source: SI — International System of Units
 // source: SI base unit (86400 seconds per day)
 const SECS_PER_DAY = 86400.0; // source: SI — International System of Units
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:856-860
+// source: cortex main mcp_server/infrastructure/pg_schema.py:856-860
 // TMM (Top-M Merged) normalization floor — prevents division by near-zero score.
-const WRRF_EPSILON = 0.001; // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:856
+const WRRF_EPSILON = 0.001; // source: cortex main mcp_server/infrastructure/pg_schema.py:856
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:849 — recency decay rate per day
-const RECENCY_DECAY_RATE = 0.01; // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:849
+// source: cortex main mcp_server/infrastructure/pg_schema.py:849 — recency decay rate per day
+const RECENCY_DECAY_RATE = 0.01; // source: cortex main mcp_server/infrastructure/pg_schema.py:849
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:900 — emotional boost coefficient
-const EMOTIONAL_BOOST_COEFF = 0.15; // source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:900
+// source: cortex main mcp_server/infrastructure/pg_schema.py:900 — emotional boost coefficient
+const EMOTIONAL_BOOST_COEFF = 0.15; // source: cortex main mcp_server/infrastructure/pg_schema.py:900
 
 
 // source: Bahrick, H.P. (1984). "Semantic memory content in permastore." JECP 33(3).
@@ -60,7 +60,7 @@ const PERMASTORE_FLOOR_CONSOLIDATED = 0.10; // source: Bahrick (1984) — consol
 const PERMASTORE_FLOOR_LATE = 0.05; // source: Benna & Fusi (2016) — late_ltp/reconsolidating floor
 
 // ── PL/pgSQL: effective_heat ──────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:586-683
+// source: cortex main mcp_server/infrastructure/pg_schema.py:586-683
 
 export const EFFECTIVE_HEAT_FN = `
 CREATE OR REPLACE FUNCTION effective_heat(
@@ -106,21 +106,21 @@ BEGIN
     decayed := base_scaled * POWER(p_factor::DOUBLE PRECISION, alpha * beta * hours_elapsed);
     decayed := LEAST(1.0::DOUBLE PRECISION,
 ` +
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:677 — 1e-38 prevents REAL underflow on cast
+// source: cortex main mcp_server/infrastructure/pg_schema.py:677 — 1e-38 prevents REAL underflow on cast
 `                     GREATEST(GREATEST(stage_floor, 1e-38::DOUBLE PRECISION), decayed));
     RETURN decayed::REAL;
 END;
 $$ LANGUAGE plpgsql STABLE PARALLEL SAFE;
 `;
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:691-706
+// source: cortex main mcp_server/infrastructure/pg_schema.py:691-706
 export const EFFECTIVE_HEAT_FROZEN_FN = `
 CREATE OR REPLACE FUNCTION effective_heat_frozen(
     m           memories,
     t_now       TIMESTAMPTZ,
     factor      REAL DEFAULT 1.0,
 ` +
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:697 — 0.95 pre-A3 daily decay factor
+// source: cortex main mcp_server/infrastructure/pg_schema.py:697 — 0.95 pre-A3 daily decay factor
 `    p_factor    REAL DEFAULT 0.95
 ) RETURNS REAL AS $$
 BEGIN
@@ -129,7 +129,7 @@ END;
 $$ LANGUAGE plpgsql IMMUTABLE PARALLEL SAFE;
 `;
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:729-937
+// source: cortex main mcp_server/infrastructure/pg_schema.py:729-937
 export const RECALL_MEMORIES_LAZY_FN = `
 DROP FUNCTION IF EXISTS recall_memories(
     TEXT, vector, TEXT, TEXT, TEXT, TEXT, REAL, INT, INT,
@@ -181,7 +181,7 @@ BEGIN
     SELECT COALESCE(MAX(hs.factor), 1.0) INTO v_factor FROM homeostatic_state hs
     WHERE hs.domain = COALESCE(p_domain, '');
 ` +
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:787 — 0.001 floor prevents div-by-zero
+// source: cortex main mcp_server/infrastructure/pg_schema.py:787 — 0.001 floor prevents div-by-zero
 `    v_min_heat_base := p_min_heat / GREATEST(v_factor, ${WRRF_EPSILON});
     RETURN QUERY
     WITH
@@ -218,14 +218,14 @@ BEGIN
     recency AS (
         SELECT c.id,
 ` +
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:849 — 0.01 recency decay rate per day
+// source: cortex main mcp_server/infrastructure/pg_schema.py:849 — 0.01 recency decay rate per day
 `               EXP(-${RECENCY_DECAY_RATE} * EXTRACT(EPOCH FROM (NOW() - c.created_at)) / ${SECS_PER_DAY})::REAL AS raw_score
         FROM candidates c
         WHERE effective_heat(c, NOW(), v_factor) >= p_min_heat
         ORDER BY c.created_at DESC LIMIT v_pool
     ),
 ` +
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:856-860 — 0.001 TMM normalization floor (Bruch 2023)
+// source: cortex main mcp_server/infrastructure/pg_schema.py:856-860 — 0.001 TMM normalization floor (Bruch 2023)
 `    vec_max  AS (SELECT COALESCE(MAX(raw_score), ${WRRF_EPSILON}) AS hi FROM vec),
     fts_max  AS (SELECT COALESCE(MAX(raw_score), ${WRRF_EPSILON}) AS hi FROM fts),
     ng_max   AS (SELECT COALESCE(MAX(raw_score), ${WRRF_EPSILON}) AS hi FROM ngram),
@@ -234,7 +234,7 @@ BEGIN
     fused AS (
         SELECT id, SUM(contribution) AS fused_score FROM (
 ` +
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:863-883 — 0.001 WRRF denominator floor (Bruch 2023)
+// source: cortex main mcp_server/infrastructure/pg_schema.py:863-883 — 0.001 WRRF denominator floor (Bruch 2023)
 `            SELECT v.id, p_w_vector * (v.raw_score - (-1.0)) / GREATEST(b.hi - (-1.0), ${WRRF_EPSILON}) AS contribution
             FROM vec v, vec_max b
             UNION ALL
@@ -259,7 +259,7 @@ BEGIN
         SELECT ab.id,
                ab.boosted_score * (
 ` +
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:900 — 0.15 emotional boost coefficient
+// source: cortex main mcp_server/infrastructure/pg_schema.py:900 — 0.15 emotional boost coefficient
 `                   1.0 + ABS(COALESCE(c.emotional_valence, 0.0)) * ${EMOTIONAL_BOOST_COEFF}
                    * (1.0 - EXP(-EXTRACT(EPOCH FROM (NOW() - c.created_at)) / ${SECS_PER_HOUR}))
                ) AS emo_score
@@ -298,7 +298,7 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 `;
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:941-978
+// source: cortex main mcp_server/infrastructure/pg_schema.py:941-978
 export const SPREAD_ACTIVATION_FN = `
 CREATE OR REPLACE FUNCTION spread_activation(
     p_seed_entity_ids INT[],
@@ -326,7 +326,7 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 `;
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:985-1053
+// source: cortex main mcp_server/infrastructure/pg_schema.py:985-1053
 export const SPREAD_ACTIVATION_MEMORIES_FN = `
 CREATE OR REPLACE FUNCTION spread_activation_memories(
     p_query_terms   TEXT[],
@@ -371,7 +371,7 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 `;
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:1060-1082
+// source: cortex main mcp_server/infrastructure/pg_schema.py:1060-1082
 export const GET_HOT_EMBEDDINGS_FN = `
 CREATE OR REPLACE FUNCTION get_hot_embeddings(
     p_min_heat    REAL DEFAULT ${PG_MIN_HEAT_DEFAULT},
@@ -390,7 +390,7 @@ END;
 $$ LANGUAGE plpgsql STABLE;
 `;
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:1088-1123
+// source: cortex main mcp_server/infrastructure/pg_schema.py:1088-1123
 export const GET_TEMPORAL_CO_ACCESS_FN = `
 CREATE OR REPLACE FUNCTION get_temporal_co_access(
     p_window_hours  REAL DEFAULT 2.0,
@@ -421,7 +421,7 @@ $$ LANGUAGE plpgsql STABLE;
  *
  * precondition:  ddl is a non-empty string.
  * postcondition: each returned string is a single executable DDL statement.
- * source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:1358-1372
+ * source: cortex main mcp_server/infrastructure/pg_schema.py:1358-1372
  */
 export function splitStatements(ddl: string): string[] {
   if (ddl.includes("$$")) {
@@ -441,7 +441,7 @@ export function splitStatements(ddl: string): string[] {
  *
  * MIGRATIONS_DDL runs before INDEXES_DDL so heat->heat_base rename lands first.
  * postcondition: returned array is non-empty; each element is executable SQL.
- * source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:1375-1411
+ * source: cortex main mcp_server/infrastructure/pg_schema.py:1375-1411
  */
 export function getAllDdl(): string[] {
   const blocks: string[] = [

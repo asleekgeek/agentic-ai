@@ -7,12 +7,12 @@
  *
  * Pure DDL — no connection management.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py
+ * source: cortex main mcp_server/infrastructure/sqlite_schema.py
  */
 
 // ── Core Tables ───────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:13-59
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:13-59
 export const MEMORIES_DDL = `
 CREATE TABLE IF NOT EXISTS memories (
     id                      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -60,17 +60,17 @@ CREATE TABLE IF NOT EXISTS memories (
     is_global               INTEGER DEFAULT 0
 )`;
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:61-68
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:61-68
 export const HOMEOSTATIC_STATE_DDL = `
 CREATE TABLE IF NOT EXISTS homeostatic_state (
     domain      TEXT PRIMARY KEY,
     factor      REAL NOT NULL DEFAULT 1.0
-    -- // source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:64-66 — open-interval (0.0, 10.0)
+    -- // source: cortex main mcp_server/infrastructure/sqlite_schema.py:64-66 — open-interval (0.0, 10.0)
                 CHECK (factor > 0.0 AND factor < 10.0),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
 )`;
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:70-76
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:70-76
 export const MEMORIES_FTS_DDL = `
 CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
     content,
@@ -78,14 +78,14 @@ CREATE VIRTUAL TABLE IF NOT EXISTS memories_fts USING fts5(
     content_rowid='id'
 )`;
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:78-82
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:78-82
 export const MEMORIES_VEC_DDL = `
 CREATE VIRTUAL TABLE IF NOT EXISTS memories_vec USING vec0(
-    -- // source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:80-82; HuggingFace all-MiniLM-L6-v2 dim=384
+    -- // source: cortex main mcp_server/infrastructure/sqlite_schema.py:80-82; HuggingFace all-MiniLM-L6-v2 dim=384
     embedding float[384]
 )`;
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:84-95
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:84-97
 export const ENTITIES_DDL = `
 CREATE TABLE IF NOT EXISTS entities (
     id              INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -95,10 +95,13 @@ CREATE TABLE IF NOT EXISTS entities (
     created_at      TEXT NOT NULL DEFAULT (datetime('now')),
     last_accessed   TEXT NOT NULL DEFAULT (datetime('now')),
     heat            REAL DEFAULT 1.0,
-    archived        INTEGER DEFAULT 0
+    archived        INTEGER DEFAULT 0,
+    -- Provenance mirror of the PG schema: 'ast_symbol' vs 'text_concept'.
+    -- Consumed by core.entity_dedup to exempt code symbols from fuzzy dedup.
+    origin          TEXT NOT NULL DEFAULT 'text_concept'
 )`;
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:97-113
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:97-113
 export const RELATIONSHIPS_DDL = `
 CREATE TABLE IF NOT EXISTS relationships (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -115,7 +118,7 @@ CREATE TABLE IF NOT EXISTS relationships (
     depression          REAL DEFAULT 0.0
 )`;
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:114-124
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:114-124
 export const STAGE_TRANSITIONS_DDL = `
 CREATE TABLE IF NOT EXISTS stage_transitions (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -127,7 +130,7 @@ CREATE TABLE IF NOT EXISTS stage_transitions (
     transitioned_at     TEXT NOT NULL DEFAULT (datetime('now'))
 )`;
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:126-132
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:126-132
 export const MEMORY_ENTITIES_DDL = `
 CREATE TABLE IF NOT EXISTS memory_entities (
     memory_id   INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
@@ -135,7 +138,7 @@ CREATE TABLE IF NOT EXISTS memory_entities (
     PRIMARY KEY (memory_id, entity_id)
 )`;
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:134-146
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:134-146
 export const PROSPECTIVE_MEMORIES_DDL = `
 CREATE TABLE IF NOT EXISTS prospective_memories (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -149,7 +152,7 @@ CREATE TABLE IF NOT EXISTS prospective_memories (
     triggered_count     INTEGER DEFAULT 0
 )`;
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:148-164
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:148-164
 export const CHECKPOINTS_DDL = `
 CREATE TABLE IF NOT EXISTS checkpoints (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -167,7 +170,7 @@ CREATE TABLE IF NOT EXISTS checkpoints (
     is_active           INTEGER DEFAULT 1
 )`;
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:166-175
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:166-175
 export const MEMORY_ARCHIVES_DDL = `
 CREATE TABLE IF NOT EXISTS memory_archives (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -178,7 +181,7 @@ CREATE TABLE IF NOT EXISTS memory_archives (
     archive_reason      TEXT DEFAULT ''
 )`;
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:177-186
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:177-186
 export const CONSOLIDATION_LOG_DDL = `
 CREATE TABLE IF NOT EXISTS consolidation_log (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -189,7 +192,7 @@ CREATE TABLE IF NOT EXISTS consolidation_log (
     duration_ms         INTEGER DEFAULT 0
 )`;
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:188-194
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:188-194
 export const ENGRAM_SLOTS_DDL = `
 CREATE TABLE IF NOT EXISTS engram_slots (
     slot_index          INTEGER PRIMARY KEY,
@@ -197,7 +200,7 @@ CREATE TABLE IF NOT EXISTS engram_slots (
     last_activated      TEXT
 )`;
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:196-208
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:196-208
 export const MEMORY_RULES_DDL = `
 CREATE TABLE IF NOT EXISTS memory_rules (
     id                  INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -211,7 +214,7 @@ CREATE TABLE IF NOT EXISTS memory_rules (
     created_at          TEXT NOT NULL DEFAULT (datetime('now'))
 )`;
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:210-227
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:210-227
 export const SCHEMAS_DDL = `
 CREATE TABLE IF NOT EXISTS schemas (
     id                      INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -229,7 +232,7 @@ CREATE TABLE IF NOT EXISTS schemas (
     created_at              TEXT NOT NULL DEFAULT (datetime('now'))
 )`;
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:229-233
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:229-233
 export const OSCILLATORY_STATE_DDL = `
 CREATE TABLE IF NOT EXISTS oscillatory_state (
     id          INTEGER PRIMARY KEY CHECK (id = 1),
@@ -238,7 +241,7 @@ CREATE TABLE IF NOT EXISTS oscillatory_state (
 
 // ── Indexes ───────────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:237-260
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:237-260
 export const INDEXES_DDL = `
 CREATE INDEX IF NOT EXISTS idx_memories_heat
     ON memories (heat);
@@ -270,7 +273,7 @@ CREATE INDEX IF NOT EXISTS idx_memories_agent_context
  * Note: FTS5 and vec0 virtual tables are returned separately
  * so callers can skip vec0 if sqlite-vec is not available.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:263-287
+ * source: cortex main mcp_server/infrastructure/sqlite_schema.py:263-287
  * precondition: none
  * postcondition: list is non-empty; MEMORIES_VEC_DDL is NOT included
  *   (caller must handle it separately after loading the extension)
@@ -301,7 +304,7 @@ export function getAllDdl(): string[] {
 // Each migration adds columns that may be missing from older databases.
 // Format: [table, column, type_and_default]
 //
-// source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:294-299
+// source: cortex main mcp_server/infrastructure/sqlite_schema.py:294-299
 
 export const MIGRATIONS: Array<[string, string, string]> = [
   ["memories", "is_benchmark", "INTEGER DEFAULT 0"],
@@ -309,7 +312,7 @@ export const MIGRATIONS: Array<[string, string, string]> = [
   ["memories", "is_global", "INTEGER DEFAULT 0"],
   ["memories", "stage_entered_at", "TEXT"],
   // Supersession edges (MEM-G1): plain INTEGER, NULL default → byte-identical.
-  // source: cortex@ed33435 mcp_server/infrastructure/sqlite_schema.py:336-337
+  // source: cortex main mcp_server/infrastructure/sqlite_schema.py:336-337
   ["memories", "supersedes_id", "INTEGER"],
   ["memories", "superseded_by_id", "INTEGER"],
 ];

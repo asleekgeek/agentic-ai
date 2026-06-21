@@ -47,7 +47,7 @@ export const STAMP_RELATIVE_PATH = join(".claude", "methodology", ".last_consoli
 // Default TTL between consolidate runs. Configurable via env so
 // operators can dial it up/down without redeploying. 6h matches
 // Cortex's default — "run a few times a day without a human."
-// source: cortex@4883307+ session_start.py — CORTEX_CONSOLIDATE_TTL_HOURS
+// source: cortex main+ session_start.py — CORTEX_CONSOLIDATE_TTL_HOURS
 export const DEFAULT_TTL_HOURS = 6;
 
 function logPath(): string {
@@ -197,7 +197,7 @@ async function buildWikiMaintenanceDeps(
   const BYTES_PER_KB = 1024; // source: IEC 80000-13:2008 §21-12
   // source: ECMAScript Date timestamps are ms
   const MS_PER_SECOND = 1000;
-  // source: cortex@4883307 mcp_server/hooks/session_start.py:226 — LIMIT 500
+  // source: cortex main mcp_server/hooks/session_start.py:226 — LIMIT 500
   const CONSOLIDATE_MEM_POOL = 500;
 
   const SECONDS_DIV = (absPath: string): number | null => {

@@ -37,10 +37,10 @@ const SEMANTICS_SAMPLE_CAP = 2000; // source: issue #13
 const MIN_PATTERN_SIZE = 3;
 const CLUSTER_THRESHOLD = 0.6;
 
-// source: cortex@f2b9f99 mcp_server/handlers/consolidation/cls.py — schema is capped at 500 chars
+// source: cortex main mcp_server/handlers/consolidation/cls.py — schema is capped at 500 chars
 const SCHEMA_MAX_CHARS = 500;
 
-// source: cortex@f2b9f99 mcp_server/handlers/consolidation/cls.py — max 10 unique tags per semantic memory
+// source: cortex main mcp_server/handlers/consolidation/cls.py — max 10 unique tags per semantic memory
 const TAGS_MAX_COUNT = 10;
 
 // Source: PC algorithm lower bound — need ≥3 observations per variable
@@ -235,7 +235,7 @@ async function computeConsolidationPlan(
     const members = cluster
       .map((i) => episodic[i])
       .filter((m): m is Record<string, unknown> => m !== undefined);
-    // source: cortex@f2b9f99 mcp_server/handlers/consolidation/cls.py — 500-char schema cap
+    // source: cortex main mcp_server/handlers/consolidation/cls.py — 500-char schema cap
     const schema = members
       .map((m) => (m["content"] as string | undefined) ?? "")
       .join(" | ")

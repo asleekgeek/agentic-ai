@@ -8,7 +8,7 @@
  * preamble shows, the dashboard cards show, and the consolidate
  * response carries are all derived from this code.
  *
- * source: cortex@4883307 mcp_server/hooks/session_start.py:206-263
+ * source: cortex main mcp_server/hooks/session_start.py:206-263
  * source: packages/memory/src/wiki/maintenance-stats.ts
  */
 
@@ -27,10 +27,10 @@ import { collectSourceFiles } from "../codebase-analysis/handlers/codebase-analy
 
 // ── Configuration constants ──────────────────────────────────────────────
 
-// source: cortex@4883307 mcp_server/hooks/session_start.py:226 ("LIMIT 500")
+// source: cortex main mcp_server/hooks/session_start.py:226 ("LIMIT 500")
 const CURATION_MEM_POOL = 500;
 
-// source: cortex@ed33435 mcp_server/infrastructure/config.py — WIKI_ROOT default
+// source: cortex main mcp_server/infrastructure/config.py — WIKI_ROOT default
 const SESSION_START_WIKI_ROOT: string =
   process.env["CORTEX_WIKI_ROOT"] ?? pathJoin(homedir(), ".claude", "methodology", "wiki");
 
@@ -55,7 +55,7 @@ const MS_PER_SECOND = 1000;
 // Returns seconds-since-epoch or null when the page is absent. statSync
 // throws on missing — catch and return null so the curator treats the
 // page as eligible.
-// source: cortex@4883307 mcp_server/core/auto_curator.py::is_path_recently_authored
+// source: cortex main mcp_server/core/auto_curator.py::is_path_recently_authored
 const SESSION_START_PAGE_MTIME: PageMtimeFn = (absPath: string): number | null => {
   try {
     return statSync(absPath).mtimeMs / MS_PER_SECOND;
@@ -107,7 +107,7 @@ function projectFileMtimeFn(projectRoot: string, rel: string): number | null {
  * field. Same failure-tolerant contract as the consolidate tool's
  * adapter; returns 0 on any error.
  *
- * source: cortex@4883307 mcp_server/hooks/session_start.py:_count_pending_curations
+ * source: cortex main mcp_server/hooks/session_start.py:_count_pending_curations
  */
 export async function countPendingCurationsSafe(databaseUrl: string): Promise<number> {
   try {

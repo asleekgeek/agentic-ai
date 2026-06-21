@@ -1,4 +1,4 @@
-/* eslint-disable @typescript-eslint/no-magic-numbers -- all numeric defaults are literal ports from cortex@ed33435 */
+/* eslint-disable @typescript-eslint/no-magic-numbers -- all numeric defaults are literal ports from cortex main */
 /**
  * sqlite-store-auxiliary.ts — Auxiliary persistence mixin.
  *
@@ -6,7 +6,7 @@
  *
  * Ports: infrastructure/sqlite_store_auxiliary.py (lines 1-300)
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py
+ * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py
  */
 
 import type { Database as DatabaseType } from "better-sqlite3";
@@ -14,7 +14,7 @@ import type { Database as DatabaseType } from "better-sqlite3";
 /**
  * Prospective memory, checkpoint, archive, engram, schema operations on SQLite.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:10-300
+ * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:10-300
  */
 export class SqliteAuxiliaryMixin {
   protected _rawConn!: DatabaseType;
@@ -27,7 +27,7 @@ export class SqliteAuxiliaryMixin {
   // ── Prospective Memory ─────────────────────────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:21-37
    */
   insertProspectiveMemory(data: Record<string, unknown>): number {
     const result = this._rawConn
@@ -49,7 +49,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:39-42
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:39-42
    */
   getActiveProspectiveMemories(): Record<string, unknown>[] {
     return this._rawConn
@@ -58,7 +58,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:44-50
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:44-50
    */
   triggerProspectiveMemory(pmId: number): void {
     this._rawConn
@@ -70,7 +70,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:52-58
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:52-58
    */
   deactivateProspectiveMemory(pmId: number): void {
     this._rawConn
@@ -81,7 +81,7 @@ export class SqliteAuxiliaryMixin {
   // ── Checkpoint ─────────────────────────────────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:62-85
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:62-85
    */
   insertCheckpoint(data: Record<string, unknown>): number {
     this._rawConn.prepare("UPDATE checkpoints SET is_active = 0").run();
@@ -110,7 +110,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:87-91
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:87-91
    */
   getActiveCheckpoint(): Record<string, unknown> | null {
     const row = this._rawConn
@@ -122,7 +122,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:93-95
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:93-95
    */
   getCurrentEpoch(): number {
     const row = this._rawConn
@@ -132,7 +132,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:97-109
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:97-109
    */
   incrementEpoch(): number {
     const newEpoch = this.getCurrentEpoch() + 1;
@@ -152,7 +152,7 @@ export class SqliteAuxiliaryMixin {
   // ── Archive ────────────────────────────────────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:113-126
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:113-126
    */
   insertArchive(data: Record<string, unknown>): number {
     const result = this._rawConn
@@ -171,7 +171,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:128-134
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:128-134
    */
   getArchivesForMemory(memoryId: number): Record<string, unknown>[] {
     const rows = this._rawConn
@@ -186,7 +186,7 @@ export class SqliteAuxiliaryMixin {
   // ── Engram Slots ───────────────────────────────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:138-149
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:138-149
    */
   initEngramSlots(numSlots: number): void {
     const row = this._rawConn
@@ -206,7 +206,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:151-155
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:151-155
    */
   getAllEngramSlots(): Record<string, unknown>[] {
     return this._rawConn
@@ -215,7 +215,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:157-162
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:157-162
    */
   getEngramSlot(slotIndex: number): Record<string, unknown> | null {
     const row = this._rawConn
@@ -225,7 +225,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:164-173
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:164-173
    */
   updateEngramSlot(
     slotIndex: number,
@@ -241,7 +241,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:175-180
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:175-180
    */
   assignMemorySlot(memoryId: number, slotIndex: number): void {
     this._rawConn
@@ -250,7 +250,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:182-186
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:182-186
    */
   getMemoriesInSlot(slotIndex: number): Record<string, unknown>[] {
     const rows = this._rawConn
@@ -265,7 +265,7 @@ export class SqliteAuxiliaryMixin {
    * excludeId omits a specific memory so the caller doesn't need to
    * guess whether it's committed yet.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:188-210
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:188-210
    */
   countMemoriesInSlot(slotIndex: number, excludeId?: number | null): number {
     if (excludeId != null) {
@@ -283,7 +283,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:212-217
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:212-217
    */
   getSlotOccupancy(): Map<number, number> {
     const rows = this._rawConn
@@ -298,7 +298,7 @@ export class SqliteAuxiliaryMixin {
   // ── Schemas (cortical structures) ──────────────────────────────────────────
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:221-246
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:221-246
    */
   insertSchema(data: Record<string, unknown>): number {
     try {
@@ -330,7 +330,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:248-275
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:248-275
    */
   private _updateExistingSchema(data: Record<string, unknown>): number {
     this._rawConn
@@ -362,7 +362,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:277-282
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:277-282
    */
   getSchemasForDomain(domain: string): Record<string, unknown>[] {
     return this._rawConn
@@ -373,7 +373,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:284-288
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:284-288
    */
   getAllSchemas(): Record<string, unknown>[] {
     return this._rawConn
@@ -382,7 +382,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:290-293
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:290-293
    */
   countSchemas(): number {
     const row = this._rawConn
@@ -392,7 +392,7 @@ export class SqliteAuxiliaryMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_auxiliary.py:295-299
+   * source: cortex main mcp_server/infrastructure/sqlite_store_auxiliary.py:295-299
    */
   deleteSchema(schemaId: string): boolean {
     const result = this._rawConn

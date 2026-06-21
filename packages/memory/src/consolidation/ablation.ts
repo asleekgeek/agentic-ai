@@ -16,54 +16,54 @@
  * production the var is never set so the lookup is a constant-time miss).
  *
  * Port of: mcp_server/core/ablation.py
- * source: cortex@ed33435 mcp_server/core/ablation.py
+ * source: cortex main mcp_server/core/ablation.py
  */
 
 // ── Ablation numeric constants ────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/ablation.py
+// source: cortex main mcp_server/core/ablation.py
 
 /** Precision factor for delta rounding: equivalent to Python round(x, 6).
- * source: cortex@ed33435 mcp_server/core/ablation.py:135 */
+ * source: cortex main mcp_server/core/ablation.py:135 */
 const DELTA_ROUNDING_PRECISION = 1_000_000;
 
 /** Sigmoid steepness for impact score: coefficient in e^(-k*rms).
- * source: cortex@ed33435 mcp_server/core/ablation.py:145 */
+ * source: cortex main mcp_server/core/ablation.py:145 */
 const SIGMOID_STEEPNESS = -5.0;
 
 /** Precision factor for impact score rounding: equivalent to Python round(x, 4).
- * source: cortex@ed33435 mcp_server/core/ablation.py:145 */
+ * source: cortex main mcp_server/core/ablation.py:145 */
 const IMPACT_ROUNDING_PRECISION = 10000;
 
 /** Impact threshold below which ablation is considered minimal.
- * source: cortex@ed33435 mcp_server/core/ablation.py:154 */
+ * source: cortex main mcp_server/core/ablation.py:154 */
 const MINIMAL_IMPACT_THRESHOLD = 0.1;
 
 /** Number of top delta effects included in interpretation.
- * source: cortex@ed33435 mcp_server/core/ablation.py:158 */
+ * source: cortex main mcp_server/core/ablation.py:158 */
 const TOP_EFFECTS_COUNT = 3;
 
 /** Minimum magnitude for a delta to be reported in interpretation.
- * source: cortex@ed33435 mcp_server/core/ablation.py:164 */
+ * source: cortex main mcp_server/core/ablation.py:164 */
 const MIN_REPORTABLE_MAGNITUDE = 0.01;
 
 /** Decimal places for magnitude display: equivalent to Python f"{magnitude:.4f}".
- * source: cortex@ed33435 mcp_server/core/ablation.py:165 */
+ * source: cortex main mcp_server/core/ablation.py:165 */
 const MAGNITUDE_DISPLAY_DECIMALS = 4;
 
 /** Impact threshold above which the mechanism is considered CRITICAL.
- * source: cortex@ed33435 mcp_server/core/ablation.py:167 */
+ * source: cortex main mcp_server/core/ablation.py:167 */
 const CRITICAL_IMPACT_THRESHOLD = 0.5;
 
 /** Impact threshold above which the mechanism contributes meaningfully.
- * source: cortex@ed33435 mcp_server/core/ablation.py:169 */
+ * source: cortex main mcp_server/core/ablation.py:169 */
 const MEANINGFUL_IMPACT_THRESHOLD = 0.3;
 
 /** Neutral hippocampal dependency value (no two-stage transfer bias).
- * source: cortex@ed33435 mcp_server/core/ablation.py:232 */
+ * source: cortex main mcp_server/core/ablation.py:232 */
 const NEUTRAL_HIPPOCAMPAL_DEPENDENCY = 0.5;
 
 // ── Mechanism enum ─────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/ablation.py:48
+// source: cortex main mcp_server/core/ablation.py:48
 
 export const Mechanism = {
   OSCILLATORY_CLOCK: "oscillatory_clock",
@@ -92,11 +92,11 @@ export const Mechanism = {
   EMOTIONAL_RETRIEVAL: "emotional_retrieval",
   EMOTIONAL_DECAY: "emotional_decay",
   MOOD_CONGRUENT_RERANK: "mood_congruent_rerank",
-  // COMPRESSION postdates the ed33435 pin (introduced cortex 44296810); wired in
+  // COMPRESSION postdates the ed33435 pin (introduced cortex main); wired in
   // stages/compression.ts to mirror compression.py:127's ablation gate.
-  // source: cortex bc5af469 mcp_server/core/ablation.py:80
+  // source: cortex main mcp_server/core/ablation.py:80
   COMPRESSION: "compression",
-  // source: cortex bc5af469 mcp_server/core/ablation.py:79
+  // source: cortex main mcp_server/core/ablation.py:79
   ENTITY_DEDUP: "entity_dedup",
 } as const;
 
@@ -116,7 +116,7 @@ export type MechanismValue = (typeof Mechanism)[MechanismKey];
  * DO NOT memoize.
  *
  * Port of: mcp_server/core/ablation.py::is_mechanism_disabled
- * source: cortex@ed33435 mcp_server/core/ablation.py:25
+ * source: cortex main mcp_server/core/ablation.py:25
  */
 export function isMechanismDisabled(mechanism: MechanismValue | string): boolean {
   const name = mechanism.toUpperCase().replace(/-/g, "_");
@@ -129,7 +129,7 @@ export function isMechanismDisabled(mechanism: MechanismValue | string): boolean
 /**
  * Configuration specifying which mechanisms are enabled/disabled.
  * Port of: mcp_server/core/ablation.py::AblationConfig
- * source: cortex@ed33435 mcp_server/core/ablation.py:79
+ * source: cortex main mcp_server/core/ablation.py:79
  */
 export class AblationConfig {
   readonly disabled: ReadonlySet<string>;
@@ -173,7 +173,7 @@ export interface AblationResult {
 /**
  * Compute signed differences between baseline and ablation metrics.
  * Port of: mcp_server/core/ablation.py::compute_ablation_deltas
- * source: cortex@ed33435 mcp_server/core/ablation.py:122
+ * source: cortex main mcp_server/core/ablation.py:122
  */
 export function computeAblationDeltas(
   baseline: Record<string, number>,
@@ -192,21 +192,21 @@ export function computeAblationDeltas(
 /**
  * Compute overall impact magnitude from deltas via RMS + sigmoid.
  * Port of: mcp_server/core/ablation.py::compute_impact_score
- * source: cortex@ed33435 mcp_server/core/ablation.py:135
+ * source: cortex main mcp_server/core/ablation.py:135
  */
 export function computeImpactScore(deltas: Record<string, number>): number {
   const values = Object.values(deltas);
   if (values.length === 0) return 0;
   const rms = Math.sqrt(values.reduce((s, d) => s + d * d, 0) / values.length);
   // sigmoid: 1 / (1 + e^(-5*rms))
-  // source: cortex@ed33435 mcp_server/core/ablation.py:141
+  // source: cortex main mcp_server/core/ablation.py:141
   return Math.round((1.0 / (1.0 + Math.exp(SIGMOID_STEEPNESS * rms))) * IMPACT_ROUNDING_PRECISION) / IMPACT_ROUNDING_PRECISION;
 }
 
 /**
  * Generate human-readable interpretation of ablation results.
  * Port of: mcp_server/core/ablation.py::generate_interpretation
- * source: cortex@ed33435 mcp_server/core/ablation.py:144
+ * source: cortex main mcp_server/core/ablation.py:144
  */
 export function generateInterpretation(
   mechanism: string,
@@ -219,7 +219,7 @@ export function generateInterpretation(
 
   const sortedDeltas = Object.entries(deltas)
     .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
-    .slice(0, TOP_EFFECTS_COUNT); // source: cortex@ed33435 ablation.py:158
+    .slice(0, TOP_EFFECTS_COUNT); // source: cortex main ablation.py:158
 
   const parts: string[] = [`Ablation of ${mechanism} (impact=${impactScore.toFixed(2)}):`];
   for (const [metric, delta] of sortedDeltas) {
@@ -244,7 +244,7 @@ export function generateInterpretation(
 /**
  * Create a complete ablation result from baseline and ablation metrics.
  * Port of: mcp_server/core/ablation.py::create_ablation_result
- * source: cortex@ed33435 mcp_server/core/ablation.py:173
+ * source: cortex main mcp_server/core/ablation.py:173
  */
 export function createAblationResult(
   mechanism: string,
@@ -268,49 +268,49 @@ export function createAblationResult(
 // ── Neutral values (identity functions for disabled mechanisms) ────────────
 
 /** Return neutral encoding strength (no oscillatory modulation).
- * source: cortex@ed33435 mcp_server/core/ablation.py:196 */
+ * source: cortex main mcp_server/core/ablation.py:196 */
 export function neutralEncodingStrength(): number {
   return 1.0;
 }
 
 /** Return neutral retrieval strength (no oscillatory modulation).
- * source: cortex@ed33435 mcp_server/core/ablation.py:201 */
+ * source: cortex main mcp_server/core/ablation.py:201 */
 export function neutralRetrievalStrength(): number {
   return 1.0;
 }
 
 /** Return neutral LTP modulation (no astrocyte/neuromodulation).
- * source: cortex@ed33435 mcp_server/core/ablation.py:206 */
+ * source: cortex main mcp_server/core/ablation.py:206 */
 export function neutralLtpModulation(): number {
   return 1.0;
 }
 
 /** Return neutral schema match (no schema acceleration).
- * source: cortex@ed33435 mcp_server/core/ablation.py:211 */
+ * source: cortex main mcp_server/core/ablation.py:211 */
 export function neutralSchemaMatch(): number {
   return 0.0;
 }
 
 /** Return neutral interference (no interference management).
- * source: cortex@ed33435 mcp_server/core/ablation.py:216 */
+ * source: cortex main mcp_server/core/ablation.py:216 */
 export function neutralInterferenceScore(): number {
   return 0.0;
 }
 
 /** Return neutral separation (no pattern separation).
- * source: cortex@ed33435 mcp_server/core/ablation.py:221 */
+ * source: cortex main mcp_server/core/ablation.py:221 */
 export function neutralSeparationIndex(): number {
   return 0.0;
 }
 
 /** Return neutral dependency (no two-stage model).
- * source: cortex@ed33435 mcp_server/core/ablation.py:226 */
+ * source: cortex main mcp_server/core/ablation.py:226 */
 export function neutralHippocampalDependency(): number {
   return NEUTRAL_HIPPOCAMPAL_DEPENDENCY;
 }
 
 /** Return neutral scaling (no homeostatic plasticity).
- * source: cortex@ed33435 mcp_server/core/ablation.py:231 */
+ * source: cortex main mcp_server/core/ablation.py:231 */
 export function neutralScalingFactor(): number {
   return 1.0;
 }

@@ -2,7 +2,7 @@
  * Handler: ingest-codebase — pull codebase analysis from the upstream
  * ai-automatised-pipeline MCP server into Cortex's store.
  *
- * source: cortex@f2b9f99 mcp_server/handlers/ingest_codebase.py:1-290
+ * source: cortex main mcp_server/handlers/ingest_codebase.py:1-290
  *
  * Re-synced 2026-04-28 (Phase 7 Group H): ported v3.14.8/v3.14.9 deltas —
  *   - _attributeFilesToSymbols: iterates filePathFromQn candidates (string[])
@@ -120,7 +120,7 @@ function _attributeFilesToSymbols(
     // filePathFromQn returns a priority-ordered list; pick the first
     // candidate present in knownFiles (matches Python: next(c for c in
     // candidates if c in known_files, None)).
-    // source: cortex@f2b9f99 ingest_codebase.py:118-126
+    // source: cortex main ingest_codebase.py:118-126
     const candidates = cypher.filePathFromQn(qn);
     const match = candidates.find((c) => knownFiles.has(c)) ?? null;
     if (match !== null) {
@@ -169,7 +169,7 @@ async function _pullSymbolsAndFiles(
   // The File→symbol containment join filters by the known-files set; if files
   // are truncated to a slice smaller than the symbols' file population, the
   // join collapses to near-zero edges. Decouple: always pull every File node.
-  // source: cortex@f2b9f99 ingest_codebase.py:162-168
+  // source: cortex main ingest_codebase.py:162-168
   const [files, fileDiag] = await cypher.fetchFiles(graphPath, null);
   diagnostics.push(...fileDiag);
 

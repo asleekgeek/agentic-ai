@@ -8,14 +8,14 @@
  *
  * Pure business logic — no I/O.
  *
- * source: cortex@ed33435 mcp_server/core/metacognition_analysis.py
+ * source: cortex main mcp_server/core/metacognition_analysis.py
  */
 
 // ── Coverage Assessment ───────────────────────────────────────────────────────
 
 /**
  * Density thresholds: (min_count, score).
- * source: cortex@ed33435 mcp_server/core/metacognition_analysis.py:13
+ * source: cortex main mcp_server/core/metacognition_analysis.py:13
  */
 const DENSITY_THRESHOLDS: Array<[number, number]> = [
   [6, 0.9],
@@ -25,7 +25,7 @@ const DENSITY_THRESHOLDS: Array<[number, number]> = [
 
 /**
  * Recency thresholds in milliseconds: (max_age_ms, score).
- * source: cortex@ed33435 mcp_server/core/metacognition_analysis.py:14-18
+ * source: cortex main mcp_server/core/metacognition_analysis.py:14-18
  */
 const RECENCY_THRESHOLDS_MS: Array<[number, number]> = [
   [1 * 24 * 3600 * 1000, 1.0],   // 1 day
@@ -35,13 +35,13 @@ const RECENCY_THRESHOLDS_MS: Array<[number, number]> = [
 
 /**
  * Default recency score when memory is older than all thresholds.
- * source: cortex@ed33435 mcp_server/core/metacognition_analysis.py:19
+ * source: cortex main mcp_server/core/metacognition_analysis.py:19
  */
 const RECENCY_DEFAULT = 0.2;
 
 /**
  * Cowan's 4±1 chunk limit — default max chunks for context management.
- * source: cortex@ed33435 mcp_server/core/metacognition_analysis.py:184
+ * source: cortex main mcp_server/core/metacognition_analysis.py:184
  */
 export const DEFAULT_MAX_CHUNKS = 5;
 
@@ -87,7 +87,7 @@ export interface CoverageResult {
  * precondition: weights sum to 1.0; entityCoverage in [0, 1]; avgConfidence in [0, 1]
  * postcondition: coverage in [0, 1]; suggestion is one of sufficient/partial/insufficient
  *
- * source: cortex@ed33435 mcp_server/core/metacognition_analysis.py:49-77
+ * source: cortex main mcp_server/core/metacognition_analysis.py:49-77
  */
 export function computeCoverage(
   matchingCount: number,
@@ -182,7 +182,7 @@ function shouldJoinChunk(
  * precondition: memories is non-empty
  * postcondition: every memory appears in exactly one chunk
  *
- * source: cortex@ed33435 mcp_server/core/metacognition_analysis.py:152-179
+ * source: cortex main mcp_server/core/metacognition_analysis.py:152-179
  */
 export function chunkMemories(
   memories: ChunkableMemory[],
@@ -271,7 +271,7 @@ function positionSelectedChunks(
  * precondition: memories is non-empty
  * postcondition: every input memory appears in output; _position_reason is set
  *
- * source: cortex@ed33435 mcp_server/core/metacognition_analysis.py:228-261
+ * source: cortex main mcp_server/core/metacognition_analysis.py:228-261
  */
 export function manageContext(
   memories: ChunkableMemory[],
@@ -312,7 +312,7 @@ export function manageContext(
  * precondition: excessMemories is non-empty; targetCount >= 1
  * postcondition: result length <= preserved.length + targetCount
  *
- * source: cortex@ed33435 mcp_server/core/metacognition_analysis.py:264-302
+ * source: cortex main mcp_server/core/metacognition_analysis.py:264-302
  */
 export function summarizeOverflow(
   excessMemories: ChunkableMemory[],

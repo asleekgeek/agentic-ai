@@ -9,26 +9,26 @@
  * Pure business logic — no I/O. Receives data, returns decisions/actions.
  *
  * Port of: mcp_server/core/curation.py
- * source: cortex@ed33435 mcp_server/core/curation.py
+ * source: cortex main mcp_server/core/curation.py
  */
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/core/curation.py:18
+// source: cortex main mcp_server/core/curation.py:18
 const NEGATION_RE =
   /\b(not|don't|doesn't|no longer|replaced|switched from|deprecated|never|removed|stopped|avoid)\b/i;
 
-// source: cortex@ed33435 mcp_server/core/curation.py:24 (_ACTION_RE — Python uses it
+// source: cortex main mcp_server/core/curation.py:24 (_ACTION_RE — Python uses it
 // via re.findall, i.e. all matches, so the faithful TS port is the global variant
 // consumed by .match() below; a non-global copy would be dead code).
 const ACTION_RE_GLOBAL =
   /\b(use|using|prefer|run|install|deploy|build|create|configure|set|enable|disable|switch|migrate)\b/gi;
 
-// source: cortex@ed33435 mcp_server/core/curation.py:31
+// source: cortex main mcp_server/core/curation.py:31
 export const MERGE_THRESHOLD = 0.85;
-// source: cortex@ed33435 mcp_server/core/curation.py:32
+// source: cortex main mcp_server/core/curation.py:32
 export const LINK_LOW = 0.6;
-// source: cortex@ed33435 mcp_server/core/curation.py:33
+// source: cortex main mcp_server/core/curation.py:33
 export const LINK_HIGH = 0.85;
 
 // ── Memify self-improvement thresholds ──────────────────────────────────────
@@ -36,20 +36,20 @@ export const LINK_HIGH = 0.85;
 // functions; the TS port hoists them to named constants so no bare literal
 // appears at a call/comparison site (rules/coding-standards §3.1, §7 — no magic
 // numbers). Values are byte-identical to the Python defaults.
-const CONTRADICTION_SIMILARITY_THRESHOLD = 0.7; // source: cortex@ed33435 mcp_server/core/curation.py:121 detect_contradictions
-const PRUNE_HEAT_THRESHOLD = 0.01; // source: cortex@ed33435 mcp_server/core/curation.py:144
-const PRUNE_CONFIDENCE_THRESHOLD = 0.3; // source: cortex@ed33435 mcp_server/core/curation.py:145
-const STRENGTHEN_MIN_ACCESS = 5; // source: cortex@ed33435 mcp_server/core/curation.py:160
-const STRENGTHEN_MIN_CONFIDENCE = 0.8; // source: cortex@ed33435 mcp_server/core/curation.py:161
-const STRENGTHEN_BOOST = 0.1; // source: cortex@ed33435 mcp_server/core/curation.py:162
-const DEFAULT_IMPORTANCE = 0.5; // source: cortex@ed33435 mcp_server/core/curation.py:175 mem.get("importance", 0.5)
-const REWEIGHT_HOT_THRESHOLD = 0.7; // source: cortex@ed33435 mcp_server/core/curation.py:186
-const REWEIGHT_COLD_THRESHOLD = 0.1; // source: cortex@ed33435 mcp_server/core/curation.py:187
-const REWEIGHT_HOT_BOOST = 0.5; // source: cortex@ed33435 mcp_server/core/curation.py:188
-const REWEIGHT_COLD_DECAY = 0.9; // source: cortex@ed33435 mcp_server/core/curation.py:189
-const DEFAULT_ENTITY_HEAT = 0.5; // source: cortex@ed33435 mcp_server/core/curation.py:197-198 entity_heats.get(..., 0.5)
-const WEIGHT_ROUND_FACTOR = 1000; // round to 3 decimals — source: cortex@ed33435 mcp_server/core/curation.py:208 round(new_weight, 3)
-const DERIVABLE_WEIGHT_THRESHOLD = 10.0; // source: cortex@ed33435 mcp_server/core/curation.py:215
+const CONTRADICTION_SIMILARITY_THRESHOLD = 0.7; // source: cortex main mcp_server/core/curation.py:121 detect_contradictions
+const PRUNE_HEAT_THRESHOLD = 0.01; // source: cortex main mcp_server/core/curation.py:144
+const PRUNE_CONFIDENCE_THRESHOLD = 0.3; // source: cortex main mcp_server/core/curation.py:145
+const STRENGTHEN_MIN_ACCESS = 5; // source: cortex main mcp_server/core/curation.py:160
+const STRENGTHEN_MIN_CONFIDENCE = 0.8; // source: cortex main mcp_server/core/curation.py:161
+const STRENGTHEN_BOOST = 0.1; // source: cortex main mcp_server/core/curation.py:162
+const DEFAULT_IMPORTANCE = 0.5; // source: cortex main mcp_server/core/curation.py:175 mem.get("importance", 0.5)
+const REWEIGHT_HOT_THRESHOLD = 0.7; // source: cortex main mcp_server/core/curation.py:186
+const REWEIGHT_COLD_THRESHOLD = 0.1; // source: cortex main mcp_server/core/curation.py:187
+const REWEIGHT_HOT_BOOST = 0.5; // source: cortex main mcp_server/core/curation.py:188
+const REWEIGHT_COLD_DECAY = 0.9; // source: cortex main mcp_server/core/curation.py:189
+const DEFAULT_ENTITY_HEAT = 0.5; // source: cortex main mcp_server/core/curation.py:197-198 entity_heats.get(..., 0.5)
+const WEIGHT_ROUND_FACTOR = 1000; // round to 3 decimals — source: cortex main mcp_server/core/curation.py:208 round(new_weight, 3)
+const DERIVABLE_WEIGHT_THRESHOLD = 10.0; // source: cortex main mcp_server/core/curation.py:215
 
 // ── Ingestion Decisions ────────────────────────────────────────────────────
 
@@ -59,7 +59,7 @@ const DERIVABLE_WEIGHT_THRESHOLD = 10.0; // source: cortex@ed33435 mcp_server/co
  * Returns one of: "merge", "link", "create".
  *
  * Port of: mcp_server/core/curation.py::decide_curation_action
- * source: cortex@ed33435 mcp_server/core/curation.py:39
+ * source: cortex main mcp_server/core/curation.py:39
  */
 export function decideCurationAction(
   similarity: number,
@@ -75,7 +75,7 @@ export function decideCurationAction(
 /**
  * Jaccard similarity between word sets of two texts.
  * Port of: mcp_server/core/curation.py::compute_textual_overlap
- * source: cortex@ed33435 mcp_server/core/curation.py:57
+ * source: cortex main mcp_server/core/curation.py:57
  */
 export function computeTextualOverlap(contentA: string, contentB: string): number {
   // Python's re.findall(r"\b\w+\b", text) uses Unicode \w by default, matching
@@ -85,7 +85,7 @@ export function computeTextualOverlap(contentA: string, contentB: string): numbe
   // "café 日本語" → JS /\w+/gu = ["caf"], Python \w+ = ["café","日本語"]). The
   // faithful equivalent of Unicode \w is the explicit class [\p{L}\p{N}_] under
   // the u flag (re.findall over \w+ also makes the \b anchors redundant).
-  // source: cortex@ed33435 mcp_server/core/curation.py:59-60 (Unicode \w)
+  // source: cortex main mcp_server/core/curation.py:59-60 (Unicode \w)
   const wordsA = new Set((contentA.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? []));
   const wordsB = new Set((contentB.toLowerCase().match(/[\p{L}\p{N}_]+/gu) ?? []));
   if (wordsA.size === 0 || wordsB.size === 0) return 0;
@@ -101,7 +101,7 @@ export function computeTextualOverlap(contentA: string, contentB: string): numbe
 /**
  * Merge two memory contents, avoiding pure duplication.
  * Port of: mcp_server/core/curation.py::merge_contents
- * source: cortex@ed33435 mcp_server/core/curation.py:66
+ * source: cortex main mcp_server/core/curation.py:66
  */
 export function mergeContents(existingContent: string, newContent: string): string {
   if (existingContent.includes(newContent.trim())) return existingContent;
@@ -112,7 +112,7 @@ export function mergeContents(existingContent: string, newContent: string): stri
 /**
  * Union of tag sets, preserving order.
  * Port of: mcp_server/core/curation.py::merge_tags
- * source: cortex@ed33435 mcp_server/core/curation.py:75
+ * source: cortex main mcp_server/core/curation.py:75
  */
 export function mergeTags(existingTags: string[], newTags: string[]): string[] {
   const seen = new Set<string>();
@@ -138,7 +138,7 @@ export interface ContradictionRecord {
 /**
  * Check one memory for contradiction against new content signals.
  * Port of: mcp_server/core/curation.py::_check_single_contradiction
- * source: cortex@ed33435 mcp_server/core/curation.py:89
+ * source: cortex main mcp_server/core/curation.py:89
  */
 function checkSingleContradiction(
   mem: Record<string, unknown>,
@@ -154,7 +154,7 @@ function checkSingleContradiction(
       memory_id: memId,
       type: "negation_mismatch",
       description: `Negation conflict with memory ${memId}`,
-      confidence_penalty: 0.2, // source: cortex@ed33435 curation.py:103
+      confidence_penalty: 0.2, // source: cortex main curation.py:103
     };
   }
 
@@ -170,7 +170,7 @@ function checkSingleContradiction(
       memory_id: memId,
       type: "action_divergence",
       description: `Different actions on similar topic (memory ${memId})`,
-      confidence_penalty: 0.1, // source: cortex@ed33435 curation.py:113
+      confidence_penalty: 0.1, // source: cortex main curation.py:113
     };
   }
   return null;
@@ -182,7 +182,7 @@ function checkSingleContradiction(
  * Returns list of {memory_id, type, description, confidence_penalty}.
  *
  * Port of: mcp_server/core/curation.py::detect_contradictions
- * source: cortex@ed33435 mcp_server/core/curation.py:118
+ * source: cortex main mcp_server/core/curation.py:118
  */
 export function detectContradictions(
   newContent: string,
@@ -210,7 +210,7 @@ export function detectContradictions(
  * Prune criteria: heat < threshold AND confidence < threshold AND access_count == 0.
  *
  * Port of: mcp_server/core/curation.py::identify_prunable
- * source: cortex@ed33435 mcp_server/core/curation.py:142
+ * source: cortex main mcp_server/core/curation.py:142
  */
 export function identifyPrunable(
   memories: Record<string, unknown>[],
@@ -233,7 +233,7 @@ export function identifyPrunable(
  * Returns list of [memory_id, new_importance].
  *
  * Port of: mcp_server/core/curation.py::identify_strengtheneable
- * source: cortex@ed33435 mcp_server/core/curation.py:158
+ * source: cortex main mcp_server/core/curation.py:158
  */
 export function identifyStrengheneable(
   memories: Record<string, unknown>[],
@@ -263,7 +263,7 @@ export function identifyStrengheneable(
  * Returns list of [relationship_id, new_weight].
  *
  * Port of: mcp_server/core/curation.py::compute_relationship_reweights
- * source: cortex@ed33435 mcp_server/core/curation.py:182
+ * source: cortex main mcp_server/core/curation.py:182
  */
 export function computeRelationshipReweights(
   relationships: Record<string, unknown>[],
@@ -285,7 +285,7 @@ export function computeRelationshipReweights(
     } else if (avgHeat < coldThreshold) {
       updates.push([rel["id"] as number, Math.round(currentWeight * coldDecay * WEIGHT_ROUND_FACTOR) / WEIGHT_ROUND_FACTOR]);
     }
-    // else: no update — continue source: cortex@ed33435 curation.py:204
+    // else: no update — continue source: cortex main curation.py:204
   }
   return updates;
 }
@@ -296,7 +296,7 @@ export function computeRelationshipReweights(
  * Returns list of fact strings.
  *
  * Port of: mcp_server/core/curation.py::identify_derivable_facts
- * source: cortex@ed33435 mcp_server/core/curation.py:212
+ * source: cortex main mcp_server/core/curation.py:212
  */
 export function identifyDerivableFacts(
   relationships: Record<string, unknown>[],

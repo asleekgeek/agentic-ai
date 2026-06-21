@@ -3,7 +3,7 @@
  * Post-WRRF recall pipeline stages — affect/reconsolidation stages.
  * Part 2 of 2 (stages: EMOTIONAL_RETRIEVAL, MOOD_CONGRUENT_RERANK, RECONSOLIDATION).
  *
- * Port of: cortex@ed33435 mcp_server/core/recall_pipeline.py:535-759
+ * Port of: cortex main mcp_server/core/recall_pipeline.py:535-759
  *
  * These stages operate on the candidate list after HOPFIELD, HDC, SA,
  * and DENDRITIC_CLUSTERS have run (see recall-pipeline-stages.ts).
@@ -48,22 +48,22 @@ function envFloat(name: string, defaultVal: number): number {
 // LongMemEval-S, 2026-05-02): both affect-side knobs showed zero
 // observable effect on LongMemEval-S (all 25 cells tied at MRR=0.84).
 // Constants are kept at the conservative engineering defaults.
-// source: cortex@ed33435 mcp_server/core/recall_pipeline.py:118-123
+// source: cortex main mcp_server/core/recall_pipeline.py:118-123
 
 const _EMOTIONAL_RETRIEVAL_BETA = envFloat(
   "CORTEX_EMOTIONAL_RETRIEVAL_BETA",
-  0.20, // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:119 — no effect on LME-S
+  0.20, // source: cortex main mcp_server/core/recall_pipeline.py:119 — no effect on LME-S
 );
 const _MOOD_CONGRUENT_BETA = envFloat(
   "CORTEX_MOOD_CONGRUENT_BETA",
-  0.15, // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:122 — no user-mood adapter
+  0.15, // source: cortex main mcp_server/core/recall_pipeline.py:122 — no user-mood adapter
 );
 
 // Below this absolute compound-valence value the query is treated as
 // emotionally neutral and the EMOTIONAL_RETRIEVAL stage no-ops.
 // VADER (Hutto & Gilbert, ICWSM 2014) §4 reports |compound| >= 0.05 as a
 // useful cutoff; we use 0.10 to avoid single weakly-loaded tokens.
-// source: cortex@ed33435 mcp_server/core/recall_pipeline.py:130
+// source: cortex main mcp_server/core/recall_pipeline.py:130
 const _EMOTIONAL_QUERY_VALENCE_FLOOR = 0.10;
 
 // ── VADER compound (stub) ─────────────────────────────────────────────────
@@ -97,7 +97,7 @@ function vaderCompound(text: string): number {
 /**
  * Rerank by query-valence ↔ candidate-valence congruence.
  *
- * Port of: cortex@ed33435 mcp_server/core/recall_pipeline.py:542-591
+ * Port of: cortex main mcp_server/core/recall_pipeline.py:542-591
  *
  * Bower (1981): emotionally-congruent material is retrieved faster and
  * more accurately than incongruent material. We infer the query's
@@ -112,7 +112,7 @@ function vaderCompound(text: string): number {
  * postcondition: returns input unchanged when ablated or query is neutral;
  *   otherwise returns RRF-blended list sorted descending
  *
- * Constants — source: cortex@ed33435 mcp_server/core/recall_pipeline.py:545-547
+ * Constants — source: cortex main mcp_server/core/recall_pipeline.py:545-547
  *   blend_beta     = _EMOTIONAL_RETRIEVAL_BETA = 0.20
  *   valence_floor  = _EMOTIONAL_QUERY_VALENCE_FLOOR = 0.10
  */
@@ -172,7 +172,7 @@ interface ReconsolidationAction {
  *   - High-importance or high-surprise memories get a heat bump.
  *   - Valence shift follows Bower (1981) mood-congruent re-storage.
  *
- * Bounds — source: cortex@ed33435 mcp_server/core/recall_pipeline.py:599-601
+ * Bounds — source: cortex main mcp_server/core/recall_pipeline.py:599-601
  *   heat_delta    in [-0.10, +0.05]
  *   valence_delta in [-0.10, +0.10]
  */
@@ -193,13 +193,13 @@ function computeReconsolidationAction(
 
   // Heat bump for important/surprising memories
   if (importance > 0.6 || surprise > 0.4) {
-    // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:679-683
+    // source: cortex main mcp_server/core/recall_pipeline.py:679-683
     heatDelta = Math.min(0.05, (importance - 0.5) * 0.1 + surprise * 0.05);
   }
 
   // Heat decay for cold memories that were barely above threshold
-  if (currentHeat < 0.15) { // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:683 — cold memory heat decay
-    heatDelta = Math.max(-0.10, heatDelta - 0.02); // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:599 — heat_delta bound [-0.10, +0.05]
+  if (currentHeat < 0.15) { // source: cortex main mcp_server/core/recall_pipeline.py:683 — cold memory heat decay
+    heatDelta = Math.max(-0.10, heatDelta - 0.02); // source: cortex main mcp_server/core/recall_pipeline.py:599 — heat_delta bound [-0.10, +0.05]
   }
 
   // Bower (1981) valence shift: query-congruent memories reinforced
@@ -208,7 +208,7 @@ function computeReconsolidationAction(
     const dist = Math.abs(Number(cv) - qValence);
     if (dist < 0.3) {
       // Congruent — reinforce toward query valence
-      valenceDelta = Math.sign(qValence - Number(cv)) * 0.05; // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:601 — valence_delta bound [-0.10, +0.10]
+      valenceDelta = Math.sign(qValence - Number(cv)) * 0.05; // source: cortex main mcp_server/core/recall_pipeline.py:601 — valence_delta bound [-0.10, +0.10]
     }
   }
 
@@ -226,7 +226,7 @@ function computeReconsolidationAction(
       if (contentTokens.has(t)) overlap++;
     }
     if (overlap / Math.max(qTokens.size, 1) > 0.5) {
-      heatDelta = Math.min(0.05, heatDelta + 0.01); // source: cortex@ed33435 mcp_server/core/recall_pipeline.py:599 — heat_delta bounded at +0.05
+      heatDelta = Math.min(0.05, heatDelta + 0.01); // source: cortex main mcp_server/core/recall_pipeline.py:599 — heat_delta bounded at +0.05
     }
   }
 
@@ -237,7 +237,7 @@ function computeReconsolidationAction(
 /**
  * Apply Nader-2000 reconsolidation to the top-K retrieved candidates.
  *
- * Port of: cortex@ed33435 mcp_server/core/recall_pipeline.py:607-708
+ * Port of: cortex main mcp_server/core/recall_pipeline.py:607-708
  *
  * For each candidate (up to top_k, default = all): compute the
  * reconsolidation action, then apply the resulting heat / valence /
@@ -331,7 +331,7 @@ export async function reconsolidationApply(
 /**
  * Rerank by user-mood ↔ candidate-valence congruence.
  *
- * Port of: cortex@ed33435 mcp_server/core/recall_pipeline.py:718-759
+ * Port of: cortex main mcp_server/core/recall_pipeline.py:718-759
  *
  * userMood is a float in [-1, +1] representing the user's current
  * affective state. When null, the stage no-ops: we do NOT fabricate a
@@ -344,7 +344,7 @@ export async function reconsolidationApply(
  * postcondition: returns input unchanged when ablated or userMood is null;
  *   otherwise returns RRF-blended list sorted descending
  *
- * Constants — source: cortex@ed33435 mcp_server/core/recall_pipeline.py:722
+ * Constants — source: cortex main mcp_server/core/recall_pipeline.py:722
  *   blend_beta = _MOOD_CONGRUENT_BETA = 0.15
  */
 export function moodCongruentRerank(

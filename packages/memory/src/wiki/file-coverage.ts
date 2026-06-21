@@ -1,7 +1,7 @@
 /**
  * file-coverage.ts — Phase C of the auto-curation system.
  *
- * The cluster-driven curator (cortex@47b818d) emits authoring jobs
+ * The cluster-driven curator (cortex main) emits authoring jobs
  * for memory clusters. That covers what the session has TOUCHED — but
  * legacy files never touched in a session have no cluster, so they
  * stay invisible to the curator forever.

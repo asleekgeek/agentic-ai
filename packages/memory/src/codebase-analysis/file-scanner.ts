@@ -14,8 +14,8 @@
  * Layer: infrastructure/codebase-analysis
  * Allowed imports: node:fs, node:path — no @agentic/* layer imports.
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project_stages.py
- * source: cortex@ed33435 mcp_server/handlers/seed_project_constants.py
+ * source: cortex main mcp_server/handlers/seed_project_stages.py
+ * source: cortex main mcp_server/handlers/seed_project_constants.py
  */
 
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
@@ -23,16 +23,16 @@ import { basename, extname, join, relative } from "node:path";
 
 // ── Constants ──────────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/handlers/seed_project_constants.py:9-15
+// source: cortex main mcp_server/handlers/seed_project_constants.py:9-15
 export const HEAT_BY_TYPE: Readonly<Record<string, number>> = {
-  structural_summary: 0.9,   // source: cortex@ed33435 seed_project_constants.py:10
-  documentation:     0.85,   // source: cortex@ed33435 seed_project_constants.py:11
-  entry_point:       0.80,   // source: cortex@ed33435 seed_project_constants.py:12
-  config:            0.70,   // source: cortex@ed33435 seed_project_constants.py:13
-  ci_cd:             0.60,   // source: cortex@ed33435 seed_project_constants.py:14
+  structural_summary: 0.9,   // source: cortex main seed_project_constants.py:10
+  documentation:     0.85,   // source: cortex main seed_project_constants.py:11
+  entry_point:       0.80,   // source: cortex main seed_project_constants.py:12
+  config:            0.70,   // source: cortex main seed_project_constants.py:13
+  ci_cd:             0.60,   // source: cortex main seed_project_constants.py:14
 };
 
-// source: cortex@ed33435 mcp_server/handlers/seed_project_constants.py:17-34
+// source: cortex main mcp_server/handlers/seed_project_constants.py:17-34
 const CONFIG_FILES: readonly string[] = [
   "package.json",
   "package-lock.json",
@@ -52,11 +52,11 @@ const CONFIG_FILES: readonly string[] = [
   "mix.exs",
 ];
 
-// source: cortex@ed33435 mcp_server/handlers/seed_project_constants.py:36-37
+// source: cortex main mcp_server/handlers/seed_project_constants.py:36-37
 const DOC_GLOBS: readonly string[] = ["README", "CLAUDE", "CONTRIBUTING", "CHANGELOG", "ARCHITECTURE"];
 const DOC_DIRS: readonly string[] = ["docs", "doc", "documentation", "adr", "docs/adr"];
 
-// source: cortex@ed33435 mcp_server/handlers/seed_project_constants.py:39-55
+// source: cortex main mcp_server/handlers/seed_project_constants.py:39-55
 const ENTRY_POINT_NAMES: ReadonlySet<string> = new Set([
   "__main__.py",
   "main.py",
@@ -73,7 +73,7 @@ const ENTRY_POINT_NAMES: ReadonlySet<string> = new Set([
   "Main.java",
 ]);
 
-// source: cortex@ed33435 mcp_server/handlers/seed_project_constants.py:57-71
+// source: cortex main mcp_server/handlers/seed_project_constants.py:57-71
 const CI_FILES: readonly string[] = [
   ".github/workflows",
   "Makefile",
@@ -90,8 +90,8 @@ const CI_FILES: readonly string[] = [
   "bitbucket-pipelines.yml",
 ];
 
-// source: cortex@ed33435 mcp_server/handlers/seed_project_constants.py:73-98
-// source: cortex@0623b30 — added .claude, worktrees, deps, vendor, third_party,
+// source: cortex main mcp_server/handlers/seed_project_constants.py:73-98
+// source: cortex main — added .claude, worktrees, deps, vendor, third_party,
 //         external. Per-agent git worktrees and vendored third-party trees
 //         are transient/non-authored and would otherwise yield duplicate
 //         stub pages in the wiki.
@@ -110,7 +110,7 @@ const IGNORE_DIRS: ReadonlySet<string> = new Set([
 // pages are generated, otherwise the wiki accumulates entries like
 // ``Spec: Entry point: .claude/worktrees/agent-a0ceb782/...`` that point at
 // paths gone by the next test run.
-// source: cortex@0623b30 mcp_server/handlers/seed_project_constants.py:115-138
+// source: cortex main mcp_server/handlers/seed_project_constants.py:115-138
 const TEST_FIXTURE_PATH_MARKERS: readonly string[] = [
   "pytest-of-",
   "/private/var/folders/",
@@ -123,13 +123,13 @@ const TEST_FIXTURE_PATH_MARKERS: readonly string[] = [
  * ``seed_project`` should refuse to operate on. Used at handler entry so
  * test runs and worktree creation never pollute the wiki with stub pages.
  *
- * source: cortex@0623b30 mcp_server/handlers/seed_project_constants.py::is_transient_seed_root
+ * source: cortex main mcp_server/handlers/seed_project_constants.py::is_transient_seed_root
  */
 export function isTransientSeedRoot(absPath: string): boolean {
   return TEST_FIXTURE_PATH_MARKERS.some((marker) => absPath.includes(marker));
 }
 
-// source: cortex@ed33435 mcp_server/handlers/seed_project_constants.py:100-118
+// source: cortex main mcp_server/handlers/seed_project_constants.py:100-118
 const EXT_MAP: Readonly<Record<string, string>> = {
   ".py":    "Python",
   ".js":    "JavaScript",
@@ -153,20 +153,20 @@ const EXT_MAP: Readonly<Record<string, string>> = {
 
 // ── Stage limit constants ──────────────────────────────────────────────────────
 
-// source: cortex@ed33435 seed_project_stages.py::_top_level_layout:89 — top-30 layout items
-const TOP_LEVEL_LAYOUT_CAP = 30; // source: cortex@ed33435 seed_project_stages.py:89
-// source: cortex@ed33435 seed_project_stages.py::_detect_languages:73 — top-5 languages
-const TOP_LANGUAGES_CAP = 5; // source: cortex@ed33435 seed_project_stages.py:73
-// source: cortex@ed33435 seed_project_stages.py::stage_docs:171 — max 20 doc discoveries
-const STAGE_DOCS_CAP = 20; // source: cortex@ed33435 seed_project_stages.py:171
-// source: cortex@ed33435 seed_project_stages.py::stage_entry_points:192 — max 5 entry points
-const STAGE_ENTRY_POINTS_CAP = 5; // source: cortex@ed33435 seed_project_stages.py:192
-// source: cortex@ed33435 seed_project_stages.py::stage_cicd:231 — max 5 CI/CD discoveries
-const STAGE_CICD_CAP = 5; // source: cortex@ed33435 seed_project_stages.py:231
-// source: cortex@ed33435 seed_project_stages.py::_scan_cicd_dir:199 — max 3 yaml files per dir
-const CICD_DIR_YAML_CAP = 3; // source: cortex@ed33435 seed_project_stages.py::_scan_cicd_dir:199
-// source: cortex@ed33435 seed_project_stages.py::_scan_cicd_dir:208 — 32KB CI/CD read limit
-const CICD_MAX_BYTES = 32768; // source: cortex@ed33435 seed_project_stages.py:208 — 32*1024
+// source: cortex main seed_project_stages.py::_top_level_layout:89 — top-30 layout items
+const TOP_LEVEL_LAYOUT_CAP = 30; // source: cortex main seed_project_stages.py:89
+// source: cortex main seed_project_stages.py::_detect_languages:73 — top-5 languages
+const TOP_LANGUAGES_CAP = 5; // source: cortex main seed_project_stages.py:73
+// source: cortex main seed_project_stages.py::stage_docs:171 — max 20 doc discoveries
+const STAGE_DOCS_CAP = 20; // source: cortex main seed_project_stages.py:171
+// source: cortex main seed_project_stages.py::stage_entry_points:192 — max 5 entry points
+const STAGE_ENTRY_POINTS_CAP = 5; // source: cortex main seed_project_stages.py:192
+// source: cortex main seed_project_stages.py::stage_cicd:231 — max 5 CI/CD discoveries
+const STAGE_CICD_CAP = 5; // source: cortex main seed_project_stages.py:231
+// source: cortex main seed_project_stages.py::_scan_cicd_dir:199 — max 3 yaml files per dir
+const CICD_DIR_YAML_CAP = 3; // source: cortex main seed_project_stages.py::_scan_cicd_dir:199
+// source: cortex main seed_project_stages.py::_scan_cicd_dir:208 — 32KB CI/CD read limit
+const CICD_MAX_BYTES = 32768; // source: cortex main seed_project_stages.py:208 — 32*1024
 
 // ── Discovery type ────────────────────────────────────────────────────────────
 
@@ -184,7 +184,7 @@ export interface Discovery {
  * precondition:  filePath is an absolute path.
  * postcondition: returns at most maxBytes bytes of content; never throws.
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project_stages.py::_safe_read:41-47
+ * source: cortex main mcp_server/handlers/seed_project_stages.py::_safe_read:41-47
  */
 function safeRead(filePath: string, maxBytes: number): string {
   try {
@@ -204,7 +204,7 @@ function safeRead(filePath: string, maxBytes: number): string {
  *   ignored directory; does not follow symlinks at dir boundaries.
  *   termination: directory tree is finite.
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project_stages.py::_walk_pruned:50-63
+ * source: cortex main mcp_server/handlers/seed_project_stages.py::_walk_pruned:50-63
  */
 function* walkPruned(root: string): Generator<string> {
   const stack: string[] = [root];
@@ -244,7 +244,7 @@ function* walkPruned(root: string): Generator<string> {
  *
  * postcondition: returns up to 5 languages ordered by descending file count.
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project_stages.py::_detect_languages:66-73
+ * source: cortex main mcp_server/handlers/seed_project_stages.py::_detect_languages:66-73
  */
 function detectLanguages(root: string): string[] {
   const extCounts = new Map<string, number>();
@@ -265,7 +265,7 @@ function detectLanguages(root: string): string[] {
  *
  * postcondition: returns up to 30 entries as descriptive strings.
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project_stages.py::_top_level_layout:76-89
+ * source: cortex main mcp_server/handlers/seed_project_stages.py::_top_level_layout:76-89
  */
 function topLevelLayout(root: string): string[] {
   const items: string[] = [];
@@ -294,7 +294,7 @@ function topLevelLayout(root: string): string[] {
  * postcondition: returns one Discovery per config file that exists and is
  *   non-empty; at most CONFIG_FILES.length items.
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project_stages.py::stage_configs:92-107
+ * source: cortex main mcp_server/handlers/seed_project_stages.py::stage_configs:92-107
  */
 export function stageConfigs(root: string, maxBytes: number): Discovery[] {
   const discoveries: Discovery[] = [];
@@ -323,14 +323,14 @@ export function stageConfigs(root: string, maxBytes: number): Discovery[] {
  *
  * postcondition: returns up to 20 doc discoveries; deduplicates by path.
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project_stages.py::stage_docs:164-171
+ * source: cortex main mcp_server/handlers/seed_project_stages.py::stage_docs:164-171
  */
 export function stageDocs(root: string, maxBytes: number): Discovery[] {
   const seen = new Set<string>();
   const discoveries: Discovery[] = [];
 
   // Root-level docs matching DOC_GLOBS prefixes
-  // source: cortex@ed33435 mcp_server/handlers/seed_project_stages.py::_harvest_root_docs:111-128
+  // source: cortex main mcp_server/handlers/seed_project_stages.py::_harvest_root_docs:111-128
   let rootEntries: string[];
   try {
     rootEntries = readdirSync(root, { encoding: "utf8" });
@@ -358,7 +358,7 @@ export function stageDocs(root: string, maxBytes: number): Discovery[] {
   }
 
   // Doc directories
-  // source: cortex@ed33435 mcp_server/handlers/seed_project_stages.py::_harvest_doc_dirs:131-161
+  // source: cortex main mcp_server/handlers/seed_project_stages.py::_harvest_doc_dirs:131-161
   const docSuffixes = new Set([".md", ".rst", ".txt", ".adoc"]);
   for (const docDir of DOC_DIRS) {
     const d = join(root, docDir);
@@ -399,7 +399,7 @@ export function stageDocs(root: string, maxBytes: number): Discovery[] {
  *
  * postcondition: returns up to 5 entry point discoveries.
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project_stages.py::stage_entry_points:174-193
+ * source: cortex main mcp_server/handlers/seed_project_stages.py::stage_entry_points:174-193
  */
 export function stageEntryPoints(root: string, maxBytes: number): Discovery[] {
   const discoveries: Discovery[] = [];
@@ -426,7 +426,7 @@ export function stageEntryPoints(root: string, maxBytes: number): Discovery[] {
  *
  * postcondition: returns up to 5 CI/CD discoveries.
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project_stages.py::stage_cicd:212-231
+ * source: cortex main mcp_server/handlers/seed_project_stages.py::stage_cicd:212-231
  */
 export function stageCicd(root: string): Discovery[] {
   const found: Discovery[] = [];
@@ -440,7 +440,7 @@ export function stageCicd(root: string): Discovery[] {
 
     if (stat.isDirectory()) {
       // Scan YAML files in CI directory
-      // source: cortex@ed33435 mcp_server/handlers/seed_project_stages.py::_scan_cicd_dir:195-210
+      // source: cortex main mcp_server/handlers/seed_project_stages.py::_scan_cicd_dir:195-210
       let entries: string[];
       try {
         entries = readdirSync(p, { encoding: "utf8" });
@@ -485,7 +485,7 @@ export function stageCicd(root: string): Discovery[] {
  *
  * postcondition: returns exactly one Discovery with project structure overview.
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project_stages.py::stage_structural_summary:234-250
+ * source: cortex main mcp_server/handlers/seed_project_stages.py::stage_structural_summary:234-250
  */
 export function stageStructuralSummary(root: string): Discovery {
   const layout = topLevelLayout(root);
@@ -514,7 +514,7 @@ export function stageStructuralSummary(root: string): Discovery {
  * postcondition: returns all discoveries across all stages; structural summary
  *   is always first (drives initial project seeding).
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project_stages.py::collect_all_discoveries:253-261
+ * source: cortex main mcp_server/handlers/seed_project_stages.py::collect_all_discoveries:253-261
  */
 export function collectAllDiscoveries(root: string, maxBytes: number): Discovery[] {
   const discoveries: Discovery[] = [];
@@ -531,10 +531,10 @@ export function collectAllDiscoveries(root: string, maxBytes: number): Discovery
  *
  * postcondition: returns a float in [0.6, 0.9] matching the discovery type.
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project_stages.py::heat_for_tags:26-38
+ * source: cortex main mcp_server/handlers/seed_project_stages.py::heat_for_tags:26-38
  */
-// source: cortex@ed33435 seed_project_constants.py:38 — fallback heat when no type tag matches
-const HEAT_FALLBACK = 0.7; // source: cortex@ed33435 seed_project_stages.py::heat_for_tags:38
+// source: cortex main seed_project_constants.py:38 — fallback heat when no type tag matches
+const HEAT_FALLBACK = 0.7; // source: cortex main seed_project_stages.py::heat_for_tags:38
 
 export function heatForTags(tags: readonly string[]): number {
   const tagSet = new Set(tags);

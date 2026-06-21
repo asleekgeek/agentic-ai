@@ -12,14 +12,14 @@
  * out-of-scope for the TS runtime; the token heuristic is the
  * production strategy for this layer.
  *
- * source: cortex@ed33435 mcp_server/core/knowledge_graph.py:extract_entities
+ * source: cortex main mcp_server/core/knowledge_graph.py:extract_entities
  */
 
 import type { MemoryStore } from "./port.js";
 import type { RecallResult } from "./types.js";
 
 // ── Co-activation constants ────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/recall.py::_apply_co_activation
+// source: cortex main mcp_server/handlers/recall.py::_apply_co_activation
 const ENTITY_EXTRACTION_CAP = 10; // max entities per memory for co-activation
 const CO_ACTIVATION_TOP_K = 5; // process top-K high-scoring results for co-activation
 const ENTITY_PAIR_CAP = 5; // cap entity set per result before cross-product
@@ -32,7 +32,7 @@ const ENTITY_PAIR_CAP = 5; // cap entity set per result before cross-product
  * Matches the regex branch of knowledge_graph.extract_entities; the
  * spaCy NER branch is not available in the TS runtime.
  *
- * source: cortex@ed33435 mcp_server/core/knowledge_graph.py:extract_entities
+ * source: cortex main mcp_server/core/knowledge_graph.py:extract_entities
  */
 function extractEntitiesSimple(content: string): string[] {
   // Match sequences of Title-Case words (e.g. "pgvector", "FlashRank", "ONNX")

@@ -18,7 +18,7 @@
  *   - curationGapsCount: parse YAML frontmatter ``curation_gaps`` lists
  *     across a domain's pages and sum the open gaps.
  *
- * source: cortex@4883307 mcp_server/core/wiki_coverage_dashboard.py
+ * source: cortex main mcp_server/core/wiki_coverage_dashboard.py
  */
 
 import type {

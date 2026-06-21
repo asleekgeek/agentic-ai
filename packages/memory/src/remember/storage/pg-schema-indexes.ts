@@ -1,9 +1,9 @@
 /**
  * pg-schema-indexes.ts — Indexes and migrations DDL.
- * source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:530-1353
+ * source: cortex main mcp_server/infrastructure/pg_schema.py:530-1353
  */
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:532-567
+// source: cortex main mcp_server/infrastructure/pg_schema.py:532-567
 export const INDEXES_DDL = `
 CREATE INDEX IF NOT EXISTS idx_memories_embedding
     ON memories USING hnsw (embedding vector_cosine_ops) WITH (m = 16, ef_construction = 64);
@@ -26,7 +26,7 @@ CREATE INDEX IF NOT EXISTS idx_workflow_graph_layout_kind ON workflow_graph_layo
 CREATE INDEX IF NOT EXISTS idx_workflow_graph_layout_xy ON workflow_graph_layout (x, y);
 `;
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:1128-1353
+// source: cortex main mcp_server/infrastructure/pg_schema.py:1128-1353
 export const MIGRATIONS_DDL = `
 DO $$
 BEGIN
@@ -179,6 +179,28 @@ DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_entities_domain_normalize') THEN
         CREATE TRIGGER trg_entities_domain_normalize BEFORE INSERT OR UPDATE OF domain ON entities
         FOR EACH ROW EXECUTE FUNCTION normalize_domain();
+    END IF;
+END $$;
+
+-- Migration: entity origin provenance (ast_symbol vs text_concept). Fuzzy
+-- entity dedup (core.entity_dedup) must merge only text-extracted concepts;
+-- AST-extracted code symbols (class/function/module names, dotted module paths)
+-- share long prefixes and must never be label-fuzzy-merged.
+-- Backfill: rows whose type is a code-symbol kind, or whose name is a slash
+-- path or a dotted module path (>= 2 dots, mirrors entity_dedup_filters.
+-- is_structural_identifier), are ast_symbol; everything else stays text_concept.
+-- source: cortex main mcp_server/infrastructure/pg_schema.py
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='entities' AND column_name='origin')
+    THEN
+        ALTER TABLE entities ADD COLUMN origin TEXT NOT NULL DEFAULT 'text_concept'
+            CHECK (origin IN ('ast_symbol', 'text_concept'));
+        UPDATE entities SET origin = 'ast_symbol'
+        WHERE LOWER(type) IN ('function','method','class','struct','module',
+                              'file','interface','trait','protocol','enum',
+                              'type','constant','variable')
+           OR name LIKE '%/%'
+           OR (length(name) - length(replace(name, '.', ''))) >= 2;
     END IF;
 END $$;
 `;

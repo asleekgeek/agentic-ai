@@ -6,7 +6,7 @@
  *
  * Pure business logic — no I/O.
  *
- * source: cortex@ed33435 mcp_server/core/emergence_metrics.py
+ * source: cortex main mcp_server/core/emergence_metrics.py
  */
 
 import {
@@ -19,7 +19,7 @@ import {
 /**
  * Bin memories by age and compute average heat per bin.
  *
- * source: cortex@ed33435 mcp_server/core/emergence_metrics.py:18-39
+ * source: cortex main mcp_server/core/emergence_metrics.py:18-39
  */
 function binMemoriesByAge(
   memoriesByAge: Array<[number, number]>,
@@ -68,7 +68,7 @@ function olsSums(
  *   r² < 0.50 → "weak"  — some signal, oversimplification
  *   else      → "good"  — explains >= 50% of variance
  *
- * source: cortex@ed33435 mcp_server/core/emergence_metrics.py:103-121
+ * source: cortex main mcp_server/core/emergence_metrics.py:103-121
  */
 function fitQualityFor(rSquared: number): "poor" | "weak" | "good" {
   if (rSquared < 0.1) return "poor";
@@ -79,7 +79,7 @@ function fitQualityFor(rSquared: number): "poor" | "weak" | "good" {
 /**
  * Fit log-linear regression: log(heat) = log(a) - b * age via OLS.
  *
- * source: cortex@ed33435 mcp_server/core/emergence_metrics.py:63-100
+ * source: cortex main mcp_server/core/emergence_metrics.py:63-100
  */
 function fitLogLinear(logHeats: Array<[number, number]>): ForgettingCurveResult {
   const [n, sumX, sumY, sumXY, sumX2] = olsSums(logHeats);
@@ -143,7 +143,7 @@ const INSUFFICIENT: ForgettingCurveResult = {
  * precondition: memoriesByAge is a list of (age_hours, heat) tuples
  * postcondition: r_squared in [0, 1]; half_life_hours >= 0
  *
- * source: cortex@ed33435 mcp_server/core/emergence_metrics.py:133-171
+ * source: cortex main mcp_server/core/emergence_metrics.py:133-171
  */
 export function computeForgettingCurve(
   memoriesByAge: Array<[number, number]>,
@@ -219,7 +219,7 @@ function computeAvgInterference(memories: MemoryForReport[]): number {
  * precondition: memories is an array of memory objects with optional fields
  * postcondition: all report fields are present; forgetting_curve is valid
  *
- * source: cortex@ed33435 mcp_server/core/emergence_metrics.py:192-222
+ * source: cortex main mcp_server/core/emergence_metrics.py:192-222
  */
 export function generateEmergenceReport(
   memories: MemoryForReport[],

@@ -28,10 +28,10 @@
  * Falls back to flat recall when <3 embeddings are available (same
  * guard as the Python original).
  *
- * source: cortex@ed33435 mcp_server/core/fractal.py:build_hierarchy
- * source: cortex@ed33435 mcp_server/core/fractal.py:score_against_hierarchy
- * source: cortex@ed33435 mcp_server/core/fractal.py:compute_level_weights
- * source: cortex@ed33435 mcp_server/handlers/recall_hierarchical.py:handler
+ * source: cortex main mcp_server/core/fractal.py:build_hierarchy
+ * source: cortex main mcp_server/core/fractal.py:score_against_hierarchy
+ * source: cortex main mcp_server/core/fractal.py:compute_level_weights
+ * source: cortex main mcp_server/handlers/recall_hierarchical.py:handler
  */
 
 import { cosineSimilarity } from "./vector-similarity.js";
@@ -46,7 +46,7 @@ import type {
 
 // ── Constants ─────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/core/fractal.py:compute_level_weights
+// source: cortex main mcp_server/core/fractal.py:compute_level_weights
 // L0=memory-direct, L1=cluster-centroid, L2=super-cluster weights per query length bucket.
 const LW_SHORT_L0 = 0.2; const LW_SHORT_L1 = 0.3; const LW_SHORT_L2 = 0.5; // broad (≤3 words)
 const LW_BALANCED_L0 = 0.4; const LW_BALANCED_L1 = 0.4; const LW_BALANCED_L2 = 0.2; // balanced (≤7)
@@ -54,14 +54,14 @@ const LW_SPECIFIC_L0 = 0.7; const LW_SPECIFIC_L1 = 0.2; const LW_SPECIFIC_L2 = 0
 const LEVEL_WEIGHTS_SHORT: [number, number, number] = [LW_SHORT_L0, LW_SHORT_L1, LW_SHORT_L2];
 const LEVEL_WEIGHTS_BALANCED: [number, number, number] = [LW_BALANCED_L0, LW_BALANCED_L1, LW_BALANCED_L2];
 const LEVEL_WEIGHTS_SPECIFIC: [number, number, number] = [LW_SPECIFIC_L0, LW_SPECIFIC_L1, LW_SPECIFIC_L2];
-const WORDS_SHORT_THRESHOLD = 3; // source: cortex@ed33435 mcp_server/core/fractal.py:compute_level_weights
-const WORDS_BALANCED_THRESHOLD = 7; // source: cortex@ed33435 mcp_server/core/fractal.py:compute_level_weights
-const SCORE_PRECISION_FACTOR = 10000; // source: cortex@ed33435 mcp_server/core/fractal.py — 4 decimal rounding
-const DOMAIN_CANDIDATE_CAP = 500; // source: cortex@ed33435 mcp_server/handlers/recall_hierarchical.py — domain cap
-const MIN_EMBEDDINGS_FOR_HIERARCHY = 3; // source: cortex@ed33435 mcp_server/handlers/recall_hierarchical.py — flat fallback threshold
-const DEFAULT_MAX_RESULTS = 10; // source: cortex@ed33435 mcp_server/handlers/recall_hierarchical.py schema
-const DEFAULT_MIN_HEAT = 0.05; // source: cortex@ed33435 mcp_server/handlers/recall_hierarchical.py schema
-const DEFAULT_CLUSTER_THRESHOLD = 0.6; // source: cortex@ed33435 mcp_server/core/fractal.py default_threshold
+const WORDS_SHORT_THRESHOLD = 3; // source: cortex main mcp_server/core/fractal.py:compute_level_weights
+const WORDS_BALANCED_THRESHOLD = 7; // source: cortex main mcp_server/core/fractal.py:compute_level_weights
+const SCORE_PRECISION_FACTOR = 10000; // source: cortex main mcp_server/core/fractal.py — 4 decimal rounding
+const DOMAIN_CANDIDATE_CAP = 500; // source: cortex main mcp_server/handlers/recall_hierarchical.py — domain cap
+const MIN_EMBEDDINGS_FOR_HIERARCHY = 3; // source: cortex main mcp_server/handlers/recall_hierarchical.py — flat fallback threshold
+const DEFAULT_MAX_RESULTS = 10; // source: cortex main mcp_server/handlers/recall_hierarchical.py schema
+const DEFAULT_MIN_HEAT = 0.05; // source: cortex main mcp_server/handlers/recall_hierarchical.py schema
+const DEFAULT_CLUSTER_THRESHOLD = 0.6; // source: cortex main mcp_server/core/fractal.py default_threshold
 
 // ── Level weight computation ───────────────────────────────────────────────
 
@@ -97,7 +97,7 @@ interface L1Cluster {
  * This implements the L1-cluster pass of fractal.build_hierarchy.
  * The L2 super-cluster pass is elided (see module header).
  *
- * source: cortex@ed33435 mcp_server/core/fractal.py:build_hierarchy
+ * source: cortex main mcp_server/core/fractal.py:build_hierarchy
  */
 function buildSimpleClusters(
   memories: MemoryItem[],
@@ -135,7 +135,7 @@ function buildSimpleClusters(
  * Returns (memory_id, score, matchedLevel) triples. Score is a weighted
  * combination of L0 (direct) and L1 (cluster centroid) cosine similarity.
  *
- * source: cortex@ed33435 mcp_server/core/fractal.py:score_against_hierarchy
+ * source: cortex main mcp_server/core/fractal.py:score_against_hierarchy
  */
 function scoreAgainstHierarchy(
   queryEmbedding: number[],

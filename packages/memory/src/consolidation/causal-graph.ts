@@ -5,7 +5,7 @@
  * co-occurrence maps, and memory arrays.
  *
  * Port of: mcp_server/core/causal_graph.py
- * source: cortex@f2b9f99 mcp_server/core/causal_graph.py:1-307
+ * source: cortex main mcp_server/core/causal_graph.py:1-307
  *
  * Algorithm reference:
  *   Spirtes, P., Glymour, C., Scheines, R. (1991).
@@ -16,28 +16,28 @@
 // ── Internal constants ────────────────────────────────────────────────────────
 
 // PMI sentinel: value returned when P(a,b) = 0 (entities never co-occurred).
-// source: cortex@f2b9f99 mcp_server/core/causal_graph.py:58 — `else -10.0`
+// source: cortex main mcp_server/core/causal_graph.py:58 — `else -10.0`
 const PMI_ZERO_SENTINEL = -10.0;
 
 // Rounding precision for PMI values (4 decimal places).
-// source: cortex@f2b9f99 mcp_server/core/causal_graph.py:66 — `round(pmi, 4)`
+// source: cortex main mcp_server/core/causal_graph.py:66 — `round(pmi, 4)`
 const PMI_DECIMAL_PLACES = 4;
 
 // Default independence threshold: PMI > 0.5 → dependent pair.
-// source: cortex@f2b9f99 mcp_server/core/causal_graph.py:201 — `independence_threshold: float = 0.5`
+// source: cortex main mcp_server/core/causal_graph.py:201 — `independence_threshold: float = 0.5`
 const DEFAULT_INDEPENDENCE_THRESHOLD = 0.5;
 
 // Default minimum co-occurrence observations before a pair can be in the skeleton.
 // PC algorithm lower bound: ≥3 observations for valid conditional independence test.
-// source: cortex@f2b9f99 mcp_server/core/causal_graph.py:202 — `min_observations: int = 3`
+// source: cortex main mcp_server/core/causal_graph.py:202 — `min_observations: int = 3`
 const DEFAULT_MIN_OBSERVATIONS = 3;
 
 // Strength multiplier for undirected edges (no temporal precedence).
-// source: cortex@f2b9f99 mcp_server/core/causal_graph.py:175 — `strength *= 0.5`
+// source: cortex main mcp_server/core/causal_graph.py:175 — `strength *= 0.5`
 const UNDIRECTED_STRENGTH_FACTOR = 0.5;
 
 // Default max depth for causal chain traversal.
-// source: cortex@f2b9f99 mcp_server/core/causal_graph.py:254 — `max_depth: int = 5`
+// source: cortex main mcp_server/core/causal_graph.py:254 — `max_depth: int = 5`
 const DEFAULT_MAX_DEPTH = 5;
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -78,7 +78,7 @@ function parsePairKey(key: PairKey): [string, string] {
  * postcondition: returned map contains counts for all pairs (a, b) where both
  *   a and b appear in the same memory content, keyed by sorted(a, b).
  *
- * source: cortex@f2b9f99 mcp_server/core/causal_graph.py:12-31
+ * source: cortex main mcp_server/core/causal_graph.py:12-31
  */
 export function computeCoOccurrenceMatrix(
   memories: readonly Record<string, unknown>[],
@@ -113,7 +113,7 @@ export function computeCoOccurrenceMatrix(
  * postcondition: returns PMI in ℝ; positive = dependent, non-positive = independent.
  *   Returns 0.0 when inputs are degenerate (total=0, a_count=0, b_count=0).
  *
- * source: cortex@f2b9f99 mcp_server/core/causal_graph.py:34-66
+ * source: cortex main mcp_server/core/causal_graph.py:34-66
  */
 export function computeConditionalIndependence(
   pairCount: number,
@@ -131,13 +131,13 @@ export function computeConditionalIndependence(
 
   if (expected === 0) return 0.0;
 
-  // source: cortex@f2b9f99 mcp_server/core/causal_graph.py:57-58
+  // source: cortex main mcp_server/core/causal_graph.py:57-58
   // Pointwise mutual information: log2(P(a,b) / P(a)*P(b))
   const pmi = p_ab > 0 ? Math.log2(p_ab / expected) : PMI_ZERO_SENTINEL;
 
   if (conditionedCount > 0) {
     // Reduce PMI if a conditioning variable explains the co-occurrence.
-    // source: cortex@f2b9f99 mcp_server/core/causal_graph.py:61-63
+    // source: cortex main mcp_server/core/causal_graph.py:61-63
     const conditioningRatio = pairCount > 0 ? conditionedCount / pairCount : 0;
     return parseFloat((pmi * Math.max(0, 1.0 - conditioningRatio)).toFixed(PMI_DECIMAL_PLACES));
   }
@@ -153,7 +153,7 @@ export function computeConditionalIndependence(
  * precondition:  entityFirstSeen values are ISO-8601 strings (lexicographic order = chronological).
  * postcondition: returns "a_before_b" | "b_before_a" | null.
  *
- * source: cortex@f2b9f99 mcp_server/core/causal_graph.py:69-92
+ * source: cortex main mcp_server/core/causal_graph.py:69-92
  */
 export function computeTemporalPrecedence(
   entityFirstSeen: ReadonlyMap<string, string>,
@@ -178,7 +178,7 @@ export function computeTemporalPrecedence(
  * postcondition: returned skeleton contains only pairs where PMI > independenceThreshold
  *   AND co-occurrence count >= minObservations.
  *
- * source: cortex@f2b9f99 mcp_server/core/causal_graph.py:94-115
+ * source: cortex main mcp_server/core/causal_graph.py:94-115
  */
 function buildSkeleton(
   coOccurrences: ReadonlyMap<PairKey, number>,
@@ -216,7 +216,7 @@ function buildSkeleton(
  * postcondition: returned set contains pair keys that should be pruned
  *   because conditioning on some third entity makes them independent.
  *
- * source: cortex@f2b9f99 mcp_server/core/causal_graph.py:118-155
+ * source: cortex main mcp_server/core/causal_graph.py:118-155
  */
 function findConditionallyIndependentEdges(
   skeleton: ReadonlyMap<PairKey, number>,
@@ -269,7 +269,7 @@ function findConditionallyIndependentEdges(
  * postcondition: returned edges list is sorted by strength descending.
  *   Undirected edges receive strength *= 0.5 per the Python source convention.
  *
- * source: cortex@f2b9f99 mcp_server/core/causal_graph.py:158-188
+ * source: cortex main mcp_server/core/causal_graph.py:158-188
  */
 function orientEdges(
   skeleton: ReadonlyMap<PairKey, number>,
@@ -296,7 +296,7 @@ function orientEdges(
       source = a;
       target = b;
       // Undirected: halve strength to reflect uncertainty.
-      // source: cortex@f2b9f99 mcp_server/core/causal_graph.py:175
+      // source: cortex main mcp_server/core/causal_graph.py:175
       finalStrength = strength * UNDIRECTED_STRENGTH_FACTOR;
     }
 
@@ -310,7 +310,7 @@ function orientEdges(
   }
 
   // Sort by strength descending.
-  // source: cortex@f2b9f99 mcp_server/core/causal_graph.py:187
+  // source: cortex main mcp_server/core/causal_graph.py:187
   edges.sort((a, b) => b.strength - a.strength);
   return edges;
 }
@@ -319,10 +319,10 @@ function orientEdges(
 
 export interface DiscoverCausalEdgesOptions {
   /** PMI threshold above which a pair is considered dependent. Default 0.5. */
-  // source: cortex@f2b9f99 mcp_server/core/causal_graph.py:201
+  // source: cortex main mcp_server/core/causal_graph.py:201
   independenceThreshold?: number;
   /** Minimum co-occurrence count to include a pair. Default 3. */
-  // source: cortex@f2b9f99 mcp_server/core/causal_graph.py:202
+  // source: cortex main mcp_server/core/causal_graph.py:202
   // PC algorithm lower bound: need ≥3 observations for conditional independence tests.
   minObservations?: number;
   /** First-seen timestamps for temporal orientation. */
@@ -343,7 +343,7 @@ export interface DiscoverCausalEdgesOptions {
  *   each edge carries source, target, strength, is_directed, evidence.
  *   Returns [] when entityNames is empty or totalMemories = 0.
  *
- * source: cortex@f2b9f99 mcp_server/core/causal_graph.py:200-240
+ * source: cortex main mcp_server/core/causal_graph.py:200-240
  */
 export function discoverCausalEdges(
   entityNames: readonly string[],
@@ -389,7 +389,7 @@ export function discoverCausalEdges(
  *
  * postcondition: keys are source entities; values are reachable targets.
  *
- * source: cortex@f2b9f99 mcp_server/core/causal_graph.py:243-249
+ * source: cortex main mcp_server/core/causal_graph.py:243-249
  */
 function buildDirectedAdjacency(edges: readonly CausalEdge[]): Map<string, string[]> {
   const adj = new Map<string, string[]>();
@@ -410,7 +410,7 @@ function buildDirectedAdjacency(edges: readonly CausalEdge[]): Map<string, strin
  * postcondition: each returned path begins with start; no path contains a cycle;
  *   paths are terminated when no outgoing directed edges remain OR depth = maxDepth.
  *
- * source: cortex@f2b9f99 mcp_server/core/causal_graph.py:252-288
+ * source: cortex main mcp_server/core/causal_graph.py:252-288
  */
 export function findCausalChain(
   edges: readonly CausalEdge[],
@@ -466,7 +466,7 @@ export function findCausalChain(
  * postcondition: returned list is sorted; contains entities C such that
  *   C → entityA and C → entityB are both directed edges in the graph.
  *
- * source: cortex@f2b9f99 mcp_server/core/causal_graph.py:291-307
+ * source: cortex main mcp_server/core/causal_graph.py:291-307
  */
 export function findCommonCauses(
   edges: readonly CausalEdge[],

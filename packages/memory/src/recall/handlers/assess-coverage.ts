@@ -19,7 +19,7 @@
  *                   entity_density, compression, domain_balance, recommendations,
  *                   directory, domain }.
  *
- * source: cortex@ed33435 mcp_server/handlers/assess_coverage.py
+ * source: cortex main mcp_server/handlers/assess_coverage.py
  */
 
 import type { MemoryStore as RecallMemoryStore } from "../port.js";
@@ -86,7 +86,7 @@ const SCHEMA_EXAMPLE_STALE_DAYS_SHORT = 7;
 const SCHEMA_EXAMPLE_STALE_DAYS_LONG = 30;
 
 // ── Schema ────────────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/assess_coverage.py schema
+// source: cortex main mcp_server/handlers/assess_coverage.py schema
 
 export const schema = {
   title: "Assess coverage",
@@ -141,7 +141,7 @@ interface AgeDistribution {
 /**
  * Compute age distribution: fresh vs stale memories.
  *
- * source: cortex@ed33435 mcp_server/handlers/assess_coverage.py:_age_distribution
+ * source: cortex main mcp_server/handlers/assess_coverage.py:_age_distribution
  */
 function ageDistribution(
   memories: Array<{ created_at?: string | null }>,
@@ -149,7 +149,7 @@ function ageDistribution(
 ): AgeDistribution {
   const now = Date.now();
   const staleMs = staleDays * MILLIS_PER_DAY;
-  const freshMs = Math.floor(staleDays / FRESH_DIVISOR) * MILLIS_PER_DAY; // source: cortex@ed33435 assess_coverage.py:92 — timedelta(days=stale_days // 3); Math.floor matches Python `//` (floor toward -inf)
+  const freshMs = Math.floor(staleDays / FRESH_DIVISOR) * MILLIS_PER_DAY; // source: cortex main assess_coverage.py:92 — timedelta(days=stale_days // 3); Math.floor matches Python `//` (floor toward -inf)
 
   let fresh = 0;
   let stale = 0;
@@ -189,7 +189,7 @@ interface EntityDensityResult {
 /**
  * Compute average entity count per memory (richness).
  *
- * source: cortex@ed33435 mcp_server/handlers/assess_coverage.py:_entity_density
+ * source: cortex main mcp_server/handlers/assess_coverage.py:_entity_density
  */
 async function entityDensity(
   memories: unknown[],
@@ -220,7 +220,7 @@ interface CompressionResult {
 /**
  * Measure how much content has been compressed.
  *
- * source: cortex@ed33435 mcp_server/handlers/assess_coverage.py:_compression_ratio
+ * source: cortex main mcp_server/handlers/assess_coverage.py:_compression_ratio
  */
 function compressionRatio(
   memories: Array<{ compression_level?: number | null }>,
@@ -244,7 +244,7 @@ interface DomainBalanceResult {
 /**
  * Evaluate how evenly distributed memories are across domains.
  *
- * source: cortex@ed33435 mcp_server/handlers/assess_coverage.py:_domain_balance
+ * source: cortex main mcp_server/handlers/assess_coverage.py:_domain_balance
  */
 function domainBalance(
   memories: Array<{ domain?: string | null }>,
@@ -280,7 +280,7 @@ function domainBalance(
 /**
  * Compute 0-100 coverage score from sub-signals.
  *
- * source: cortex@ed33435 mcp_server/handlers/assess_coverage.py:_compute_coverage_score
+ * source: cortex main mcp_server/handlers/assess_coverage.py:_compute_coverage_score
  */
 function computeCoverageScore(
   totalMemories: number,
@@ -310,7 +310,7 @@ function computeCoverageScore(
 /**
  * Generate actionable recommendations based on the coverage signals.
  *
- * source: cortex@ed33435 mcp_server/handlers/assess_coverage.py:_recommendations
+ * source: cortex main mcp_server/handlers/assess_coverage.py:_recommendations
  */
 function buildRecommendations(
   total: number,
@@ -364,7 +364,7 @@ export interface AssessCoverageResult {
 /**
  * Assess knowledge coverage completeness.
  *
- * source: cortex@ed33435 mcp_server/handlers/assess_coverage.py:handler
+ * source: cortex main mcp_server/handlers/assess_coverage.py:handler
  */
 export async function assessCoverageHandler(
   args: Record<string, unknown> | null | undefined,

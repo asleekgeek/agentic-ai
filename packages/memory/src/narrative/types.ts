@@ -19,7 +19,7 @@ import { z } from "zod";
 
 // Neutral importance fallback when a memory row omits importance — matches the
 // Python default used throughout core/narrative.py (mem.get("importance", 0.5)).
-// source: cortex@ed33435 mcp_server/core/thermodynamics.py compute_importance default 0.5
+// source: cortex main mcp_server/core/thermodynamics.py compute_importance default 0.5
 const DEFAULT_IMPORTANCE = 0.5;
 
 // ── Primitive building blocks ─────────────────────────────────────────────
@@ -30,7 +30,7 @@ const DEFAULT_IMPORTANCE = 0.5;
  * the MemoryStore.get_memories_for_directory / get_hot_memories responses.
  */
 export const MemoryRecordSchema = z.object({
-  // source: cortex@ed33435 get_project_story.py:155 — chapter entry carries mem["id"]
+  // source: cortex main get_project_story.py:155 — chapter entry carries mem["id"]
   id: z.number().int().nonnegative().default(0),
   content: z.string(),
   tags: z.union([z.array(z.string()), z.string()]).default([]),

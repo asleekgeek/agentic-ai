@@ -14,8 +14,8 @@
  * Layer: codebase-analysis/handlers (composition — wires scanner + store).
  * Allowed imports: file-scanner, @agentic/memory/remember types, node:fs.
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project.py::handler
- * source: cortex@ed33435 mcp_server/handlers/seed_project_stages.py
+ * source: cortex main mcp_server/handlers/seed_project.py::handler
+ * source: cortex main mcp_server/handlers/seed_project_stages.py
  */
 
 import { existsSync } from "node:fs";
@@ -26,8 +26,8 @@ import type { MemoryInsertData } from "../../remember/types.js";
 
 // ── Named constants ───────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/handlers/seed_project.py:117 — max_file_size_kb default 64
-const DEFAULT_MAX_FILE_SIZE_KB = 64; // source: cortex@ed33435 seed_project.py:117
+// source: cortex main mcp_server/handlers/seed_project.py:117 — max_file_size_kb default 64
+const DEFAULT_MAX_FILE_SIZE_KB = 64; // source: cortex main seed_project.py:117
 // source: IEC 80000-13 — 1 kibibyte = 1024 bytes
 const BYTES_PER_KB = 1024; // source: IEC 80000-13:2008 §21-12
 
@@ -70,7 +70,7 @@ export interface SeedProjectResponse {
  * precondition:  args may be null/undefined.
  * postcondition: returns (root absolute path, domain, maxBytes, dry_run).
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project.py::_parse_args:112-119
+ * source: cortex main mcp_server/handlers/seed_project.py::_parse_args:112-119
  */
 function parseArgs(args: SeedProjectArgs): {
   root:    string;
@@ -94,7 +94,7 @@ function parseArgs(args: SeedProjectArgs): {
  *
  * postcondition: returns a map of stage name → count.
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project.py::_build_stage_counts:158-168
+ * source: cortex main mcp_server/handlers/seed_project.py::_build_stage_counts:158-168
  */
 function buildStageCounts(
   discoveries: ReadonlyArray<{ readonly tags: readonly string[] }>,
@@ -124,7 +124,7 @@ function buildStageCounts(
  * postcondition: returns (stored, skipped, memoryIds); stored + skipped == discoveries.length.
  *   Each stored ID is guaranteed positive. bumpHeatRaw is called once per ID.
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project.py::_store_discoveries:122-155
+ * source: cortex main mcp_server/handlers/seed_project.py::_store_discoveries:122-155
  * source: ADR-0042 — async path required for PG backend
  */
 async function storeDiscoveriesAsync(
@@ -191,7 +191,7 @@ async function storeDiscoveriesAsync(
  *   when dry_run=true: returns {seeded:false, dry_run:true, discoveries, titles}.
  *   when root does not exist: returns {seeded:false, reason:"directory not found"}.
  *
- * source: cortex@ed33435 mcp_server/handlers/seed_project.py::handler:171-208
+ * source: cortex main mcp_server/handlers/seed_project.py::handler:171-208
  */
 export async function handler(
   args: SeedProjectArgs,
@@ -211,7 +211,7 @@ export async function handler(
   // ``Spec: Project structure: repo-a`` from fixture runs — both
   // noise that lives forever in the wiki because the underlying path
   // is gone by the next test run.
-  // source: cortex@0623b30 mcp_server/handlers/seed_project.py:182-194
+  // source: cortex main mcp_server/handlers/seed_project.py:182-194
   if (isTransientSeedRoot(root)) {
     return { seeded: false, reason: `transient_root_refused: ${root}` };
   }
@@ -231,7 +231,7 @@ export async function handler(
   // Scope purge to this domain (issue #16): seeding repo-A must not
   // wipe out repo-B's seeded memories. Domain authority ends at the
   // project boundary; cross-domain effects are an externality.
-  // source: cortex@fdc78f7 mcp_server/handlers/seed_project.py:181-186 (issue #16)
+  // source: cortex main mcp_server/handlers/seed_project.py:181-186 (issue #16)
   let purgedStale = 0;
   const storeExt = deps.store as unknown as {
     deleteMemoriesByTag?: (tag: string, domain?: string) => number;

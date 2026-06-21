@@ -9,7 +9,7 @@
  * no-regression gate with the merge disabled (CORTEX_ABLATE_ENTITY_DEDUP=1)
  * versus enabled, isolating its retrieval impact.
  *
- * Port of: cortex bc5af469 mcp_server/handlers/consolidation/entity_merge.py
+ * Port of: cortex main mcp_server/handlers/consolidation/entity_merge.py
  */
 
 import { Mechanism, isMechanismDisabled } from "../ablation.js";
@@ -39,8 +39,8 @@ export interface EntityMergePort {
    * postcondition: returns { merged } indicating whether the operation
    *   ran (true) or was a no-op (false, e.g. equal ids or missing entity).
    *
-   * source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py
-   * source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py
+   * source: cortex main mcp_server/infrastructure/pg_store_entity_merge.py
+   * source: cortex main mcp_server/infrastructure/sqlite_store_entity_merge.py
    */
   mergeEntities(survivorId: number, aliasId: number): Promise<{ merged: boolean; [k: string]: unknown }>;
 }
@@ -63,17 +63,17 @@ export interface EntityMergeCycleResult {
  *   each applied merge has updated the DB atomically via port.mergeEntities.
  *   Errors are non-fatal: the cycle logs and returns {merges_applied:0}.
  *
- * Port of: cortex bc5af469 mcp_server/handlers/consolidation/entity_merge.py::run_entity_merge_cycle
+ * Port of: cortex main mcp_server/handlers/consolidation/entity_merge.py::run_entity_merge_cycle
  */
 export async function runEntityMergeCycle(port: EntityMergePort): Promise<EntityMergeCycleResult> {
   // Ablation gate: CORTEX_ABLATE_ENTITY_DEDUP=1 → skip entire cycle.
-  // source: cortex bc5af469 mcp_server/handlers/consolidation/entity_merge.py — is_mechanism_disabled gate
+  // source: cortex main mcp_server/handlers/consolidation/entity_merge.py — is_mechanism_disabled gate
   if (isMechanismDisabled(Mechanism.ENTITY_DEDUP)) {
     return { merges_applied: 0, pairs_planned: 0, ablated: true };
   }
 
   try {
-    // source: cortex bc5af469 mcp_server/handlers/consolidation/entity_merge.py — get_all_entities(min_heat=0.0)
+    // source: cortex main mcp_server/handlers/consolidation/entity_merge.py — get_all_entities(min_heat=0.0)
     const entities = await port.getAllEntities({ minHeat: 0 });
 
     if (entities.length <= 1) {
@@ -81,12 +81,12 @@ export async function runEntityMergeCycle(port: EntityMergePort): Promise<Entity
     }
 
     // Invoke the pure dedup engine (Phase A).
-    // source: cortex bc5af469 mcp_server/handlers/consolidation/entity_merge.py — deduplicate_entities(entities)
+    // source: cortex main mcp_server/handlers/consolidation/entity_merge.py — deduplicate_entities(entities)
     const result = deduplicateEntities(entities as EntityInput[]);
     const remap = result.remap;
 
     // Apply each alias→survivor pair where BOTH keys are digit strings.
-    // source: cortex bc5af469 mcp_server/handlers/consolidation/entity_merge.py — _apply_merges
+    // source: cortex main mcp_server/handlers/consolidation/entity_merge.py — _apply_merges
     let applied = 0;
     for (const [aliasKey, survivorKey] of Object.entries(remap)) {
       // Only proceed when both keys are numeric: live DB rows always carry an id;
@@ -101,7 +101,7 @@ export async function runEntityMergeCycle(port: EntityMergePort): Promise<Entity
     return { merges_applied: applied, pairs_planned: Object.keys(remap).length };
   } catch {
     // Non-fatal: a failing entity-merge cycle must not abort the full consolidation run.
-    // source: cortex bc5af469 mcp_server/handlers/consolidation/entity_merge.py — except Exception: logger.debug
+    // source: cortex main mcp_server/handlers/consolidation/entity_merge.py — except Exception: logger.debug
     return { merges_applied: 0, pairs_planned: 0 };
   }
 }

@@ -1,7 +1,7 @@
 /**
  * Pure predicates for fuzzy entity deduplication.
  *
- * Port of: cortex bc5af469 mcp_server/core/entity_dedup_filters.py
+ * Port of: cortex main mcp_server/core/entity_dedup_filters.py
  *
  * Normalization, entropy gating, shingle/MinHash construction, and the five
  * false-positive blockers that keep near-miss-but-distinct labels from merging.
@@ -18,25 +18,25 @@
 import { MinHash } from "../../shared/minhash.js";
 import { jaroWinklerSimilarity, osaDistance } from "../../shared/string-distance.js";
 
-// ── tunable constants (source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:24-31,
+// ── tunable constants (source: cortex main mcp_server/core/entity_dedup_filters.py:24-31,
 //    originally graphify graphify/dedup.py) ──
 
-// source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:24 (bits/char; Shannon 1948)
+// source: cortex main mcp_server/core/entity_dedup_filters.py:24 (bits/char; Shannon 1948)
 export const ENTROPY_THRESHOLD = 2.5;
-// source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:25 (MinHash band-LSH blocking threshold)
+// source: cortex main mcp_server/core/entity_dedup_filters.py:25 (MinHash band-LSH blocking threshold)
 export const LSH_THRESHOLD = 0.7;
-// source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:26 (Jaro-Winkler similarity required to merge)
+// source: cortex main mcp_server/core/entity_dedup_filters.py:26 (Jaro-Winkler similarity required to merge)
 export const MERGE_THRESHOLD = 0.92;
-// source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:27 (MinHash permutations)
+// source: cortex main mcp_server/core/entity_dedup_filters.py:27 (MinHash permutations)
 export const NUM_PERM = 128;
 
-// source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:28 (below this, fuzzy edits are usually variants not typos)
+// source: cortex main mcp_server/core/entity_dedup_filters.py:28 (below this, fuzzy edits are usually variants not typos)
 const _SHORT_LABEL_MAX = 12;
 
-// source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:29 (JW floor for an allowed same-length single substitution)
+// source: cortex main mcp_server/core/entity_dedup_filters.py:29 (JW floor for an allowed same-length single substitution)
 const _SAME_LEN_SUB_JW = 0.97;
 
-// source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:31 (character k-gram size for MinHash)
+// source: cortex main mcp_server/core/entity_dedup_filters.py:31 (character k-gram size for MinHash)
 const _SHINGLE_K = 3;
 
 // ── normalizeLabel ────────────────────────────────────────────────────────────
@@ -57,7 +57,7 @@ const _SHINGLE_K = 3;
  * `str.toLowerCase()` is used instead of `str.casefold()` — for the ASCII and
  * common Latin characters in entity labels, the results are identical.
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:32-35
+ * source: cortex main mcp_server/core/entity_dedup_filters.py:32-35
  */
 export function normalizeLabel(label: string | null | undefined): string {
   if (label === null || label === undefined) {
@@ -80,7 +80,7 @@ export function normalizeLabel(label: string | null | undefined): string {
  *                -sum((count/n) * log2(count/n)) for each distinct character c
  *                where count is the frequency of c and n is the label length.
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:38-45
+ * source: cortex main mcp_server/core/entity_dedup_filters.py:38-45
  */
 export function entropy(label: string): number {
   const s = normalizeLabel(label);
@@ -107,7 +107,7 @@ export function entropy(label: string): number {
  * Postcondition: returns a Set of overlapping k-character substrings of text,
  *                or {text} if text.length < k.
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:48-51
+ * source: cortex main mcp_server/core/entity_dedup_filters.py:48-51
  */
 export function shingles(text: string, k: number = _SHINGLE_K): Set<string> {
   if (text.length < k) return new Set([text]);
@@ -128,7 +128,7 @@ export function shingles(text: string, k: number = _SHINGLE_K): Set<string> {
  * Postcondition: returns a MinHash sketch of shingles(normalized.replace(" ", ""),
  *                k=_SHINGLE_K); sketch is reproducible for the same input.
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:54-57
+ * source: cortex main mcp_server/core/entity_dedup_filters.py:54-57
  */
 export function makeMinhash(normalized: string, numPerm: number = NUM_PERM): MinHash {
   const m = new MinHash(numPerm);
@@ -143,7 +143,7 @@ export function makeMinhash(normalized: string, numPerm: number = NUM_PERM): Min
 // Trailing version/variant suffix: digits (+letters) like "v2", "A55", or a
 // 2+ letter codename revision. Stem must end in a letter so plain words don't
 // match.
-// source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:62-63
+// source: cortex main mcp_server/core/entity_dedup_filters.py:62-63
 const _VARIANT_SUFFIX = /^(.*[a-z])([0-9]+[a-z]*|[a-z]{2,})$/;
 
 /**
@@ -156,7 +156,7 @@ const _VARIANT_SUFFIX = /^(.*[a-z])([0-9]+[a-z]*|[a-z]{2,})$/;
  * Postcondition: true iff both match _VARIANT_SUFFIX, share the same stem,
  *                differ in the suffix, and max(len(a), len(b)) < _SHORT_LABEL_MAX.
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:65-73
+ * source: cortex main mcp_server/core/entity_dedup_filters.py:65-73
  */
 export function isVariantPair(a: string, b: string): boolean {
   if (a === b || Math.max(a.length, b.length) >= _SHORT_LABEL_MAX) return false;
@@ -182,7 +182,7 @@ export function isVariantPair(a: string, b: string): boolean {
  *                AND osaDistance(a, b) <= 1;
  *                true (blocked) otherwise (i.e., the pair must not merge).
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:76-89
+ * source: cortex main mcp_server/core/entity_dedup_filters.py:76-89
  */
 export function shortLabelBlocked(a: string, b: string, jwScore: number): boolean {
   if (Math.max(a.length, b.length) >= _SHORT_LABEL_MAX) return false;
@@ -209,7 +209,7 @@ export function shortLabelBlocked(a: string, b: string, jwScore: number): boolea
  * Postcondition: true iff sorted-by-length (lo, hi): hi starts with lo OR hi
  *                ends with lo, AND hi !== lo.
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:92-100
+ * source: cortex main mcp_server/core/entity_dedup_filters.py:92-100
  */
 export function isAffixExtension(a: string, b: string): boolean {
   const [lo, hi] = a.length <= b.length ? [a, b] : [b, a];
@@ -230,7 +230,7 @@ export function isAffixExtension(a: string, b: string): boolean {
  * Precondition:  label is the raw (un-normalized) entity name.
  * Postcondition: true iff label contains "/" or contains 2 or more ".".
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:103-115
+ * source: cortex main mcp_server/core/entity_dedup_filters.py:103-115
  */
 export function isStructuralIdentifier(label: string): boolean {
   const s = label.trim();
@@ -262,13 +262,13 @@ function commonPrefixLen(a: string, b: string): number {
  *                string AND both middles are non-empty AND their JW similarity
  *                is < MERGE_THRESHOLD.
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:118-139
+ * source: cortex main mcp_server/core/entity_dedup_filters.py:118-139
  */
 export function affixesSandwichDifference(a: string, b: string): boolean {
   const p = commonPrefixLen(a, b);
   // Common suffix length, clamped so prefix and suffix don't overlap on the
   // shorter string. Python: s = min(s, min(len(a), len(b)) - p)
-  // source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:127
+  // source: cortex main mcp_server/core/entity_dedup_filters.py:127
   let s = commonPrefixLen([...a].reverse().join(""), [...b].reverse().join(""));
   s = Math.min(s, Math.min(a.length, b.length) - p);
   if (s < 0 || p + s < 0.5 * Math.min(a.length, b.length)) return false;
@@ -293,7 +293,7 @@ export function affixesSandwichDifference(a: string, b: string): boolean {
  * Postcondition: true iff p >= 0.5 * min(len(a), len(b)) AND both remainders
  *                are non-empty AND JW(ra, rb) < MERGE_THRESHOLD.
  *
- * source: cortex bc5af469 mcp_server/core/entity_dedup_filters.py:142-155
+ * source: cortex main mcp_server/core/entity_dedup_filters.py:142-155
  */
 export function sharedPrefixMasksDifference(a: string, b: string): boolean {
   const n = Math.min(a.length, b.length);

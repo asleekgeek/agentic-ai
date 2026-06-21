@@ -14,7 +14,7 @@
  * to return only seed activation (no propagation). Guard is in the
  * recall-handler entry point.
  *
- * Port of: cortex@bc0ae4f mcp_server/core/spreading_activation.py
+ * Port of: cortex main mcp_server/core/spreading_activation.py
  *
  * source: Collins & Loftus (1975) "A spreading-activation theory of
  *         semantic processing." Psychological Review 82(6):407-428.
@@ -29,16 +29,16 @@ export interface SpreadOptions {
   /** Initial activation for each seed node (default 1.0). */
   initialActivation?: number;
   /** Activation decay per hop (default 0.65).
-   *  source: cortex@bc0ae4f mcp_server/core/spreading_activation.py:17 (empirical tuning) */
+   *  source: cortex main mcp_server/core/spreading_activation.py:17 (empirical tuning) */
   decay?: number;
   /** Activation threshold below which propagation stops (default 0.1).
-   *  source: cortex@bc0ae4f mcp_server/core/spreading_activation.py:18 */
+   *  source: cortex main mcp_server/core/spreading_activation.py:18 */
   threshold?: number;
   /** Maximum BFS depth (default 3).
-   *  source: cortex@bc0ae4f mcp_server/core/spreading_activation.py:19 */
+   *  source: cortex main mcp_server/core/spreading_activation.py:19 */
   maxDepth?: number;
   /** Maximum number of activated nodes, top-K cap (default 50).
-   *  source: cortex@bc0ae4f mcp_server/core/spreading_activation.py:20 */
+   *  source: cortex main mcp_server/core/spreading_activation.py:20 */
   maxNodes?: number;
   /** Pass true to skip propagation (ablation mode — returns seed activations only). */
   disabled?: boolean;
@@ -59,15 +59,15 @@ export interface RelationshipInput {
 
 // ── Defaults ──────────────────────────────────────────────────────────────
 
-const DEFAULT_DECAY = 0.65;       // source: cortex@bc0ae4f spreading_activation.py:17
-const DEFAULT_THRESHOLD = 0.1;    // source: cortex@bc0ae4f spreading_activation.py:18
-const DEFAULT_MAX_DEPTH = 3;      // source: cortex@bc0ae4f spreading_activation.py:19
-const DEFAULT_MAX_NODES = 50;     // source: cortex@bc0ae4f spreading_activation.py:20
+const DEFAULT_DECAY = 0.65;       // source: cortex main spreading_activation.py:17
+const DEFAULT_THRESHOLD = 0.1;    // source: cortex main spreading_activation.py:18
+const DEFAULT_MAX_DEPTH = 3;      // source: cortex main spreading_activation.py:19
+const DEFAULT_MAX_NODES = 50;     // source: cortex main spreading_activation.py:20
 
 /**
  * Half-threshold multiplier for the propagation inner loop.
  * A neighbor receives activation only if it would exceed threshold/2.
- * source: cortex@bc0ae4f mcp_server/core/spreading_activation.py:46
+ * source: cortex main mcp_server/core/spreading_activation.py:46
  */
 const HALF_THRESHOLD_FACTOR = 0.5;
 
@@ -93,7 +93,7 @@ function initializeSeeds(
  * Loop invariant: every node in nextFrontier has activation >= threshold
  *   and is not a seed.
  *
- * source: cortex@bc0ae4f spreading_activation.py:36-62
+ * source: cortex main spreading_activation.py:36-62
  */
 function propagateOneHop(
   graph: EntityGraph,
@@ -152,7 +152,7 @@ function capActivations(
  * Loop invariant: `frontier` contains only nodes above threshold.
  * Termination: loop runs at most maxDepth iterations.
  *
- * source: cortex@bc0ae4f mcp_server/core/spreading_activation.py:76-115
+ * source: cortex main mcp_server/core/spreading_activation.py:76-115
  *
  * @param disabled - Pass true to skip propagation (ablation mode).
  *                   Callers wire this from CORTEX_ABLATE_SPREADING_ACTIVATION.
@@ -199,7 +199,7 @@ export function spreadActivation(
  * pre:  entityActivations is a non-empty Map<entityId, score>
  * post: returned list is sorted descending by score
  *
- * source: cortex@bc0ae4f mcp_server/core/spreading_activation.py:118-144
+ * source: cortex main mcp_server/core/spreading_activation.py:118-144
  */
 export function mapEntityActivationToMemories(
   entityActivations: Map<number, number>,
@@ -268,7 +268,7 @@ export function groomednessMultiplier(
  * pre:  queryTerms is a list of strings
  * post: returned list is deduplicated; each id appears at most once
  *
- * source: cortex@bc0ae4f mcp_server/core/spreading_activation.py:147-169
+ * source: cortex main mcp_server/core/spreading_activation.py:147-169
  */
 export function resolveSeedEntities(
   queryTerms: string[],
@@ -292,7 +292,7 @@ export function resolveSeedEntities(
  *
  * post: graph is bidirectional; entities below minHeat are excluded
  *
- * source: cortex@bc0ae4f mcp_server/core/spreading_activation.py:172-222
+ * source: cortex main mcp_server/core/spreading_activation.py:172-222
  */
 export function buildEntityGraph(
   entities: EntityGraphBuilderInput[],

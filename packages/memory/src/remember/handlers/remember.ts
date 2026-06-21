@@ -65,13 +65,13 @@ export type { WriteEmbedder } from "./remember-helpers.js";
 
 // source: thermodynamics.py:apply_surprise_boost (heuristic)
 const SURPRISE_BOOST_FACTOR = 0.3; // source: thermodynamics.py:apply_surprise_boost
-const RECENT_CONTENTS_LIMIT = 10; // source: cortex@ed33435 mcp_server/handlers/remember.py — structural comparison window
-const VECTOR_SEARCH_TOP_K = 5; // source: cortex@ed33435 mcp_server/handlers/remember.py — top-5 similar memories
-// source: cortex@ed33435 mcp_server/handlers/remember.py — VADER emotional valence
+const RECENT_CONTENTS_LIMIT = 10; // source: cortex main mcp_server/handlers/remember.py — structural comparison window
+const VECTOR_SEARCH_TOP_K = 5; // source: cortex main mcp_server/handlers/remember.py — top-5 similar memories
+// source: cortex main mcp_server/handlers/remember.py — VADER emotional valence
 //   check threshold: memories under 100 chars rarely have enough signal for VADER.
 //   Engineering heuristic; same threshold used in llm-entity-extractor MIN_CONTENT_CHARS.
-const VADER_MIN_CONTENT_CHARS = 100; // source: engineering heuristic, cortex@ed33435 remember.py
-const ENTITY_EXTRACTION_CAP = 20; // source: cortex@ed33435 mcp_server/core/knowledge_graph.py — entity cap per memory
+const VADER_MIN_CONTENT_CHARS = 100; // source: engineering heuristic, cortex main remember.py
+const ENTITY_EXTRACTION_CAP = 20; // source: cortex main mcp_server/core/knowledge_graph.py — entity cap per memory
 
 function applySurpriseBoost(
   baseHeat: number,
@@ -326,7 +326,7 @@ export async function rememberAsync(
   // process-wide engine wired at the MCP composition root; it is null only for
   // non-MCP callers / tests, where the write path degrades to no curation —
   // matching Cortex when encode() yields nothing (remember_helpers.py:41,342).
-  // source: cortex@ed33435 mcp_server/handlers/remember.py:299
+  // source: cortex main mcp_server/handlers/remember.py:299
   let embedding: Buffer | null = null;
   if (embedder) {
     try {
@@ -344,7 +344,7 @@ export async function rememberAsync(
   // `if embedding: vec_hits = store.search_vectors(embedding, top_k=5, min_heat=0.0)`).
   // With no embedder the search is skipped — Cortex likewise yields no neighbours
   // when embedding is falsy. *Async-when-available (PG), sync fallback (SQLite).
-  // source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:41-42
+  // source: cortex main mcp_server/handlers/remember_helpers.py:41-42
   const storeAnyVec = store as unknown as {
     searchVectorsAsync?: (buf: Buffer, k: number, threshold: number) => Promise<Array<[number, number]>>;
   };
@@ -502,7 +502,7 @@ export async function rememberAsync(
   // action divergence) — supersede, retaining both rows. Benchmark loaders bypass
   // remember() (ingestMemoriesBatch), so curation never perturbs LoCoMo /
   // LongMemEval / BEAM. tryCurationAsync wraps its own try/catch (except→create).
-  // source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:try_curation (341-367)
+  // source: cortex main mcp_server/handlers/remember_helpers.py:try_curation (341-367)
   let curation: CurationDecision = { action: "create", targetId: null };
   if (embedding && !force) {
     curation = await tryCurationAsync(content, embedding, force, store, embedder ?? null, tags, mod.heat);
@@ -541,8 +541,8 @@ export async function rememberAsync(
   // into a dedicated upsert (PG: UPDATE ... SET embedding; SQLite: memories_vec).
   // Best-effort: the row is already committed, so a persistence failure only means
   // this memory won't be a future vector-search candidate.
-  // source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:_build_insert_record (embedding field)
-  // source: cortex@ed33435 mcp_server/infrastructure/pg_store.py:insert_memory (embedding column)
+  // source: cortex main mcp_server/handlers/remember_helpers.py:_build_insert_record (embedding field)
+  // source: cortex main mcp_server/infrastructure/pg_store.py:insert_memory (embedding column)
   if (embedding) {
     const storeAnyEmb = store as unknown as {
       upsertEmbedding?: (id: number, emb: Buffer) => void | Promise<void>;
@@ -558,7 +558,7 @@ export async function rememberAsync(
 
   if (curation.action === "supersede" && curation.targetId !== null) {
     // Phase 2 (MEM-G1): stamp old.superseded_by_id = newId. Async-when-available (PG).
-    // source: cortex@ed33435 mcp_server/handlers/remember_helpers.py:351-362
+    // source: cortex main mcp_server/handlers/remember_helpers.py:351-362
     const storeAnySup = store as unknown as {
       setSupersededByAsync?: (oldId: number, newId: number) => Promise<void>;
     };
@@ -650,7 +650,7 @@ export async function rememberAsync(
 
   // action "superseded" (MEM-G1) when curation inserted this row as the successor
   // of a contradicting near-duplicate; otherwise the normal "stored".
-  // source: cortex@ed33435 mcp_server/handlers/remember_response.py — supersede→"superseded"
+  // source: cortex main mcp_server/handlers/remember_response.py — supersede→"superseded"
   const response: RememberResponse = {
     stored: true,
     action: curation.action === "supersede" ? "superseded" : "stored",
@@ -670,7 +670,7 @@ export async function rememberAsync(
 // Extracts capitalized tokens as entity candidates, mirroring the regex
 // branch of knowledge_graph.extract_entities. The spaCy NER branch is not
 // available in the TS runtime.
-// source: cortex@ed33435 mcp_server/core/knowledge_graph.py:extract_entities
+// source: cortex main mcp_server/core/knowledge_graph.py:extract_entities
 
 function extractEntityNamesFromContent(content: string): string[] {
   const names = new Set<string>();
@@ -687,7 +687,7 @@ function extractEntityNamesFromContent(content: string): string[] {
 }
 
 // CamelCase identifiers → "technology" type (multi-hump pattern).
-// source: cortex@ed33435 mcp_server/core/knowledge_graph.py:74,129-132 — _CAMELCASE_RE matches multi-hump CamelCase, type=technology
+// source: cortex main mcp_server/core/knowledge_graph.py:74,129-132 — _CAMELCASE_RE matches multi-hump CamelCase, type=technology
 const _CAMELCASE_RE = /\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b/;
 
 function entityTypeFor(name: string): "technology" | "concept" {

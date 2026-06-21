@@ -1,16 +1,16 @@
 /**
  * pg-schema-tables.ts — DDL constants: core tables, wiki schema, support tables.
- * source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:1-529
+ * source: cortex main mcp_server/infrastructure/pg_schema.py:1-529
  * PostgreSQL 15+ with pgvector and pg_trgm required. Pure DDL.
  */
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:13-16
+// source: cortex main mcp_server/infrastructure/pg_schema.py:13-16
 export const EXTENSIONS_DDL = `
 CREATE EXTENSION IF NOT EXISTS vector;
 CREATE EXTENSION IF NOT EXISTS pg_trgm;
 `;
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:20-69
+// source: cortex main mcp_server/infrastructure/pg_schema.py:20-69
 export const MEMORIES_DDL = `
 CREATE TABLE IF NOT EXISTS memories (
     id              SERIAL PRIMARY KEY,
@@ -70,7 +70,7 @@ CREATE TABLE IF NOT EXISTS memories (
 );
 `;
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:71-82
+// source: cortex main mcp_server/infrastructure/pg_schema.py:71-88
 export const ENTITIES_DDL = `
 CREATE TABLE IF NOT EXISTS entities (
     id              SERIAL PRIMARY KEY,
@@ -80,23 +80,28 @@ CREATE TABLE IF NOT EXISTS entities (
     created_at      TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     last_accessed   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     heat            REAL DEFAULT 1.0,
-    archived        BOOLEAN DEFAULT FALSE
+    archived        BOOLEAN DEFAULT FALSE,
+    -- Provenance: 'ast_symbol' (code symbol from codebase ingestion — exempt
+    -- from label-fuzzy dedup) vs 'text_concept' (extracted from
+    -- memory content — eligible for fuzzy dedup). Consumed by core.entity_dedup.
+    origin          TEXT NOT NULL DEFAULT 'text_concept'
+                    CHECK (origin IN ('ast_symbol', 'text_concept'))
 );
 `;
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:84-91
+// source: cortex main mcp_server/infrastructure/pg_schema.py:84-91
 export const HOMEOSTATIC_STATE_DDL = `
 CREATE TABLE IF NOT EXISTS homeostatic_state (
     domain     TEXT PRIMARY KEY,
     factor     REAL NOT NULL DEFAULT 1.0
 ` +
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:88-89 — homeostatic factor bounds
+// source: cortex main mcp_server/infrastructure/pg_schema.py:88-89 — homeostatic factor bounds
 `               CHECK (factor > 0.0 AND factor < 10.0),
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 `;
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:93-108
+// source: cortex main mcp_server/infrastructure/pg_schema.py:93-108
 export const RELATIONSHIPS_DDL = `
 CREATE TABLE IF NOT EXISTS relationships (
     id                  SERIAL PRIMARY KEY,
@@ -114,7 +119,7 @@ CREATE TABLE IF NOT EXISTS relationships (
 );
 `;
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:110-118
+// source: cortex main mcp_server/infrastructure/pg_schema.py:110-118
 export const MEMORY_ENTITIES_DDL = `
 CREATE TABLE IF NOT EXISTS memory_entities (
     memory_id   INTEGER NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
@@ -124,7 +129,7 @@ CREATE TABLE IF NOT EXISTS memory_entities (
 CREATE INDEX IF NOT EXISTS idx_memory_entities_entity ON memory_entities (entity_id);
 `;
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:130-329
+// source: cortex main mcp_server/infrastructure/pg_schema.py:130-329
 export const WIKI_SCHEMA_DDL = `
 CREATE SCHEMA IF NOT EXISTS wiki;
 
@@ -282,7 +287,7 @@ CREATE INDEX IF NOT EXISTS idx_wiki_citations_session ON wiki.citations (session
 CREATE INDEX IF NOT EXISTS idx_wiki_memos_subject ON wiki.memos (subject_type, subject_id);
 `;
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:334-354
+// source: cortex main mcp_server/infrastructure/pg_schema.py:334-354
 export const WIKI_TRIGGERS_DDL = `
 CREATE OR REPLACE FUNCTION wiki.on_citation_insert() RETURNS trigger AS $$
 BEGIN
@@ -290,7 +295,7 @@ BEGIN
        SET citation_count = citation_count + 1,
            last_cited_at = NEW.cited_at,
 ` +
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:342 — 0.05 heat bump on citation
+// source: cortex main mcp_server/infrastructure/pg_schema.py:342 — 0.05 heat bump on citation
 `           heat = LEAST(1.0, heat + 0.05),
            tended = NEW.cited_at
      WHERE id = NEW.page_id;
@@ -306,7 +311,7 @@ DO $$ BEGIN
 END $$;
 `;
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:357-388
+// source: cortex main mcp_server/infrastructure/pg_schema.py:357-388
 export const WIKI_LINK_TRIGGER_DDL = `
 CREATE OR REPLACE FUNCTION wiki.on_link_change() RETURNS trigger AS $$
 BEGIN
@@ -336,7 +341,7 @@ DO $$ BEGIN
 END $$;
 `;
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_schema.py:390-528
+// source: cortex main mcp_server/infrastructure/pg_schema.py:390-528
 export const SUPPORT_TABLES_DDL = `
 CREATE TABLE IF NOT EXISTS prospective_memories (
     id                  SERIAL PRIMARY KEY,

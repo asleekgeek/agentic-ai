@@ -1,7 +1,7 @@
 /**
  * Cypher fetchers for ingest-codebase.
  *
- * source: cortex@f2b9f99 mcp_server/handlers/ingest_codebase_cypher.py:1-340
+ * source: cortex main mcp_server/handlers/ingest_codebase_cypher.py:1-340
  *
  * Re-synced 2026-04-28 (Phase 7 Group H): ported v3.14.8/v3.14.9 deltas —
  *   - filePathFromQn now returns string[] (priority-ordered candidates, not
@@ -72,12 +72,12 @@ export interface FileRow {
 
 // ── Fallback ──────────────────────────────────────────────────────────────
 
-// source: cortex@f2b9f99 mcp_server/handlers/ingest_codebase_cypher.py:53-111
+// source: cortex main mcp_server/handlers/ingest_codebase_cypher.py:53-111
 // file_path_from_qn — Rust-style qualified-name fallback (v3.14.9)
 const _CODE_EXTS = [".py", ".ts", ".tsx", ".rs", ".js"] as const;
 // Maximum number of tail segments to drop when deriving a Rust-style module path.
 // Covers the deepest realistic nesting: module::Class::method::closure (drop 3).
-// source: cortex@f2b9f99 ingest_codebase_cypher.py:100-110
+// source: cortex main ingest_codebase_cypher.py:100-110
 // eslint-disable-next-line @typescript-eslint/no-magic-numbers
 const _MAX_RUST_QN_DROP = 3 as const;
 

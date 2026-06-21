@@ -3,7 +3,7 @@
  * PG recall weight computation: intent-adaptive signal weights.
  * Part 1 of 2 (pg-recall.ts = weights + orchestration).
  *
- * Port of: cortex@ed33435 mcp_server/core/pg_recall.py:1-180
+ * Port of: cortex main mcp_server/core/pg_recall.py:1-180
  *
  * Pure business logic — no I/O.
  */
@@ -21,7 +21,7 @@ import { QueryIntent } from "./types.js";
 //   BEAM-optimal: fts=0.0, heat=0.7, ngram=0.0 → MRR 0.554
 //   But fts=0.0 regresses LongMemEval -9.2pp R@10, LoCoMo -15.5pp R@10
 // These defaults are balanced across all three benchmarks.
-// source: cortex@ed33435 mcp_server/core/pg_recall.py:93-100
+// source: cortex main mcp_server/core/pg_recall.py:93-100
 
 export const _BASE_PG_WEIGHTS: Record<string, number> = {
   vector: 1.0,   // Primary signal — always full strength
@@ -32,7 +32,7 @@ export const _BASE_PG_WEIGHTS: Record<string, number> = {
 };
 
 // Intent-specific PG weight overrides.
-// source: cortex@ed33435 mcp_server/core/pg_recall.py:102-123
+// source: cortex main mcp_server/core/pg_recall.py:102-123
 export const _PG_INTENT_OVERRIDES: Record<string, Record<string, number>> = {
   [QueryIntent.TEMPORAL]: {
     heat: 0.6,
@@ -67,7 +67,7 @@ function isMechanismDisabled(mech: string): boolean {
 /**
  * Compute PG recall_memories() signal weights for a given intent.
  *
- * Port of: cortex@ed33435 mcp_server/core/pg_recall.py:126-169
+ * Port of: cortex main mcp_server/core/pg_recall.py:126-169
  *
  * Derives base weights from coreWeights (from query_intent) when available,
  * then applies intent-specific PG overrides.
@@ -76,7 +76,7 @@ function isMechanismDisabled(mech: string): boolean {
  *   CORTEX_DECAY_DISABLED=1   → forces heat weight to 0.0
  *   CORTEX_HEAT_CONSTANT=<f>  → forces heat weight to 0.0
  *   CORTEX_ABLATE_ADAPTIVE_DECAY=1 → forces heat weight to 0.0
- * source: cortex@ed33435 mcp_server/core/pg_recall.py:136-158
+ * source: cortex main mcp_server/core/pg_recall.py:136-158
  *
  * precondition: intent is a known QueryIntent value
  * postcondition: all weights non-negative; vector = 1.0; heat = 0.0 when
@@ -90,12 +90,12 @@ export function computePgWeights(
 
   // Vector is always 1.0 in the PG path.
   // ngram derived from fts (same ratio as Python).
-  // source: cortex@ed33435 mcp_server/core/pg_recall.py:145-151
+  // source: cortex main mcp_server/core/pg_recall.py:145-151
   const base: Record<string, number> = {
     vector: 1.0,
     fts: cw["fts"] ?? (_BASE_PG_WEIGHTS["fts"] ?? 0.5),
     heat: cw["heat"] ?? (_BASE_PG_WEIGHTS["heat"] ?? 0.3),
-    ngram: (cw["fts"] ?? (_BASE_PG_WEIGHTS["fts"] ?? 0.5)) * 0.6, // source: cortex@ed33435 mcp_server/core/pg_recall.py:149
+    ngram: (cw["fts"] ?? (_BASE_PG_WEIGHTS["fts"] ?? 0.5)) * 0.6, // source: cortex main mcp_server/core/pg_recall.py:149
     recency: 0.0,
   };
 
@@ -105,7 +105,7 @@ export function computePgWeights(
   }
 
   // Ablation: disable heat/decay signal
-  // source: cortex@ed33435 mcp_server/core/pg_recall.py:153-158
+  // source: cortex main mcp_server/core/pg_recall.py:153-158
   const heatDisabled =
     (typeof process !== "undefined" && (
       process.env["CORTEX_DECAY_DISABLED"] === "1" ||
@@ -137,7 +137,7 @@ export interface ChronoCandidate {
 /**
  * Blend relevance ranking with chronological ordering.
  *
- * Port of: cortex@ed33435 mcp_server/core/pg_recall.py:62-88
+ * Port of: cortex main mcp_server/core/pg_recall.py:62-88
  *
  * For event ordering queries, the chronological position of memories
  * matters as much as semantic relevance.
@@ -146,14 +146,14 @@ export interface ChronoCandidate {
  * postcondition: each candidate has updated score; list sorted descending;
  *   _rel_rank and _chr_rank fields removed from output
  *
- * Constants — source: cortex@ed33435 mcp_server/core/pg_recall.py:63
+ * Constants — source: cortex main mcp_server/core/pg_recall.py:63
  *   beta = 0.5  (equal weight relevance + chrono)
  *   k    = 60   (Cormack 2009 default)
  */
 export function chronologicalRerank(
   candidates: ChronoCandidate[],
-  beta = 0.5,  // source: cortex@ed33435 mcp_server/core/pg_recall.py:63
-  k = 60,      // source: cortex@ed33435 mcp_server/core/pg_recall.py:63
+  beta = 0.5,  // source: cortex main mcp_server/core/pg_recall.py:63
+  k = 60,      // source: cortex main mcp_server/core/pg_recall.py:63
 ): ChronoCandidate[] {
   // Assign relevance rank
   const withRel = candidates.map((c, i) => ({ ...c, _rel_rank: i }));
@@ -173,7 +173,7 @@ export function chronologicalRerank(
   );
 
   // RRF blend: score = (1-beta)/(k+rel_rank) + beta/(k+chr_rank)
-  // source: cortex@ed33435 mcp_server/core/pg_recall.py:83
+  // source: cortex main mcp_server/core/pg_recall.py:83
   const scored = withRel.map((c) => {
     const relRank = c._rel_rank ?? 0;
     const chrRank = chrRankMap.get(c.memory_id) ?? relRank;

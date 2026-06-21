@@ -9,7 +9,7 @@
  *
  * Pure business logic — no I/O.
  *
- * source: cortex@ed33435 mcp_server/core/style_classifier.py
+ * source: cortex main mcp_server/core/style_classifier.py
  */
 
 import type { CognitiveStyle } from "./types.js";
@@ -17,7 +17,7 @@ import type { CognitiveStyle } from "./types.js";
 // ── Keyword lists ─────────────────────────────────────────────────────────────
 
 /**
- * source: cortex@ed33435 mcp_server/core/style_classifier.py ABSTRACT_KEYWORDS:15-34
+ * source: cortex main mcp_server/core/style_classifier.py ABSTRACT_KEYWORDS:15-34
  */
 export const ABSTRACT_KEYWORDS: readonly string[] = [
   "architecture",
@@ -41,7 +41,7 @@ export const ABSTRACT_KEYWORDS: readonly string[] = [
 ];
 
 /**
- * source: cortex@ed33435 mcp_server/core/style_classifier.py CONCRETE_KEYWORDS:36-54
+ * source: cortex main mcp_server/core/style_classifier.py CONCRETE_KEYWORDS:36-54
  */
 export const CONCRETE_KEYWORDS: readonly string[] = [
   "example",
@@ -64,7 +64,7 @@ export const CONCRETE_KEYWORDS: readonly string[] = [
 ];
 
 /**
- * source: cortex@ed33435 mcp_server/core/style_classifier.py PLANNING_KEYWORDS:56-70
+ * source: cortex main mcp_server/core/style_classifier.py PLANNING_KEYWORDS:56-70
  */
 export const PLANNING_KEYWORDS: readonly string[] = [
   "plan",
@@ -83,7 +83,7 @@ export const PLANNING_KEYWORDS: readonly string[] = [
 ];
 
 /**
- * source: cortex@ed33435 mcp_server/core/style_classifier.py TRIAL_KEYWORDS:72-84
+ * source: cortex main mcp_server/core/style_classifier.py TRIAL_KEYWORDS:72-84
  */
 export const TRIAL_KEYWORDS: readonly string[] = [
   "try",
@@ -102,7 +102,7 @@ export const TRIAL_KEYWORDS: readonly string[] = [
 // ── Test regex ────────────────────────────────────────────────────────────────
 
 /**
- * source: cortex@ed33435 mcp_server/core/style_classifier.py _TEST_RE:86-89
+ * source: cortex main mcp_server/core/style_classifier.py _TEST_RE:86-89
  */
 const TEST_RE =
   /\b(test|spec|assert|expect|xct|xctest|jest|pytest|mocha|coverage|tdd|unit.?test|integration.?test)\b/i;
@@ -163,7 +163,7 @@ function clamp(v: number): number {
 
 /**
  * Score the active/reflective axis across conversations.
- * source: cortex@ed33435 mcp_server/core/style_classifier.py _score_active_reflective:128-166
+ * source: cortex main mcp_server/core/style_classifier.py _score_active_reflective:128-166
  */
 function scoreActiveReflective(conversations: StyleConversationRecord[]): number {
   if (conversations.length === 0) return 0;
@@ -205,7 +205,7 @@ function scoreActiveReflective(conversations: StyleConversationRecord[]): number
 
 /**
  * Score the sensing/intuitive axis.
- * source: cortex@ed33435 mcp_server/core/style_classifier.py _score_sensing_intuitive:169-192
+ * source: cortex main mcp_server/core/style_classifier.py _score_sensing_intuitive:169-192
  */
 function scoreSensingIntuitive(conversations: StyleConversationRecord[]): number {
   if (conversations.length === 0) return 0;
@@ -240,7 +240,7 @@ function scoreSensingIntuitive(conversations: StyleConversationRecord[]): number
 
 /**
  * Score the sequential/global axis.
- * source: cortex@ed33435 mcp_server/core/style_classifier.py _score_sequential_global:195-226
+ * source: cortex main mcp_server/core/style_classifier.py _score_sequential_global:195-226
  */
 function scoreSequentialGlobal(conversations: StyleConversationRecord[]): number {
   if (conversations.length === 0) return 0;
@@ -286,7 +286,7 @@ function scoreSequentialGlobal(conversations: StyleConversationRecord[]): number
 
 /**
  * Classify problem decomposition style.
- * source: cortex@ed33435 mcp_server/core/style_classifier.py _classify_problem_decomposition:229-251
+ * source: cortex main mcp_server/core/style_classifier.py _classify_problem_decomposition:229-251
  */
 function classifyProblemDecomposition(conversations: StyleConversationRecord[]): string {
   if (conversations.length === 0) return "top-down";
@@ -311,7 +311,7 @@ function classifyProblemDecomposition(conversations: StyleConversationRecord[]):
 
 /**
  * Classify exploration style.
- * source: cortex@ed33435 mcp_server/core/style_classifier.py _classify_exploration_style:254-271
+ * source: cortex main mcp_server/core/style_classifier.py _classify_exploration_style:254-271
  */
 function classifyExplorationStyle(conversations: StyleConversationRecord[]): string {
   if (conversations.length === 0) return "depth-first";
@@ -333,7 +333,7 @@ function classifyExplorationStyle(conversations: StyleConversationRecord[]): str
 
 /**
  * Classify verification behavior.
- * source: cortex@ed33435 mcp_server/core/style_classifier.py _classify_verification_behavior:274-298
+ * source: cortex main mcp_server/core/style_classifier.py _classify_verification_behavior:274-298
  */
 function classifyVerificationBehavior(conversations: StyleConversationRecord[]): string {
   if (conversations.length === 0) return "no-test";
@@ -367,7 +367,7 @@ function classifyVerificationBehavior(conversations: StyleConversationRecord[]):
  * precondition: conversations is an array (may be empty)
  * postcondition: all numeric axes in [-1, 1]; categorical labels are non-empty strings
  *
- * source: cortex@ed33435 mcp_server/core/style_classifier.py:301-311
+ * source: cortex main mcp_server/core/style_classifier.py:301-311
  */
 export function classifyStyle(conversations: unknown): CognitiveStyle {
   const convs = Array.isArray(conversations)

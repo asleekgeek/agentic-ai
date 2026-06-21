@@ -6,7 +6,7 @@
  * I/O lives in the caller (typically the consolidate handler or the
  * dashboard renderer).
  *
- * source: cortex@4883307 mcp_server/core/wiki_coverage.py:audit_domain
+ * source: cortex main mcp_server/core/wiki_coverage.py:audit_domain
  */
 
 import {

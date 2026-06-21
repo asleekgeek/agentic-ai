@@ -16,7 +16,7 @@ import { makeImportInfo, makeSymbolDef } from "./types.js";
 
 // Signature truncation cap: 120 chars preserves the parameter list while bounding
 //   entity name + signature storage. Same value as ast-extractors.ts:SIG_MAX_CHARS.
-const SIG_MAX_CHARS = 120; // source: cortex@ed33435 mcp_server/core/ast_extractors.py:_extract_python_func — sig[:120]
+const SIG_MAX_CHARS = 120; // source: cortex main mcp_server/core/ast_extractors.py:_extract_python_func — sig[:120]
 
 // ── Import patterns ───────────────────────────────────────────────────────
 

@@ -1,10 +1,10 @@
-/* eslint-disable @typescript-eslint/no-magic-numbers -- all numeric defaults are literal ports from cortex@ed33435 */
+/* eslint-disable @typescript-eslint/no-magic-numbers -- all numeric defaults are literal ports from cortex main */
 /**
  * sqlite-store-relationships.ts — Relationship CRUD mixin for SqliteMemoryStore.
  *
  * Ports: infrastructure/sqlite_store_relationships.py (lines 1-167)
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py
+ * source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py
  */
 
 import type { Database as DatabaseType } from "better-sqlite3";
@@ -12,7 +12,7 @@ import type { Database as DatabaseType } from "better-sqlite3";
 /**
  * Relationship persistence operations on SQLite.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py:9-167
+ * source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py:9-167
  */
 export class SqliteRelationshipMixin {
   protected _rawConn!: DatabaseType;
@@ -23,7 +23,7 @@ export class SqliteRelationshipMixin {
    * precondition:  updates is a list of [rel_id, weight] pairs
    * postcondition: returns count of updated rows; 0 if input is empty
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py:14-25
+   * source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py:14-25
    */
   updateRelationshipsWeightBatch(updates: Array<[number, number]>): number {
     if (updates.length === 0) return 0;
@@ -52,7 +52,7 @@ export class SqliteRelationshipMixin {
    * precondition:  relIds is a list of integer ids
    * postcondition: returns count of deleted rows; 0 if input is empty
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py:27-37
+   * source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py:27-37
    */
   deleteRelationshipsBatch(relIds: number[]): number {
     if (relIds.length === 0) return 0;
@@ -66,7 +66,7 @@ export class SqliteRelationshipMixin {
   /**
    * Insert a relationship row and return its integer id.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py:39-56
+   * source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py:39-56
    */
   insertRelationship(data: Record<string, unknown>): number {
     const result = this._rawConn
@@ -89,7 +89,7 @@ export class SqliteRelationshipMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py:58-61
+   * source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py:58-61
    */
   countRelationships(): number {
     const row = this._rawConn
@@ -99,7 +99,7 @@ export class SqliteRelationshipMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py:62-90
+   * source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py:62-90
    */
   getRelationshipsForEntity(
     entityId: number,
@@ -138,7 +138,7 @@ export class SqliteRelationshipMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py:92-98
+   * source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py:92-98
    */
   getAllRelationships(): Record<string, unknown>[] {
     return this._rawConn
@@ -151,7 +151,7 @@ export class SqliteRelationshipMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py:100-108
+   * source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py:100-108
    */
   getRelationshipCounts(): Map<number, number> {
     const rows = this._rawConn
@@ -167,7 +167,7 @@ export class SqliteRelationshipMixin {
   }
 
   /**
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py:110-117
+   * source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py:110-117
    */
   getEntityRelationshipPairs(): Set<string> {
     const rows = this._rawConn
@@ -178,7 +178,7 @@ export class SqliteRelationshipMixin {
           "JOIN entities e2 ON r.target_entity_id = e2.id",
       )
       .all() as Array<{ source_name: string; target_name: string }>;
-    // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py:117
+    // source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py:117
     // Python returns set of 2-tuples; TS returns Set of "source|target" strings
     return new Set(rows.map((r) => `${r.source_name}|${r.target_name}`));
   }
@@ -186,7 +186,7 @@ export class SqliteRelationshipMixin {
   /**
    * Hebbian update: co-activation strengthens edges.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py:119-167
+   * source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py:119-167
    */
   reinforceOrCreateRelationship(
     sourceName: string,
@@ -213,7 +213,7 @@ export class SqliteRelationshipMixin {
       .prepare(
         "UPDATE relationships SET " +
           "weight = MIN(2.0, weight + ?), " +
-          "facilitation = MIN(1.0, facilitation + 0.05), " + // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py:142,155
+          "facilitation = MIN(1.0, facilitation + 0.05), " + // source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py:142,155
           "last_reinforced = datetime('now') " +
           "WHERE source_entity_id = ? AND target_entity_id = ? " +
           "AND relationship_type = ?",
@@ -226,7 +226,7 @@ export class SqliteRelationshipMixin {
       .prepare(
         "UPDATE relationships SET " +
           "weight = MIN(2.0, weight + ?), " +
-          "facilitation = MIN(1.0, facilitation + 0.05), " + // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py:142,155
+          "facilitation = MIN(1.0, facilitation + 0.05), " + // source: cortex main mcp_server/infrastructure/sqlite_store_relationships.py:142,155
           "last_reinforced = datetime('now') " +
           "WHERE source_entity_id = ? AND target_entity_id = ? " +
           "AND relationship_type = ?",

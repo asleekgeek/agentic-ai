@@ -118,7 +118,7 @@ export function rrfFuseSignals(
  * postcondition: returned list is sorted by descending fused score; ties
  *   broken by source count then ascending id (matches rrfFuseIds).
  *
- * source: cortex@ed33435 mcp_server/core/retrieval_dispatch.py:wrrf_fuse:43-56
+ * source: cortex main mcp_server/core/retrieval_dispatch.py:wrrf_fuse:43-56
  * source: Cormack, Clarke, Büttcher (2009) "Reciprocal Rank Fusion ..."
  *   SIGIR — RRF as the canonical heterogeneous-signal merger; weighting
  *   per signal is the standard extension when signal informativeness varies.

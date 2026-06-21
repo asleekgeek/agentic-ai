@@ -6,19 +6,19 @@
  * Constructs success, merge, rejection, and full response dicts.
  * Pure functions — no side effects, no I/O.
  *
- * source: cortex@ed33435 mcp_server/handlers/remember_response.py
+ * source: cortex main mcp_server/handlers/remember_response.py
  */
 
 import type { EmotionalTagResult } from "./remember-helpers.js";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/handlers/remember_response.py — round(x, 4) throughout
+// source: cortex main mcp_server/handlers/remember_response.py — round(x, 4) throughout
 const ROUND_FACTOR = 1e4;
 
-// source: cortex@ed33435 mcp_server/core/schema_engine.py:classify_schema_match — assimilation threshold
+// source: cortex main mcp_server/core/schema_engine.py:classify_schema_match — assimilation threshold
 const SCHEMA_ASSIMILATION_THRESHOLD = 0.8;
-// source: cortex@ed33435 mcp_server/core/schema_engine.py:classify_schema_match — accommodation threshold
+// source: cortex main mcp_server/core/schema_engine.py:classify_schema_match — accommodation threshold
 const SCHEMA_ACCOMMODATION_THRESHOLD = 0.5;
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ export interface RememberRejectionResponse {
 }
 
 // ── buildEmotionalInfo ────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_response.py:build_emotional_info
+// source: cortex main mcp_server/handlers/remember_response.py:build_emotional_info
 
 /**
  * Extract emotional summary from tag result.
@@ -123,7 +123,7 @@ export function buildEmotionalInfo(etag: EmotionalTagResult | null): EmotionalIn
 }
 
 // ── buildSchemaInfo ───────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_response.py:build_schema_info
+// source: cortex main mcp_server/handlers/remember_response.py:build_schema_info
 
 /**
  * Build schema match info if present.
@@ -136,7 +136,7 @@ export function buildSchemaInfo(
   schemaId: string | null,
 ): SchemaInfo | null {
   if (schemaMatch <= 0) return null;
-  // source: cortex@ed33435 mcp_server/core/schema_engine.py:classify_schema_match
+  // source: cortex main mcp_server/core/schema_engine.py:classify_schema_match
   let pathway: string;
   if (schemaMatch >= SCHEMA_ASSIMILATION_THRESHOLD) pathway = "assimilation";
   else if (schemaMatch >= SCHEMA_ACCOMMODATION_THRESHOLD) pathway = "accommodation";
@@ -150,7 +150,7 @@ export function buildSchemaInfo(
 }
 
 // ── describeSignals ───────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:describe_signals
+// source: cortex main mcp_server/core/predictive_coding_flat.py:describe_signals
 
 /**
  * Build a novelty description from the 4 component signals.
@@ -179,19 +179,19 @@ export function describeSignals(
       dominant = k;
     }
   }
-  // source: cortex@ed33435 mcp_server/handlers/remember_response.py — 4-decimal rounding for all novelty signals
+  // source: cortex main mcp_server/handlers/remember_response.py — 4-decimal rounding for all novelty signals
   return {
-    emb: Math.round(embNov * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/remember_response.py:describe_signals
-    ent: Math.round(entNov * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/remember_response.py:describe_signals
-    temp: Math.round(tempNov * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/remember_response.py:describe_signals
-    struct: Math.round(structNov * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/remember_response.py:describe_signals
-    combined: Math.round(combined * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/remember_response.py:describe_signals
+    emb: Math.round(embNov * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/remember_response.py:describe_signals
+    ent: Math.round(entNov * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/remember_response.py:describe_signals
+    temp: Math.round(tempNov * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/remember_response.py:describe_signals
+    struct: Math.round(structNov * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/remember_response.py:describe_signals
+    combined: Math.round(combined * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/remember_response.py:describe_signals
     dominant,
   };
 }
 
 // ── buildMechanismFields ──────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_response.py:_build_mechanism_fields
+// source: cortex main mcp_server/handlers/remember_response.py:_build_mechanism_fields
 
 function buildMechanismFields(
   mod: {
@@ -209,20 +209,20 @@ function buildMechanismFields(
     neuromodulation: mod.neuro_mod,
     emotional_tag: buildEmotionalInfo(mod.emotional_tag),
     oscillatory: {
-      theta_phase: Math.round(mod.theta * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/remember_response.py:_build_mechanism_fields — 4-decimal
-      encoding_strength: Math.round(mod.enc_mod * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/remember_response.py:_build_mechanism_fields
+      theta_phase: Math.round(mod.theta * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/remember_response.py:_build_mechanism_fields — 4-decimal
+      encoding_strength: Math.round(mod.enc_mod * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/remember_response.py:_build_mechanism_fields
     },
     consolidation_stage: "labile",
     pattern_separation: {
-      separation_index: Math.round(sep * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/remember_response.py:_build_mechanism_fields
-      interference_score: Math.round(interf * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/remember_response.py:_build_mechanism_fields
+      separation_index: Math.round(sep * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/remember_response.py:_build_mechanism_fields
+      interference_score: Math.round(interf * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/remember_response.py:_build_mechanism_fields
     },
     schema: buildSchemaInfo(mod.schema_match, mod.schema_id),
   };
 }
 
 // ── buildResponse ─────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_response.py:build_response
+// source: cortex main mcp_server/handlers/remember_response.py:build_response
 
 /**
  * Build the full success response dict.
@@ -266,9 +266,9 @@ export function buildResponse(
     action,
     store_type: storeType,
     domain,
-    heat: Math.round(mod.heat * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/remember_response.py:build_response
-    importance: Math.round(mod.importance * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/remember_response.py:build_response
-    valence: Math.round(mod.valence * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/remember_response.py:build_response
+    heat: Math.round(mod.heat * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/remember_response.py:build_response
+    importance: Math.round(mod.importance * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/remember_response.py:build_response
+    valence: Math.round(mod.valence * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/remember_response.py:build_response
     reason: mod.gate_reason ?? "novel",
     novelty: describeSignals(
       mod.emb_nov ?? 0,
@@ -286,7 +286,7 @@ export function buildResponse(
 }
 
 // ── buildMergeResponse ────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_response.py:build_merge_response
+// source: cortex main mcp_server/handlers/remember_response.py:build_merge_response
 
 /**
  * Build the response for a merge action.
@@ -311,8 +311,8 @@ export function buildMergeResponse(
     memory_id: mid,
     action: "merged",
     domain,
-    heat: Math.round(mod.heat * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/remember_response.py:build_merge_response
-    importance: Math.round(mod.importance * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/remember_response.py:build_merge_response
+    heat: Math.round(mod.heat * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/remember_response.py:build_merge_response
+    importance: Math.round(mod.importance * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/remember_response.py:build_merge_response
     novelty: describeSignals(
       gate.emb_nov ?? 0,
       gate.ent_nov ?? 0,
@@ -325,7 +325,7 @@ export function buildMergeResponse(
 }
 
 // ── buildRejectionResponse ────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/remember_response.py (rejection path in remember.py)
+// source: cortex main mcp_server/handlers/remember_response.py (rejection path in remember.py)
 
 /**
  * Build a rejection response when the gate decides not to store.
@@ -354,6 +354,6 @@ export function buildRejectionResponse(
       gate.struct_nov ?? 0,
       gate.score,
     ),
-    importance: Math.round(importance * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/remember_response.py — 4-decimal rounding
+    importance: Math.round(importance * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/remember_response.py — 4-decimal rounding
   };
 }

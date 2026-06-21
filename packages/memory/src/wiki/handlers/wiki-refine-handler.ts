@@ -5,7 +5,7 @@
  * does not require a DB connection. For the DB-backed MCP tool handlers
  * (wiki_get_draft / wiki_refine_draft), see wiki-refine-db-handler.ts.
  *
- * source: cortex@ed33435 mcp_server/handlers/wiki_refine.py (handler_get / LLM path)
+ * source: cortex main mcp_server/handlers/wiki_refine.py (handler_get / LLM path)
  */
 
 import type { LlmClient } from "@agentic/core";
@@ -15,7 +15,7 @@ import { WikiUnavailableError } from "./wiki-errors.js";
 const WIKI_REFINE_MAX_TOKENS = 1024;
 
 // source: https://docs.anthropic.com/en/api/messages — temperature 0.7 for creative prose
-// Reconstructed: cortex@ed33435 mcp_server/handlers/wiki_refine.py does not specify a temperature.
+// Reconstructed: cortex main mcp_server/handlers/wiki_refine.py does not specify a temperature.
 const WIKI_REFINE_TEMPERATURE = 0.7;
 
 // source: mcp_server/handlers/wiki_refine.py:147 — lead ≤60 words ≈ 300 chars fallback cap
@@ -51,7 +51,7 @@ export interface WikiRefineResult {
  * Postcondition: returns a WikiRefineResult with the LLM-refined lead and
  *                sections; when llmClient is null throws WikiUnavailableError.
  *
- * source: cortex@ed33435 mcp_server/handlers/wiki_refine.py:125-200
+ * source: cortex main mcp_server/handlers/wiki_refine.py:125-200
  */
 export async function wikiRefineHandler(
   args: WikiRefineArgs,

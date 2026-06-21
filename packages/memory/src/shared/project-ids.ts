@@ -14,7 +14,7 @@
  * never the host OS. The function is therefore deterministic across platforms
  * and idempotent on canonical slugs already on disk.
  *
- * Port of: cortex@4260a99 mcp_server/shared/project_ids.py (issue #18 fix)
+ * Port of: cortex main mcp_server/shared/project_ids.py (issue #18 fix)
  */
 
 const STRIP_PREFIX_RE = /^-?Users-[^-]+(-Documents)?(-Developments)?-/;
@@ -67,7 +67,7 @@ function windowsSlug(path: string): string {
  *   - Idempotent on canonical slugs already on disk: passing back a
  *     previously-produced slug returns the same slug.
  *
- * source: cortex@4260a99 mcp_server/shared/project_ids.py:cwd_to_project_id (issue #18)
+ * source: cortex main mcp_server/shared/project_ids.py:cwd_to_project_id (issue #18)
  */
 export function cwdToProjectId(cwd: string | null | undefined): string | null {
   if (!cwd) return null;

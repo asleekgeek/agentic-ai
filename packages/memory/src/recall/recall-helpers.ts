@@ -6,7 +6,7 @@
  * Extracted to keep recall-handler.ts under 300 lines. Every Python helper
  * function is ported 1:1. Pure functions depend only on their arguments.
  *
- * source: cortex@ed33435 mcp_server/handlers/recall_helpers.py
+ * source: cortex main mcp_server/handlers/recall_helpers.py
  */
 
 import type { MemoryItem, RelatedNeighbors, VersionNeighbor, EntityNeighborGroup } from "./types.js";
@@ -16,7 +16,7 @@ import { QueryIntent } from "./types.js";
 
 // ── Constants ──────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py — round(x, 4) throughout
+// source: cortex main mcp_server/handlers/recall_helpers.py — round(x, 4) throughout
 const ROUND_FACTOR = 1e4;
 
 // source: Robertson & Zaragoza (2009) BM25 — k1=1.5, b=0.75 standard BM25 params
@@ -26,14 +26,14 @@ const BM25_B = 0.75;
 // source: Robertson & Zaragoza (2009) BM25 — proxy for avgDocLen in English
 const BM25_AVG_DOC_LEN = 100;
 
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:compute_vector_fts — FTS fallback limit
+// source: cortex main mcp_server/handlers/recall_helpers.py:compute_vector_fts — FTS fallback limit
 const FTS_FALLBACK_DIVISOR = 2;
 
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:compute_result_boost — KNOWLEDGE_UPDATE multipliers
+// source: cortex main mcp_server/handlers/recall_helpers.py:compute_result_boost — KNOWLEDGE_UPDATE multipliers
 const KU_BOOST_MULTIPLIER = 3.0;
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:compute_result_boost — half-life for KNOWLEDGE_UPDATE
+// source: cortex main mcp_server/handlers/recall_helpers.py:compute_result_boost — half-life for KNOWLEDGE_UPDATE
 const KU_HALFLIFE_MULTIPLIER = 0.5;
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:compute_result_boost — cutoff extension
+// source: cortex main mcp_server/handlers/recall_helpers.py:compute_result_boost — cutoff extension
 const KU_CUTOFF_MULTIPLIER = 2.0;
 
 // source: SI — 86400 seconds per day, standard conversion
@@ -41,20 +41,20 @@ const MS_PER_DAY = 86_400_000;
 // source: SI — 3600 seconds per hour, standard conversion
 const MS_PER_HOUR = 3_600_000;
 
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:compute_result_boost — half-life exponent base
+// source: cortex main mcp_server/handlers/recall_helpers.py:compute_result_boost — half-life exponent base
 const HALF_LIFE_BASE = 0.5;
 
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:collect_signals — pool sizes and hot-pool limits
+// source: cortex main mcp_server/handlers/recall_helpers.py:collect_signals — pool sizes and hot-pool limits
 const TRIGGER_FTS_LIMIT = 3;
 
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:collect_signals — default novelty fallback
+// source: cortex main mcp_server/handlers/recall_helpers.py:collect_signals — default novelty fallback
 const DEFAULT_NOVELTY = 0.5;
 
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:inject_triggered_memories — min word length for trigger matching
+// source: cortex main mcp_server/handlers/recall_helpers.py:inject_triggered_memories — min word length for trigger matching
 const TRIGGER_MIN_WORD_LEN = 3;
 
 // ── computeVectorFts ──────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:compute_vector_fts
+// source: cortex main mcp_server/handlers/recall_helpers.py:compute_vector_fts
 
 /**
  * Vector similarity + FTS signals.
@@ -88,7 +88,7 @@ export async function computeVectorFts(
   }
 
   // Expanded query: simple synonym expansion via common engineering terms
-  // source: cortex@ed33435 mcp_server/core/enrichment.py:build_expanded_query
+  // source: cortex main mcp_server/core/enrichment.py:build_expanded_query
   const expanded = buildExpandedQuery(query);
   const ftsResults = await store.searchByFts(expanded, pool);
   const ftsPairs: Array<[number, number]> = ftsResults.map((r) => [r.memory_id, r.score]);
@@ -108,7 +108,7 @@ export async function computeVectorFts(
 }
 
 // ── buildExpandedQuery ────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/enrichment.py:build_expanded_query
+// source: cortex main mcp_server/core/enrichment.py:build_expanded_query
 
 /**
  * Lightweight query expansion by synonym substitution.
@@ -135,7 +135,7 @@ export function buildExpandedQuery(query: string): string {
 }
 
 // ── computeTextSignals ────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:compute_text_signals
+// source: cortex main mcp_server/handlers/recall_helpers.py:compute_text_signals
 
 /**
  * BM25 + n-gram signals from hot memory pool.
@@ -152,7 +152,7 @@ export function computeTextSignals(
   const queryTerms = query.toLowerCase().split(/\s+/);
 
   // BM25 approximation: TF-IDF style
-  // source: cortex@ed33435 mcp_server/core/scoring.py:compute_bm25_scores
+  // source: cortex main mcp_server/core/scoring.py:compute_bm25_scores
   const bm25: Array<[number, number]> = [];
   const N = hotMems.length;
   for (const mem of hotMems) {
@@ -174,7 +174,7 @@ export function computeTextSignals(
   }
 
   // N-gram overlap score
-  // source: cortex@ed33435 mcp_server/core/scoring.py:compute_ngram_score
+  // source: cortex main mcp_server/core/scoring.py:compute_ngram_score
   const ngram: Array<[number, number]> = [];
   const querySet = new Set(queryTerms.filter((w) => w.length > 2));
   for (const mem of hotMems) {
@@ -191,7 +191,7 @@ export function computeTextSignals(
 }
 
 // ── getHotPool ────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:get_hot_pool
+// source: cortex main mcp_server/handlers/recall_helpers.py:get_hot_pool
 
 /**
  * Fetch hot memories scoped by domain/directory.
@@ -220,7 +220,7 @@ export async function getHotPool(
 }
 
 // ── computeResultBoost ────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:compute_result_boost
+// source: cortex main mcp_server/handlers/recall_helpers.py:compute_result_boost
 
 /**
  * Compute recency boost based on query intent.
@@ -261,7 +261,7 @@ export function computeResultBoost(
 }
 
 // ── parseTags ─────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:parse_tags
+// source: cortex main mcp_server/handlers/recall_helpers.py:parse_tags
 
 /**
  * Normalize tags from string or array form.
@@ -284,7 +284,7 @@ export function parseTags(tags: unknown): string[] {
 }
 
 // ── Low-signal filter ─────────────────────────────────────────────────────
-// source: cortex@f425157 mcp_server/handlers/recall_helpers.py — LOW_SIGNAL_TAGS + filter_low_signal
+// source: cortex main mcp_server/handlers/recall_helpers.py — LOW_SIGNAL_TAGS + filter_low_signal
 
 /**
  * Tags that mark memories as low-signal noise at the retrieval layer.
@@ -297,7 +297,7 @@ export function parseTags(tags: unknown): string[] {
  * already rejects such content from the wiki; recall reuses the same
  * concept at the retrieval layer.
  *
- * source: cortex@f425157 mcp_server/handlers/recall_helpers.py:LOW_SIGNAL_TAGS
+ * source: cortex main mcp_server/handlers/recall_helpers.py:LOW_SIGNAL_TAGS
  */
 export const LOW_SIGNAL_TAGS: ReadonlySet<string> = new Set([
   "auto-captured",
@@ -344,7 +344,7 @@ export const LOW_SIGNAL_TAGS: ReadonlySet<string> = new Set([
  * tooling) skip this filter via the ``include_low_signal`` input
  * parameter on the recall handler.
  *
- * source: cortex@f425157 mcp_server/handlers/recall_helpers.py:filter_low_signal
+ * source: cortex main mcp_server/handlers/recall_helpers.py:filter_low_signal
  */
 export function filterLowSignal<T extends { readonly tags?: unknown }>(
   results: readonly T[],
@@ -364,7 +364,7 @@ export function filterLowSignal<T extends { readonly tags?: unknown }>(
 }
 
 // ── buildResult ───────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:build_result
+// source: cortex main mcp_server/handlers/recall_helpers.py:build_result
 
 /**
  * Build a single result dict with recency boost applied.
@@ -395,7 +395,7 @@ export function buildResult(
   const boost = computeResultBoost(intent, createdAt, settings);
 
   // Session coherence: small bonus for memories created in recent session window
-  // source: cortex@ed33435 mcp_server/core/thermodynamics.py:compute_session_coherence
+  // source: cortex main mcp_server/core/thermodynamics.py:compute_session_coherence
   let heat = mem.heat ?? 0;
   if (createdAt) {
     const ageHours = (Date.now() - new Date(createdAt).getTime()) / MS_PER_HOUR;
@@ -408,19 +408,19 @@ export function buildResult(
     memory_id: mem.id,
     content: mem.content,
     score: Math.round(score * (1.0 + boost) * ROUND_FACTOR) / ROUND_FACTOR,
-    heat: Math.round(heat * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:build_result — 4-decimal rounding
+    heat: Math.round(heat * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/recall_helpers.py:build_result — 4-decimal rounding
     domain: mem.domain ?? "",
     tags: parseTags(mem.tags),
     store_type: mem.store_type ?? "episodic",
     created_at: createdAt,
     importance: mem.importance ?? DEFAULT_NOVELTY,
     surprise: mem.surprise_score ?? 0.0,
-    recency_boost: Math.round(boost * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:build_result — 4-decimal rounding
+    recency_boost: Math.round(boost * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/recall_helpers.py:build_result — 4-decimal rounding
   };
 }
 
 // ── injectTriggeredMemories ──────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:inject_triggered_memories
+// source: cortex main mcp_server/handlers/recall_helpers.py:inject_triggered_memories
 
 /**
  * Inject prospective memories whose triggers match the query.
@@ -485,7 +485,7 @@ export async function injectTriggeredMemories<T extends { memory_id: number }>(
 
 // ── Inline relation-walk (MEM-G4) ─────────────────────────────────────────
 //
-// Port of: cortex@6fbf723d mcp_server/handlers/recall_helpers.py
+// Port of: cortex main mcp_server/handlers/recall_helpers.py
 //   _version_neighbors, _entity_neighbors, inline_related_neighbors
 //
 // Semantic: for each recalled memory, inline a ONE-HOP walk over:
@@ -494,22 +494,22 @@ export async function injectTriggeredMemories<T extends { memory_id: number }>(
 //
 // max_entities / max_neighbors / GIST_CHARS are response-budget fanout caps,
 // NOT algorithmic constants. They shape payload size only.
-//   source: cortex@6fbf723d recall_helpers.py (comment block above inline_related_neighbors):
+//   source: cortex main recall_helpers.py (comment block above inline_related_neighbors):
 //     "max_entities / max_neighbors are response-budget fanout caps (cf.
 //      core/response_budget.py), NOT algorithmic constants"
-//   _GIST_CHARS = 160 — source: cortex@6fbf723d recall_helpers.py:_GIST_CHARS = 160
+//   _GIST_CHARS = 160 — source: cortex main recall_helpers.py:_GIST_CHARS = 160
 
 /** Preview length for inlined neighbor content.
- *  source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_GIST_CHARS = 160 */
-const RELATED_GIST_CHARS = 160; // source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_GIST_CHARS = 160
+ *  source: cortex main mcp_server/handlers/recall_helpers.py:_GIST_CHARS = 160 */
+const RELATED_GIST_CHARS = 160; // source: cortex main mcp_server/handlers/recall_helpers.py:_GIST_CHARS = 160
 
 /** Max entities per memory for the one-hop entity walk.
- *  source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:inline_related_neighbors(max_entities=3) */
-const RELATED_MAX_ENTITIES = 3; // source: cortex@6fbf723d recall_helpers.py — response-budget cap, not algorithmic
+ *  source: cortex main mcp_server/handlers/recall_helpers.py:inline_related_neighbors(max_entities=3) */
+const RELATED_MAX_ENTITIES = 3; // source: cortex main recall_helpers.py — response-budget cap, not algorithmic
 
 /** Max neighbors per entity for the one-hop entity walk.
- *  source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:inline_related_neighbors(max_neighbors=5) */
-const RELATED_MAX_NEIGHBORS = 5; // source: cortex@6fbf723d recall_helpers.py — response-budget cap, not algorithmic
+ *  source: cortex main mcp_server/handlers/recall_helpers.py:inline_related_neighbors(max_neighbors=5) */
+const RELATED_MAX_NEIGHBORS = 5; // source: cortex main recall_helpers.py — response-budget cap, not algorithmic
 
 /**
  * Supersession-chain neighbors of a memory (item-1 edges), if any.
@@ -519,7 +519,7 @@ const RELATED_MAX_NEIGHBORS = 5; // source: cortex@6fbf723d recall_helpers.py �
  *       each with a gist capped at RELATED_GIST_CHARS chars.
  *       Returns [] when the memory row has no supersession fields.
  *
- * source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_version_neighbors
+ * source: cortex main mcp_server/handlers/recall_helpers.py:_version_neighbors
  */
 async function versionNeighbors(
   memoryId: number,
@@ -557,7 +557,7 @@ async function versionNeighbors(
  *       outgoing relationship entries (weight-ranked by the store).
  *       Returns [] when entity subsystem is unavailable.
  *
- * source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:_entity_neighbors
+ * source: cortex main mcp_server/handlers/recall_helpers.py:_entity_neighbors
  */
 async function entityNeighbors(
   memoryId: number,
@@ -617,7 +617,7 @@ async function entityNeighbors(
  * Invariant: results.length is unchanged; only the ``related`` annotation
  *            is added to each entry.
  *
- * source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:inline_related_neighbors
+ * source: cortex main mcp_server/handlers/recall_helpers.py:inline_related_neighbors
  */
 export async function inlineRelatedNeighbors(
   results: Array<{ memory_id: number; related?: RelatedNeighbors }>,
@@ -637,7 +637,7 @@ export async function inlineRelatedNeighbors(
 }
 
 // ── buildEnhancements ─────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/recall_helpers.py:build_enhancements
+// source: cortex main mcp_server/handlers/recall_helpers.py:build_enhancements
 
 /**
  * Build the enhancements metadata for the recall response.

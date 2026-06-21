@@ -15,13 +15,13 @@
  *         All detectors are best-effort — individual failures produce empty
  *         lists, not thrown exceptions.
  *
- * source: cortex@ed33435 mcp_server/handlers/detect_gaps.py
+ * source: cortex main mcp_server/handlers/detect_gaps.py
  */
 
 import type { MemoryStore as RecallMemoryStore } from "../../recall/port.js";
 
 // ── Schema ────────────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/handlers/detect_gaps.py schema
+// source: cortex main mcp_server/handlers/detect_gaps.py schema
 
 export const schema = {
   title: "Detect gaps",
@@ -77,13 +77,13 @@ export const schema = {
 
 // ── Constants ─────────────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/handlers/detect_gaps.py:_entity_gaps — isolated[:10]
+// source: cortex main mcp_server/handlers/detect_gaps.py:_entity_gaps — isolated[:10]
 const MAX_ISOLATED_ENTITIES = 10; // source: detect_gaps.py:_entity_gaps
-// source: cortex@ed33435 mcp_server/handlers/detect_gaps.py:_domain_coverage_gaps — sparse[:5]
+// source: cortex main mcp_server/handlers/detect_gaps.py:_domain_coverage_gaps — sparse[:5]
 const MAX_SPARSE_DOMAINS = 5; // source: detect_gaps.py:_domain_coverage_gaps
-// source: cortex@ed33435 mcp_server/handlers/detect_gaps.py:_temporal_gaps — [:5]
+// source: cortex main mcp_server/handlers/detect_gaps.py:_temporal_gaps — [:5]
 const MAX_TEMPORAL_GAPS = 5; // source: detect_gaps.py:_temporal_gaps
-// source: cortex@ed33435 mcp_server/handlers/detect_gaps.py:_domain_coverage_gaps — below 50% of average
+// source: cortex main mcp_server/handlers/detect_gaps.py:_domain_coverage_gaps — below 50% of average
 const SPARSE_DOMAIN_THRESHOLD = 0.5; // source: detect_gaps.py:_domain_coverage_gaps
 
 // ── Gap types ─────────────────────────────────────────────────────────────────
@@ -120,7 +120,7 @@ type Gap = EntityGap | DomainGap | TemporalGap;
 /**
  * Find entities that are referenced but have no relationships.
  *
- * source: cortex@ed33435 mcp_server/handlers/detect_gaps.py:_entity_gaps
+ * source: cortex main mcp_server/handlers/detect_gaps.py:_entity_gaps
  */
 async function detectEntityGaps(store: RecallMemoryStore): Promise<EntityGap[]> {
   try {
@@ -165,7 +165,7 @@ interface DomainCount {
 /**
  * Find domains with fewer memories than 50% of the global average.
  *
- * source: cortex@ed33435 mcp_server/handlers/detect_gaps.py:_domain_coverage_gaps
+ * source: cortex main mcp_server/handlers/detect_gaps.py:_domain_coverage_gaps
  */
 async function detectDomainCoverageGaps(store: RecallMemoryStore): Promise<DomainGap[]> {
   try {
@@ -211,7 +211,7 @@ async function detectDomainCoverageGaps(store: RecallMemoryStore): Promise<Domai
 /**
  * Find domains whose memories haven't been accessed recently.
  *
- * source: cortex@ed33435 mcp_server/handlers/detect_gaps.py:_temporal_gaps
+ * source: cortex main mcp_server/handlers/detect_gaps.py:_temporal_gaps
  */
 async function detectTemporalGaps(
   store: RecallMemoryStore,
@@ -277,7 +277,7 @@ export interface DetectGapsResult {
 /**
  * Detect knowledge gaps in the memory store.
  *
- * source: cortex@ed33435 mcp_server/handlers/detect_gaps.py:handler
+ * source: cortex main mcp_server/handlers/detect_gaps.py:handler
  */
 export async function detectGapsHandler(
   args: Record<string, unknown> | null | undefined,

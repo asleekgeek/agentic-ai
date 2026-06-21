@@ -18,7 +18,7 @@
 
 import type { MemoryStore } from "../storage/memory-store.js";
 
-// source: cortex@ed33435 mcp_server/handlers/forget.py — content_preview is first 80 chars
+// source: cortex main mcp_server/handlers/forget.py — content_preview is first 80 chars
 const FORGET_CONTENT_PREVIEW_CHARS = 80;
 
 export interface ForgetRequest {

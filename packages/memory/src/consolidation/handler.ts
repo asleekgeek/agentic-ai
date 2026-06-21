@@ -251,7 +251,7 @@ export async function handler(
   }
 
   // Entity-merge cycle: collapse near-duplicate concept entities.
-  // source: cortex bc5af469 mcp_server/handlers/consolidation/entity_merge.py
+  // source: cortex main mcp_server/handlers/consolidation/entity_merge.py
   stats["entity_merge"] = await timed(() =>
     runEntityMergeCycle({
       getAllEntities: (opts) => store.getAllEntities(opts),

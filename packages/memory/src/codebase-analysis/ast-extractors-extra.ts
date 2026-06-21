@@ -13,8 +13,8 @@ import { findChildren, nodeText, walkType } from "./ast-extractors.js";
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 type TsNode = any;
 
-// source: cortex@ed33435 mcp_server/core/ast_extractors.py:_extract_python_func — sig[:120]
-const SIG_MAX_CHARS = 120; // source: cortex@ed33435 mcp_server/core/ast_extractors.py — signature truncation cap
+// source: cortex main mcp_server/core/ast_extractors.py:_extract_python_func — sig[:120]
+const SIG_MAX_CHARS = 120; // source: cortex main mcp_server/core/ast_extractors.py — signature truncation cap
 
 // ── Go ────────────────────────────────────────────────────────────────────
 

@@ -17,8 +17,8 @@
  * Layer: codebase-analysis/handlers (composition root wires pool + store).
  * Allowed imports: ingest-helpers, remember/storage types, node stdlib.
  *
- * source: cortex@ed33435 mcp_server/handlers/change_impact.py
- * source: cortex@ed33435 mcp_server/core/change_impact_matcher.py
+ * source: cortex main mcp_server/handlers/change_impact.py
+ * source: cortex main mcp_server/core/change_impact_matcher.py
  */
 
 import type { MemoryStore } from "../../remember/storage/memory-store.js";
@@ -31,11 +31,11 @@ import {
 
 // ── Named constants ───────────────────────────────────────────────────────────
 
-// source: cortex@ed33435 mcp_server/handlers/change_impact.py:36 — _IMPACT_BOOST
+// source: cortex main mcp_server/handlers/change_impact.py:36 — _IMPACT_BOOST
 const IMPACT_BOOST = 0.15;
-// source: cortex@ed33435 mcp_server/handlers/change_impact.py:37 — _MAX_HEAT_BUMPS
+// source: cortex main mcp_server/handlers/change_impact.py:37 — _MAX_HEAT_BUMPS
 const MAX_HEAT_BUMPS = 20;
-// source: cortex@ed33435 mcp_server/handlers/change_impact.py:38 — _MAX_MEMORIES_SCANNED
+// source: cortex main mcp_server/handlers/change_impact.py:38 — _MAX_MEMORIES_SCANNED
 const MAX_MEMORIES_SCANNED = 1000;
 
 // ── Dependency injection type ─────────────────────────────────────────────────
@@ -92,7 +92,7 @@ export interface ChangeImpactResponse {
  *
  * postcondition: symbols and files are deduplicated string arrays.
  *
- * source: cortex@ed33435 mcp_server/handlers/change_impact.py::_extract_symbols_and_files:77-99
+ * source: cortex main mcp_server/handlers/change_impact.py::_extract_symbols_and_files:77-99
  */
 function extractSymbolsAndFiles(payload: unknown): { symbols: string[]; files: string[] } {
   let rows: Record<string, unknown>[] = [];
@@ -129,7 +129,7 @@ function extractSymbolsAndFiles(payload: unknown): { symbols: string[]; files: s
  * postcondition: returns deduplicated (symbols, files) covering direct +
  *   optionally transitive impact.
  *
- * source: cortex@ed33435 mcp_server/handlers/change_impact.py::_collect_impact:102-129
+ * source: cortex main mcp_server/handlers/change_impact.py::_collect_impact:102-129
  */
 async function collectImpact(
   pool: McpClientPool,
@@ -152,7 +152,7 @@ async function collectImpact(
   }
 
   // Expand via get_impact for each direct symbol; dedupe
-  // source: cortex@ed33435 mcp_server/handlers/change_impact.py:118-128
+  // source: cortex main mcp_server/handlers/change_impact.py:118-128
   const seen = new Set<string>(symbols);
   for (const sym of [...symbols]) {
     let resp: unknown;
@@ -180,7 +180,7 @@ async function collectImpact(
 /**
  * Return the basename of a file path (works for / and \ separators).
  *
- * source: cortex@ed33435 mcp_server/core/change_impact_matcher.py::_basename:39-42
+ * source: cortex main mcp_server/core/change_impact_matcher.py::_basename:39-42
  */
 function pathBasename(p: string): string {
   if (!p) return "";
@@ -191,7 +191,7 @@ function pathBasename(p: string): string {
  * Return the tail identifier of a dotted qualified name.
  * e.g. "foo.Bar.baz" → "baz"
  *
- * source: cortex@ed33435 mcp_server/core/change_impact_matcher.py::_tail_of_qualname:32-37
+ * source: cortex main mcp_server/core/change_impact_matcher.py::_tail_of_qualname:32-37
  */
 function tailOfQualname(q: string): string {
   return q.includes(".") ? (q.split(".").at(-1) ?? q) : q;
@@ -211,7 +211,7 @@ function tailOfQualname(q: string): string {
  * precondition:  impactedSymbols and impactedFiles are string arrays.
  * postcondition: result is sorted by (-match_count, id); no duplicates.
  *
- * source: cortex@ed33435 mcp_server/core/change_impact_matcher.py::match_memories:45-98
+ * source: cortex main mcp_server/core/change_impact_matcher.py::match_memories:45-98
  */
 function matchMemories(
   impactedSymbols: string[],
@@ -280,7 +280,7 @@ function matchMemories(
  * precondition:  store.getMemory and store.bumpHeatRaw are available.
  * postcondition: each bumped memory's heat_base = min(1.0, current + IMPACT_BOOST).
  *
- * source: cortex@ed33435 mcp_server/handlers/change_impact.py::_apply_heat_bumps:132-149
+ * source: cortex main mcp_server/handlers/change_impact.py::_apply_heat_bumps:132-149
  */
 function applyHeatBumps(store: MemoryStore, matches: ImpactMatchResult[]): number {
   let bumped = 0;
@@ -313,7 +313,7 @@ function applyHeatBumps(store: MemoryStore, matches: ImpactMatchResult[]): numbe
  *   - matches is deterministically sorted by (-match_count, memory_id).
  *   - When apply_heat_bump=true: bumpHeatRaw called for up to 20 matches.
  *
- * source: cortex@ed33435 mcp_server/handlers/change_impact.py::handler:152-217
+ * source: cortex main mcp_server/handlers/change_impact.py::handler:152-217
  */
 export async function changeImpactHandler(
   args: ChangeImpactArgs,
@@ -386,12 +386,12 @@ export async function changeImpactHandler(
 export const schema = {
   title: "Change impact",
   description:
-    // source: cortex@ed33435 mcp_server/handlers/change_impact.py — schema description
+    // source: cortex main mcp_server/handlers/change_impact.py — schema description
     "Report which Cortex memories reference code that changed in a commit. " +
     "Uses automatised-pipeline's detect_changes and " +
     "optionally get_impact to compute the symbol/file impact set, then " +
     "matches against recent memories. Read-only by default; pass " +
-    // source: cortex@ed33435 mcp_server/handlers/change_impact.py:36-37 — IMPACT_BOOST, MAX_HEAT_BUMPS
+    // source: cortex main mcp_server/handlers/change_impact.py:36-37 — IMPACT_BOOST, MAX_HEAT_BUMPS
     "apply_heat_bump=true to nudge heat on the top matches. " +
     "Requires AP enabled (mcpClientPool injected at composition root).",
 };

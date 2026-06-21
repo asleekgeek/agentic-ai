@@ -3,11 +3,11 @@
  *
  * Pure data types with no logic beyond defaults.
  *
- * Port of: cortex@ed33435 mcp_server/core/replay_types.py
+ * Port of: cortex main mcp_server/core/replay_types.py
  */
 
 // ── Replay direction ──────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/replay_types.py:12-16
+// source: cortex main mcp_server/core/replay_types.py:12-16
 
 export enum ReplayDirection {
   FORWARD = "forward",
@@ -15,7 +15,7 @@ export enum ReplayDirection {
 }
 
 // ── ReplayEvent ───────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/replay_types.py:19-28
+// source: cortex main mcp_server/core/replay_types.py:19-28
 
 /**
  * A single memory in a replay sequence.
@@ -50,7 +50,7 @@ export function makeReplayEvent(
 }
 
 // ── ReplaySequence ────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/replay_types.py:31-47
+// source: cortex main mcp_server/core/replay_types.py:31-47
 
 /**
  * An ordered sequence of memories replayed during an SWR burst.
@@ -82,7 +82,7 @@ export function makeReplaySequence(
 }
 
 // ── ReplayResult ──────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/replay_types.py:50-60
+// source: cortex main mcp_server/core/replay_types.py:50-60
 
 /** Result of a full SWR replay cycle. */
 export interface ReplayResult {

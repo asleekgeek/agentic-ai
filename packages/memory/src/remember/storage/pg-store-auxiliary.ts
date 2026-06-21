@@ -1,7 +1,7 @@
 /**
  * pg-store-auxiliary.ts — Auxiliary persistence: prospective memories,
  * checkpoints, archives, engram slots, schemas.
- * source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py
+ * source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py
  */
 import type { PoolClient } from "pg";
 
@@ -25,7 +25,7 @@ export interface SchemaData {
   formation_count?: number; assimilation_count?: number; violation_count?: number;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:22-38
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:22-38
 export async function insertProspectiveMemory(client: PoolClient, data: ProspectiveMemoryData): Promise<number> {
   const result = await client.query<{ id: number }>(
     `INSERT INTO prospective_memories (content, trigger_condition, trigger_type, target_directory, is_active, triggered_count)
@@ -37,13 +37,13 @@ export async function insertProspectiveMemory(client: PoolClient, data: Prospect
   return row.id;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:40-44
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:40-44
 export async function getActiveProspectiveMemories(client: PoolClient): Promise<Record<string, unknown>[]> {
   const result = await client.query("SELECT * FROM prospective_memories WHERE is_active");
   return result.rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:46-53
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:46-53
 export async function triggerProspectiveMemory(client: PoolClient, pmId: number): Promise<void> {
   await client.query(
     `UPDATE prospective_memories SET triggered_at = NOW(), triggered_count = triggered_count + 1 WHERE id = $1`,
@@ -51,12 +51,12 @@ export async function triggerProspectiveMemory(client: PoolClient, pmId: number)
   );
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:54-59
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:54-59
 export async function deactivateProspectiveMemory(client: PoolClient, pmId: number): Promise<void> {
   await client.query("UPDATE prospective_memories SET is_active = FALSE WHERE id = $1", [pmId]);
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:63-86
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:63-86
 export async function insertCheckpoint(client: PoolClient, data: CheckpointData): Promise<number> {
   await client.query("UPDATE checkpoints SET is_active = FALSE");
   const result = await client.query<{ id: number }>(
@@ -75,19 +75,19 @@ export async function insertCheckpoint(client: PoolClient, data: CheckpointData)
   return row.id;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:88-92
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:88-92
 export async function getActiveCheckpoint(client: PoolClient): Promise<Record<string, unknown> | null> {
   const result = await client.query("SELECT * FROM checkpoints WHERE is_active ORDER BY created_at DESC LIMIT 1");
   return (result.rows[0] as Record<string, unknown> | undefined) ?? null;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:94-96
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:94-96
 export async function getCurrentEpoch(client: PoolClient): Promise<number> {
   const result = await client.query<{ e: number | null }>("SELECT MAX(epoch) AS e FROM checkpoints");
   return result.rows[0]?.e ?? 0;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:98-110
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:98-110
 export async function incrementEpoch(client: PoolClient): Promise<number> {
   const current = await getCurrentEpoch(client);
   const newEpoch = current + 1;
@@ -100,7 +100,7 @@ export async function incrementEpoch(client: PoolClient): Promise<number> {
   return newEpoch;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:114-132
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:114-132
 export async function insertArchive(
   client: PoolClient, data: ArchiveData,
   bytesToVector: (buf: Buffer | null | undefined) => string | null,
@@ -116,7 +116,7 @@ export async function insertArchive(
   return row.id;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:134-140
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:134-140
 export async function getArchivesForMemory(client: PoolClient, memoryId: number): Promise<Record<string, unknown>[]> {
   const result = await client.query(
     "SELECT * FROM memory_archives WHERE original_memory_id = $1 ORDER BY archived_at DESC",
@@ -125,7 +125,7 @@ export async function getArchivesForMemory(client: PoolClient, memoryId: number)
   return result.rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:144-155
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:144-155
 export async function initEngramSlots(client: PoolClient, numSlots: number): Promise<void> {
   const countResult = await client.query<{ c: number }>("SELECT COUNT(*) AS c FROM engram_slots");
   const existing = countResult.rows[0]?.c ?? 0;
@@ -138,18 +138,18 @@ export async function initEngramSlots(client: PoolClient, numSlots: number): Pro
   }
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:157-161
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:157-161
 export async function getAllEngramSlots(client: PoolClient): Promise<Record<string, unknown>[]> {
   return (await client.query("SELECT * FROM engram_slots ORDER BY slot_index")).rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:163-168
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:163-168
 export async function getEngramSlot(client: PoolClient, slotIndex: number): Promise<Record<string, unknown> | null> {
   const result = await client.query("SELECT * FROM engram_slots WHERE slot_index = $1", [slotIndex]);
   return (result.rows[0] as Record<string, unknown> | undefined) ?? null;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:170-178
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:170-178
 export async function updateEngramSlot(client: PoolClient, slotIndex: number, excitability: number, lastActivated: string): Promise<void> {
   await client.query(
     "UPDATE engram_slots SET excitability = $1, last_activated = $2 WHERE slot_index = $3",
@@ -157,17 +157,17 @@ export async function updateEngramSlot(client: PoolClient, slotIndex: number, ex
   );
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:180-185
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:180-185
 export async function assignMemorySlot(client: PoolClient, memoryId: number, slotIndex: number): Promise<void> {
   await client.query("UPDATE memories SET slot_index = $1 WHERE id = $2", [slotIndex, memoryId]);
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:187-192
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:187-192
 export async function getMemoriesInSlot(client: PoolClient, slotIndex: number): Promise<Record<string, unknown>[]> {
   return (await client.query("SELECT * FROM memories WHERE slot_index = $1", [slotIndex])).rows as Record<string, unknown>[];
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:194-216
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:194-216
 export async function countMemoriesInSlot(client: PoolClient, slotIndex: number, excludeId?: number | null): Promise<number> {
   const result = excludeId != null
     ? await client.query<{ c: number }>("SELECT COUNT(*) AS c FROM memories WHERE slot_index = $1 AND id != $2", [slotIndex, excludeId])
@@ -175,7 +175,7 @@ export async function countMemoriesInSlot(client: PoolClient, slotIndex: number,
   return result.rows[0]?.c ?? 0;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:218-223
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:218-223
 export async function getSlotOccupancy(client: PoolClient): Promise<Map<number, number>> {
   const result = await client.query<{ slot_index: number; c: number }>(
     "SELECT slot_index, COUNT(*) AS c FROM memories WHERE slot_index IS NOT NULL GROUP BY slot_index",
@@ -185,7 +185,7 @@ export async function getSlotOccupancy(client: PoolClient): Promise<Map<number, 
   return out;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:227-283
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:227-283
 export async function insertSchema(client: PoolClient, data: SchemaData): Promise<number> {
   try {
     const result = await client.query<{ id: number }>(
@@ -196,7 +196,7 @@ export async function insertSchema(client: PoolClient, data: SchemaData): Promis
         data.schema_id, data.domain ?? "", data.label ?? "",
         JSON.stringify(data.entity_signature ?? {}), JSON.stringify(data.relationship_types ?? []),
         JSON.stringify(data.tag_signature ?? {}),
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:240
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:240
         data.consistency_threshold ?? 0.7, data.formation_count ?? 0, // eslint-disable-line @typescript-eslint/no-magic-numbers
         data.assimilation_count ?? 0, data.violation_count ?? 0,
       ],
@@ -225,7 +225,7 @@ async function _updateExistingSchema(client: PoolClient, data: SchemaData): Prom
       data.domain ?? "", data.label ?? "",
       JSON.stringify(data.entity_signature ?? {}), JSON.stringify(data.relationship_types ?? []),
       JSON.stringify(data.tag_signature ?? {}),
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:265
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:265
       data.consistency_threshold ?? 0.7, data.formation_count ?? 0, // eslint-disable-line @typescript-eslint/no-magic-numbers
       data.assimilation_count ?? 0, data.violation_count ?? 0, data.schema_id,
     ],
@@ -234,7 +234,7 @@ async function _updateExistingSchema(client: PoolClient, data: SchemaData): Prom
   return select.rows[0]?.id ?? 0;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_auxiliary.py:285-305
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:285-305
 export async function getSchemasForDomain(client: PoolClient, domain: string): Promise<Record<string, unknown>[]> {
   return (await client.query("SELECT * FROM schemas WHERE domain = $1 ORDER BY formation_count DESC", [domain])).rows as Record<string, unknown>[];
 }

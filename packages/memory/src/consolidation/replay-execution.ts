@@ -11,7 +11,7 @@
  *
  * Pure business logic — no I/O.
  *
- * Port of: cortex@ed33435 mcp_server/core/replay_execution.py
+ * Port of: cortex main mcp_server/core/replay_execution.py
  *
  * References:
  *   Foster DJ, Wilson MA (2006) Nature 440:680-683
@@ -26,7 +26,7 @@ export { ReplayDirection };
 export type { ReplayEvent };
 
 // ── Constants ─────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/replay_execution.py:33-38
+// source: cortex main mcp_server/core/replay_execution.py:33-38
 
 const MAX_SEQUENCE_LENGTH = 8;
 const MIN_SEQUENCE_LENGTH = 2;
@@ -35,7 +35,7 @@ const STDP_REPLAY_SCALE = 0.5;
 /**
  * Davidson et al. (2009) report 15-20x compression during SWR replay.
  * Using 20x (upper bound) since our sequences are shorter than biological ones.
- * source: cortex@ed33435 mcp_server/core/replay_execution.py:38
+ * source: cortex main mcp_server/core/replay_execution.py:38
  */
 const COMPRESSION_RATIO = 20.0;
 
@@ -51,7 +51,7 @@ const DJB2_SHIFT = 5;
 /**
  * Bitmask to restrict hash output to a positive 31-bit integer.
  * Mirrors Python: hash(s) & 0x7FFFFFFF in mcp_server/core/replay_execution.py:234-235.
- * source: cortex@ed33435 mcp_server/core/replay_execution.py — standard positive-int
+ * source: cortex main mcp_server/core/replay_execution.py — standard positive-int
  *   hash truncation idiom used identically in consolidation/replay.ts.
  */
 const HASH_POSITIVE_31_BIT_MASK = 0x7fffffff;
@@ -104,7 +104,7 @@ function memToEvent(mem: Record<string, unknown>): ReplayEvent {
  * precondition:  memories is an array of memory records.
  * postcondition: returned array length <= maxLength; sorted by created_at.
  *
- * source: cortex@ed33435 mcp_server/core/replay_execution.py:86-96
+ * source: cortex main mcp_server/core/replay_execution.py:86-96
  */
 export function buildTemporalSequence(
   memories: Record<string, unknown>[],
@@ -183,7 +183,7 @@ function buildChainIds(
  * postcondition: returned array length <= maxLength; first element is seedMemory.
  *   For forward replay, events are in chronological order; reverse is reversed.
  *
- * source: cortex@ed33435 mcp_server/core/replay_execution.py:102-126
+ * source: cortex main mcp_server/core/replay_execution.py:102-126
  */
 export function buildCausalSequence(
   seedMemory: Record<string, unknown>,
@@ -250,7 +250,7 @@ function hashStr(s: string): number {
  * postcondition: returned array of [src_id, tgt_id, delta_t] tuples;
  *   delta_t is scaled by compression_ratio.
  *
- * source: cortex@ed33435 mcp_server/core/replay_execution.py:198-218
+ * source: cortex main mcp_server/core/replay_execution.py:198-218
  *   STDP_REPLAY_SCALE = 0.5; COMPRESSION_RATIO = 20.0 (Davidson et al. 2009 upper bound)
  */
 export function computeReplayStdpPairs(

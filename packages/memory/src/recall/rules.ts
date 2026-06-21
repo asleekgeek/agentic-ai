@@ -11,10 +11,10 @@
  * (pattern + action strings already resolved), so recall does not need
  * to depend on the automation layer.
  *
- * source: cortex@ed33435 mcp_server/core/memory_rules.py:apply_rules
+ * source: cortex main mcp_server/core/memory_rules.py:apply_rules
  */
 
-// source: cortex@ed33435 mcp_server/core/memory_rules.py — default score adjustments
+// source: cortex main mcp_server/core/memory_rules.py — default score adjustments
 const DEFAULT_BOOST = 0.1;
 const DEFAULT_PENALTY = 0.1;
 

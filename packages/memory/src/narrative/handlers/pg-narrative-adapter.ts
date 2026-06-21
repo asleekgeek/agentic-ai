@@ -18,7 +18,7 @@
  * source: Liskov, B. H. & Wing, J. M. (1994) — MemoryPort contract must be
  *   satisfied by ALL implementations, including PG.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py
+ * source: cortex main mcp_server/infrastructure/pg_store_queries.py
  *   (getMemoriesForDomain, getHotMemories, getMemoriesForDirectory)
  */
 
@@ -76,7 +76,7 @@ function rowToRecord(row: PgMemoryRow): MemoryRecord {
  * wherever MemoryPort is expected. Callers must not observe behavioral
  * differences attributable to the backend type.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py
+ * source: cortex main mcp_server/infrastructure/pg_store_queries.py
  *   getMemoriesForDomain, getMemoriesForDirectory, getHotMemories
  */
 export class PgNarrativeAdapter implements MemoryPort {
@@ -90,7 +90,7 @@ export class PgNarrativeAdapter implements MemoryPort {
    *   AND heat_base >= minHeat, ordered by heat DESC.
    *
    * NOTE: PG uses a LIKE prefix match (same semantics as SQLite adapter).
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:30-38
+   * source: cortex main mcp_server/infrastructure/pg_store_queries.py:30-38
    */
   getMemoriesForDirectory(directory: string, minHeat: number): MemoryRecord[] {
     const raw = this._store.getMemoriesForDirectory(directory, minHeat);
@@ -104,7 +104,7 @@ export class PgNarrativeAdapter implements MemoryPort {
    * Postcondition: returns at most `limit` rows where domain = domain
    *   AND heat_base >= minHeat, ordered by heat DESC.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:20-28
+   * source: cortex main mcp_server/infrastructure/pg_store_queries.py:20-28
    */
   getMemoriesForDomain(domain: string, minHeat: number, limit: number): MemoryRecord[] {
     const raw = this._store.getMemoriesForDomain(domain, minHeat, limit);
@@ -118,7 +118,7 @@ export class PgNarrativeAdapter implements MemoryPort {
    * Postcondition: returns at most `limit` rows with heat_base >= minHeat,
    *   ordered by heat DESC.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/pg_store_queries.py:40-61
+   * source: cortex main mcp_server/infrastructure/pg_store_queries.py:40-61
    */
   getHotMemories(minHeat: number, limit: number): MemoryRecord[] {
     const raw = this._store.getHotMemories(minHeat, limit);

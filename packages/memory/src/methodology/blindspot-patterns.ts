@@ -7,7 +7,7 @@
  *
  * Pure business logic — no I/O.
  *
- * source: cortex@ed33435 mcp_server/core/blindspot_patterns.py
+ * source: cortex main mcp_server/core/blindspot_patterns.py
  */
 
 import type { BlindSpot } from "./types.js";
@@ -20,7 +20,7 @@ import type { BlindSpot } from "./types.js";
  * precondition: domainExplorationRatio in [0, 1], globalExpRatio in [0, 1]
  * postcondition: returns [] or a single-element array with a "pattern" BlindSpot
  *
- * source: cortex@ed33435 mcp_server/core/blindspot_patterns.py:15-50
+ * source: cortex main mcp_server/core/blindspot_patterns.py:15-50
  */
 export function checkExplorationGap(
   domainExplorationRatio: number,
@@ -69,7 +69,7 @@ export function checkExplorationGap(
  * precondition: conversations is an array of conversation records
  * postcondition: returns [shortCount, longCount] where both >= 0
  *
- * source: cortex@ed33435 mcp_server/core/blindspot_patterns.py:53-63
+ * source: cortex main mcp_server/core/blindspot_patterns.py:53-63
  */
 export function countDurationBuckets(
   conversations: Array<{ durationMinutes?: number; duration?: number }>,
@@ -92,7 +92,7 @@ export function countDurationBuckets(
  * precondition: domainTotal > 0 (caller guards), ratios in [0, 1]
  * postcondition: returns BlindSpot[] with type "pattern" for each gap found
  *
- * source: cortex@ed33435 mcp_server/core/blindspot_patterns.py:66-101
+ * source: cortex main mcp_server/core/blindspot_patterns.py:66-101
  */
 export function checkDurationGaps(
   domainTotal: number,

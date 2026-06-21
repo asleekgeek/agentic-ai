@@ -20,7 +20,7 @@
  * Pure business logic — no I/O. The handler composes this with the memory
  * store and the wiki writer.
  *
- * source: cortex@47b818d mcp_server/core/auto_curator.py
+ * source: cortex main mcp_server/core/auto_curator.py
  * source: cortex@HEAD~ mcp_server/core/auto_curator.py (2026-05-18 — task-record sections)
  */
 
@@ -34,7 +34,7 @@ import {
 // 2026-05-17: thresholds tuned to mirror the cluster-quality bar of the
 // hand-authored pages from this session. Below these, a cluster doesn't
 // carry enough signal to author a useful page.
-// source: cortex@47b818d mcp_server/core/auto_curator.py:33-37
+// source: cortex main mcp_server/core/auto_curator.py:33-37
 export const MIN_MEMORIES_PER_CLUSTER = 4;
 export const MIN_AVG_HEAT_FOR_PAGE = 0.3;
 export const MIN_ENTITY_FREQ_FOR_TOPIC = 3;
@@ -46,7 +46,7 @@ export { MAX_MEMORIES_PER_PROMPT } from "./prompt-sections.js";
 // a cluster whose suggested path was written within this window. 30
 // days is the heuristic floor; clusters with substantial new content
 // after that window get re-curated to update the page.
-// source: cortex@4883307 mcp_server/core/auto_curator.py:79
+// source: cortex main mcp_server/core/auto_curator.py:79
 export const SKIP_IF_AUTHORED_WITHIN_DAYS = 30;
 
 // Seconds in a day, for the mtime-age comparison.
@@ -59,17 +59,17 @@ const MS_PER_SECOND = 1000;
 // Entity-extraction caps. The slug length matches the wiki-path
 // convention (kind/<domain>/<slug>.md) and the memory-body cap keeps the
 // prompt under the model context budget.
-// source: cortex@47b818d mcp_server/core/auto_curator.py:_slugify default
+// source: cortex main mcp_server/core/auto_curator.py:_slugify default
 const SLUG_MAX_LEN = 60;
-// source: cortex@47b818d mcp_server/core/auto_curator.py:107 (top 8 entities)
+// source: cortex main mcp_server/core/auto_curator.py:107 (top 8 entities)
 const TOP_ENTITIES_PER_CLUSTER = 8;
-// source: cortex@47b818d mcp_server/core/auto_curator.py:_find_related_pages return slice
+// source: cortex main mcp_server/core/auto_curator.py:_find_related_pages return slice
 const MAX_RELATED_PAGES = 6;
-// source: cortex@47b818d mcp_server/core/auto_curator.py:131 (snake-case ≥ 6 chars)
+// source: cortex main mcp_server/core/auto_curator.py:131 (snake-case ≥ 6 chars)
 const MIN_SNAKE_LEN = 6;
-// source: cortex@47b818d mcp_server/core/auto_curator.py:121 (basename ≥ 4 chars)
+// source: cortex main mcp_server/core/auto_curator.py:121 (basename ≥ 4 chars)
 const MIN_BASENAME_LEN = 4;
-// source: cortex@47b818d mcp_server/core/auto_curator.py:185 (topic-stopword guard)
+// source: cortex main mcp_server/core/auto_curator.py:185 (topic-stopword guard)
 const MIN_TOPIC_LEN = 4;
 
 // ── Data structures ─────────────────────────────────────────────────────
@@ -120,7 +120,7 @@ export type PageMtimeFn = (absPath: string) => number | null;
  * re-suggested. The check is mtime-based, so hand-edits protect a
  * page from re-curation the same way fresh authoring does.
  *
- * source: cortex@4883307 mcp_server/core/auto_curator.py::is_path_recently_authored
+ * source: cortex main mcp_server/core/auto_curator.py::is_path_recently_authored
  */
 export function isPathRecentlyAuthored(
   absPath: string,
@@ -140,7 +140,7 @@ export function isPathRecentlyAuthored(
  * I/O-free — the caller injects ``pageMtime`` (typically a wrapper
  * over fs.statSync) and the wiki root.
  *
- * source: cortex@4883307 mcp_server/core/auto_curator.py::build_clusters
+ * source: cortex main mcp_server/core/auto_curator.py::build_clusters
  *         (the in-line filter; we extract it to a standalone fn so
  *         buildClusters remains pure).
  */
@@ -175,7 +175,7 @@ function joinPath(...parts: readonly string[]): string {
  * When ``pageMtime`` is omitted, no skip filter runs — the count is
  * the raw cluster count. Tests use that path.
  *
- * source: cortex@4883307 mcp_server/core/auto_curator.py::count_pending_clusters
+ * source: cortex main mcp_server/core/auto_curator.py::count_pending_clusters
  */
 export function countPendingClusters(
   memories: readonly CuratorMemory[],
@@ -191,7 +191,7 @@ export function countPendingClusters(
 
 // ── Topic identification ────────────────────────────────────────────────
 
-// source: cortex@47b818d mcp_server/core/auto_curator.py:76-85
+// source: cortex main mcp_server/core/auto_curator.py:76-85
 const TOPIC_STOPWORDS: ReadonlySet<string> = new Set([
   "the", "a", "an", "and", "or", "but", "is", "are", "was", "were",
   "be", "been", "being", "have", "has", "had", "do", "does", "did",
@@ -208,7 +208,7 @@ function slugify(text: string, maxLen = SLUG_MAX_LEN): string {
   return s.slice(0, maxLen).replace(/-+$/, "");
 }
 
-// source: cortex@47b818d mcp_server/core/auto_curator.py:91-94
+// source: cortex main mcp_server/core/auto_curator.py:91-94
 const FILE_EXT_RE = /\b([\w./_-]+)\.(py|ts|js|md|sql|yml|yaml|toml|rs|go)\b/g;
 const CAMEL_RE    = /\b[A-Z][a-zA-Z]+(?:[A-Z][a-z]+)+\b/g;
 const SNAKE_RE    = /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g;
@@ -223,7 +223,7 @@ const SNAKE_RE    = /\b[a-z][a-z0-9]*(?:_[a-z0-9]+)+\b/g;
  *   - File paths drop the directory prefix to keep cluster topics
  *     readable. The full path is still in the source memory.
  *
- * source: cortex@47b818d mcp_server/core/auto_curator.py::_extract_entities_from_content
+ * source: cortex main mcp_server/core/auto_curator.py::_extract_entities_from_content
  */
 export function extractEntitiesFromContent(content: string): string[] {
   const entities: string[] = [];
@@ -302,7 +302,7 @@ export interface CuratorMemory {
  * No LLM call here — this is pure logic. The LLM gets called downstream
  * by the handler with the prompts ``buildAuthoringPrompt`` produces.
  *
- * source: cortex@47b818d mcp_server/core/auto_curator.py::build_clusters
+ * source: cortex main mcp_server/core/auto_curator.py::build_clusters
  */
 export function buildClusters(
   memories: readonly CuratorMemory[],
@@ -374,7 +374,7 @@ export function buildClusters(
 
 /**
  * Decide whether the cluster is a reference, lesson, or adr.
- * source: cortex@47b818d mcp_server/core/auto_curator.py::_infer_kind
+ * source: cortex main mcp_server/core/auto_curator.py::_infer_kind
  */
 function inferKind(memories: readonly CuratorMemory[]): string {
   const tagCounter = new Map<string, number>();
@@ -476,7 +476,7 @@ Author the wiki page now. Output only the Markdown body, frontmatter first.
  * LLM, or a future ``llm_client.author_page(prompt)`` adapter sends
  * them directly to the Anthropic API.
  *
- * source: cortex@47b818d mcp_server/core/auto_curator.py::build_authoring_prompt
+ * source: cortex main mcp_server/core/auto_curator.py::build_authoring_prompt
  */
 export function buildAuthoringPrompt(
   cluster: CurationCluster,
@@ -500,7 +500,7 @@ export function buildAuthoringPrompt(
 
 /**
  * Find existing wiki pages whose topic words overlap with this cluster's.
- * source: cortex@47b818d mcp_server/core/auto_curator.py::_find_related_pages
+ * source: cortex main mcp_server/core/auto_curator.py::_find_related_pages
  */
 function findRelatedPages(
   cluster: CurationCluster,
@@ -514,7 +514,7 @@ function findRelatedPages(
   // strips ``.md`` from each page path, but cluster.suggested_path
   // retains it. Strip here so a page never recommends itself as a
   // [[related-page]] cross-link.
-  // source: cortex@47b818d_post-port — the Python had this same bug
+  // source: cortex main_post-port — the Python had this same bug
   //         (no .md normalisation); we close it here.
   const ownPathNoMd = cluster.suggested_path.replace(/\.md$/, "");
 
@@ -539,7 +539,7 @@ function findRelatedPages(
 
 /**
  * Pair each cluster with its authoring prompt and any related pages.
- * source: cortex@47b818d mcp_server/core/auto_curator.py::build_jobs
+ * source: cortex main mcp_server/core/auto_curator.py::build_jobs
  */
 export function buildJobs(
   clusters: readonly CurationCluster[],

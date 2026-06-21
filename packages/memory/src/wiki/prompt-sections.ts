@@ -150,7 +150,7 @@ export function relatedBlock(relatedPages: readonly string[]): string {
  * Unknown keys are preserved verbatim (``{unknown_key}``) so a missing
  * substitution is visible in the prompt rather than silently elided.
  *
- * source: cortex@47b818d auto_curator.py — Python uses str.format, mirrored
+ * source: cortex main auto_curator.py — Python uses str.format, mirrored
  */
 export function formatPrompt(
   template: string,

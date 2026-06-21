@@ -18,14 +18,14 @@ const MAX_CONTENT_LENGTH = 120;
 // Display N "next steps" from a checkpoint. Sized to match the checkpoint
 // summary shown in the Cortex preamble — three steps fits the eye-scan
 // budget without overflowing the context block.
-// source: cortex@ed33435 mcp_server/hooks/session_start.py — top-3 next-steps
+// source: cortex main mcp_server/hooks/session_start.py — top-3 next-steps
 const NEXT_STEPS_DISPLAY_LIMIT = 3;
 // Heat-bar rendering: the bar is built from "+" repeated up to N chars.
 // Five chars matches the bar width of the Cortex Python preamble.
-// source: cortex@ed33435 mcp_server/hooks/session_start.py — "+" * min(5, …)
+// source: cortex main mcp_server/hooks/session_start.py — "+" * min(5, …)
 const HEAT_BAR_MAX_LENGTH = 5;
 // Multiplier mapping the [0,1] heat value to a 0..5 integer for the bar.
-// source: cortex@ed33435 mcp_server/hooks/session_start.py — int(heat * 5)
+// source: cortex main mcp_server/hooks/session_start.py — int(heat * 5)
 const HEAT_BAR_SCALE = 5;
 
 // ── Utilities ─────────────────────────────────────────────────────────────
@@ -138,7 +138,7 @@ export function buildContext(
   // Without this nudge the LLM has no way to know there's
   // documentation work waiting — surfacing it here lets it happen
   // "without a human asking", per the 2026-05-17 user directive.
-  // source: cortex@4883307 mcp_server/hooks/session_start.py:463-479
+  // source: cortex main mcp_server/hooks/session_start.py:463-479
   //
   // 2026-05-18 (Phase C): pendingDrift + pendingCoverage land in the
   // same section. The LLM gets one consolidated maintenance prompt

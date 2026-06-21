@@ -9,7 +9,7 @@
  *
  * Pure logic — no I/O.
  *
- * Port of: cortex@ed33435 mcp_server/core/unified_search_fusion.py
+ * Port of: cortex main mcp_server/core/unified_search_fusion.py
  *
  * Source: Cormack, Clarke, Büttcher (2009) "Reciprocal Rank Fusion
  * Outperforms Condorcet and Individual Rank Learning Methods", SIGIR.
@@ -18,7 +18,7 @@
 // Matches pg_recall default; see Cormack (2009) for the empirical basis.
 // K=60 is used for WRRF inside pg_recall (settings.WRRF_K), so
 // Phase 3 is consistent with the rest of the retrieval stack.
-// source: cortex@ed33435 mcp_server/core/unified_search_fusion.py:30
+// source: cortex main mcp_server/core/unified_search_fusion.py:30
 export const DEFAULT_K = 60;
 
 // Precision multiplier for rrf_score rounding: round(score, 6) in Python
@@ -30,7 +30,7 @@ const RRF_SCORE_PRECISION = 1e6;
 
 /**
  * Return the string id of an item, or null if missing.
- * source: cortex@ed33435 mcp_server/core/unified_search_fusion.py:33-35
+ * source: cortex main mcp_server/core/unified_search_fusion.py:33-35
  */
 function idOf(item: Record<string, unknown>, idKey: string): string | null {
   const v = item[idKey];
@@ -57,7 +57,7 @@ function idOf(item: Record<string, unknown>, idKey: string): string | null {
  *   deterministic across runs.
  *   Length <= topN if topN is specified.
  *
- * source: cortex@ed33435 mcp_server/core/unified_search_fusion.py:38-97
+ * source: cortex main mcp_server/core/unified_search_fusion.py:38-97
  *   K default = 60 (Cormack et al. 2009 experimental finding)
  *   RRF formula: delta = 1 / (k + rank), rank is 1-indexed
  */
@@ -101,7 +101,7 @@ export function fuse(
     });
   }
 
-  // source: cortex@ed33435 mcp_server/core/unified_search_fusion.py:91-93
+  // source: cortex main mcp_server/core/unified_search_fusion.py:91-93
   // Sort by (-rrf_score, -source_count, id) for determinism
   merged.sort((a, b) => {
     const scoreDiff = (b["rrf_score"] as number) - (a["rrf_score"] as number);

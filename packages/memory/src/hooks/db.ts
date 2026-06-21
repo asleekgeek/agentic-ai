@@ -72,8 +72,8 @@ function parseTags(val: unknown): string[] {
 // ── Query-shape constants ─────────────────────────────────────────────────
 // Pre-existing literals extracted to satisfy no-magic-numbers; values unchanged.
 const MAX_TEAM_DECISIONS = 3; // TS injection cap on team-decision rows
-const MAX_FTS_QUERY_CHARS = 200; // source: cortex@bc5af469 hooks/auto_recall.py:168 — query[:200]
-const MAX_FTS_KEYWORDS = 5; // source: cortex@bc5af469 hooks/agent_briefing.py:285 — keywords[:5]
+const MAX_FTS_QUERY_CHARS = 200; // source: cortex main hooks/auto_recall.py:168 — query[:200]
+const MAX_FTS_KEYWORDS = 5; // source: cortex main hooks/agent_briefing.py:285 — keywords[:5]
 // Pre-existing $N offset in the bumpHeatBySymbols ILIKE clause (NOT modified here;
 // the value looks off-by-one vs the [boost, ...names] bind order — flagged for a
 // separate, verified investigation, out of scope for the B1#2 effective_heat fix).
@@ -104,7 +104,7 @@ export async function fetchAnchors(
     const { rows } = await conn.query(
       // `memories.heat` is not a stored column — use effective_heat(m, NOW())
       // (lazy A3 decay) and exclude auto-captured noise even if is_protected.
-      // source: cortex@bc5af469 hooks/session_start.py:114-123 (contract §8b)
+      // source: cortex main hooks/session_start.py:114-123 (contract §8b)
       `SELECT m.id, m.content, m.tags, m.domain, m.is_global
        FROM memories m
        WHERE m.is_protected = TRUE
@@ -136,7 +136,7 @@ export async function fetchTeamDecisions(
   if (!conn) return [];
   try {
     const { rows } = await conn.query(
-      // source: cortex@bc5af469 hooks/session_start.py:164-168 — effective_heat(m, NOW())
+      // source: cortex main hooks/session_start.py:164-168 — effective_heat(m, NOW())
       `SELECT m.id, m.content, m.domain, m.agent_context,
               effective_heat(m, NOW()) AS heat
        FROM memories m
@@ -244,7 +244,7 @@ export async function ftsRecall(
   if (!conn) return [];
   try {
     const { rows } = await conn.query(
-      // source: cortex@bc5af469 hooks/auto_recall.py:156-166 — effective_heat(m, NOW())
+      // source: cortex main hooks/auto_recall.py:156-166 — effective_heat(m, NOW())
       // (lazy A3 decay) replaces the non-existent stored `heat` column.
       `SELECT m.id, m.content,
               effective_heat(m, NOW()) AS heat,
@@ -280,7 +280,7 @@ export async function fetchAgentMemories(
   if (!conn) return [];
   try {
     const { rows } = await conn.query(
-      // source: cortex@bc5af469 hooks/agent_briefing.py:274-283 — effective_heat(m, NOW())
+      // source: cortex main hooks/agent_briefing.py:274-283 — effective_heat(m, NOW())
       `SELECT m.id, m.content,
               effective_heat(m, NOW()) AS heat,
               m.agent_context
@@ -311,7 +311,7 @@ export async function fetchTeamDecisionsForAgent(
   if (!conn) return [];
   try {
     const { rows } = await conn.query(
-      // source: cortex@bc5af469 hooks/agent_briefing.py:304-313 — effective_heat(m, NOW())
+      // source: cortex main hooks/agent_briefing.py:304-313 — effective_heat(m, NOW())
       `SELECT m.id, m.content,
               effective_heat(m, NOW()) AS heat,
               m.agent_context

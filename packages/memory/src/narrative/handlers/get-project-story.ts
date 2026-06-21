@@ -12,7 +12,7 @@
  * MemoryPort methods are sync-signature (async-bridged inside the PG adapter),
  * matching the existing wiring in tools/narrative.ts.
  *
- * source: cortex@ed33435 mcp_server/handlers/get_project_story.py:99-264
+ * source: cortex main mcp_server/handlers/get_project_story.py:99-264
  * Layer: narrative/handlers — application layer
  */
 
@@ -20,7 +20,7 @@ import type { MemoryPort } from "./narrative.js";
 import type { MemoryRecord } from "../types.js";
 
 // ── Response shape ──────────────────────────────────────────────────────────
-// source: cortex@ed33435 get_project_story.py:151-161 (entry), :208-215 (chapter),
+// source: cortex main get_project_story.py:151-161 (entry), :208-215 (chapter),
 //         :259-264 (response).
 
 export interface ChapterEntry {
@@ -338,7 +338,7 @@ function filterByPeriod(memories: MemoryRecord[], period: string): DatedMemory[]
  *                chronologically within the period window (≤ max_chapters most
  *                recent buckets).
  *
- * source: cortex@ed33435 get_project_story.py:230-264 (handler)
+ * source: cortex main get_project_story.py:230-264 (handler)
  */
 export function getProjectStoryHandler(
   store: MemoryPort,
