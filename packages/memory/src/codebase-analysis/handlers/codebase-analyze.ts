@@ -15,7 +15,7 @@ import { existsSync, readFileSync, statSync } from "node:fs";
 import { extname } from "node:path";
 import { EXT_TO_LANG, buildMemoryContent, parseFile } from "../codebase-parser.js";
 import { isAvailable as astIsAvailable, parseFileAst } from "../ast-parser.js";
-import { detectCommunities, extractInheritance, resolveAllImports } from "../codebase-graph.js";
+import { computeCentrality, detectCommunities, detectGodNodes, extractInheritance, resolveAllImports } from "../codebase-graph.js";
 import { resolveTypeReferences } from "../codebase-type-resolver.js";
 import type { FileAnalysis } from "../types.js";
 import {
@@ -28,6 +28,7 @@ import {
   persistCommunityTags,
   persistEntities,
   persistFileEdge,
+  persistGodNodeTags,
   persistInheritanceEdge,
   resolveRelativePath,
 } from "./codebase-analyze-helpers.js";
@@ -317,10 +318,13 @@ async function _runGraphAnalysis(
   const allFileEdges = [...allFileEdgesMap.values()];
   const inheritEdges = extractInheritance(analyses);
   const communities = detectCommunities(allFileEdges, []);
+  // source: cortex main mcp_server/handlers/codebase_analyze.py god-node detection + tagging
+  const godNodes = detectGodNodes(computeCentrality(allFileEdges, []));
 
   const fileRels = await persistFileEdge(store, allFileEdges, domain);
   const inheritRels = await persistInheritanceEdge(store, inheritEdges, domain);
   await persistCommunityTags(store, communities);
+  await persistGodNodeTags(store, godNodes);
 
   return {
     import_edges: importEdges.length,
@@ -328,6 +332,7 @@ async function _runGraphAnalysis(
     total_file_edges: allFileEdges.length,
     inheritance_edges: inheritEdges.length,
     communities: new Set(communities.values()).size,
+    god_nodes: godNodes.length,
     file_edges_stored: fileRels,
     inherit_edges_stored: inheritRels,
   };

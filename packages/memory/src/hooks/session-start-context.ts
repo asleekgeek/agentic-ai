@@ -217,6 +217,12 @@ export function buildColdStartMessage(
     return lines.join("\n");
   }
 
+  // source: cortex main mcp_server/hooks/session_start.py
+  if (setupResult?.status === "auth_failed") {
+    const msg = setupResult.message ?? "Authentication failed";
+    return "## Cortex — Database Authentication\n\n" + msg;
+  }
+
   if (setupResult && setupResult.status !== "ready") {
     const msg = setupResult.message ?? "Unknown setup error";
     lines.push(`Setup issue: ${msg}\n`);

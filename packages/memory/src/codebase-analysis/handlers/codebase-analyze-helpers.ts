@@ -649,6 +649,59 @@ export async function persistInheritanceEdge(
   return count;
 }
 
+/**
+ * Tag codebase memories for files flagged as architectural god nodes.
+ *
+ * God nodes are degree-centrality outliers (see codebase_communities.
+ * detect_god_nodes). Tagging them lets the graph viz and recall surface
+ * architectural hotspots.
+ *
+ * Parity note: the oracle matches via `content LIKE %file_path%` against
+ * codebase memories and appends a "god-node" tag. The TS port matches on
+ * memory content including the filePath (mirroring the LSP-#5 fix used by
+ * persistCommunityTags) and appends the tag via updateMemoryContent, which
+ * is on the MemoryStore interface and works on both backends.
+ *
+ * source: cortex main mcp_server/handlers/codebase_analyze_helpers.py:persist_god_node_tags
+ */
+export async function persistGodNodeTags(
+  store: MemoryStore,
+  godNodes: string[],
+): Promise<void> {
+  if (godNodes.length === 0) return;
+  // Get all codebase memories once and filter by filePath in JS.
+  // This replaces the SQLite-only store.execute() pattern with
+  // getMemoriesByAgentContext() which works on both backends.
+  // source: codebase-analyze-helpers.ts — LSP violation #5 fix
+  const allCodebaseMemories = (() => {
+    try {
+      return store.getMemoriesByAgentContext(CODEBASE_AGENT_CONTEXT);
+    } catch {
+      return [];
+    }
+  })();
+
+  for (const filePath of godNodes) {
+    try {
+      const rows = allCodebaseMemories.filter((r) =>
+        typeof r.tags === "string" && r.tags.includes(filePath) ||
+        store.getMemory?.(r.id as number)?.content?.includes(filePath),
+      ) as Array<{ id: number; tags: string }>;
+      for (const row of rows) {
+        const tags = _parseTags(row.tags);
+        if (!tags.includes("god-node")) {
+          tags.push("god-node");
+          // Use updateMemoryContent (MemoryStore interface method — works on both backends).
+          const mem = store.getMemory(row.id);
+          if (mem) store.updateMemoryContent(row.id, mem.content, tags);
+        }
+      }
+    } catch {
+      // best-effort
+    }
+  }
+}
+
 export async function persistCommunityTags(
   store: MemoryStore,
   communities: Map<string, number>,

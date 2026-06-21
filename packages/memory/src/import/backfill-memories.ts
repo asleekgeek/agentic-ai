@@ -29,6 +29,7 @@ import {
   ensureBackfillLogAsync,
   fileHash,
   findConcepts,
+  gistOversizedContent,
   isAlreadyBackfilledAsync,
   linkConcepts,
   markBackfilledAsync,
@@ -144,8 +145,10 @@ async function importSingleItem(
   projectSlug: string,
   rememberHandler: RememberHandler,
 ): Promise<number | null> {
-  const content = item.content ?? "";
-  if (!content || content.length < 20) return null; // source: backfill_memories.py:_import_single_item
+  const raw = item.content ?? "";
+  if (!raw || raw.length < 20) return null; // source: backfill_memories.py:_import_single_item
+
+  const content = gistOversizedContent(raw); // source: backfill_memories.py:_import_single_item
 
   const tags = [
     ...(item.tags ?? []),

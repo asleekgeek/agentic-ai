@@ -9,9 +9,9 @@
  * source: cortex main mcp_server/core/emergence_metrics.py
  */
 
-import {
-  computePhaseLockingBenefit,
-  computeSchemaAccelerationMetric,
+import type {
+  PhaseLockingResult,
+  SchemaAccelerationResult,
 } from "./emergence-tracker.js";
 
 // ── Forgetting Curve ──────────────────────────────────────────────────────────
@@ -151,6 +151,23 @@ export function computeForgettingCurve(
   if (memoriesByAge.length < 5) return { ...INSUFFICIENT };
 
   const binMeans = binMemoriesByAge(memoriesByAge);
+  return forgettingFromBinMeans(binMeans, memoriesByAge.length);
+}
+
+/**
+ * Fit the curve from already-binned (center, mean_heat) data.
+ *
+ * Shared by computeForgettingCurve (list path) and the streaming emergence
+ * report, which accumulates the bins online and so never holds the raw point
+ * set.
+ *
+ * source: cortex main mcp_server/core/emergence_metrics.py
+ */
+function forgettingFromBinMeans(
+  binMeans: Array<[number, number]>,
+  nPoints: number,
+): ForgettingCurveResult {
+  if (nPoints < 5) return { ...INSUFFICIENT };
   if (binMeans.length < 3) {
     return {
       curve_type: "insufficient_bins",
@@ -178,6 +195,18 @@ export function computeForgettingCurve(
   return fitLogLinear(logHeats);
 }
 
+/**
+ * Convert online bin_idx -> [heat_sum, count] to sorted bin means.
+ *
+ * source: cortex main mcp_server/core/emergence_metrics.py
+ */
+function binsToMeans(bins: Map<number, [number, number]>): Array<[number, number]> {
+  return [...bins.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .filter(([, [, cnt]]) => cnt > 0)
+    .map(([idx, [hs, cnt]]) => [idx * 6.0 + 3.0, hs / cnt]);
+}
+
 // ── Aggregate Report ──────────────────────────────────────────────────────────
 
 interface MemoryForReport {
@@ -193,53 +222,195 @@ export interface EmergenceReport {
   timestamp: string;
   memory_count: number;
   forgetting_curve: ForgettingCurveResult;
-  schema_acceleration: ReturnType<typeof computeSchemaAccelerationMetric>;
-  phase_locking: ReturnType<typeof computePhaseLockingBenefit>;
+  schema_acceleration: SchemaAccelerationResult;
+  phase_locking: PhaseLockingResult;
   stage_distribution: Record<string, number>;
   avg_interference: number;
 }
 
-function computeStageDistribution(memories: MemoryForReport[]): Record<string, number> {
-  const stages: Record<string, number> = {};
-  for (const m of memories) {
-    const stage = m.consolidation_stage ?? "unknown";
-    stages[stage] = (stages[stage] ?? 0) + 1;
-  }
-  return stages;
+interface SchemaCohort {
+  count: number;
+  consolidated: number;
+  time_sum: number;
 }
 
-function computeAvgInterference(memories: MemoryForReport[]): number {
-  const scores = memories.map((m) => m.interference_score ?? 0);
-  return Math.round((scores.reduce((s, v) => s + v, 0) / Math.max(scores.length, 1)) * 10000) / 10000;
+interface PhaseAgg {
+  count: number;
+  heat_sum: number;
+  alive: number;
 }
 
 /**
- * Generate a full emergence report from memory data.
+ * Generate a full emergence report from an in-memory list.
  *
- * precondition: memories is an array of memory objects with optional fields
- * postcondition: all report fields are present; forgetting_curve is valid
+ * Thin wrapper over generateEmergenceReportStreamed (one chunk) so the list
+ * path and the streaming path can never diverge.
  *
- * source: cortex main mcp_server/core/emergence_metrics.py:192-222
+ * source: cortex main mcp_server/core/emergence_metrics.py
  */
 export function generateEmergenceReport(
   memories: MemoryForReport[],
+  events: unknown[] | null = null,
 ): EmergenceReport {
-  const ageHeat: Array<[number, number]> = memories
-    .filter((m) => (m.heat ?? 0) > 0.01)
-    .map((m) => [(m.hours_in_stage ?? 0) + 1.0, m.heat ?? 0.5]);
+  return generateEmergenceReportStreamed([memories], events);
+}
 
-  const consistent = memories.filter((m) => (m.schema_match_score ?? 0) >= 0.5);
-  const inconsistent = memories.filter((m) => (m.schema_match_score ?? 0) < 0.3);
-  const encPhase = memories.filter((m) => (m.theta_phase_at_encoding ?? 0) < 0.5);
-  const retPhase = memories.filter((m) => (m.theta_phase_at_encoding ?? 0) >= 0.5);
+/**
+ * schema-acceleration metric from streamed cohort aggregates.
+ *
+ * Mirrors emergence_tracker.compute_schema_acceleration_metric exactly, but
+ * from {count, consolidated, time_sum} per cohort instead of two lists.
+ *
+ * source: cortex main mcp_server/core/emergence_metrics.py
+ */
+function schemaAccelerationFromAgg(
+  cons: SchemaCohort,
+  incons: SchemaCohort,
+): SchemaAccelerationResult {
+  const cCount = cons.count;
+  const iCount = incons.count;
+  const cTime = cons.consolidated ? cons.time_sum / cons.consolidated : Infinity;
+  const iTime = incons.consolidated ? incons.time_sum / incons.consolidated : Infinity;
+
+  let ratioDefined = true;
+  let reason = "";
+  let ratio: number;
+  if (cCount === 0) {
+    ratioDefined = false;
+    reason = "no_schemas_promoted_yet";
+    ratio = 1.0;
+  } else if (iCount === 0) {
+    ratioDefined = false;
+    reason = "no_baseline_population";
+    ratio = 1.0;
+  } else if (iTime > 0 && cTime < Infinity) {
+    ratio = iTime / Math.max(cTime, 0.1);
+  } else {
+    ratioDefined = false;
+    reason = "no_consolidated_memories";
+    ratio = 1.0;
+  }
+
+  const out: SchemaAccelerationResult = {
+    consistent_count: cCount,
+    inconsistent_count: iCount,
+    consistent_consolidated_fraction:
+      Math.round((cCount ? cons.consolidated / cCount : 0.0) * 10000) / 10000,
+    inconsistent_consolidated_fraction:
+      Math.round((iCount ? incons.consolidated / iCount : 0.0) * 10000) / 10000,
+    acceleration_ratio: Math.round(ratio * 10000) / 10000,
+    ratio_defined: ratioDefined,
+  };
+  if (reason) {
+    out.reason_for_undefined = reason;
+  }
+  return out;
+}
+
+/**
+ * phase-locking metric from streamed per-phase aggregates.
+ *
+ * source: cortex main mcp_server/core/emergence_metrics.py
+ */
+function phaseLockingFromAgg(enc: PhaseAgg, ret: PhaseAgg): PhaseLockingResult {
+  const avg = (d: PhaseAgg): number => (d.count ? d.heat_sum / d.count : 0.0);
+  const surv = (d: PhaseAgg): number => (d.count ? d.alive / d.count : 0.0);
+
+  const encHeat = avg(enc);
+  const retHeat = avg(ret);
+  return {
+    encoding_phase_count: enc.count,
+    retrieval_phase_count: ret.count,
+    encoding_phase_avg_heat: Math.round(encHeat * 10000) / 10000,
+    retrieval_phase_avg_heat: Math.round(retHeat * 10000) / 10000,
+    phase_benefit: Math.round((encHeat - retHeat) * 10000) / 10000,
+    encoding_phase_survival: Math.round(surv(enc) * 10000) / 10000,
+    retrieval_phase_survival: Math.round(surv(ret) * 10000) / 10000,
+  };
+}
+
+/**
+ * Constant-memory emergence report: one streaming pass of bounded reducers.
+ *
+ * Every metric in the legacy report is an aggregate (binned forgetting curve,
+ * schema/phase cohort sums, stage counts, interference mean), so the whole
+ * report needs only O(num_bins + num_stages) RAM regardless of corpus size.
+ *
+ * source: cortex main mcp_server/core/emergence_metrics.py
+ */
+export function generateEmergenceReportStreamed(
+  memoryChunks: Iterable<MemoryForReport[]>,
+  events: unknown[] | null = null,
+): EmergenceReport {
+  void events;
+  const bins = new Map<number, [number, number]>(); // bin_idx -> [heat_sum, count]
+  let nAge = 0;
+  const cons: SchemaCohort = { count: 0, consolidated: 0, time_sum: 0.0 };
+  const incons: SchemaCohort = { count: 0, consolidated: 0, time_sum: 0.0 };
+  const enc: PhaseAgg = { count: 0, heat_sum: 0.0, alive: 0 };
+  const ret: PhaseAgg = { count: 0, heat_sum: 0.0, alive: 0 };
+  const stageDist: Record<string, number> = {};
+  let interferenceSum = 0.0;
+  let total = 0;
+
+  for (const chunk of memoryChunks) {
+    for (const m of chunk) {
+      total += 1;
+      const heat = m.heat ?? 0;
+      if (heat > 0.01) {
+        const idx = Math.max(0, Math.floor(((m.hours_in_stage ?? 0) + 1.0) / 6.0));
+        let bucket = bins.get(idx);
+        if (!bucket) {
+          bucket = [0.0, 0];
+          bins.set(idx, bucket);
+        }
+        bucket[0] += heat;
+        bucket[1] += 1;
+        nAge += 1;
+      }
+      const score = m.schema_match_score ?? 0;
+      const consolidated = m.consolidation_stage === "consolidated";
+      if (score >= 0.5) {
+        foldSchemaCohort(cons, m, consolidated);
+      } else if (score < 0.3) {
+        foldSchemaCohort(incons, m, consolidated);
+      }
+      const phase = (m.theta_phase_at_encoding ?? 0) < 0.5 ? enc : ret;
+      phase.count += 1;
+      phase.heat_sum += m.heat ?? 0;
+      if ((m.heat ?? 0) >= 0.1) {
+        phase.alive += 1;
+      }
+      const stage = m.consolidation_stage ?? "unknown";
+      stageDist[stage] = (stageDist[stage] ?? 0) + 1;
+      interferenceSum += m.interference_score ?? 0;
+    }
+  }
 
   return {
     timestamp: new Date().toISOString(),
-    memory_count: memories.length,
-    forgetting_curve: computeForgettingCurve(ageHeat),
-    schema_acceleration: computeSchemaAccelerationMetric(consistent, inconsistent),
-    phase_locking: computePhaseLockingBenefit(encPhase, retPhase),
-    stage_distribution: computeStageDistribution(memories),
-    avg_interference: computeAvgInterference(memories),
+    memory_count: total,
+    forgetting_curve: forgettingFromBinMeans(binsToMeans(bins), nAge),
+    schema_acceleration: schemaAccelerationFromAgg(cons, incons),
+    phase_locking: phaseLockingFromAgg(enc, ret),
+    stage_distribution: stageDist,
+    avg_interference: Math.round((interferenceSum / Math.max(total, 1)) * 10000) / 10000,
   };
+}
+
+/**
+ * Fold one memory into a schema cohort aggregate.
+ *
+ * source: cortex main mcp_server/core/emergence_metrics.py
+ */
+function foldSchemaCohort(
+  cohort: SchemaCohort,
+  mem: MemoryForReport,
+  consolidated: boolean,
+): void {
+  cohort.count += 1;
+  if (consolidated) {
+    cohort.consolidated += 1;
+    cohort.time_sum += (mem.hours_in_stage ?? 0) + 24.0;
+  }
 }

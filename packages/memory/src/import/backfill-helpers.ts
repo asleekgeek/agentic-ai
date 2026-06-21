@@ -24,6 +24,8 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import { homedir } from "node:os";
 import { detectDomainFromPath } from "./domain-detector.js";
+import { extractGist, needsGist } from "../core/gist-extraction.js";
+import { storeArtifact } from "../infrastructure/artifact-store.js";
 import type { MemoryStore } from "../remember/storage/memory-store.js";
 
 // ── Constants ─────────────────────────────────────────────────────────────────
@@ -394,6 +396,37 @@ export function slugToDomain(slug: string): string {
   // Convert slug (-Users-alice-code-cortex) back to a path then extract domain.
   const asPath = slug.replace(/-/g, "/");
   return detectDomainFromPath(asPath);
+}
+
+// ── Oversized-content gist gate (shared by import + backfill) ──────────────────
+
+/**
+ * Gist + artifact-pointer an extracted item's content if it is oversized.
+ *
+ * Pre:  content is the memory body string for an extracted import/backfill item.
+ * Post: when `content` fits GIST_BUDGET, returns it unchanged. When it
+ *       exceeds the budget, the FULL raw content is written to a
+ *       content-addressed artifact and the returned string is a deterministic
+ *       gist plus a pointer line — same write-side hygiene as the
+ *       post_tool_capture hook (docs/provenance/bounded-io-phase2-design.md F3).
+ *       Single choke point so the extractor (core) stays I/O-free: the I/O
+ *       happens here, in the handler (composition-root) layer. Artifact write
+ *       failure falls back to the full content (capture must not be lost).
+ *
+ * source: cortex main mcp_server/handlers/backfill_helpers.py:gist_oversized_content
+ */
+export function gistOversizedContent(content: string): string {
+  if (!needsGist(content)) {
+    return content;
+  }
+  let artifactPath: string;
+  try {
+    artifactPath = storeArtifact(content);
+  } catch {
+    return content;
+  }
+  const pointer = `**Artifact:** \`${artifactPath}\` (${content.length} chars full output)`;
+  return `${extractGist(content)}\n\n${pointer}`;
 }
 
 // ── Concept detection and linking ─────────────────────────────────────────────

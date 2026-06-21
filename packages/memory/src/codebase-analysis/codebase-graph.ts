@@ -405,3 +405,86 @@ function _bfs(
   }
   return visited;
 }
+
+// ── Node centrality + god-node detection ────────────────────────────────────
+// source: cortex main mcp_server/core/codebase_communities.py (compute_centrality, detect_god_nodes)
+
+export interface NodeCentrality {
+  degree: number;
+  betweenness: number;
+  pagerank: number;
+}
+
+// Two-sigma outlier convention for god-node detection.
+// source: cortex main mcp_server/core/codebase_communities.py (detect_god_nodes sigma default)
+const GOD_NODE_SIGMA = 2.0;
+
+/**
+ * Per-node centrality on the undirected dependency graph. degree = deg/(n-1),
+ * exact vs networkx degree_centrality. betweenness/pagerank are networkx-only in
+ * the oracle and have NO TypeScript consumer (only `degree` is read, by
+ * detectGodNodes); reported as 0 rather than reimplementing networkx in Node.
+ * Empty map for fewer than two nodes.
+ * source: cortex main mcp_server/core/codebase_communities.py (compute_centrality)
+ */
+export function computeCentrality(
+  fileEdges: ReadonlyArray<readonly [string, string]>,
+  callEdges: ReadonlyArray<readonly [string, string, string]> = [],
+): Map<string, NodeCentrality> {
+  const adj = new Map<string, Set<string>>();
+  const touch = (node: string): Set<string> => {
+    let s = adj.get(node);
+    if (s === undefined) {
+      s = new Set<string>();
+      adj.set(node, s);
+    }
+    return s;
+  };
+  for (const [src, tgt] of fileEdges) {
+    const a = touch(src);
+    const b = touch(tgt);
+    if (src !== tgt) {
+      a.add(tgt);
+      b.add(src);
+    }
+  }
+  for (const [src, , tgt] of callEdges) {
+    const a = touch(src);
+    const b = touch(tgt);
+    if (src !== tgt) {
+      a.add(tgt);
+      b.add(src);
+    }
+  }
+  const n = adj.size;
+  if (n < 2) return new Map();
+  const denom = n - 1;
+  const result = new Map<string, NodeCentrality>();
+  for (const [node, neighbors] of adj) {
+    result.set(node, { degree: neighbors.size / denom, betweenness: 0, pagerank: 0 });
+  }
+  return result;
+}
+
+/**
+ * Flag "god" nodes: degree-centrality outliers above mean + sigma*std (the
+ * threshold is measured from the graph, not hardcoded). Returns paths sorted by
+ * descending degree. Empty when fewer than two nodes or zero variance.
+ * source: cortex main mcp_server/core/codebase_communities.py (detect_god_nodes)
+ */
+export function detectGodNodes(
+  centrality: Map<string, NodeCentrality>,
+  sigma: number = GOD_NODE_SIGMA,
+): string[] {
+  const nodes = [...centrality.keys()];
+  if (nodes.length < 2) return [];
+  const degrees = nodes.map((nd) => centrality.get(nd)?.degree ?? 0);
+  const mean = degrees.reduce((acc, d) => acc + d, 0) / degrees.length;
+  const variance = degrees.reduce((acc, d) => acc + (d - mean) ** 2, 0) / degrees.length;
+  const std = Math.sqrt(variance);
+  if (std === 0) return [];
+  const threshold = mean + sigma * std;
+  return nodes
+    .filter((nd) => (centrality.get(nd)?.degree ?? 0) > threshold)
+    .sort((x, y) => (centrality.get(y)?.degree ?? 0) - (centrality.get(x)?.degree ?? 0));
+}

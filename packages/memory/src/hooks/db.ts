@@ -167,9 +167,14 @@ export async function fetchHotMemories(
   if (!conn) return [];
   try {
     const { rows } = await conn.query(
+      // Exclude tier-1 noise (auto-captured tool outputs, block replicas) at the
+      // SQL level so the session-start banner is never poisoned. The post-fetch
+      // isTierNoise filter remains as defense-in-depth.
+      // source: cortex main mcp_server/hooks/session_start.py (contract §8b)
       `SELECT id, content, domain, heat_base AS heat, tags, is_global
        FROM memories
        WHERE heat_base >= $1
+         AND NOT (tags @> '["auto-captured"]'::jsonb OR tags @> '["memory-replica"]'::jsonb)
        ORDER BY heat_base DESC
        LIMIT $2`,
       [minHeat, limit + excludeIds.size],

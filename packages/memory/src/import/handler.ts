@@ -19,6 +19,7 @@ import { ageDecayedHeat, computeAgeDays } from "./heat.js";
 import { discoverJsonlFiles, readFullBounded } from "./scanner.js";
 import { extractMemorableItems, extractSessionSummary } from "./session-extractor.js";
 import { detectDomainFromPath } from "./domain-detector.js";
+import { gistOversizedContent } from "./backfill-helpers.js";
 import type {
   ExtractedItem,
   ImportRequest,
@@ -87,7 +88,7 @@ async function storeMemory(
   rememberHandler: RememberHandler,
 ): Promise<boolean> {
   const args = {
-    content: item.content,
+    content: gistOversizedContent(item.content), // source: import_sessions.py::_store_memory
     tags: item.tags,
     domain,
     source: "import",
