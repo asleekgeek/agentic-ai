@@ -30,11 +30,18 @@ interface Gate {
 // Process-global registry: one gate per server name, created on first use.
 const gates = new Map<string, Gate>();
 
+// Declared budget per server (the first caller's maxConcurrent) — observability
+// mirror of the oracle's _BUDGETS registry.
+// source: cortex main mcp_server/infrastructure/upstream_governor.py (_BUDGETS)
+const budgets = new Map<string, number>();
+
 function getGate(serverName: string, maxConcurrent: number): Gate {
   let gate = gates.get(serverName);
   if (gate === undefined) {
-    gate = { permits: Math.max(1, maxConcurrent), queue: [] };
+    const budget = Math.max(1, maxConcurrent);
+    gate = { permits: budget, queue: [] };
     gates.set(serverName, gate);
+    budgets.set(serverName, budget);
   }
   return gate;
 }
@@ -72,7 +79,17 @@ export async function govern(
   };
 }
 
-/** Test-only: clear the process-global gate registry. */
+/**
+ * Declared budget for a server (the first caller's maxConcurrent), or undefined
+ * when no gate exists yet. Mirrors the oracle's current_budget.
+ * source: cortex main mcp_server/infrastructure/upstream_governor.py (current_budget)
+ */
+export function currentBudget(serverName: string): number | undefined {
+  return budgets.get(serverName);
+}
+
+/** Test-only: clear the process-global gate + budget registries. */
 export function _resetGovernor(): void {
   gates.clear();
+  budgets.clear();
 }

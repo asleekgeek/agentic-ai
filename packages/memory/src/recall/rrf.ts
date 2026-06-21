@@ -112,64 +112,42 @@ export function rrfFuseSignals(
  * regression on MRR vs the Python baseline because every signal counts
  * equally regardless of its informativeness for the query intent.
  *
- * precondition: weights has an entry for every active signal (a signal with a
- *   non-empty list). An active signal missing from weights is a length-drift
- *   violation and throws an Error — mirroring the Python zip(..., strict=True)
- *   invariant. Extra weights for inactive signals are tolerated: the oracle
- *   zips the parallel lists the caller builds, so only the active⊆weights
- *   direction is load-bearing. Missing weights are never silently defaulted to
- *   1.0 and the fusion never falls back to plain RRF. Non-positive weights skip
- *   the signal entirely.
- * postcondition: returned list is sorted by descending fused score; ties
- *   broken by source count then ascending id (matches rrfFuseIds).
+ * precondition: none beyond well-formed inputs. A signal whose weight is absent
+ *   is treated as weight 0 and skipped — the oracle builds signal_weights via
+ *   weights.get(name, 0.0) then `if weight <= 0: continue`. No throw, no 1.0
+ *   default. Non-positive weights skip the signal entirely.
+ * postcondition: returned list is sorted by DESCENDING fused score ONLY; ties
+ *   keep first-seen (insertion) order via a stable sort — byte-faithful to the
+ *   oracle's `sorted(scores.items(), key=score, reverse=True)` over an
+ *   insertion-ordered dict. No secondary tie-break key.
  *
  * source: cortex main mcp_server/core/retrieval_dispatch.py wrrf_fuse
- * source: Cormack, Clarke, Büttcher (2009) "Reciprocal Rank Fusion ..."
- *   SIGIR — RRF as the canonical heterogeneous-signal merger; weighting
- *   per signal is the standard extension when signal informativeness varies.
+ * source: Cormack, Clarke, Büttcher (2009) "Reciprocal Rank Fusion ..." SIGIR.
  */
 export function wrrfFuseSignals(
   signals: Record<string, Array<[number, number]>>,
   weights: Record<string, number>,
   k: number = DEFAULT_RRF_K,
 ): Array<[number, number]> {
-  // Oracle wrrf_fuse zips two PARALLEL lists (signal_results, signal_weights)
-  // with strict=True — the caller (dispatch_retrieval via compute_signal_weights)
-  // builds both together so they never drift. The faithful TS analog requires
-  // every ACTIVE signal (a non-empty list) to have a weight; a missing weight is
-  // a length-drift violation and throws, mirroring zip(strict=True). Extra
-  // weights for inactive signals are tolerated: the oracle only zips the
-  // active-list direction, so only active⊆weights is load-bearing. Missing
-  // weights are never silently defaulted to 1.0.
+  // Oracle wrrf_fuse: signal_weights[i] = weights.get(name, 0.0); a missing
+  // weight becomes 0 and `if weight <= 0: continue` skips the signal — it NEVER
+  // throws. The zip(strict=True) is a positional length guard over two
+  // caller-built parallel lists, not a per-signal presence check. Sort by score
+  // only; the oracle's stable sort keeps the dict's insertion order on ties.
   // source: cortex main mcp_server/core/retrieval_dispatch.py wrrf_fuse
   const scores = new Map<number, number>();
-  const sourceCounts = new Map<number, number>();
   for (const [name, pairs] of Object.entries(signals)) {
     if (pairs.length === 0) continue;
-    if (!(name in weights)) {
-      throw new Error(
-        `wrrfFuseSignals: active signal "${name}" has no weight ` +
-          `(zip strict=True parity — every active signal must have a weight)`,
-      );
-    }
-    const w = weights[name] as number;
+    const w = weights[name] ?? 0.0;
     if (w <= 0) continue;
     for (let rank = 0; rank < pairs.length; rank++) {
       const entry = pairs[rank];
       if (!entry) continue;
       const id = entry[0];
-      const delta = w / (k + rank + 1);
-      scores.set(id, (scores.get(id) ?? 0) + delta);
-      sourceCounts.set(id, (sourceCounts.get(id) ?? 0) + 1);
+      scores.set(id, (scores.get(id) ?? 0) + w / (k + rank + 1));
     }
   }
-  const entries = Array.from(scores.entries());
-  entries.sort(([idA, scoreA], [idB, scoreB]) => {
-    if (scoreB !== scoreA) return scoreB - scoreA;
-    const cA = sourceCounts.get(idA) ?? 0;
-    const cB = sourceCounts.get(idB) ?? 0;
-    if (cB !== cA) return cB - cA;
-    return idA - idB;
-  });
-  return entries;
+  // Score-only descending. Array.prototype.sort is stable (ES2019+), so ties keep
+  // insertion order, matching the oracle's stable sort over an insertion-ordered dict.
+  return Array.from(scores.entries()).sort((a, b) => b[1] - a[1]);
 }

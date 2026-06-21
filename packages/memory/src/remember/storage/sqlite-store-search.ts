@@ -460,7 +460,7 @@ export class SqliteSearchMixin {
       const memRows = this._rawConn
         .prepare(
           "SELECT id FROM memories WHERE content LIKE ? " +
-            "AND heat >= ? AND NOT is_stale LIMIT 20",
+            "AND heat_base >= ? AND NOT is_stale LIMIT 20",
         )
         .all(`%${name}%`, minHeat) as Array<{ id: number }>;
       for (const mr of memRows) {

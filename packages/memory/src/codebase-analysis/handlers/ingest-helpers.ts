@@ -21,12 +21,26 @@
 import { createHash } from "node:crypto";
 import { resolve, basename, join } from "node:path";
 import * as fs from "node:fs";
+import { homedir } from "node:os";
 // source: cortex main mcp_server/handlers/ingest_helpers.py
 import { govern } from "../../infrastructure/upstream-governor.js";
 
 export const CODE_GRAPH_TAG_PREFIX = "_code_graph:";
 // source: 8 hex chars = 32-bit collision space; sufficient for project-key disambiguation
 const PROJECT_KEY_HASH_LENGTH = 8;
+
+/**
+ * Expand a leading ~ to the user's home directory (Node's path.resolve does
+ * NOT). Mirrors the oracle's Path(...).expanduser() applied to project/graph
+ * paths before hashing/stat — without it a ~-prefixed path yields a different
+ * project key and stat target (cache miss vs the oracle's hit).
+ * source: cortex main mcp_server/handlers/ingest_helpers.py (Path.expanduser)
+ */
+function expanduser(p: string): string {
+  if (p === "~") return homedir();
+  if (p.startsWith("~/")) return join(homedir(), p.slice(2));
+  return p;
+}
 
 // ── McpClientPool port ────────────────────────────────────────────────────
 //
@@ -43,6 +57,13 @@ export interface McpClientPool {
     toolName: string,
     args: Record<string, unknown>,
   ): Promise<Record<string, unknown>>;
+  /**
+   * Per-server concurrency budget (mcp-connections.json maxConcurrentCalls,
+   * default 1 when unset). Threaded into the admission governor — mirrors the
+   * oracle passing client.max_concurrent_calls to govern().
+   * source: cortex main mcp_server/handlers/ingest_helpers.py (call_upstream)
+   */
+  maxConcurrentCalls?(serverName: string): number | undefined;
 }
 
 // ── Project identification ─────────────────────────────────────────────────
@@ -51,7 +72,7 @@ export function projectKey(projectPath: string): string {
   /**
    * Stable project key = last path segment + short hash of full path.
    */
-  const p = resolve(projectPath);
+  const p = resolve(expanduser(projectPath));
   const digest = createHash("sha256").update(p, "utf8").digest("hex").slice(0, PROJECT_KEY_HASH_LENGTH); // source: SHA-256 (FIPS 180-4) — standard hash algorithm for key derivation
   return `${basename(p)}-${digest}`;
 }
@@ -80,13 +101,14 @@ export function graphPathIsMaterialised(graphPath: string | null): boolean {
   if (!graphPath) {
     return false;
   }
+  const gp = expanduser(graphPath);
   try {
-    if (!fs.existsSync(graphPath)) {
+    if (!fs.existsSync(gp)) {
       return false;
     }
-    const st = fs.statSync(graphPath);
+    const st = fs.statSync(gp);
     if (st.isDirectory()) {
-      return fs.readdirSync(graphPath).length > 0;
+      return fs.readdirSync(gp).length > 0;
     }
     return st.size > 0;
   } catch {
@@ -235,22 +257,24 @@ export function graphIsFresh(projectPath: string, graphPath: string): boolean {
    *
    * source: cortex main mcp_server/handlers/ingest_helpers.py
    */
+  const gp = expanduser(graphPath);
+  const root = expanduser(projectPath);
   let builtAt: number;
   try {
-    builtAt = fs.statSync(graphPath).mtimeMs;
+    builtAt = fs.statSync(gp).mtimeMs;
   } catch {
     return true;
   }
   let rootIsDir: boolean;
   try {
-    rootIsDir = fs.statSync(projectPath).isDirectory();
+    rootIsDir = fs.statSync(root).isDirectory();
   } catch {
     rootIsDir = false;
   }
   if (!rootIsDir) {
     return true;
   }
-  const stack: string[] = [projectPath];
+  const stack: string[] = [root];
   while (stack.length > 0) {
     const dirpath = stack.pop() as string;
     let entries: fs.Dirent[];
@@ -295,7 +319,7 @@ export function memoiseGraphPath(
     tags: [tag, "_ingest", "code-graph"],
     source: "ingest_codebase",
     domain: "cortex-ingest",
-    directory_context: resolve(projectPath),
+    directory_context: resolve(expanduser(projectPath)),
     is_protected: true,
     importance: 1.0,
     heat: 1.0,
@@ -339,7 +363,7 @@ export async function callUpstream(
   // admission semaphores) can hammer the shared child until it OOMs and the
   // next stdin write raises a connection-lost error.
   // source: cortex main mcp_server/handlers/ingest_helpers.py
-  const release = await govern(serverName);
+  const release = await govern(serverName, pool.maxConcurrentCalls?.(serverName));
   try {
     return await pool.call(serverName, toolName, args);
   } finally {
