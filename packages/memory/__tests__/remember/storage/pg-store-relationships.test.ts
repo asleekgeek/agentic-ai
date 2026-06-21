@@ -41,6 +41,16 @@ describe("insertRelationship", () => {
     expect(sql).toContain("last_reinforced");
     expect(sql).toContain("RETURNING id");
   });
+  // B1#1/A4#5: idempotent upsert on the directed tuple, GREATEST-merge of
+  // weight/confidence. source: cortex@bc5af469 pg_store_relationships.py:59-69
+  it("upserts idempotently on the directed tuple with GREATEST merge", async () => {
+    const client = mc([{ id: 7 }]);
+    await insertRelationship(client, { source_entity_id: 1, target_entity_id: 2, relationship_type: "calls" });
+    const sql = (client.query as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
+    expect(sql).toContain("ON CONFLICT (source_entity_id, target_entity_id, relationship_type)");
+    expect(sql).toContain("GREATEST(relationships.weight, EXCLUDED.weight)");
+    expect(sql).toContain("GREATEST(relationships.confidence, EXCLUDED.confidence)");
+  });
 });
 
 describe("getRelationshipsForEntity", () => {

@@ -25,11 +25,22 @@ export async function deleteRelationshipsBatch(client: PoolClient, relIds: numbe
   return relIds.length;
 }
 
-// source: cortex@ed33435 mcp_server/infrastructure/pg_store_relationships.py:52-69
+// Idempotent on the directed tuple (source, target, type). Re-ingest (e.g.
+// incremental codebase re-analysis) replays the same structural edges; without
+// ON CONFLICT this raises a unique violation on uq_relationships_directed. On
+// conflict we refresh the edge instead of duplicating: keep the strongest
+// weight/confidence, mark it re-reinforced. The arbiter index (dedup-then-
+// CREATE UNIQUE INDEX migration) lives in pg-schema-indexes.ts MIGRATIONS_DDL.
+// source: cortex@bc5af469 mcp_server/infrastructure/pg_store_relationships.py:52-81
 export async function insertRelationship(client: PoolClient, data: RelationshipData): Promise<number> {
   const result = await client.query<{ id: number }>(
     `INSERT INTO relationships (source_entity_id, target_entity_id, relationship_type, weight, is_causal, confidence, created_at, last_reinforced)
-     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, NOW()), NOW()) RETURNING id`,
+     VALUES ($1, $2, $3, $4, $5, $6, COALESCE($7, NOW()), NOW())
+     ON CONFLICT (source_entity_id, target_entity_id, relationship_type)
+     DO UPDATE SET weight = GREATEST(relationships.weight, EXCLUDED.weight),
+       confidence = GREATEST(relationships.confidence, EXCLUDED.confidence),
+       last_reinforced = NOW()
+     RETURNING id`,
     [data.source_entity_id, data.target_entity_id, data.relationship_type,
      data.weight ?? 1.0, data.is_causal ?? false, data.confidence ?? 1.0, data.created_at ?? null]);
   const row = result.rows[0];

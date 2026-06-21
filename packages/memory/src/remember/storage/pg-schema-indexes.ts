@@ -58,6 +58,36 @@ BEGIN
     END IF;
 END $$;
 
+-- Full directed-tuple UNIQUE index. The pre-existing index above is PARTIAL
+-- (co_retrieval only); insertRelationship's unqualified ON CONFLICT needs a
+-- non-partial arbiter on (source, target, type). Without it, re-ingest (e.g.
+-- incremental codebase re-analysis) silently DUPLICATES every 'calls'/'contains'
+-- edge. Dedup keeps MIN(id) and touches only the relationships table — no
+-- cross-table repointing (mirrors uq_relationships_canonical_co_retrieval).
+-- source: Cortex mcp_server/infrastructure/pg_schema.py — uq_relationships_directed dedup+UNIQUE index migration
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_indexes WHERE indexname = 'uq_relationships_directed'
+    ) THEN
+        DELETE FROM relationships r
+        USING (
+            SELECT source_entity_id, target_entity_id, relationship_type,
+                   MIN(id) AS keep_id
+            FROM relationships
+            GROUP BY source_entity_id, target_entity_id, relationship_type
+            HAVING COUNT(*) > 1
+        ) dup
+        WHERE r.source_entity_id = dup.source_entity_id
+          AND r.target_entity_id = dup.target_entity_id
+          AND r.relationship_type = dup.relationship_type
+          AND r.id <> dup.keep_id;
+
+        CREATE UNIQUE INDEX uq_relationships_directed
+            ON relationships (source_entity_id, target_entity_id, relationship_type);
+    END IF;
+END $$;
+
 DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='memories' AND column_name='is_benchmark')
     THEN ALTER TABLE memories ADD COLUMN is_benchmark BOOLEAN DEFAULT FALSE;
