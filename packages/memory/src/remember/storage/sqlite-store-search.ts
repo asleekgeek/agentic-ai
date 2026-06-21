@@ -12,6 +12,25 @@
 
 import type { Database as DatabaseType } from "better-sqlite3";
 
+/**
+ * Deserialize a SQLite `tags` TEXT column into a list.
+ *
+ * SQLite stores tags as a JSON string; the recall output schema (and parity
+ * with the PostgreSQL backend) requires a list.
+ *
+ * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:16-26
+ */
+function _decodeTags(raw: unknown): string[] {
+  if (typeof raw === "string") {
+    try {
+      return JSON.parse(raw) as string[];
+    } catch {
+      return [];
+    }
+  }
+  return (raw as string[]) ?? [];
+}
+
 export interface WrrfWeights {
   vector?: number;
   fts?: number;
@@ -27,7 +46,7 @@ export interface RecallResult {
   domain: string;
   created_at: string;
   store_type: string;
-  tags: string;
+  tags: string[];
   importance: number;
   surprise_score: number;
 }
@@ -279,7 +298,7 @@ export class SqliteSearchMixin {
         domain: (row["domain"] as string) ?? "",
         created_at: row["created_at"] as string,
         store_type: (row["store_type"] as string) ?? "episodic",
-        tags: row["tags"] as string,
+        tags: _decodeTags(row["tags"]),
         importance: (row["importance"] as number) ?? 0,
         surprise_score: (row["surprise_score"] as number) ?? 0,
       });
@@ -456,28 +475,134 @@ export class SqliteSearchMixin {
   }
 
   /**
-   * Stub — sqlite-vec does not support efficient batch embedding fetch.
+   * Return (memory_id, embedding_bytes, heat) for hot memories.
    *
-   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:356-363
+   * Mirrors PgMemoryStore.get_hot_embeddings. SQLite stores embeddings in
+   * memories_vec (sqlite-vec); we join client-side: fetch hot IDs, then fetch
+   * each embedding by rowid. O(N) join is acceptable at fallback scale.
+   *
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py
    */
   getHotEmbeddings(
-    _minHeat = 0.05, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:358
-    _domain: string | null = null,
-    _limit = 500, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:360
-  ): Array<[number, unknown, number]> {
-    return [];
+    minHeat = 0.05, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py
+    domain: string | null = null,
+    limit = 500, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py
+  ): Array<[number, Buffer, number]> {
+    const conds = ["heat_base >= ?", "NOT is_stale"];
+    const params: unknown[] = [minHeat];
+    if (domain) {
+      conds.push("(domain = ? OR is_global = 1)");
+      params.push(domain);
+    }
+    params.push(limit);
+    const rows = this._rawConn
+      .prepare(
+        `SELECT id, heat_base FROM memories WHERE ${conds.join(" AND ")} ` +
+          `ORDER BY heat_base DESC LIMIT ?`,
+      )
+      .all(...params) as Array<{ id: number; heat_base: number }>;
+    if (rows.length === 0) return [];
+    const results: Array<[number, Buffer, number]> = [];
+    for (const row of rows) {
+      const emb = this._fetchEmbeddingBytes(row.id);
+      if (emb != null) {
+        results.push([row.id, emb, Number(row.heat_base)]);
+      }
+    }
+    return results;
   }
 
   /**
-   * Stub — temporal co-access requires PG window functions.
+   * Fetch raw embedding bytes from memories_vec for a single memory.
    *
-   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:365-372
+   * Returns bytes (numpy float32 packed) or null if the vec table is absent,
+   * the row is missing, or the embedding is NULL.
+   *
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py
+   */
+  private _fetchEmbeddingBytes(memoryId: number): Buffer | null {
+    if (!this._hasVec) return null;
+    try {
+      const vecRow = this._rawConn
+        .prepare("SELECT embedding FROM memories_vec WHERE rowid = ?")
+        .get(memoryId) as { embedding: unknown } | undefined;
+      if (vecRow == null) return null;
+      const raw = vecRow.embedding;
+      if (raw == null) return null;
+      // sqlite-vec returns a buffer/blob; convert to bytes.
+      return Buffer.from(raw as Buffer);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Return (mem_a, mem_b, proximity_weight) pairs co-accessed recently.
+   *
+   * Mirrors PgMemoryStore.get_temporal_co_access for SR-graph construction.
+   * SQLite divergence: only one last_accessed timestamp per memory (no access
+   * log). Approximation: pair memories whose last_accessed differs by less than
+   * window_hours; proximity = 1 - delta/window (linear decay). min_access is
+   * honored via access_count >= min_access. Canonical pair order a < b.
+   *
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py
    */
   getTemporalCoAccess(
-    _windowHours = 2.0, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:366
-    _minAccess = 1,
-    _limit = 100, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:368
+    windowHours = 2.0, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py
+    minAccess = 1,
+    limit = 100, // source: cortex main mcp_server/infrastructure/sqlite_store_search.py
   ): Array<[number, number, number]> {
-    return [];
+    const windowSeconds = windowHours * 3600.0;
+    let rows: Array<{ mem_a: number; mem_b: number; proximity: number | null }>;
+    try {
+      rows = this._rawConn
+        .prepare(
+          `
+                SELECT
+                    CASE WHEN a.id < b.id THEN a.id ELSE b.id END AS mem_a,
+                    CASE WHEN a.id < b.id THEN b.id ELSE a.id END AS mem_b,
+                    1.0 - (
+                        ABS(
+                            (julianday(a.last_accessed) - julianday(b.last_accessed))
+                            * 86400.0
+                        ) / ?
+                    ) AS proximity
+                FROM memories a
+                JOIN memories b
+                    ON a.id != b.id
+                    AND ABS(
+                        (julianday(a.last_accessed) - julianday(b.last_accessed))
+                        * 86400.0
+                    ) < ?
+                WHERE a.access_count >= ?
+                  AND NOT a.is_stale
+                  AND b.access_count >= ?
+                  AND NOT b.is_stale
+                GROUP BY mem_a, mem_b
+                ORDER BY proximity DESC
+                LIMIT ?
+                `,
+        )
+        .all(
+          windowSeconds,
+          windowSeconds,
+          minAccess,
+          minAccess,
+          limit,
+        ) as Array<{ mem_a: number; mem_b: number; proximity: number | null }>;
+    } catch {
+      return [];
+    }
+    const results: Array<[number, number, number]> = [];
+    for (const row of rows) {
+      const proximity = row.proximity;
+      if (proximity == null || proximity <= 0) continue;
+      results.push([
+        Number(row.mem_a),
+        Number(row.mem_b),
+        Number(Math.min(1.0, proximity)),
+      ]);
+    }
+    return results;
   }
 }

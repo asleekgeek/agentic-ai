@@ -40,6 +40,73 @@ export async function getHotMemories(
   return (await client.query(`SELECT * FROM memories WHERE heat_base >= $1 ${f}ORDER BY heat_base DESC`, [minHeat])).rows as Record<string, unknown>[];
 }
 
+/**
+ * Stream hot memories hottest-first via KEYSET pagination.
+ *
+ * Each batch is an independent, index-backed range scan — NOT a server-side
+ * cursor over ORDER BY heat_base DESC (which forces PG to sort the whole table
+ * before yielding the first row). Keyset paging
+ * WHERE (heat_base, id) < (last_heat, last_id) ORDER BY heat_base DESC, id DESC
+ * walks the composite (heat_base DESC, id DESC) index forward one bounded page
+ * at a time, so the first batch lands fast and memories warm up continuously.
+ *
+ * columns — explicit projection allowlist (NOT user input). The graph build
+ * passes only the rendered fields, excluding the embedding vector,
+ * content_tsv and original_content.
+ *
+ * hardLimit — optional hottest-N subset bound (undefined = full corpus). The
+ * caller paginates to exhaustion when unset; per-page memory is one chunkSize
+ * batch regardless of total.
+ *
+ * source: cortex main mcp_server/infrastructure/pg_store_queries.py:63-148
+ */
+export async function* iterHotMemoriesChunked(
+  client: PoolClient,
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:65
+  minHeat = 0.0, // eslint-disable-line @typescript-eslint/no-magic-numbers
+  includeBenchmarks = true,
+// source: cortex main mcp_server/infrastructure/pg_store_queries.py:67
+  chunkSize = 1000, // eslint-disable-line @typescript-eslint/no-magic-numbers
+  columns = "*",
+  hardLimit?: number | null,
+): AsyncGenerator<Record<string, unknown>[]> {
+  const benchFilter = includeBenchmarks ? "" : "AND NOT coalesce(is_benchmark, FALSE) ";
+  // columns is an internal allowlist; chunkSize/page are cast to int and
+  // interpolated; keyset values go through bound params ($n), never interpolated.
+  let yielded = 0;
+  let lastHeat: number | null = null;
+  let lastId: number | null = null;
+  const cap = hardLimit != null && hardLimit > 0 ? Math.trunc(hardLimit) : null;
+  while (true) {
+    let page = Math.trunc(chunkSize);
+    if (cap !== null) {
+      const remaining = cap - yielded;
+      if (remaining <= 0) return;
+      page = Math.min(page, remaining);
+    }
+    let where: string;
+    let params: unknown[];
+    if (lastHeat === null) {
+      where = "heat_base >= $1 ";
+      params = [minHeat];
+    } else {
+      // Keyset cursor: strictly-after (lastHeat, lastId) in the
+      // (heat_base DESC, id DESC) order. Tuple compare is index-friendly.
+      where = "heat_base >= $1 AND (heat_base, id) < ($2, $3) ";
+      params = [minHeat, lastHeat, lastId];
+    }
+    const sql = `SELECT ${columns} FROM memories WHERE ${where}${benchFilter}ORDER BY heat_base DESC, id DESC LIMIT ${page}`;
+    const rows = (await client.query(sql, params)).rows as Record<string, unknown>[];
+    if (rows.length === 0) return;
+    yield rows;
+    yielded += rows.length;
+    const tail = rows[rows.length - 1] as Record<string, unknown>;
+    lastHeat = tail["heat_base"] as number;
+    lastId = tail["id"] as number;
+    if (rows.length < page) return;
+  }
+}
+
 // source: cortex main mcp_server/infrastructure/pg_store_queries.py:63-75
 export async function getAllMemoriesWithEmbeddings(
   client: PoolClient, vectorToBytes: (v: unknown) => Buffer | null,
@@ -77,6 +144,22 @@ export async function getMemoriesInTimeWindow(client: PoolClient, centerTime: st
 // source: cortex main mcp_server/infrastructure/pg_store_queries.py:107-109
 export async function getAllMemoriesForDecay(client: PoolClient): Promise<Record<string, unknown>[]> {
   return (await client.query("SELECT * FROM memories WHERE NOT is_stale")).rows as Record<string, unknown>[];
+}
+
+/**
+ * Most-recent-first memories carrying `tag`.
+ *
+ * Replaces full-table scans that filtered by tag in application code. Recency
+ * correctness is guaranteed by the ORDER BY; limit only bounds the scan —
+ * callers that skip dead entries get limit candidates of headroom.
+ *
+ * source: cortex main mcp_server/infrastructure/pg_store_queries.py:184-199
+ */
+// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- source: cortex main mcp_server/infrastructure/pg_store_queries.py:184
+export async function getMemoriesByTag(client: PoolClient, tag: string, limit = 20): Promise<Record<string, unknown>[]> {
+  return (await client.query(
+    "SELECT * FROM memories WHERE tags @> $1::jsonb AND NOT is_stale ORDER BY created_at DESC LIMIT $2",
+    [JSON.stringify([tag]), limit])).rows as Record<string, unknown>[];
 }
 
 // source: cortex main mcp_server/infrastructure/pg_store_queries.py:111-152

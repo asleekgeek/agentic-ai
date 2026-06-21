@@ -352,7 +352,8 @@ CREATE TABLE IF NOT EXISTS prospective_memories (
     is_active           BOOLEAN DEFAULT TRUE,
     created_at          TIMESTAMPTZ NOT NULL DEFAULT NOW(),
     triggered_at        TIMESTAMPTZ,
-    triggered_count     INTEGER DEFAULT 0
+    triggered_count     INTEGER DEFAULT 0,
+    created_by          TEXT NOT NULL DEFAULT ''
 );
 
 CREATE TABLE IF NOT EXISTS checkpoints (

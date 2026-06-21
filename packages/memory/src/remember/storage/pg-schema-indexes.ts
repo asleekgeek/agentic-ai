@@ -10,6 +10,12 @@ CREATE INDEX IF NOT EXISTS idx_memories_embedding
 CREATE INDEX IF NOT EXISTS idx_memories_content_tsv ON memories USING gin (content_tsv);
 CREATE INDEX IF NOT EXISTS idx_memories_content_trgm ON memories USING gin (content gin_trgm_ops);
 CREATE INDEX IF NOT EXISTS idx_memories_heat_base ON memories (heat_base);
+-- Composite key for KEYSET pagination of the viz graph build
+-- (iter_hot_memories_chunked): ORDER BY heat_base DESC, id DESC with a
+-- (heat_base, id) < (...) cursor becomes a pure index range scan, no
+-- per-page sort even across large heat_base tie groups.
+-- source: cortex main mcp_server/infrastructure/pg_schema.py
+CREATE INDEX IF NOT EXISTS idx_memories_heat_base_id ON memories (heat_base DESC, id DESC);
 CREATE INDEX IF NOT EXISTS idx_memories_domain ON memories (domain);
 CREATE INDEX IF NOT EXISTS idx_memories_store_type ON memories (store_type);
 CREATE INDEX IF NOT EXISTS idx_memories_created_at ON memories (created_at);
@@ -179,6 +185,33 @@ DO $$ BEGIN
     IF NOT EXISTS (SELECT 1 FROM pg_trigger WHERE tgname = 'trg_entities_domain_normalize') THEN
         CREATE TRIGGER trg_entities_domain_normalize BEFORE INSERT OR UPDATE OF domain ON entities
         FOR EACH ROW EXECUTE FUNCTION normalize_domain();
+    END IF;
+END $$;
+
+-- Streaming-ingest support: NON-unique functional index keeps the LOWER(name)
+-- lookup index-backed for the single-writer entity stage (NOT EXISTS resolve);
+-- safe to create unconditionally (never fails on existing case-variant dupes).
+-- source: cortex main mcp_server/infrastructure/pg_schema.py
+CREATE INDEX IF NOT EXISTS idx_entities_lower_name ON entities (LOWER(name));
+
+-- Checkpoint table for resumable ingest: each batch's writes and its progress
+-- update commit inside ONE transaction, so a crashed run resumes from
+-- last_key_committed with no duplication.
+-- source: cortex main mcp_server/infrastructure/pg_schema.py
+CREATE TABLE IF NOT EXISTS ingest_progress (
+    run_id text PRIMARY KEY,
+    last_key_committed text NOT NULL DEFAULT '',
+    rows_committed bigint NOT NULL DEFAULT 0,
+    updated_at timestamptz NOT NULL DEFAULT NOW()
+);
+
+-- Migration: trigger provenance (bounded-io Phase 2 F1). Distinguishes
+-- user-created triggers from harvested ones so future cleanups never have to
+-- guess. Pre-existing rows keep '' (unattributable).
+-- source: cortex main mcp_server/infrastructure/pg_schema.py
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='prospective_memories' AND column_name='created_by')
+    THEN ALTER TABLE prospective_memories ADD COLUMN created_by TEXT NOT NULL DEFAULT '';
     END IF;
 END $$;
 

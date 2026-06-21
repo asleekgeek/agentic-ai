@@ -418,3 +418,29 @@ export function getMemorySettings(): MemorySettings {
 export function _resetMemorySettings(): void {
   _instance = null;
 }
+
+/**
+ * Resolve a raw DATABASE_URL value. An unexpanded `${...}` token (Claude Code
+ * passes the literal through when the user_config option is unset) is treated
+ * as unset, so the settings default still applies — callers fall back when this
+ * returns undefined.
+ * source: cortex main mcp_server/infrastructure/pg_store.py (_get_database_url)
+ */
+export function resolveDatabaseUrl(raw?: string): string | undefined {
+  const url = (raw ?? "").trim();
+  if (!url || url.includes("${")) {
+    return undefined;
+  }
+  return url;
+}
+
+/**
+ * Launch-time capability scope for connection-rooted isolation. When
+ * CORTEX_ROOT_AGENT_TOPIC is set, the server forces this agent_topic on every
+ * recall/remember. Empty/unset → undefined (no rooting).
+ * source: cortex main mcp_server/infrastructure/memory_config.py (root_agent_topic)
+ */
+export function rootAgentTopic(): string | undefined {
+  const val = (process.env["CORTEX_ROOT_AGENT_TOPIC"] ?? "").trim();
+  return val || undefined;
+}

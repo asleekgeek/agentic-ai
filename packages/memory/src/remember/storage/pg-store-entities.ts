@@ -65,6 +65,22 @@ export async function getEntityById(client: PoolClient, entityId: number): Promi
   return (result.rows[0] as Record<string, unknown> | undefined) ?? null;
 }
 
+/**
+ * Return the highest-heat entities tagged with `domainSlug`.
+ *
+ * Used by the chain endpoint to seed a domain-level BFS — the domain node
+ * itself is not an entity, but its code symbols are. Mirrors the oracle's
+ * ORDER BY heat DESC, mention_count DESC exactly.
+ *
+ * source: cortex main mcp_server/infrastructure/pg_store_entities.py:111-124
+ */
+// eslint-disable-next-line @typescript-eslint/no-magic-numbers -- source: cortex main mcp_server/infrastructure/pg_store_entities.py:112
+export async function getTopEntitiesForDomain(client: PoolClient, domainSlug: string, limit = 20): Promise<Record<string, unknown>[]> {
+  return (await client.query(
+    "SELECT * FROM entities WHERE domain = $1 ORDER BY heat DESC, mention_count DESC LIMIT $2",
+    [domainSlug, limit])).rows as Record<string, unknown>[];
+}
+
 // source: cortex main mcp_server/infrastructure/pg_store_entities.py:99-111
 export async function getAllEntities(client: PoolClient, minHeat = 0.05, includeArchived = false): Promise<Record<string, unknown>[]> { // eslint-disable-line @typescript-eslint/no-magic-numbers
   const q = includeArchived

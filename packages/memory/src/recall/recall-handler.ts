@@ -43,8 +43,15 @@ import {
   extractHeatSignal,
   fuseSignals,
 } from "./multi-signal-fusion.js";
-import { filterLowSignal, inlineRelatedNeighbors } from "./recall-helpers.js";
+import {
+  filterByTags,
+  filterLowSignal,
+  injectable,
+  inlineRelatedNeighbors,
+} from "./recall-helpers.js";
 import { boundPayload, listTarget } from "./response-budget.js";
+// source: cortex main mcp_server/handlers/recall.py — root_agent_topic() override
+import { rootAgentTopic } from "../infrastructure/memory-config.js";
 import type { EmbeddingEngine, MemoryStore } from "./port.js";
 import { classifyQueryIntent, computeRetrievalWeights } from "./query-intent.js";
 import { applyRules } from "./rules.js";
@@ -196,6 +203,7 @@ async function injectTriggeredMemories(
   results: ReturnType<typeof buildRecallResult>[],
   query: string,
   store: MemoryStore,
+  maxInject: number | null = null,
 ): Promise<ReturnType<typeof buildRecallResult>[]> {
   let triggers: unknown[];
   try {
@@ -209,6 +217,10 @@ async function injectTriggeredMemories(
   const injected: ReturnType<typeof buildRecallResult>[] = [];
 
   for (const trigger of triggers) {
+    // Cap total injection at the caller-requested k: injection must not
+    // exceed the tool's response contract.
+    // source: cortex main mcp_server/handlers/recall_helpers.py:inject_triggered_memories (max_inject)
+    if (maxInject !== null && injected.length >= maxInject) break;
     const t = trigger as Record<string, unknown>;
     const triggerContent = (t["content"] as string) ?? "";
     if (!triggerContent) continue;
@@ -222,13 +234,23 @@ async function injectTriggeredMemories(
 
     const ftsCandidates = await store.searchByFts(triggerContent, TRIGGER_FTS_LIMIT);
     for (const { memory_id } of ftsCandidates) {
+      if (maxInject !== null && injected.length >= maxInject) break;
       if (existingIds.has(memory_id)) continue;
       const mem = await store.getMemory(memory_id);
-      if (!mem) continue;
+      // Trigger injection respects the low-signal discipline: reject
+      // post_tool_capture sources and LOW_SIGNAL_TAGS overlap so the
+      // fixed-0.9 score never re-introduces auto-capture noise.
+      // source: cortex main mcp_server/handlers/recall_helpers.py:_injectable
+      if (!mem || !injectable(mem)) continue;
       injected.push({
         memory_id,
         content: mem.content,
         score: 0.9,
+        // Observability: mark the fixed 0.9 as a trigger artifact, not a
+        // covert rank, and carry the provenance source.
+        // source: cortex main mcp_server/handlers/recall_helpers.py:inject_triggered_memories (injected:True + source)
+        injected: true,
+        source: mem.source ?? "",
         heat: mem.heat ?? 1.0,
         domain: mem.domain ?? "",
         tags: Array.isArray(mem.tags) ? mem.tags : [],
@@ -265,6 +287,66 @@ async function trackRecallReplay(
   }
 }
 
+// ── Fetch-by-id ───────────────────────────────────────────────────────────
+
+/**
+ * Fetch one memory by id — the retrieval path for truncated results.
+ *
+ * ``contentOffset`` pages through contents larger than the response budget:
+ * the slice starts there, ``content_length`` carries the full size, and
+ * boundPayload marks the slice truncated if it still overflows.
+ *
+ * source: cortex main mcp_server/handlers/recall.py:_fetch_by_id
+ */
+async function fetchById(
+  memoryId: number,
+  contentOffset: number,
+  store: MemoryStore,
+): Promise<RecallResponse> {
+  const stored = await store.getMemory(memoryId);
+  if (stored == null) {
+    return {
+      memories: [],
+      count: 0,
+      intent: QueryIntent.GENERAL,
+      dispatch_tier: "ts",
+      signals: {},
+      enhancements: undefined,
+      low_signal_dropped: 0,
+    };
+  }
+  // Copy before mutating: truncation must never write back into whatever
+  // object the store handed us.
+  const content = stored.content ?? "";
+  const memory = {
+    memory_id: stored.id,
+    content: contentOffset > 0 ? content.slice(contentOffset) : content,
+    content_length: content.length,
+    content_offset: contentOffset,
+    score: 0,
+    heat: stored.heat ?? 0,
+    domain: stored.domain ?? "",
+    tags: Array.isArray(stored.tags) ? stored.tags : [],
+    store_type: stored.store_type ?? "episodic",
+    created_at: stored.created_at ?? "",
+    importance: stored.importance ?? DEFAULT_IMPORTANCE,
+    surprise: stored.surprise_score ?? 0,
+    recency_boost: 0,
+  };
+  const resp: RecallResponse = {
+    memories: [memory],
+    count: 1,
+    intent: QueryIntent.GENERAL,
+    dispatch_tier: "ts",
+    signals: {},
+    enhancements: undefined,
+    low_signal_dropped: 0,
+  };
+  boundPayload(resp, [listTarget("memories", "content", "score")]);
+  resp.count = resp.memories.length;
+  return resp;
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────
 
 /**
@@ -291,7 +373,23 @@ export async function recallHandler(
     low_signal_dropped: 0,
   };
 
+  // Fetch-by-id path: bypass search entirely, retrieve the full content of
+  // a result that came back truncated. query is ignored when memory_id is set.
+  // source: cortex main mcp_server/handlers/recall.py:_handler_impl (memory_id branch first)
+  if (args && args.memory_id != null) {
+    return fetchById(args.memory_id, args.content_offset ?? 0, store);
+  }
+
   if (!args || !args.query) return empty;
+
+  // Connection-rooted scoping: when CORTEX_ROOT_AGENT_TOPIC is set the
+  // server forces that scope regardless of what the caller passed (or
+  // omitted). Defense at the handler boundary covers every caller.
+  // source: cortex main mcp_server/handlers/recall.py:_handler_impl (root_agent_topic override)
+  const root = rootAgentTopic();
+  if (root != null) {
+    args.agent_topic = root;
+  }
 
   // source: cortex main mcp_server/handlers/recall.py (max_results=10, min_heat=0.05 — empirical defaults)
   // source: cortex main mcp_server/handlers/recall.py (include_low_signal default=False)
@@ -303,6 +401,10 @@ export async function recallHandler(
     include_low_signal = false,
     include_related = false,
   } = args;
+  // Positive tag filters (OR / AND). Empty arrays are no-ops.
+  // source: cortex main mcp_server/handlers/recall.py:_handler_impl (tags_any / tags_all)
+  const tagsAny: string[] = args.tags_any ?? [];
+  const tagsAll: string[] = args.tags_all ?? [];
 
   // 1. Intent classification
   const intentInfo = classifyQueryIntent(query);
@@ -475,8 +577,15 @@ export async function recallHandler(
     })
     .slice(0, max_results * 2);
 
-  // 11. Prospective trigger injection
-  const withTriggers = await injectTriggeredMemories(scored, query, store);
+  // 11. Prospective trigger injection (capped at max_results — injection
+  //     must not exceed the tool's response contract).
+  //     source: cortex main mcp_server/handlers/recall.py:_handler_impl (max_inject=max_results)
+  const withTriggers = await injectTriggeredMemories(
+    scored,
+    query,
+    store,
+    max_results,
+  );
 
   // 12. Apply neuro-symbolic rules
   let rules: unknown[] = [];
@@ -514,8 +623,18 @@ export async function recallHandler(
     lowSignalDropped = filtered.dropped;
   }
 
+  // 12.6. Positive tag filter: tags_any (OR) and tags_all (AND). Applied at
+  //       the same pipeline stage as the low-signal filter (after it, before
+  //       the max_results cap) so the over-fetch headroom still applies.
+  //       No-op when both are empty.
+  //       source: cortex main mcp_server/handlers/recall.py:_handler_impl (filter_by_tags after filter_low_signal, before cap)
+  const afterTags =
+    tagsAny.length > 0 || tagsAll.length > 0
+      ? (filterByTags(afterFilter, tagsAny, tagsAll) as typeof afterFilter)
+      : afterFilter;
+
   // 13. Cap to max_results
-  const capped = afterFilter.slice(0, max_results);
+  const capped = afterTags.slice(0, max_results);
 
   // 14. Strategic ordering (Lost-in-the-Middle mitigation)
   // source: Liu et al. (2023) "Lost in the Middle: How Language Models Use Long Contexts."

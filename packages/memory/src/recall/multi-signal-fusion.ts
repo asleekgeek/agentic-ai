@@ -198,12 +198,13 @@ export function buildRecallResult(
  * locally-computed BM25 + n-gram + heat signals.
  *
  * Per-signal weights match the Python recall pipeline (BASE_WEIGHTS +
- * INTENT_WEIGHT_OVERRIDES). When omitted, every signal weight defaults
- * to 1.0 — equivalent to plain RRF — to preserve the previous contract
- * for callers that don't yet pass weights.
+ * INTENT_WEIGHT_OVERRIDES). When weights are supplied they must cover
+ * exactly the active signals: a missing or extra weight throws an Error
+ * (strict=True parity) rather than defaulting to 1.0 or degrading to plain
+ * RRF. When weights are omitted entirely, unweighted RRF is used.
  *
  * Port of: the fusion step in mcp_server/handlers/recall_helpers.py::collect_signals
- *          plus mcp_server/core/retrieval_dispatch.py::wrrf_fuse (weighted variant)
+ *          plus mcp_server/core/retrieval_dispatch.py wrrf_fuse (weighted variant)
  */
 export function fuseSignals(
   signals: MultiSignalSignals,

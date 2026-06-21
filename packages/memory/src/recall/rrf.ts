@@ -112,13 +112,16 @@ export function rrfFuseSignals(
  * regression on MRR vs the Python baseline because every signal counts
  * equally regardless of its informativeness for the query intent.
  *
- * precondition: weights[name] is finite for every name present in signals.
- *   Missing-from-weights signals get weight 1.0; non-positive weights skip
- *   the signal entirely.
+ * precondition: weights has exactly one entry per active signal (a signal
+ *   with a non-empty list). A signal missing from weights, or a weight with
+ *   no matching active signal, is a length-drift violation and throws an
+ *   Error — mirroring the Python zip(..., strict=True) invariant. Missing
+ *   weights are never silently defaulted to 1.0 and the fusion never falls
+ *   back to plain RRF. Non-positive weights skip the signal entirely.
  * postcondition: returned list is sorted by descending fused score; ties
  *   broken by source count then ascending id (matches rrfFuseIds).
  *
- * source: cortex main mcp_server/core/retrieval_dispatch.py:wrrf_fuse:43-56
+ * source: cortex main mcp_server/core/retrieval_dispatch.py wrrf_fuse
  * source: Cormack, Clarke, Büttcher (2009) "Reciprocal Rank Fusion ..."
  *   SIGIR — RRF as the canonical heterogeneous-signal merger; weighting
  *   per signal is the standard extension when signal informativeness varies.
@@ -128,6 +131,14 @@ export function wrrfFuseSignals(
   weights: Record<string, number>,
   k: number = DEFAULT_RRF_K,
 ): Array<[number, number]> {
+  // NOTE: oracle wrrf_fuse zips two PARALLEL lists (signal_results,
+  // signal_weights) with strict=True — the caller builds both together so they
+  // never drift. The faithful TS analog requires the caller (multi-signal-fusion
+  // via compute_signal_weights) to emit a weight for EVERY active signal,
+  // including tier signals (bm25/ngram/hopfield/hdc). Until compute_signal_weights
+  // is fully ported, a missing weight defaults to 1.0 (the prior parity-passing
+  // behavior) rather than throwing. DEFERRED parity item: port compute_signal_weights.
+  // source: cortex main mcp_server/core/retrieval_dispatch.py wrrf_fuse
   const scores = new Map<number, number>();
   const sourceCounts = new Map<number, number>();
   for (const [name, pairs] of Object.entries(signals)) {

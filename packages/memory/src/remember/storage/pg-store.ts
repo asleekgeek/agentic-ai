@@ -95,6 +95,8 @@ import {
   insertArchive as pgInsertArchive,
 } from "./pg-store-auxiliary.js";
 import { findCoAccessedPairs as pgFindCoAccessedPairs } from "./pg-store-queries.js";
+// source: cortex main mcp_server/infrastructure/pg_store.py _get_database_url
+import { resolveDatabaseUrl } from "../../infrastructure/memory-config.js";
 import {
   insertRule as pgInsertRule,
   getAllActiveRules as pgGetAllActiveRules,
@@ -129,8 +131,11 @@ function clampHeat(h: number): number {
 export class PgMemoryStore implements MemoryStoreExt {
   private readonly _pool: PgPool;
 
-  constructor(connectionString: string) {
-    this._pool = new Pool({ connectionString, max: 5 });
+  // source: cortex main mcp_server/infrastructure/pg_store.py _get_database_url
+  // (PgMemoryStore.__init__: self._url = database_url or _get_database_url())
+  constructor(connectionString?: string) {
+    const url = connectionString || resolveDatabaseUrl();
+    this._pool = new Pool({ connectionString: url, max: 5 });
   }
 
   // ── Internal: run a query synchronously by acquiring a client ──────────

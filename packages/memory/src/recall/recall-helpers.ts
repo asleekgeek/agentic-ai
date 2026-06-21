@@ -363,6 +363,87 @@ export function filterLowSignal<T extends { readonly tags?: unknown }>(
   return { kept, dropped };
 }
 
+// ── injectable ────────────────────────────────────────────────────────────
+// source: cortex main mcp_server/handlers/recall_helpers.py:_injectable
+
+/**
+ * Trigger injection must not bypass the low-signal discipline.
+ *
+ * Auto-captured tool dumps and tag-marked noise are exactly what
+ * filterLowSignal removes from the ranked results upstream; re-inserting
+ * them here at a fixed 0.9 inverts the ranking. Rejects memories whose
+ * source is ``post_tool_capture`` OR whose tags overlap LOW_SIGNAL_TAGS.
+ *
+ * source: cortex main mcp_server/handlers/recall_helpers.py:_injectable
+ */
+export function injectable(mem: {
+  readonly source?: unknown;
+  readonly tags?: unknown;
+}): boolean {
+  if (mem.source === "post_tool_capture") return false;
+  const tags = parseTags(mem.tags).map((t) => String(t).toLowerCase());
+  return !tags.some((t) => LOW_SIGNAL_TAGS.has(t));
+}
+
+// ── filterByTags ──────────────────────────────────────────────────────────
+// source: cortex main mcp_server/handlers/recall_helpers.py:filter_by_tags
+
+/**
+ * Positive tag filter applied after the WRRF pipeline.
+ *
+ * Pre:  results is the post-low-signal-filter list; tagsAny and tagsAll are
+ *       lists of tag strings (may be empty).
+ * Post: returns the subset of results satisfying both constraints:
+ *         - tagsAny: memory carries at least one tag in tagsAny (OR);
+ *           skipped when tagsAny is empty.
+ *         - tagsAll: memory carries every tag in tagsAll (AND);
+ *           skipped when tagsAll is empty.
+ *       Tags are compared lowercased. Order is preserved; len(result) <= len(results).
+ *       No-op (returns the input) when both filters are empty.
+ *
+ * source: cortex main mcp_server/handlers/recall_helpers.py:filter_by_tags
+ */
+export function filterByTags<T extends { readonly tags?: unknown }>(
+  results: readonly T[],
+  tagsAny: readonly string[],
+  tagsAll: readonly string[],
+): T[] {
+  if (tagsAny.length === 0 && tagsAll.length === 0) {
+    return results as T[];
+  }
+
+  const anySet = new Set(tagsAny.map((t) => String(t).toLowerCase()));
+  const allSet = new Set(tagsAll.map((t) => String(t).toLowerCase()));
+
+  const kept: T[] = [];
+  for (const r of results) {
+    const tagSet = new Set(parseTags(r.tags).map((t) => String(t).toLowerCase()));
+
+    if (anySet.size > 0) {
+      let hasAny = false;
+      for (const t of anySet) {
+        if (tagSet.has(t)) {
+          hasAny = true;
+          break;
+        }
+      }
+      if (!hasAny) continue;
+    }
+    if (allSet.size > 0) {
+      let hasAll = true;
+      for (const t of allSet) {
+        if (!tagSet.has(t)) {
+          hasAll = false;
+          break;
+        }
+      }
+      if (!hasAll) continue;
+    }
+    kept.push(r);
+  }
+  return kept;
+}
+
 // ── buildResult ───────────────────────────────────────────────────────────
 // source: cortex main mcp_server/handlers/recall_helpers.py:build_result
 

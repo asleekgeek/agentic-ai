@@ -34,6 +34,8 @@ import { appendFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { MemoryStoreExt } from "../remember/storage/memory-store.js";
+// source: cortex main mcp_server/infrastructure/pg_store.py _get_database_url
+import { resolveDatabaseUrl } from "../infrastructure/memory-config.js";
 import type { runWikiMaintenance as RunWikiMaintenanceFn } from "../wiki/maintenance.js";
 import type { FileCoverageRollup } from "../wiki/coverage-dashboard.js";
 
@@ -105,11 +107,15 @@ async function runConsolidateCycle(): Promise<void> {
   appendLog(`${LOG_PREFIX} cycle start`);
   try {
     // Construct the memory store the same way the MCP server does.
-    const databaseUrl = process.env["DATABASE_URL"];
+    // source: cortex main mcp_server/infrastructure/pg_store.py _get_database_url
+    // — a literal "${...}" placeholder or empty value is treated as unset, so
+    // the SQLite backend is chosen instead of building a bogus PG store.
+    const rawDatabaseUrl = process.env["DATABASE_URL"]?.trim() ?? "";
+    const pgConfigured = rawDatabaseUrl !== "" && !rawDatabaseUrl.includes("${");
     let store: MemoryStoreExt;
-    if (databaseUrl) {
+    if (pgConfigured) {
       const { PgMemoryStore } = await import("../remember/storage/pg-store.js");
-      store = new PgMemoryStore(databaseUrl);
+      store = new PgMemoryStore(resolveDatabaseUrl());
       appendLog(`${LOG_PREFIX} PG store opened (DATABASE_URL set)`);
     } else {
       const { SqliteMemoryStore } = await import("../remember/storage/sqlite-store.js");

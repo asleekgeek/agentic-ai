@@ -25,6 +25,8 @@
  */
 
 import { z } from "zod";
+// source: cortex main mcp_server/infrastructure/pg_store.py _get_database_url
+import { resolveDatabaseUrl, getMemorySettings } from "../infrastructure/memory-config.js";
 
 // ── Base event fields shared by all Claude Code hook events ───────────────
 
@@ -145,8 +147,9 @@ export interface HookConfig {
 
 export function loadHookConfig(): HookConfig {
   return {
-    databaseUrl:
-      process.env["DATABASE_URL"] ?? "postgresql://localhost:5432/cortex",
+    // source: cortex main mcp_server/infrastructure/pg_store.py _get_database_url
+    // — empty or literal "${...}" DATABASE_URL falls back to the settings default.
+    databaseUrl: resolveDatabaseUrl(process.env["DATABASE_URL"]) ?? getMemorySettings().DATABASE_URL,
     pluginRoot: process.env["CLAUDE_PLUGIN_ROOT"] ?? "",
     projectRoot: process.env["CLAUDE_PROJECT_ROOT"] ?? process.cwd(),
   };

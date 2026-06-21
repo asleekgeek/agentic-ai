@@ -76,6 +76,32 @@ export const RecallRequestSchema = z.object({
   // source: cortex main mcp_server/handlers/recall.py — include_related default=False
   // source: cortex main mcp_server/handlers/recall_helpers.py:inline_related_neighbors
   include_related: z.boolean().optional().default(false),
+  // Positive tag filter (OR): keep only memories carrying at least one of
+  // these tags. Applied after the WRRF pipeline at the same stage as the
+  // low-signal filter. No-op when empty.
+  // source: cortex main mcp_server/handlers/recall.py — tags_any (default [])
+  // Optional in the request type; the handler treats an absent value as the
+  // empty list (no-op), matching the oracle's default-[] semantics.
+  tags_any: z.array(z.string()).optional(),
+  // Positive tag filter (AND): keep only memories carrying ALL of these
+  // tags. Applied after the WRRF pipeline at the same stage as the
+  // low-signal filter. No-op when empty.
+  // source: cortex main mcp_server/handlers/recall.py — tags_all (default [])
+  // Optional in the request type; the handler treats an absent value as the
+  // empty list (no-op), matching the oracle's default-[] semantics.
+  tags_all: z.array(z.string()).optional(),
+  // Fetch one memory by id, bypassing search. Use to retrieve the full
+  // content of a result that came back ``truncated``. ``query`` is ignored
+  // when set.
+  // source: cortex main mcp_server/handlers/recall.py — memory_id
+  memory_id: z.number().int().optional(),
+  // With ``memory_id``: start the returned content at this character
+  // offset. Page through contents larger than the response budget by
+  // re-calling with the previous offset + the length of the slice received.
+  // source: cortex main mcp_server/handlers/recall.py — content_offset (default 0)
+  // Optional in the request type; the fetch-by-id path treats an absent
+  // value as 0, matching the oracle's default-0 semantics.
+  content_offset: z.number().int().min(0).optional(),
 });
 
 export type RecallRequest = z.infer<typeof RecallRequestSchema>;
@@ -139,6 +165,20 @@ export const RecallResultSchema = z.object({
   // source: cortex main mcp_server/handlers/recall.py:62-73 (outputSchema items)
   truncated: z.boolean().optional(),
   content_length: z.number().int().optional(),
+  // Set by the memory_id fetch path: the character offset the returned
+  // content slice starts at, so callers can page through bodies larger
+  // than the response budget.
+  // source: cortex main mcp_server/handlers/recall.py:_fetch_by_id (content_offset)
+  content_offset: z.number().int().optional(),
+  // Trigger-injection observability: present and true when this memory was
+  // injected by a prospective-memory trigger rather than ranked by WRRF.
+  // The fixed 0.9 score is then a trigger marker, not a covert rank.
+  // source: cortex main mcp_server/handlers/recall_helpers.py:inject_triggered_memories (injected: True)
+  injected: z.boolean().optional(),
+  // Memory provenance source string. Carried on injected records so the
+  // injection is observable as trigger metadata.
+  // source: cortex main mcp_server/handlers/recall_helpers.py:inject_triggered_memories (source)
+  source: z.string().optional(),
 });
 
 export type RecallResult = z.infer<typeof RecallResultSchema>;
@@ -293,6 +333,11 @@ export interface MemoryItem {
   importance: number;
   surprise_score: number;
   embedding: number[] | null;
+  // Provenance source string from the stored row. Read by the trigger
+  // injection guard (_injectable rejects source=='post_tool_capture') and
+  // carried onto injected records for observability.
+  // source: cortex main mcp_server/handlers/recall_helpers.py:_injectable / inject_triggered_memories
+  source?: string;
   // Supersession edges (MEM-G1): populated by _normalizeRow so the include_related
   // version walk (recall-helpers.ts:versionNeighbors) can read them off getMemory.
   // source: cortex main mcp_server/handlers/recall_helpers.py:_version_neighbors

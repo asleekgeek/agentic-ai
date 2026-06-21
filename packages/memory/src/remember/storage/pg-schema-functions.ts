@@ -211,8 +211,14 @@ BEGIN
         ORDER BY similarity(c.content, p_query_text) DESC LIMIT v_pool
     ),
     hot AS (
-        SELECT c.id, effective_heat(c, NOW(), v_factor) AS raw_score FROM candidates c
+` +
+// Auto-captures excluded from heat/recency pools: their freshness is a
+// mechanical artifact (baseline_heat + always-recent created_at) carrying no
+// importance info; including them caused a measured freshness inversion.
+// source: cortex main mcp_server/infrastructure/pg_schema.py
+`        SELECT c.id, effective_heat(c, NOW(), v_factor) AS raw_score FROM candidates c
         WHERE effective_heat(c, NOW(), v_factor) >= p_min_heat
+          AND c.source <> 'post_tool_capture'
         ORDER BY effective_heat(c, NOW(), v_factor) DESC LIMIT v_pool
     ),
     recency AS (
@@ -222,6 +228,7 @@ BEGIN
 `               EXP(-${RECENCY_DECAY_RATE} * EXTRACT(EPOCH FROM (NOW() - c.created_at)) / ${SECS_PER_DAY})::REAL AS raw_score
         FROM candidates c
         WHERE effective_heat(c, NOW(), v_factor) >= p_min_heat
+          AND c.source <> 'post_tool_capture'
         ORDER BY c.created_at DESC LIMIT v_pool
     ),
 ` +
@@ -417,11 +424,42 @@ $$ LANGUAGE plpgsql STABLE;
 `;
 
 /**
+ * Remove '--' line comments before statement splitting.
+ *
+ * A '--' begins a comment only outside a single-quoted string literal;
+ * everything from it to end-of-line is dropped. Without this, a semicolon
+ * inside a comment is mistaken for a statement terminator by the ';'-splitter
+ * and the comment tail after the semicolon is then executed as SQL.
+ *
+ * source: cortex main mcp_server/infrastructure/pg_schema.py
+ */
+function stripSqlLineComments(ddl: string): string {
+  const cleaned: string[] = [];
+  for (const line of ddl.split("\n")) {
+    let inStr = false;
+    let cut = line.length;
+    let idx = 0;
+    while (idx < line.length) {
+      const ch = line[idx];
+      if (ch === "'") {
+        inStr = !inStr;
+      } else if (ch === "-" && !inStr && idx + 1 < line.length && line[idx + 1] === "-") {
+        cut = idx;
+        break;
+      }
+      idx += 1;
+    }
+    cleaned.push(line.slice(0, cut).replace(/\s+$/, ""));
+  }
+  return cleaned.join("\n");
+}
+
+/**
  * Split a multi-statement DDL string into individual statements.
  *
  * precondition:  ddl is a non-empty string.
  * postcondition: each returned string is a single executable DDL statement.
- * source: cortex main mcp_server/infrastructure/pg_schema.py:1358-1372
+ * source: cortex main mcp_server/infrastructure/pg_schema.py
  */
 export function splitStatements(ddl: string): string[] {
   if (ddl.includes("$$")) {
@@ -429,8 +467,15 @@ export function splitStatements(ddl: string): string[] {
     return trimmed.length > 0 ? [trimmed] : [];
   }
   const statements: string[] = [];
-  for (const part of ddl.split(";")) {
-    const stmt = part.trim();
+  for (const part of stripSqlLineComments(ddl).split(";")) {
+    // Drop leading blank/comment lines so a chunk that begins with a comment
+    // is not mistaken for the comment text being the first SQL token; also
+    // drop chunks that are entirely comments / whitespace.
+    const lines = part.split("\n");
+    while (lines.length > 0 && (lines[0]?.trim() === "" || lines[0]?.trimStart().startsWith("--"))) {
+      lines.shift();
+    }
+    const stmt = lines.join("\n").trim();
     if (stmt.length > 0) statements.push(stmt + ";");
   }
   return statements;

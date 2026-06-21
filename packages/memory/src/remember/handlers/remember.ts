@@ -56,6 +56,10 @@ import { hardenContent } from "../../shared/content-hardening.js";
 import { resolveDomain } from "../domain-resolution.js";
 // source: handlers/remember.py:338-341 detect_global — auto-detect global scope.
 import { detectGlobal } from "../../recall/global-detector.js";
+// source: cortex main mcp_server/infrastructure/memory_config.py:root_agent_topic
+//   Connection-rooted scoping: CORTEX_ROOT_AGENT_TOPIC forces agent_topic on
+//   every write so the model cannot target or omit another scope.
+import { rootAgentTopic } from "../../infrastructure/memory-config.js";
 import type { WriteGateScore } from "../types.js";
 // Re-export so the MCP composition root can type RememberDeps.embedder without
 // reaching into the helpers module directly.
@@ -137,7 +141,16 @@ export function remember(
   // source: remember.py:272-276
   const content = hardenContent(args.content);
   if (!content) {
-    return { stored: false, reason: "no_content" };
+    return { stored: false, action: "rejected", reason: "no_content" };
+  }
+
+  // Connection-rooted scoping: a server launched with CORTEX_ROOT_AGENT_TOPIC
+  // forces that scope on every write, so the model cannot store into (or omit)
+  // another agent's scope. Mirrors the recall-side force; covers all callers.
+  // source: cortex main mcp_server/handlers/remember.py — root_agent_topic force
+  const _root = rootAgentTopic();
+  if (_root !== undefined) {
+    args.agent_topic = _root;
   }
 
   const tags = args.tags;
@@ -306,7 +319,16 @@ export async function rememberAsync(
   // source: remember.py:272-276
   const content = hardenContent(args.content);
   if (!content) {
-    return { stored: false, reason: "no_content" };
+    return { stored: false, action: "rejected", reason: "no_content" };
+  }
+
+  // Connection-rooted scoping: a server launched with CORTEX_ROOT_AGENT_TOPIC
+  // forces that scope on every write, so the model cannot store into (or omit)
+  // another agent's scope. Mirrors the recall-side force; covers all callers.
+  // source: cortex main mcp_server/handlers/remember.py — root_agent_topic force
+  const _root = rootAgentTopic();
+  if (_root !== undefined) {
+    args.agent_topic = _root;
   }
 
   const tags = args.tags;

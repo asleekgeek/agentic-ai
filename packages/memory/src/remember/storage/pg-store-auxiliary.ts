@@ -8,6 +8,7 @@ import type { PoolClient } from "pg";
 export interface ProspectiveMemoryData {
   content: string; trigger_condition: string; trigger_type: string;
   target_directory?: string | null; is_active?: boolean; triggered_count?: number;
+  created_by?: string;
 }
 export interface CheckpointData {
   session_id?: string; directory_context?: string; current_task?: string;
@@ -25,12 +26,40 @@ export interface SchemaData {
   formation_count?: number; assimilation_count?: number; violation_count?: number;
 }
 
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py — get_ingest_progress
+export async function getIngestProgress(client: PoolClient, runId: string): Promise<[string, number]> {
+  const result = await client.query<{ last_key_committed: string; rows_committed: number | null }>(
+    "SELECT last_key_committed, rows_committed FROM ingest_progress WHERE run_id = $1",
+    [runId],
+  );
+  const row = result.rows[0];
+  if (row == null) return ["", 0];
+  return [row.last_key_committed, Number(row.rows_committed ?? 0)];
+}
+
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py — set_ingest_progress
+export async function setIngestProgress(client: PoolClient, runId: string, lastKeyCommitted: string, rowsCommitted: number): Promise<void> {
+  await client.query(
+    `INSERT INTO ingest_progress (run_id, last_key_committed, rows_committed, updated_at)
+     VALUES ($1, $2, $3, NOW())
+     ON CONFLICT (run_id) DO UPDATE SET
+       last_key_committed = EXCLUDED.last_key_committed,
+       rows_committed = EXCLUDED.rows_committed, updated_at = NOW()`,
+    [runId, lastKeyCommitted, rowsCommitted],
+  );
+}
+
+// source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py — clear_ingest_progress
+export async function clearIngestProgress(client: PoolClient, runId: string): Promise<void> {
+  await client.query("DELETE FROM ingest_progress WHERE run_id = $1", [runId]);
+}
+
 // source: cortex main mcp_server/infrastructure/pg_store_auxiliary.py:22-38
 export async function insertProspectiveMemory(client: PoolClient, data: ProspectiveMemoryData): Promise<number> {
   const result = await client.query<{ id: number }>(
-    `INSERT INTO prospective_memories (content, trigger_condition, trigger_type, target_directory, is_active, triggered_count)
-     VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
-    [data.content, data.trigger_condition, data.trigger_type, data.target_directory ?? null, data.is_active ?? true, data.triggered_count ?? 0],
+    `INSERT INTO prospective_memories (content, trigger_condition, trigger_type, target_directory, is_active, triggered_count, created_by)
+     VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
+    [data.content, data.trigger_condition, data.trigger_type, data.target_directory ?? null, data.is_active ?? true, data.triggered_count ?? 0, data.created_by ?? ""],
   );
   const row = result.rows[0];
   if (row == null) throw new Error("insertProspectiveMemory: no id returned");
