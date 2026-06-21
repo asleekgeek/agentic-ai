@@ -149,7 +149,7 @@ function ageDistribution(
 ): AgeDistribution {
   const now = Date.now();
   const staleMs = staleDays * MILLIS_PER_DAY;
-  const freshMs = (staleDays / FRESH_DIVISOR) * MILLIS_PER_DAY; // source: assess_coverage.py:92 — Python uses stale_days // 3 (floor); TS port uses float division (pre-existing divergence, tracked for parity follow-up)
+  const freshMs = Math.floor(staleDays / FRESH_DIVISOR) * MILLIS_PER_DAY; // source: cortex@ed33435 assess_coverage.py:92 — timedelta(days=stale_days // 3); Math.floor matches Python `//` (floor toward -inf)
 
   let fresh = 0;
   let stale = 0;
