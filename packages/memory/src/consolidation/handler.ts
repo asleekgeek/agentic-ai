@@ -18,6 +18,7 @@ import { runPlasticityCycle } from "./stages/plasticity.js";
 import { runMemifyCycle } from "./stages/memify.js";
 import { runDeepSleep } from "./stages/sleep.js";
 import { runTwoStageTransfer } from "./stages/transfer.js";
+import { runEntityMergeCycle } from "./stages/entity-merge.js";
 
 // ── Handler args ──────────────────────────────────────────────────────────────
 
@@ -75,6 +76,8 @@ export interface ConsolidationStore {
   acquireBatch(): {
     execute(sql: string, params?: unknown[]): Promise<{ rows?: Record<string, unknown>[]; rowcount?: number }>;
   };
+  // ── Entity merge ──────────────────────────────────────────────────────────
+  mergeEntities(survivorId: number, aliasId: number): Promise<{ merged: boolean; [k: string]: unknown }>;
   // ── Transfer ──────────────────────────────────────────────────────────────
   getTransferCandidates(limit: number): Promise<Record<string, unknown>[]>;
   updateHippocampalDependency(id: number, dependency: number): Promise<void>;
@@ -120,6 +123,7 @@ export interface ConsolidationResult {
   cls?: Record<string, unknown>;
   memify?: Record<string, unknown>;
   deep_sleep?: Record<string, unknown>;
+  entity_merge?: Record<string, unknown>;
   cascade: Record<string, unknown>;
   homeostatic: Record<string, unknown>;
   transfer?: Record<string, unknown>;
@@ -245,6 +249,15 @@ export async function handler(
       ),
     );
   }
+
+  // Entity-merge cycle: collapse near-duplicate concept entities.
+  // source: cortex bc5af469 mcp_server/handlers/consolidation/entity_merge.py
+  stats["entity_merge"] = await timed(() =>
+    runEntityMergeCycle({
+      getAllEntities: (opts) => store.getAllEntities(opts),
+      mergeEntities: (survivorId, aliasId) => store.mergeEntities(survivorId, aliasId),
+    }),
+  );
 
   // Always-run cycles
   stats["cascade"] = await timed(() =>

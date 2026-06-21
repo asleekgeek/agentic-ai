@@ -158,3 +158,115 @@ export async function getMemoriesForEntity(client: PoolClient, entityId: number)
     "SELECT m.* FROM memories m JOIN memory_entities me ON me.memory_id = m.id WHERE me.entity_id = $1 ORDER BY m.heat_base DESC",
     [entityId])).rows as Record<string, unknown>[];
 }
+
+// source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py
+//
+// DEVIATION: agentic-ai entities has NO 'origin' column (confirmed by
+// pg-schema-tables.ts:75-84 and sqlite-schema.ts:90-99). The cortex oracle
+// additionally fetches origin to exclude ast_symbol rows as a defense-in-depth
+// guard. That check is omitted here; only the 2-row existence check is kept.
+export interface MergeEntitiesResult {
+  merged: boolean;
+  survivor_id: number;
+  alias_id: number;
+  memory_links_moved: number;
+  relationships_rewired: number;
+}
+
+export async function mergeEntities(
+  client: PoolClient,
+  survivorId: number,
+  aliasId: number,
+): Promise<MergeEntitiesResult> {
+  // precondition:  survivorId and aliasId are positive integers.
+  // postcondition: if merged, alias row archived (archived=true, heat=0);
+  //   all memory_entities and relationships rows pointing to alias are
+  //   retargeted to survivor; self-loops are deleted; survivor heat/recency
+  //   absorbs alias via GREATEST (bounded — never a sum); all in one transaction.
+  const result: MergeEntitiesResult = {
+    merged: false,
+    survivor_id: survivorId,
+    alias_id: aliasId,
+    memory_links_moved: 0,
+    relationships_rewired: 0,
+  };
+
+  if (survivorId === aliasId) return result;
+
+  // 2-row existence check: require both entities to be present.
+  // source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py — SELECT id from entities
+  const existsResult = await client.query<{ id: number }>(
+    "SELECT id FROM entities WHERE id = ANY($1::int[])",
+    [[survivorId, aliasId]],
+  );
+  if (existsResult.rows.length !== 2) return result;
+
+  try {
+    await client.query("BEGIN");
+
+    // Rewire memory_entities links: insert survivor links, dedup via ON CONFLICT.
+    // source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py — INSERT INTO memory_entities
+    await client.query(
+      "INSERT INTO memory_entities (memory_id, entity_id) " +
+        "SELECT memory_id, $1 FROM memory_entities WHERE entity_id = $2 " +
+        "ON CONFLICT DO NOTHING",
+      [survivorId, aliasId],
+    );
+
+    // Delete the alias's memory_entities links.
+    // source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py — DELETE FROM memory_entities
+    const movedResult = await client.query<{ rowcount: number }>(
+      "DELETE FROM memory_entities WHERE entity_id = $1",
+      [aliasId],
+    );
+    const moved = movedResult.rowCount ?? 0;
+
+    // Rewire relationship source references.
+    // source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py — UPDATE relationships source
+    const srcResult = await client.query(
+      "UPDATE relationships SET source_entity_id = $1 WHERE source_entity_id = $2",
+      [survivorId, aliasId],
+    );
+    // Rewire relationship target references.
+    // source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py — UPDATE relationships target
+    const tgtResult = await client.query(
+      "UPDATE relationships SET target_entity_id = $1 WHERE target_entity_id = $2",
+      [survivorId, aliasId],
+    );
+
+    // Delete self-loops created by the rewire.
+    // source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py — DELETE self-loops
+    await client.query(
+      "DELETE FROM relationships WHERE source_entity_id = target_entity_id AND source_entity_id = $1",
+      [survivorId],
+    );
+
+    // Absorb alias heat/recency into survivor via GREATEST — bounded, not a sum.
+    // source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py — UPDATE entities heat
+    await client.query(
+      "UPDATE entities SET " +
+        "heat = GREATEST(heat, (SELECT heat FROM entities WHERE id = $1)), " +
+        "last_accessed = GREATEST(last_accessed, (SELECT last_accessed FROM entities WHERE id = $1)) " +
+        "WHERE id = $2",
+      [aliasId, survivorId],
+    );
+
+    // Tombstone the alias: archived=true, heat=0 (auditable, NOT deleted).
+    // source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py — UPDATE entities tombstone
+    await client.query(
+      "UPDATE entities SET archived = TRUE, heat = 0 WHERE id = $1",
+      [aliasId],
+    );
+
+    await client.query("COMMIT");
+
+    result.merged = true;
+    result.memory_links_moved = moved;
+    result.relationships_rewired = (srcResult.rowCount ?? 0) + (tgtResult.rowCount ?? 0);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    throw err;
+  }
+
+  return result;
+}

@@ -31,3 +31,5 @@ export { runPlasticityCycle } from "./stages/plasticity.js";
 export { runMemifyCycle } from "./stages/memify.js";
 export { runDeepSleep } from "./stages/sleep.js";
 export { runTwoStageTransfer } from "./stages/transfer.js";
+export { runEntityMergeCycle } from "./stages/entity-merge.js";
+export type { EntityMergePort, EntityMergeCycleResult } from "./stages/entity-merge.js";

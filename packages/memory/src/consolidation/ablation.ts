@@ -96,10 +96,8 @@ export const Mechanism = {
   // stages/compression.ts to mirror compression.py:127's ablation gate.
   // source: cortex bc5af469 mcp_server/core/ablation.py:80
   COMPRESSION: "compression",
-  // ENTITY_DEDUP (cortex ablation.py:79, "entity_dedup") is intentionally NOT
-  // mirrored: the consolidate-time entity-merge mechanism it gates
-  // (handlers/consolidation/entity_merge.py) is not ported to TS, so the label
-  // alone would be unwired. Add it together with that subsystem, not before.
+  // source: cortex bc5af469 mcp_server/core/ablation.py:79
+  ENTITY_DEDUP: "entity_dedup",
 } as const;
 
 export type MechanismKey = keyof typeof Mechanism;

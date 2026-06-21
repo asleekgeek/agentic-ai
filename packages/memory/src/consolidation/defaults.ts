@@ -101,6 +101,7 @@ export function toConsolidationStore(store: MemoryStoreExt): ConsolidationStore 
     insertMemoryAsync?(data: Parameters<MemoryStoreExt["insertMemory"]>[0]): Promise<number>;
     bumpHeatRawAsync?(id: number, heat: number): Promise<void>;
     deleteMemoryAsync?(id: number): Promise<boolean>;
+    mergeEntitiesAsync?(survivorId: number, aliasId: number): Promise<{ merged: boolean; [k: string]: unknown }>;
   };
 
   return {
@@ -189,6 +190,11 @@ export function toConsolidationStore(store: MemoryStoreExt): ConsolidationStore 
         return { rows: [], rowcount: 0 };
       },
     }),
+    // ── entity merge ─────────────────────────────────────────────────────────
+    mergeEntities: (survivorId, aliasId) =>
+      typeof pg.mergeEntitiesAsync === "function"
+        ? pg.mergeEntitiesAsync(survivorId, aliasId)
+        : Promise.resolve(store.mergeEntities(survivorId, aliasId)),
     // ── transfer ─────────────────────────────────────────────────────────────
     getTransferCandidates: (l) =>
       typeof pg.getTransferCandidatesAsync === "function"

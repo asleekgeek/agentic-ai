@@ -80,6 +80,7 @@ import {
   getAllEntities as pgGetAllEntities,
   updateEntitiesHeatBatch as pgUpdateEntitiesHeatBatch,
   archiveEntitiesBatch as pgArchiveEntitiesBatch,
+  mergeEntities as pgMergeEntities,
 } from "./pg-store-entities.js";
 import {
   getAllRelationships as pgGetAllRelationships,
@@ -1127,6 +1128,22 @@ export class PgMemoryStore implements MemoryStoreExt {
   archiveEntitiesBatch(entityIds: number[]): number {
     void this.runAsync((c) => pgArchiveEntitiesBatch(c, entityIds));
     return entityIds.length;
+  }
+
+  /**
+   * Merge alias entity into survivor. Delegates to pg-store-entities::mergeEntities.
+   *
+   * The sync variant calls _runSync (throws at runtime from async contexts).
+   * Use mergeEntitiesAsync from async consolidation cycles.
+   *
+   * source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py
+   */
+  mergeEntities(survivorId: number, aliasId: number): { merged: boolean; survivor_id: number; alias_id: number; memory_links_moved: number; relationships_rewired: number } {
+    return this._runSync((c) => pgMergeEntities(c, survivorId, aliasId));
+  }
+
+  async mergeEntitiesAsync(survivorId: number, aliasId: number): Promise<{ merged: boolean; survivor_id: number; alias_id: number; memory_links_moved: number; relationships_rewired: number }> {
+    return this.runAsync((c) => pgMergeEntities(c, survivorId, aliasId));
   }
 
   // ── MemoryStoreExt: relationship queries ───────────────────────────────

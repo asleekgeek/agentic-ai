@@ -544,6 +544,20 @@ export interface MemoryStoreExt extends MemoryStore {
   /** Archive entities by setting heat to 0. */
   archiveEntitiesBatch(entityIds: number[]): number;
 
+  /**
+   * Merge alias entity into survivor: rewire memory_entities + relationships,
+   * drop self-loops, absorb heat/recency via MAX, tombstone alias (archived=1, heat=0).
+   * All mutations are atomic (one transaction). No-op when ids equal or either missing.
+   *
+   * DEVIATION: agentic-ai entities has NO 'origin' column — the cortex oracle's
+   * ast_symbol defense-in-depth guard (pg-schema-tables.ts:75-84, sqlite-schema.ts:90-99)
+   * is omitted; only the 2-row existence check is retained.
+   *
+   * source: cortex bc5af469 mcp_server/infrastructure/pg_store_entity_merge.py
+   * source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py
+   */
+  mergeEntities(survivorId: number, aliasId: number): { merged: boolean; survivor_id: number; alias_id: number; memory_links_moved: number; relationships_rewired: number };
+
   // ── Relationship queries ───────────────────────────────────────────────
   //
   // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_relationships.py

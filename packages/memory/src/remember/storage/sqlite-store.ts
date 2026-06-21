@@ -1403,6 +1403,105 @@ export class SqliteMemoryStore implements MemoryStoreExt {
     return entityIds.length;
   }
 
+  /**
+   * Collapse alias entity into survivor in one SQLite transaction.
+   *
+   * precondition:  survivorId and aliasId are positive integers; both exist in entities.
+   * postcondition: if merged, all memory_entities and relationships rows pointing to
+   *   alias are retargeted to survivor; self-loops deleted; survivor absorbs alias
+   *   heat/recency via MAX (bounded — never a sum); alias tombstoned (archived=1, heat=0).
+   *
+   * DEVIATION: agentic-ai entities has NO 'origin' column (confirmed by
+   * pg-schema-tables.ts:75-84 and sqlite-schema.ts:90-99). The cortex oracle's
+   * ast_symbol defense-in-depth guard is omitted; only the 2-row existence check is kept.
+   *
+   * source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py
+   */
+  mergeEntities(
+    survivorId: number,
+    aliasId: number,
+  ): { merged: boolean; survivor_id: number; alias_id: number; memory_links_moved: number; relationships_rewired: number } {
+    const result = {
+      merged: false,
+      survivor_id: survivorId,
+      alias_id: aliasId,
+      memory_links_moved: 0,
+      relationships_rewired: 0,
+    };
+
+    if (survivorId === aliasId) return result;
+
+    // 2-row existence check: require both entities to be present.
+    // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — SELECT id FROM entities
+    const existingRows = this._db
+      .prepare("SELECT id FROM entities WHERE id IN (?, ?)")
+      .all(survivorId, aliasId) as Array<{ id: number }>;
+    if (existingRows.length !== 2) return result;
+
+    const doMerge = this._db.transaction(() => {
+      // Rewire memory_entities links: dedup via OR IGNORE.
+      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — INSERT OR IGNORE
+      this._db
+        .prepare(
+          "INSERT OR IGNORE INTO memory_entities (memory_id, entity_id) " +
+            "SELECT memory_id, ? FROM memory_entities WHERE entity_id = ?",
+        )
+        .run(survivorId, aliasId);
+
+      // Delete the alias's memory_entities links.
+      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — DELETE FROM memory_entities
+      const movedInfo = this._db
+        .prepare("DELETE FROM memory_entities WHERE entity_id = ?")
+        .run(aliasId);
+      const moved = movedInfo.changes;
+
+      // Rewire relationship source references.
+      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE relationships source
+      const srcInfo = this._db
+        .prepare("UPDATE relationships SET source_entity_id = ? WHERE source_entity_id = ?")
+        .run(survivorId, aliasId);
+
+      // Rewire relationship target references.
+      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE relationships target
+      const tgtInfo = this._db
+        .prepare("UPDATE relationships SET target_entity_id = ? WHERE target_entity_id = ?")
+        .run(survivorId, aliasId);
+
+      // Delete self-loops created by the rewire.
+      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — DELETE self-loops
+      this._db
+        .prepare(
+          "DELETE FROM relationships WHERE source_entity_id = target_entity_id AND source_entity_id = ?",
+        )
+        .run(survivorId);
+
+      // Absorb alias heat/recency into survivor via MAX — bounded, not a sum.
+      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE entities heat
+      this._db
+        .prepare(
+          "UPDATE entities SET " +
+            "heat = MAX(heat, (SELECT heat FROM entities WHERE id = ?)), " +
+            "last_accessed = MAX(last_accessed, (SELECT last_accessed FROM entities WHERE id = ?)) " +
+            "WHERE id = ?",
+        )
+        .run(aliasId, aliasId, survivorId);
+
+      // Tombstone the alias: archived=1, heat=0 (auditable, NOT deleted).
+      // source: cortex bc5af469 mcp_server/infrastructure/sqlite_store_entity_merge.py — UPDATE entities tombstone
+      this._db
+        .prepare("UPDATE entities SET archived = 1, heat = 0 WHERE id = ?")
+        .run(aliasId);
+
+      return { moved, rewired: srcInfo.changes + tgtInfo.changes };
+    });
+
+    const { moved, rewired } = doMerge();
+    result.merged = true;
+    result.memory_links_moved = moved;
+    result.relationships_rewired = rewired;
+    return result;
+  }
+
   // ── Relationship queries ──────────────────────────────��────────────────
 
   /**
