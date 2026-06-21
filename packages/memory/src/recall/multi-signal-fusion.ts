@@ -20,6 +20,7 @@ import { computeBm25Scores, computeNgramScore } from "./bm25.js";
 import { computeRecencyBoost, computeSessionCoherence } from "./heat.js";
 import { expandSignalWeights } from "./query-intent.js";
 import { rrfFuseSignals, wrrfFuseSignals } from "./rrf.js";
+import { _SIGNAL_NAMES } from "./retrieval-dispatch.js";
 import type {
   MemoryItem,
   MultiSignalSignals,
@@ -226,9 +227,16 @@ export function fuseSignals(
   rrfK = DEFAULT_RRF_K,
   weights?: Record<string, number>,
 ): Array<[number, number]> {
+  // Build active signals in the canonical _SIGNAL_NAMES order so wrrfFuseSignals
+  // inserts mem_ids in the oracle's order (it iterates signals.get(n) for n in
+  // _SIGNAL_NAMES) — making the stable-sort tie-break on equal fused scores
+  // byte-faithful, and ignoring any out-of-allowlist signal exactly as the oracle does.
+  // source: cortex main mcp_server/core/retrieval_dispatch.py (_SIGNAL_NAMES order)
   const activeSignals: Record<string, Array<[number, number]>> = {};
-  for (const [name, pairs] of Object.entries(signals)) {
-    if (pairs.length > 0) {
+  const allSignals = signals as Record<string, Array<[number, number]>>;
+  for (const name of _SIGNAL_NAMES) {
+    const pairs = allSignals[name];
+    if (pairs && pairs.length > 0) {
       activeSignals[name] = pairs;
     }
   }

@@ -74,7 +74,7 @@ export function wrfFuse(
 // ── Signal Names ──────────────────────────────────────────────────────────
 // source: cortex main mcp_server/core/retrieval_dispatch.py:60-70
 
-const _SIGNAL_NAMES = [
+export const _SIGNAL_NAMES = [
   "vector",
   "fts",
   "heat",

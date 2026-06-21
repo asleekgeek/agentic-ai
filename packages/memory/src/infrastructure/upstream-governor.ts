@@ -80,12 +80,13 @@ export async function govern(
 }
 
 /**
- * Declared budget for a server (the first caller's maxConcurrent), or undefined
- * when no gate exists yet. Mirrors the oracle's current_budget.
+ * Declared permit count for a server. TOTAL function: an ungoverned server
+ * returns the default budget (not undefined), mirroring the oracle's
+ * current_budget which returns _BUDGETS.get(name, _DEFAULT_MAX_CONCURRENT_CALLS).
  * source: cortex main mcp_server/infrastructure/upstream_governor.py (current_budget)
  */
-export function currentBudget(serverName: string): number | undefined {
-  return budgets.get(serverName);
+export function currentBudget(serverName: string): number {
+  return budgets.get(serverName) ?? DEFAULT_MAX_CONCURRENT_CALLS;
 }
 
 /** Test-only: clear the process-global gate + budget registries. */
