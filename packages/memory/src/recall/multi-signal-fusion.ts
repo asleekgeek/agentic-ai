@@ -18,8 +18,14 @@
 
 import { computeBm25Scores, computeNgramScore } from "./bm25.js";
 import { computeRecencyBoost, computeSessionCoherence } from "./heat.js";
+import { expandSignalWeights } from "./query-intent.js";
 import { rrfFuseSignals, wrrfFuseSignals } from "./rrf.js";
-import type { MemoryItem, MultiSignalSignals, RecallResult } from "./types.js";
+import type {
+  MemoryItem,
+  MultiSignalSignals,
+  RecallResult,
+  SignalWeights,
+} from "./types.js";
 import type { QueryIntentValue } from "./types.js";
 import { QueryIntent } from "./types.js";
 
@@ -197,14 +203,23 @@ export function buildRecallResult(
  * Accepts pre-computed signals (from the MemoryStore port) alongside
  * locally-computed BM25 + n-gram + heat signals.
  *
- * Per-signal weights match the Python recall pipeline (BASE_WEIGHTS +
- * INTENT_WEIGHT_OVERRIDES). When weights are supplied they must cover
- * exactly the active signals: a missing or extra weight throws an Error
- * (strict=True parity) rather than defaulting to 1.0 or degrading to plain
- * RRF. When weights are omitted entirely, unweighted RRF is used.
+ * The supplied `weights` argument is the RAW intent-weight map produced by
+ * computeRetrievalWeights (keys vector/fts/heat/temporal/causal/entity/
+ * spreading). The oracle never fuses with that dict directly: dispatch_retrieval
+ * passes it through compute_signal_weights, which expands it into a weight for
+ * EVERY signal that can be active (vector/fts/heat/hopfield/hdc/sr/sa/bm25/
+ * ngram) before zipping it against the parallel signal lists. This function
+ * mirrors that — it expands the intent weights via expandSignalWeights (the
+ * base-tier port of compute_signal_weights) so that every active signal,
+ * including the tier signals bm25/ngram/hopfield/hdc/sr/sa, has a weight.
+ * Without the expansion those signals were absent from the map and silently
+ * defaulted to 1.0; the strict invariant in wrrfFuseSignals now rejects any
+ * active signal that lacks a weight (zip strict=True parity) rather than
+ * defaulting it. When weights are omitted entirely, unweighted RRF is used.
  *
  * Port of: the fusion step in mcp_server/handlers/recall_helpers.py::collect_signals
  *          plus mcp_server/core/retrieval_dispatch.py wrrf_fuse (weighted variant)
+ * source: cortex main mcp_server/core/retrieval_dispatch.py compute_signal_weights
  */
 export function fuseSignals(
   signals: MultiSignalSignals,
@@ -218,7 +233,8 @@ export function fuseSignals(
     }
   }
   if (weights) {
-    return wrrfFuseSignals(activeSignals, weights, rrfK);
+    const perSignalWeights = expandSignalWeights(weights as SignalWeights);
+    return wrrfFuseSignals(activeSignals, perSignalWeights, rrfK);
   }
   return rrfFuseSignals(activeSignals, rrfK);
 }

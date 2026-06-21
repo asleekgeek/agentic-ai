@@ -44,6 +44,11 @@
 // The type is aliased (PgPool) so it never collides with the destructured value.
 import pgDefault, { type Pool as PgPool, type PoolClient } from "pg";
 const { Pool } = pgDefault;
+// source: cortex main mcp_server/infrastructure/pg_store.py _init_schema (get_all_ddl)
+import { createHash } from "node:crypto";
+import { getAllDdl } from "./pg-schema-functions.js";
+// source: cortex main mcp_server/infrastructure/pg_store.py _SCHEMA_META_DDL
+import { SCHEMA_META_DDL } from "./pg-schema-tables.js";
 import type { MemoryInsertData, MemoryItem } from "../types.js";
 import type {
   EntityRecord,
@@ -111,6 +116,13 @@ import {
 // source: ECMAScript spec — Float32Array.BYTES_PER_ELEMENT = 4
 const FLOAT32_BYTES_PER_ELEMENT = Float32Array.BYTES_PER_ELEMENT;
 
+// Advisory lock id for schema bootstrap. Two processes hitting a fresh DB
+// simultaneously used to deadlock on the A3 migration's ALTER TABLE / CREATE
+// INDEX pair; this lock serializes the apply.
+// source: cortex main mcp_server/infrastructure/pg_store.py _SCHEMA_LOCK_ID
+//   (sha256(b'cortex_schema_a3').hexdigest() mod 2**31)
+const SCHEMA_LOCK_ID = 1357020271; // eslint-disable-line @typescript-eslint/no-magic-numbers -- source: cortex main mcp_server/infrastructure/pg_store.py _SCHEMA_LOCK_ID
+
 function nowIso(): string {
   return new Date().toISOString();
 }
@@ -131,11 +143,108 @@ function clampHeat(h: number): number {
 export class PgMemoryStore implements MemoryStoreExt {
   private readonly _pool: PgPool;
 
+  // Memoized schema-init promise. The oracle runs _init_schema in __init__;
+  // this port defers it to first async use (Node cannot block in the sync
+  // constructor) and memoizes so it runs at most once per store instance.
+  // source: cortex main mcp_server/infrastructure/pg_store.py __init__/_init_schema
+  private _schemaInit: Promise<void> | null = null;
+
   // source: cortex main mcp_server/infrastructure/pg_store.py _get_database_url
   // (PgMemoryStore.__init__: self._url = database_url or _get_database_url())
   constructor(connectionString?: string) {
     const url = connectionString || resolveDatabaseUrl();
     this._pool = new Pool({ connectionString: url, max: 5 });
+  }
+
+  // ── Schema bootstrap (hash-gated, memoized) ─────────────────────────────
+  //
+  // Mirrors the oracle, which inits in __init__. Here it is lazy-first-use:
+  // _ensureSchema() memoizes _initSchema() so the DDL is hashed and (only on
+  // a hash change) re-applied at most once per store instance, then awaited at
+  // the start of every async write/read path.
+  // source: cortex main mcp_server/infrastructure/pg_store.py _init_schema
+
+  /**
+   * Run _initSchema() at most once, returning the memoized promise.
+   * source: cortex main mcp_server/infrastructure/pg_store.py _init_schema
+   */
+  private _ensureSchema(): Promise<void> {
+    if (this._schemaInit === null) this._schemaInit = this._initSchema();
+    return this._schemaInit;
+  }
+
+  /**
+   * Return the DDL hash recorded in schema_meta, or null.
+   *
+   * A missing schema_meta table (fresh DB) or any read error reads as null →
+   * the caller migrates.
+   * source: cortex main mcp_server/infrastructure/pg_store.py _recorded_schema_hash
+   */
+  private async _recordedSchemaHash(client: PoolClient): Promise<string | null> {
+    try {
+      const result = await client.query<{ ddl_hash: string }>(
+        `SELECT ddl_hash FROM schema_meta WHERE id = 1`,
+      );
+      return result.rows[0]?.ddl_hash ?? null;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Persist the just-applied DDL revision (upsert the single row). Creates
+   * schema_meta lazily — it is intentionally NOT part of getAllDdl().
+   * source: cortex main mcp_server/infrastructure/pg_store.py _record_schema_hash
+   */
+  private async _recordSchemaHash(client: PoolClient, ddlHash: string): Promise<void> {
+    await client.query(SCHEMA_META_DDL);
+    await client.query(
+      `INSERT INTO schema_meta (id, ddl_hash, applied_at) VALUES (1, $1, NOW())
+       ON CONFLICT (id) DO UPDATE SET ddl_hash = EXCLUDED.ddl_hash, applied_at = EXCLUDED.applied_at`,
+      [ddlHash],
+    );
+  }
+
+  /**
+   * Create/upgrade tables, indexes, and stored procedures — once per schema
+   * REVISION, gated on a content hash of getAllDdl() recorded in schema_meta.
+   *
+   * Fast path: when the recorded hash matches the code, this is a single
+   * indexed SELECT — no advisory lock, no DDL. DDL runs only on a hash
+   * difference, serialized under pg_advisory_lock with a double-check so
+   * concurrent first-time inits don't re-run it.
+   *
+   * source: cortex main mcp_server/infrastructure/pg_store.py _init_schema
+   */
+  private async _initSchema(): Promise<void> {
+    const ddlList = getAllDdl();
+    const ddlHash = createHash("sha256").update(ddlList.join("\n"), "utf-8").digest("hex");
+    await this._runAsyncRaw(async (client) => {
+      // Fast path: DB already at this exact DDL revision.
+      if ((await this._recordedSchemaHash(client)) === ddlHash) return;
+      // Stale or fresh: serialize the apply under the advisory lock.
+      await client.query(`SELECT pg_advisory_lock($1)`, [SCHEMA_LOCK_ID]);
+      try {
+        // A peer may have applied the new revision while we waited.
+        if ((await this._recordedSchemaHash(client)) === ddlHash) return;
+        for (const ddl of ddlList) {
+          try {
+            await client.query(ddl);
+          } catch (exc) {
+            // eslint-disable-next-line no-console -- mirrors oracle logger.warning
+            console.warn(`Schema statement failed: ${ddl.split("\n")[0]?.slice(0, 50)} — ${String(exc)}`);
+          }
+        }
+        await this._recordSchemaHash(client, ddlHash);
+      } finally {
+        try {
+          await client.query(`SELECT pg_advisory_unlock($1)`, [SCHEMA_LOCK_ID]);
+        } catch (exc) {
+          // eslint-disable-next-line no-console -- mirrors oracle logger.warning
+          console.warn(`Failed to release schema advisory lock: ${String(exc)}`);
+        }
+      }
+    });
   }
 
   // ── Internal: run a query synchronously by acquiring a client ──────────
@@ -175,6 +284,19 @@ export class PgMemoryStore implements MemoryStoreExt {
    *   (including error paths — finally block).
    */
   async runAsync<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
+    // Ensure schema is at the code's revision before any read/write. The oracle
+    // inits in __init__; this port inits lazily on first use (memoized).
+    // source: cortex main mcp_server/infrastructure/pg_store.py __init__/_init_schema
+    await this._ensureSchema();
+    return this._runAsyncRaw(fn);
+  }
+
+  /**
+   * Acquire a pool client and run fn, WITHOUT the schema gate. Used by
+   * _initSchema itself to avoid re-entering _ensureSchema (infinite recursion).
+   * postcondition: client is returned to the pool in all code paths.
+   */
+  private async _runAsyncRaw<T>(fn: (client: PoolClient) => Promise<T>): Promise<T> {
     const client = await this._pool.connect();
     try {
       return await fn(client);

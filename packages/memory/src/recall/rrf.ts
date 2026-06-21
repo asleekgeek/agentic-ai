@@ -112,12 +112,14 @@ export function rrfFuseSignals(
  * regression on MRR vs the Python baseline because every signal counts
  * equally regardless of its informativeness for the query intent.
  *
- * precondition: weights has exactly one entry per active signal (a signal
- *   with a non-empty list). A signal missing from weights, or a weight with
- *   no matching active signal, is a length-drift violation and throws an
- *   Error — mirroring the Python zip(..., strict=True) invariant. Missing
- *   weights are never silently defaulted to 1.0 and the fusion never falls
- *   back to plain RRF. Non-positive weights skip the signal entirely.
+ * precondition: weights has an entry for every active signal (a signal with a
+ *   non-empty list). An active signal missing from weights is a length-drift
+ *   violation and throws an Error — mirroring the Python zip(..., strict=True)
+ *   invariant. Extra weights for inactive signals are tolerated: the oracle
+ *   zips the parallel lists the caller builds, so only the active⊆weights
+ *   direction is load-bearing. Missing weights are never silently defaulted to
+ *   1.0 and the fusion never falls back to plain RRF. Non-positive weights skip
+ *   the signal entirely.
  * postcondition: returned list is sorted by descending fused score; ties
  *   broken by source count then ascending id (matches rrfFuseIds).
  *
@@ -131,19 +133,26 @@ export function wrrfFuseSignals(
   weights: Record<string, number>,
   k: number = DEFAULT_RRF_K,
 ): Array<[number, number]> {
-  // NOTE: oracle wrrf_fuse zips two PARALLEL lists (signal_results,
-  // signal_weights) with strict=True — the caller builds both together so they
-  // never drift. The faithful TS analog requires the caller (multi-signal-fusion
-  // via compute_signal_weights) to emit a weight for EVERY active signal,
-  // including tier signals (bm25/ngram/hopfield/hdc). Until compute_signal_weights
-  // is fully ported, a missing weight defaults to 1.0 (the prior parity-passing
-  // behavior) rather than throwing. DEFERRED parity item: port compute_signal_weights.
+  // Oracle wrrf_fuse zips two PARALLEL lists (signal_results, signal_weights)
+  // with strict=True — the caller (dispatch_retrieval via compute_signal_weights)
+  // builds both together so they never drift. The faithful TS analog requires
+  // every ACTIVE signal (a non-empty list) to have a weight; a missing weight is
+  // a length-drift violation and throws, mirroring zip(strict=True). Extra
+  // weights for inactive signals are tolerated: the oracle only zips the
+  // active-list direction, so only active⊆weights is load-bearing. Missing
+  // weights are never silently defaulted to 1.0.
   // source: cortex main mcp_server/core/retrieval_dispatch.py wrrf_fuse
   const scores = new Map<number, number>();
   const sourceCounts = new Map<number, number>();
   for (const [name, pairs] of Object.entries(signals)) {
     if (pairs.length === 0) continue;
-    const w = weights[name] ?? 1.0;
+    if (!(name in weights)) {
+      throw new Error(
+        `wrrfFuseSignals: active signal "${name}" has no weight ` +
+          `(zip strict=True parity — every active signal must have a weight)`,
+      );
+    }
+    const w = weights[name] as number;
     if (w <= 0) continue;
     for (let rank = 0; rank < pairs.length; rank++) {
       const entry = pairs[rank];

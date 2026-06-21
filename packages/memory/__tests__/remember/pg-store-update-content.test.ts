@@ -60,6 +60,13 @@ describe("PgMemoryStore.updateMemoryContentAsync", () => {
   it("sends UPDATE memories SET content, tags WHERE id", async () => {
     const store = new PgMemoryStore("postgresql://fake/db");
 
+    // Neutralize the lazy, hash-gated schema init so the assertions see ONLY
+    // the operation's query. The oracle inits schema in __init__ (before any
+    // op); this port defers it to first async use (runAsync awaits
+    // _ensureSchema). Pre-resolving _schemaInit short-circuits _initSchema.
+    // source: cortex main mcp_server/infrastructure/pg_store.py _init_schema
+    (store as unknown as { _schemaInit: Promise<void> })._schemaInit = Promise.resolve();
+
     mockClient.query.mockClear();
     mockConnect.mockClear();
 
@@ -92,6 +99,11 @@ describe("PgMemoryStore.updateMemoryContentAsync", () => {
 
   it("serialises empty tags array as '[]'", async () => {
     const store = new PgMemoryStore("postgresql://fake/db");
+
+    // Neutralize lazy schema init (see test above) so mockClient.query.mock.calls[0]
+    // is the operation's UPDATE, not a schema DDL statement.
+    // source: cortex main mcp_server/infrastructure/pg_store.py _init_schema
+    (store as unknown as { _schemaInit: Promise<void> })._schemaInit = Promise.resolve();
 
     mockClient.query.mockClear();
     await store.updateMemoryContentAsync(1, "No tags.", []);

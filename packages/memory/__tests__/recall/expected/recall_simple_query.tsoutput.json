@@ -4,14 +4,14 @@
   "output": {
     "memories": [
       {
-        "memory_id": 1,
-        "content": "We chose pgvector over Pinecone because of lower operational complexity, native PostgreSQL integration, and cost. pgvector supports HNSW indexes with m=16, ef_construction=64.",
-        "score": 0.021,
-        "heat": 1,
+        "memory_id": 4,
+        "content": "HNSW index parameters: m=16 ef_construction=64 are the pgvector defaults. These match our production config.",
+        "score": 0.0157,
+        "heat": 0.7,
         "domain": "cortex",
         "tags": [
-          "architecture",
-          "vector-db"
+          "pgvector",
+          "hnsw"
         ],
         "store_type": "episodic",
         "created_at": "2026-05-05T00:00:00.000Z",
@@ -36,14 +36,14 @@
         "recency_boost": 0.2988
       },
       {
-        "memory_id": 4,
-        "content": "HNSW index parameters: m=16 ef_construction=64 are the pgvector defaults. These match our production config.",
-        "score": 0.0209,
-        "heat": 0.7,
+        "memory_id": 1,
+        "content": "We chose pgvector over Pinecone because of lower operational complexity, native PostgreSQL integration, and cost. pgvector supports HNSW indexes with m=16, ef_construction=64.",
+        "score": 0.0156,
+        "heat": 1,
         "domain": "cortex",
         "tags": [
-          "pgvector",
-          "hnsw"
+          "architecture",
+          "vector-db"
         ],
         "store_type": "episodic",
         "created_at": "2026-05-05T00:00:00.000Z",

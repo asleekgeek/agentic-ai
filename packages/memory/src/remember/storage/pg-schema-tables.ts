@@ -465,3 +465,18 @@ CREATE TABLE IF NOT EXISTS workflow_graph_layout (
     computed_at          TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 `;
+
+// One-row table recording the content hash of the LAST-APPLIED DDL set.
+// Created lazily by the first migration (via _recordSchemaHash) so a fresh DB
+// bootstraps cleanly. NOT part of getAllDdl(): the hash is computed over the
+// getAllDdl() statement list, which must exclude schema_meta itself (mirrors
+// the oracle, whose get_all_ddl() omits schema_meta — it is created inside
+// _record_schema_hash).
+// source: cortex main mcp_server/infrastructure/pg_store.py _SCHEMA_META_DDL
+export const SCHEMA_META_DDL = `
+CREATE TABLE IF NOT EXISTS schema_meta (
+    id          INTEGER PRIMARY KEY DEFAULT 1 CHECK (id = 1),
+    ddl_hash    TEXT NOT NULL,
+    applied_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+`;
