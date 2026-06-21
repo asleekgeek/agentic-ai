@@ -214,9 +214,10 @@ export function buildRecallResult(
  * base-tier port of compute_signal_weights) so that every active signal,
  * including the tier signals bm25/ngram/hopfield/hdc/sr/sa, has a weight.
  * Without the expansion those signals were absent from the map and silently
- * defaulted to 1.0; the strict invariant in wrrfFuseSignals now rejects any
- * active signal that lacks a weight (zip strict=True parity) rather than
- * defaulting it. When weights are omitted entirely, unweighted RRF is used.
+ * defaulted to 1.0; with it, every active signal carries its computed weight. A
+ * weight still absent for an active signal is treated as 0 and skipped (oracle:
+ * weights.get(name, 0.0) then `if weight <= 0: continue`) — never defaulted to
+ * 1.0 and never thrown. When weights are omitted entirely, unweighted RRF is used.
  *
  * Port of: the fusion step in mcp_server/handlers/recall_helpers.py::collect_signals
  *          plus mcp_server/core/retrieval_dispatch.py wrrf_fuse (weighted variant)
