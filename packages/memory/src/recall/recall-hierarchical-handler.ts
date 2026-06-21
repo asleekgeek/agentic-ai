@@ -270,7 +270,9 @@ export async function recallHierarchicalHandler(
         created_at: r.created_at,
       })),
       total: flatResult.count,
-      hierarchy: { stats: { fallback: "no_embedding_engine" } },
+      // source: cortex main mcp_server/handlers/recall_hierarchical.py — flat fallback: top-level fallback:"flat_recall", hierarchy:{stats:{}}
+      hierarchy: { stats: {} },
+      fallback: "flat_recall",
     };
   }
 
@@ -305,7 +307,9 @@ export async function recallHierarchicalHandler(
         created_at: r.created_at,
       })),
       total: flatResult.count,
-      hierarchy: { stats: { fallback: "too_few_embeddings" } },
+      // source: cortex main mcp_server/handlers/recall_hierarchical.py — flat fallback: top-level fallback:"flat_recall", hierarchy:{stats:{}}
+      hierarchy: { stats: {} },
+      fallback: "flat_recall",
     };
   }
 

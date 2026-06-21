@@ -80,7 +80,11 @@ function parseArgs(args: SeedProjectArgs): {
 } {
   const raw = args.directory?.trim() || process.cwd();
   const root = resolvePath(raw);
-  const domain = args.domain?.trim() ?? basename(root);
+  // Falsy-coalescing (not ??): an explicit "" or whitespace-only domain must
+  // fall back to the directory basename, never run a domain-scoped purge against
+  // an empty domain. source: cortex main mcp_server/handlers/seed_project.py
+  // (_parse_args: domain = args.get("domain","") or root.name)
+  const domain = args.domain?.trim() || basename(root);
   const maxKb = args.max_file_size_kb ?? DEFAULT_MAX_FILE_SIZE_KB;
   const maxBytes = maxKb * BYTES_PER_KB;
   const dryRun = args.dry_run ?? false;

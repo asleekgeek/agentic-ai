@@ -399,6 +399,9 @@ export class SqliteMemoryStore implements MemoryStoreExt {
       // source: cortex main mcp_server/infrastructure/sqlite_schema.py:336-337
       ["memories", "supersedes_id", "INTEGER"],
       ["memories", "superseded_by_id", "INTEGER"],
+      // prospective_memories.created_by: NOT NULL DEFAULT '' → byte-identical.
+      // source: cortex main mcp_server/infrastructure/sqlite_schema.py
+      ["prospective_memories", "created_by", "TEXT NOT NULL DEFAULT ''"],
     ];
     for (const [table, col, def] of migrations) {
       try {

@@ -149,7 +149,8 @@ CREATE TABLE IF NOT EXISTS prospective_memories (
     is_active           INTEGER DEFAULT 1,
     created_at          TEXT NOT NULL DEFAULT (datetime('now')),
     triggered_at        TEXT,
-    triggered_count     INTEGER DEFAULT 0
+    triggered_count     INTEGER DEFAULT 0,
+    created_by          TEXT NOT NULL DEFAULT ''
 )`;
 
 // source: cortex main mcp_server/infrastructure/sqlite_schema.py:148-164

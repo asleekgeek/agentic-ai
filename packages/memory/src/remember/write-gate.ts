@@ -286,6 +286,8 @@ export function buildRejectionResponse(
   importance: number,
 ): {
   stored: false;
+  // source: cortex main mcp_server/core/write_gate.py
+  action: "rejected";
   reason: string;
   novelty: {
     embedding_novelty: number;
@@ -298,6 +300,8 @@ export function buildRejectionResponse(
 } {
   return {
     stored: false,
+    // source: cortex main mcp_server/core/write_gate.py
+    action: "rejected" as const,
     reason: score.gateReason,
     // source: phase 4-to-5 cleanup, 2026-04-26
     // describeSignals returns Record<string,number> but always emits exactly

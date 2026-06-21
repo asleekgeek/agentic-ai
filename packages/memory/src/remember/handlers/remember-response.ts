@@ -260,10 +260,21 @@ export function buildResponse(
   interf: number,
 ): RememberSuccessResponse {
   const mechanismFields = buildMechanismFields(mod, sep, interf);
+  // Normalize internal curation action vocab → schema-canonical enum.
+  // try_curation returns present-tense ops; the public schema documents
+  // past-tense outcomes (stored / merged / superseded).
+  // source: cortex main mcp_server/handlers/remember_response.py:build_response
+  const schemaAction: string =
+    (
+      { create: "stored", link: "stored", merge: "merged", supersede: "superseded" } as Record<
+        string,
+        string
+      >
+    )[action] ?? action;
   return {
     stored: true,
     memory_id: memId,
-    action,
+    action: schemaAction,
     store_type: storeType,
     domain,
     heat: Math.round(mod.heat * ROUND_FACTOR) / ROUND_FACTOR, // source: cortex main mcp_server/handlers/remember_response.py:build_response

@@ -625,7 +625,7 @@ describe("recall_hierarchical — basic parity", () => {
       DEFAULT_RECALL_SETTINGS,
     );
     expect(result).toBeDefined();
-    expect(result.hierarchy?.stats).toHaveProperty("fallback");
+    expect(result).toHaveProperty("fallback", "flat_recall"); // source: cortex main mcp_server/handlers/recall_hierarchical.py — top-level fallback
   });
 
   it("hierarchical handler returns level_weights when embeddings available", async () => {

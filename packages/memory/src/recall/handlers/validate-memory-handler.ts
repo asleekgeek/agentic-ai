@@ -12,7 +12,7 @@
 import * as fs from "node:fs";
 import * as os from "node:os";
 import * as path from "node:path";
-import { READ_ONLY } from "../../shared/tool-meta.js";
+import { IDEMPOTENT_WRITE } from "../../shared/tool-meta.js";
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -56,7 +56,7 @@ export interface ValidateMemoryStore {
 
 export const schema = {
   title: "Validate memory",
-  annotations: READ_ONLY,
+  annotations: IDEMPOTENT_WRITE,
   description:
     "Reconcile memory content against the current filesystem state: " +
     "extract file/path references from each memory (sandboxed under " +

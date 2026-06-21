@@ -34,8 +34,8 @@ export class SqliteAuxiliaryMixin {
       .prepare(
         "INSERT INTO prospective_memories " +
           "(content, trigger_condition, trigger_type, " +
-          "target_directory, is_active, triggered_count) " +
-          "VALUES (?, ?, ?, ?, ?, ?)",
+          "target_directory, is_active, triggered_count, created_by) " +
+          "VALUES (?, ?, ?, ?, ?, ?, ?)",
       )
       .run(
         data["content"] as string,
@@ -44,6 +44,7 @@ export class SqliteAuxiliaryMixin {
         (data["target_directory"] as string | null) ?? null,
         data["is_active"] !== false && data["is_active"] !== 0 ? 1 : 0,
         (data["triggered_count"] as number) ?? 0,
+        (data["created_by"] as string) ?? "",
       );
     return result.lastInsertRowid as number;
   }

@@ -266,6 +266,8 @@ export const HierarchicalRecallResponseSchema = z.object({
   total: z.number().int(),
   query_word_count: z.number().int().optional(),
   level_weights: z.record(z.number()).optional(),
+  // source: cortex main mcp_server/handlers/recall_hierarchical.py — flat fallback returns top-level fallback:"flat_recall"
+  fallback: z.string().optional(),
   hierarchy: z
     .object({
       stats: z.record(z.unknown()).optional(),
