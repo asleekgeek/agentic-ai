@@ -152,6 +152,49 @@ export interface AblationResult {
   interpretation: string;
 }
 
+// ── Delta / impact constants ──────────────────────────────────────────────────
+
+// source: parity with mcp_server/core/ablation.py:135 — round(a - b, 6)
+const DELTA_ROUND_FACTOR = 1e6;
+
+// source: parity with mcp_server/core/ablation.py:145 — 2.718 approximation of e
+const EULER_APPROX = 2.718;
+
+// Sigmoid steepness multiplier: 1 / (1 + e^(-5 * rms)).
+// source: parity with mcp_server/core/ablation.py:145
+const SIGMOID_STEEPNESS = -5.0;
+
+// source: parity with mcp_server/core/ablation.py:145 — round(..., 4)
+const IMPACT_ROUND_FACTOR = 1e4;
+
+// Minimum impact score below which ablation is considered negligible.
+// source: parity with mcp_server/core/ablation.py:154
+const IMPACT_MINIMAL_THRESHOLD = 0.1;
+
+// Maximum number of top deltas shown in interpretation.
+// source: parity with mcp_server/core/ablation.py:158
+const INTERPRETATION_TOP_K = 3;
+
+// Minimum delta magnitude to include in interpretation output.
+// source: parity with mcp_server/core/ablation.py:164 — if magnitude > 0.01
+const DELTA_DISPLAY_MIN = 0.01;
+
+// Number of decimal places used to format delta magnitudes in interpretation.
+// source: parity with mcp_server/core/ablation.py:165
+const DELTA_FORMAT_PLACES = 4;
+
+// Impact score threshold above which mechanism is considered critical.
+// source: parity with mcp_server/core/ablation.py:167
+const IMPACT_CRITICAL_THRESHOLD = 0.5;
+
+// Impact score threshold above which mechanism is considered meaningful.
+// source: parity with mcp_server/core/ablation.py:169
+const IMPACT_MEANINGFUL_THRESHOLD = 0.3;
+
+// Neutral hippocampal dependency value (no two-stage model active).
+// source: parity with mcp_server/core/ablation.py:232
+const NEUTRAL_HIPPOCAMPAL_DEPENDENCY_VALUE = 0.5;
+
 // ── Delta computation ─────────────────────────────────────────────────────
 
 /**
@@ -172,7 +215,7 @@ export function computeAblationDeltas(
   for (const key of keys) {
     const b = baseline[key] ?? 0.0;
     const a = ablation[key] ?? 0.0;
-    deltas[key] = Math.round((a - b) * 1e6) / 1e6;
+    deltas[key] = Math.round((a - b) * DELTA_ROUND_FACTOR) / DELTA_ROUND_FACTOR;
   }
   return deltas;
 }
@@ -195,8 +238,8 @@ export function computeImpactScore(deltas: Record<string, number>): number {
   const sumSquared = values.reduce((acc, d) => acc + d * d, 0);
   const rms = Math.sqrt(sumSquared / values.length);
   // source: cortex@ed33435 mcp_server/core/ablation.py:141 — sigmoid with base 2.718
-  const sigmoid = 1.0 / (1.0 + 2.718 ** (-5.0 * rms));
-  return Math.round(sigmoid * 1e4) / 1e4;
+  const sigmoid = 1.0 / (1.0 + EULER_APPROX ** (SIGMOID_STEEPNESS * rms));
+  return Math.round(sigmoid * IMPACT_ROUND_FACTOR) / IMPACT_ROUND_FACTOR;
 }
 
 // ── Interpretation ────────────────────────────────────────────────────────
@@ -214,26 +257,26 @@ export function generateInterpretation(
   deltas: Record<string, number>,
   impactScore: number,
 ): string {
-  if (impactScore < 0.1) {
+  if (impactScore < IMPACT_MINIMAL_THRESHOLD) {
     return `Ablation of ${mechanism} had minimal impact on system behavior.`;
   }
 
   const sortedDeltas = Object.entries(deltas)
     .sort(([, a], [, b]) => Math.abs(b) - Math.abs(a))
-    .slice(0, 3);
+    .slice(0, INTERPRETATION_TOP_K);
 
   const parts = [`Ablation of ${mechanism} (impact=${impactScore.toFixed(2)}):`];
   for (const [metric, delta] of sortedDeltas) {
     const direction = delta > 0 ? "increased" : "decreased";
     const magnitude = Math.abs(delta);
-    if (magnitude > 0.01) {
-      parts.push(`  ${metric} ${direction} by ${magnitude.toFixed(4)}`);
+    if (magnitude > DELTA_DISPLAY_MIN) {
+      parts.push(`  ${metric} ${direction} by ${magnitude.toFixed(DELTA_FORMAT_PLACES)}`);
     }
   }
 
-  if (impactScore > 0.5) {
+  if (impactScore > IMPACT_CRITICAL_THRESHOLD) {
     parts.push("  This mechanism appears CRITICAL for system function.");
-  } else if (impactScore > 0.3) {
+  } else if (impactScore > IMPACT_MEANINGFUL_THRESHOLD) {
     parts.push("  This mechanism contributes meaningfully to system behavior.");
   } else {
     parts.push("  This mechanism has a minor but measurable contribution.");
@@ -314,7 +357,7 @@ export function neutralSeparationIndex(): number { return 0.0; }
  * Return neutral dependency (no two-stage model).
  * source: cortex@ed33435 mcp_server/core/ablation.py:226
  */
-export function neutralHippocampalDependency(): number { return 0.5; }
+export function neutralHippocampalDependency(): number { return NEUTRAL_HIPPOCAMPAL_DEPENDENCY_VALUE; }
 
 /**
  * Return neutral scaling (no homeostatic plasticity).

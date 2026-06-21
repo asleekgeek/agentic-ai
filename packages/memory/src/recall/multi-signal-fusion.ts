@@ -23,6 +23,45 @@ import type { MemoryItem, MultiSignalSignals, RecallResult } from "./types.js";
 import type { QueryIntentValue } from "./types.js";
 import { QueryIntent } from "./types.js";
 
+// ── Magic-number constants ─────────────────────────────────────────────────
+
+// Multiplier applied to RECENCY_BOOST_MAX for KNOWLEDGE_UPDATE intent.
+// Port of: mcp_server/handlers/recall_helpers.py:117 (boost_max=settings.RECENCY_BOOST_MAX * 3.0)
+const KNOWLEDGE_UPDATE_BOOST_MAX_MULTIPLIER = 3.0;
+
+// Multiplier applied to RECENCY_BOOST_HALFLIFE_DAYS for KNOWLEDGE_UPDATE intent.
+// Port of: mcp_server/handlers/recall_helpers.py:118 (halflife_days=settings.RECENCY_BOOST_HALFLIFE_DAYS * 0.5)
+const KNOWLEDGE_UPDATE_HALFLIFE_MULTIPLIER = 0.5;
+
+// Multiplier applied to RECENCY_BOOST_CUTOFF_DAYS for KNOWLEDGE_UPDATE intent.
+// Port of: mcp_server/handlers/recall_helpers.py:119 (cutoff_days=settings.RECENCY_BOOST_CUTOFF_DAYS * 2.0)
+const KNOWLEDGE_UPDATE_CUTOFF_MULTIPLIER = 2.0;
+
+// Precision factor for rounding scores and heat to 4 decimal places.
+// Port of: mcp_server/handlers/recall_helpers.py:267 (round(score * (1.0 + boost), 4))
+// source: parity with mcp_server/handlers/recall_helpers.py:267
+const SCORE_ROUNDING_PRECISION = 10000;
+
+// Default importance score for memories lacking an explicit importance field.
+// Port of: mcp_server/handlers/recall_helpers.py:268 (mem.get("importance", 0.5))
+const DEFAULT_IMPORTANCE = 0.5;
+
+// Default RRF k constant — the standard Reciprocal Rank Fusion smoothing parameter.
+// Port of: mcp_server/core/retrieval_dispatch.py (wrrf_fuse, k=60)
+const DEFAULT_RRF_K = 60;
+
+// Fraction of results placed at the top for strategic ordering (Lost-in-the-Middle).
+// Port of: mcp_server/handlers/recall.py::_apply_strategic_ordering (top_fraction=0.3)
+const STRATEGIC_TOP_FRACTION = 0.3;
+
+// Fraction of results placed at the bottom for strategic ordering.
+// Port of: mcp_server/handlers/recall.py::_apply_strategic_ordering (bottom_fraction=0.2)
+const STRATEGIC_BOTTOM_FRACTION = 0.2;
+
+// Minimum result count below which strategic reordering is skipped.
+// Port of: mcp_server/handlers/recall.py::_apply_strategic_ordering (if len(results) < 5)
+const STRATEGIC_ORDERING_MIN_RESULTS = 5;
+
 // ── Text-signal computation ────────────────────────────────────────────────
 
 /**
@@ -88,9 +127,9 @@ function computeResultBoost(
   if (intent === QueryIntent.KNOWLEDGE_UPDATE) {
     return computeRecencyBoost(
       createdAt,
-      settings.RECENCY_BOOST_MAX * 3.0,
-      settings.RECENCY_BOOST_HALFLIFE_DAYS * 0.5,
-      settings.RECENCY_BOOST_CUTOFF_DAYS * 2.0,
+      settings.RECENCY_BOOST_MAX * KNOWLEDGE_UPDATE_BOOST_MAX_MULTIPLIER,
+      settings.RECENCY_BOOST_HALFLIFE_DAYS * KNOWLEDGE_UPDATE_HALFLIFE_MULTIPLIER,
+      settings.RECENCY_BOOST_CUTOFF_DAYS * KNOWLEDGE_UPDATE_CUTOFF_MULTIPLIER,
     );
   }
   return computeRecencyBoost(
@@ -138,15 +177,15 @@ export function buildRecallResult(
   return {
     memory_id: mem.id,
     content: mem.content,
-    score: Math.round(score * (1 + boost) * 10000) / 10000,
-    heat: Math.round(heat * 10000) / 10000,
+    score: Math.round(score * (1 + boost) * SCORE_ROUNDING_PRECISION) / SCORE_ROUNDING_PRECISION,
+    heat: Math.round(heat * SCORE_ROUNDING_PRECISION) / SCORE_ROUNDING_PRECISION,
     domain: mem.domain ?? "",
     tags: parseTags(mem.tags),
     store_type: mem.store_type ?? "episodic",
     created_at: createdAt,
-    importance: mem.importance ?? 0.5,
+    importance: mem.importance ?? DEFAULT_IMPORTANCE,
     surprise: mem.surprise_score ?? 0,
-    recency_boost: Math.round(boost * 10000) / 10000,
+    recency_boost: Math.round(boost * SCORE_ROUNDING_PRECISION) / SCORE_ROUNDING_PRECISION,
   };
 }
 
@@ -168,7 +207,7 @@ export function buildRecallResult(
  */
 export function fuseSignals(
   signals: MultiSignalSignals,
-  rrfK = 60,
+  rrfK = DEFAULT_RRF_K,
   weights?: Record<string, number>,
 ): Array<[number, number]> {
   const activeSignals: Record<string, Array<[number, number]>> = {};
@@ -198,11 +237,11 @@ export function fuseSignals(
  */
 export function applyStrategicOrdering<T>(
   results: T[],
-  topFraction = 0.3,
-  bottomFraction = 0.2,
+  topFraction = STRATEGIC_TOP_FRACTION,
+  bottomFraction = STRATEGIC_BOTTOM_FRACTION,
 ): T[] {
   const n = results.length;
-  if (n < 5) return results;
+  if (n < STRATEGIC_ORDERING_MIN_RESULTS) return results;
   const topN = Math.max(1, Math.floor(n * topFraction));
   const bottomN = Math.max(1, Math.floor(n * bottomFraction));
   if (n - topN - bottomN <= 0) return results;

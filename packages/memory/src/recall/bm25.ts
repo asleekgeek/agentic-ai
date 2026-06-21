@@ -8,6 +8,40 @@
  * Pure business logic — no I/O. All inputs are plain strings / arrays.
  */
 
+// ── BM25 constants ───────────────────────────────────────────────────────
+
+// Default BM25 term-frequency saturation parameter.
+// source: parity with mcp_server/core/scoring.py:115
+const BM25_K1_DEFAULT = 1.5;
+
+// Default BM25 document-length normalization parameter.
+// source: parity with mcp_server/core/scoring.py:116
+const BM25_B_DEFAULT = 0.75;
+
+// IDF smoothing addend: log((N - df + 0.5) / (df + 0.5) + 1).
+// source: parity with mcp_server/core/scoring.py:107
+const IDF_SMOOTH_ADDEND = 0.5;
+
+// Fallback average document length when corpus is empty.
+// source: parity with mcp_server/core/scoring.py:82
+const AVG_DL_FALLBACK = 1.0;
+
+// N-gram sizes for trigram and bigram overlap scoring.
+// source: parity with mcp_server/core/scoring.py:158-164
+const TRIGRAM_N = 3;
+
+// N-gram weight: trigram component.
+// source: parity with mcp_server/core/scoring.py:170
+const NGRAM_WEIGHT_TRIGRAM = 0.4;
+
+// N-gram weight: bigram component.
+// source: parity with mcp_server/core/scoring.py:170
+const NGRAM_WEIGHT_BIGRAM = 0.35;
+
+// N-gram weight: content-word overlap component.
+// source: parity with mcp_server/core/scoring.py:170
+const NGRAM_WEIGHT_CONTENT = 0.25;
+
 // ── Stop-words ────────────────────────────────────────────────────────────
 // Port of: mcp_server/core/scoring.py _STOPWORDS
 
@@ -57,7 +91,7 @@ function buildBm25Stats(documents: string[]): Bm25Stats {
   const docTokens = documents.map(tokenizeRaw);
   const docLengths = docTokens.map((t) => t.length);
   const totalLen = docLengths.reduce((s, l) => s + l, 0);
-  const avgDl = docLengths.length > 0 ? totalLen / docLengths.length : 1.0;
+  const avgDl = docLengths.length > 0 ? totalLen / docLengths.length : AVG_DL_FALLBACK;
   const df = new Map<string, number>();
   for (const tokens of docTokens) {
     for (const term of new Set(tokens)) {
@@ -92,8 +126,8 @@ function bm25DocScore(
     const tf = tfMap.get(term);
     if (tf === undefined) continue;
     const termDf = df.get(term) ?? 0;
-    // IDF smoothing: log((N - df + 0.5) / (df + 0.5) + 1)
-    const idf = Math.log((n - termDf + 0.5) / (termDf + 0.5) + 1);
+    // IDF smoothing: log((N - df + IDF_SMOOTH_ADDEND) / (df + IDF_SMOOTH_ADDEND) + 1)
+    const idf = Math.log((n - termDf + IDF_SMOOTH_ADDEND) / (termDf + IDF_SMOOTH_ADDEND) + 1);
     score += (idf * (tf * (k1 + 1))) / (tf + k1 * (1 - b + (b * dl) / avgDl));
   }
   return score;
@@ -114,8 +148,8 @@ function bm25DocScore(
 export function computeBm25Scores(
   query: string,
   documents: string[],
-  k1 = 1.5,
-  b = 0.75,
+  k1 = BM25_K1_DEFAULT,
+  b = BM25_B_DEFAULT,
 ): number[] {
   const qTerms = tokenizeRaw(query);
   if (qTerms.length === 0 || documents.length === 0) {
@@ -170,8 +204,8 @@ export function computeNgramScore(query: string, document: string): number {
   const dTok = tokenizeRaw(document);
   if (qTok.length === 0 || dTok.length === 0) return 0;
 
-  const qTri = extractNgrams(qTok, 3);
-  const dTri = extractNgrams(dTok, 3);
+  const qTri = extractNgrams(qTok, TRIGRAM_N);
+  const dTri = extractNgrams(dTok, TRIGRAM_N);
   const tri =
     qTri.size > 0
       ? setIntersectionSize(qTri, dTri) / Math.max(qTri.size, 1)
@@ -187,5 +221,5 @@ export function computeNgramScore(query: string, document: string): number {
   const cw =
     qCw.size > 0 ? setIntersectionSize(qCw, dCw) / Math.max(qCw.size, 1) : 0;
 
-  return 0.4 * tri + 0.35 * bi + 0.25 * cw;
+  return NGRAM_WEIGHT_TRIGRAM * tri + NGRAM_WEIGHT_BIGRAM * bi + NGRAM_WEIGHT_CONTENT * cw;
 }

@@ -19,6 +19,25 @@ import {
   zeros,
 } from "../shared/linear-algebra.js";
 
+// ── Numeric constants ──────────────────────────────────────────────────────────
+
+// Singularity threshold for Cramer's rule determinant check.
+// source: parity with mcp_server/core/sparse_dictionary_learning.py:43
+const CRAMER_SINGULARITY_THRESHOLD = 1e-12;
+
+// OMP correlation floor: residual is considered orthogonal to remaining atoms
+// when the absolute inner product falls below this value.
+// source: parity with mcp_server/core/sparse_dictionary_learning.py:128
+const OMP_CORRELATION_THRESHOLD = 1e-10;
+
+// Sentinel initial value for best-correlation / best-distance trackers so
+// any real measurement beats it on the first iteration.
+const SENTINEL_INITIAL = -1.0;
+
+// Dimension of the largest analytic least-squares solver (3x3 Cramer's rule).
+// source: parity with mcp_server/core/sparse_dictionary_learning.py:69
+const MAX_ANALYTIC_DIMENSION = 3;
+
 // ── Orthogonal Matching Pursuit (OMP) ─────────────────────────────────────────
 
 function solveLeastSquares1(G: number[][], h: number[]): number[] {
@@ -33,7 +52,7 @@ function h_(v: number[], i: number): number { return v[i] ?? 0; }
 
 function solveLeastSquares2(G: number[][], h: number[]): number[] {
   const det = g(G,0,0)*g(G,1,1) - g(G,0,1)*g(G,1,0);
-  if (Math.abs(det) < 1e-12) return [0, 0];
+  if (Math.abs(det) < CRAMER_SINGULARITY_THRESHOLD) return [0, 0];
   return [
     (h_(h,0)*g(G,1,1) - h_(h,1)*g(G,0,1)) / det,
     (g(G,0,0)*h_(h,1) - g(G,1,0)*h_(h,0)) / det,
@@ -50,11 +69,11 @@ function det3(m: number[][]): number {
 
 function solveLeastSquares3(G: number[][], h: number[]): number[] {
   const detG = det3(G);
-  if (Math.abs(detG) < 1e-12) return [0, 0, 0];
+  if (Math.abs(detG) < CRAMER_SINGULARITY_THRESHOLD) return [0, 0, 0];
   const result: number[] = [];
-  for (let col = 0; col < 3; col++) {
+  for (let col = 0; col < MAX_ANALYTIC_DIMENSION; col++) {
     const M = G.map((row) => [...row]);
-    for (let row = 0; row < 3; row++) {
+    for (let row = 0; row < MAX_ANALYTIC_DIMENSION; row++) {
       const r = M[row];
       if (r) r[col] = h_(h, row);
     }
@@ -95,7 +114,7 @@ function solveLeastSquares(
 
   if (n === 1) return solveLeastSquares1(G, h);
   if (n === 2) return solveLeastSquares2(G, h);
-  if (n === 3) return solveLeastSquares3(G, h);
+  if (n === MAX_ANALYTIC_DIMENSION) return solveLeastSquares3(G, h);
 
   return new Array<number>(n).fill(0);
 }
@@ -130,7 +149,7 @@ export function omp(
   // Invariant: residual = signal - sum(coeff_i * atom_i for i in selectedIndices)
   // Termination: loop runs at most sparsity times; each iteration adds one index
   for (let iter = 0; iter < sparsity; iter++) {
-    let bestCorr = -1.0;
+    let bestCorr = SENTINEL_INITIAL;
     let bestIdx = -1;
     for (let k = 0; k < K; k++) {
       if (selectedIndices.includes(k)) continue;
@@ -142,7 +161,7 @@ export function omp(
         bestIdx = k;
       }
     }
-    if (bestIdx === -1 || bestCorr < 1e-10) break;
+    if (bestIdx === -1 || bestCorr < OMP_CORRELATION_THRESHOLD) break;
     selectedIndices.push(bestIdx);
 
     const coefficients = solveLeastSquares(atoms, signal, selectedIndices);
@@ -191,7 +210,7 @@ export function initializeAtoms(data: number[][], K: number): number[][] {
       minDist[i] = Math.min(cur, d);
     }
 
-    let bestDist = -1.0;
+    let bestDist = SENTINEL_INITIAL;
     let bestIdx = 0;
     for (let i = 0; i < data.length; i++) {
       if (selected.includes(i)) continue;

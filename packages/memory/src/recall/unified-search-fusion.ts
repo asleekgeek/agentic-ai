@@ -21,6 +21,11 @@
 // source: cortex@ed33435 mcp_server/core/unified_search_fusion.py:30
 export const DEFAULT_K = 60;
 
+// Precision multiplier for rrf_score rounding: round(score, 6) in Python
+// is ported as Math.round(score * RRF_SCORE_PRECISION) / RRF_SCORE_PRECISION.
+// source: parity with mcp_server/core/unified_search_fusion.py:85
+const RRF_SCORE_PRECISION = 1e6;
+
 // ── Helpers ───────────────────────────────────────────────────────────────
 
 /**
@@ -91,7 +96,7 @@ export function fuse(
     merged.push({
       ...body,
       [idKey]: ident,
-      rrf_score: Math.round(score * 1e6) / 1e6,
+      rrf_score: Math.round(score * RRF_SCORE_PRECISION) / RRF_SCORE_PRECISION,
       source_ranks: sourceRanks.get(ident) ?? {},
     });
   }

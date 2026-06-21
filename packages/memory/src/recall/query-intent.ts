@@ -35,7 +35,8 @@ const MULTI_HOP_RE =
 const INSTRUCTION_RE =
   /\b(instruction|guideline|requirement|constraint|supposed to|expected to|should i|must i)\b|what (?:rule|format|style|tone|constraint)|how should (?:i|you|we)/i;
 
-// Event ordering — ChronoRAG (Chen et al., arxiv 2508.18748, 2025)
+// Event ordering — ChronoRAG (Chen et al., 2025): chronological assembly improves ordering.
+// source: parity with mcp_server/core/query_intent.py:64
 const EVENT_ORDER_RE =
   /\b(what happened first|in what order|sequence of|chronological|what came before|what came after|order of events|first.*then.*then|happened before|happened after|what order|which came first|what was the first|what was the last|earliest|latest)\b/i;
 
@@ -52,6 +53,48 @@ const QUESTION_WHEN = /^\s*when\b/i;
 const QUESTION_WHAT = /^\s*(what|who)\b/i;
 const QUESTION_HOW = /^\s*how\b/i;
 const QUESTION_INSTRUCTION = /^\s*(how should|what (?:format|rule|constraint|style|tone))\b/i;
+
+// ── Pattern scoring constants ──────────────────────────────────────────────
+// Port of: mcp_server/core/query_intent.py _score_patterns
+
+// Boost added to KNOWLEDGE_UPDATE when ENTITY pattern also matches.
+const KNOWLEDGE_UPDATE_ENTITY_BOOST = 0.5;
+
+// EVENT_ORDER match gives a stronger base signal than other patterns
+// to override TEMPORAL when both fire.
+const EVENT_ORDER_SCORE_BOOST = 1.5;
+
+// Temporal also receives a partial credit when event-order fires.
+const EVENT_ORDER_TEMPORAL_BOOST = 0.3;
+
+// Multi-hop boost when two or more named entities are present.
+const MULTI_ENTITY_HOP_BOOST = 0.5;
+
+// ── Question-booster constants ─────────────────────────────────────────────
+// Port of: mcp_server/core/query_intent.py _apply_question_boosters
+
+const QUESTION_WHY_CAUSAL_BOOST = 0.5;
+const QUESTION_WHEN_TEMPORAL_BOOST = 0.5;
+const QUESTION_WHAT_ENTITY_BOOST = 0.3;
+const QUESTION_WHAT_SEMANTIC_BOOST = 0.2;
+const QUESTION_HOW_CAUSAL_BOOST = 0.3;
+const QUESTION_INSTRUCTION_BOOST = 0.8;
+
+// ── Score rounding ─────────────────────────────────────────────────────────
+// Port of: mcp_server/core/query_intent.py classify_query_intent —
+// round(v, 3) maps to Math.round(v * 1000) / 1000 in TypeScript.
+const SCORE_ROUND_FACTOR = 1000; // source: parity with mcp_server/core/query_intent.py:204 — round(v, 3) → 10^3
+
+// ── Derived-signal weight multipliers (expandSignalWeights) ────────────────
+// Port of: mcp_server/core/retrieval_dispatch.py _base_weights (lines 86-91)
+// and compute_signal_weights sa formula (line 157).
+
+const SIGNAL_SA_FTS_FACTOR = 0.5;
+const SIGNAL_HOPFIELD_VECTOR_FACTOR = 0.5;
+const SIGNAL_HDC_VECTOR_FACTOR = 0.4;
+const SIGNAL_SR_HEAT_FACTOR = 0.6;
+const SIGNAL_BM25_FTS_FACTOR = 0.8;
+const SIGNAL_NGRAM_FTS_FACTOR = 0.6;
 
 // ── Pattern scoring ────────────────────────────────────────────────────────
 
@@ -76,15 +119,15 @@ function scorePatterns(query: string): Record<string, number> {
   if (KNOWLEDGE_UPDATE_RE.test(query)) {
     scores[QueryIntent.KNOWLEDGE_UPDATE] = (scores[QueryIntent.KNOWLEDGE_UPDATE] ?? 0) + 1;
     if (ENTITY_RE.test(query)) {
-      scores[QueryIntent.KNOWLEDGE_UPDATE] = (scores[QueryIntent.KNOWLEDGE_UPDATE] ?? 0) + 0.5;
+      scores[QueryIntent.KNOWLEDGE_UPDATE] = (scores[QueryIntent.KNOWLEDGE_UPDATE] ?? 0) + KNOWLEDGE_UPDATE_ENTITY_BOOST;
     }
   }
   if (MULTI_HOP_RE.test(query)) scores[QueryIntent.MULTI_HOP] = (scores[QueryIntent.MULTI_HOP] ?? 0) + 1;
   if (INSTRUCTION_RE.test(query)) scores[QueryIntent.INSTRUCTION] = (scores[QueryIntent.INSTRUCTION] ?? 0) + 1;
   if (EVENT_ORDER_RE.test(query)) {
     // strong signal — overrides temporal
-    scores[QueryIntent.EVENT_ORDER] = (scores[QueryIntent.EVENT_ORDER] ?? 0) + 1.5;
-    scores[QueryIntent.TEMPORAL] = (scores[QueryIntent.TEMPORAL] ?? 0) + 0.3;
+    scores[QueryIntent.EVENT_ORDER] = (scores[QueryIntent.EVENT_ORDER] ?? 0) + EVENT_ORDER_SCORE_BOOST;
+    scores[QueryIntent.TEMPORAL] = (scores[QueryIntent.TEMPORAL] ?? 0) + EVENT_ORDER_TEMPORAL_BOOST;
   }
   if (SUMMARIZATION_RE.test(query)) scores[QueryIntent.SUMMARIZATION] = (scores[QueryIntent.SUMMARIZATION] ?? 0) + 1;
   if (PREFERENCE_RE.test(query)) scores[QueryIntent.PREFERENCE] = (scores[QueryIntent.PREFERENCE] ?? 0) + 1;
@@ -92,7 +135,7 @@ function scorePatterns(query: string): Record<string, number> {
   // Multi-entity detection boosts multi-hop
   const namedEntities = query.match(/\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/g) ?? [];
   if (namedEntities.length >= 2) {
-    scores[QueryIntent.MULTI_HOP] = (scores[QueryIntent.MULTI_HOP] ?? 0) + 0.5;
+    scores[QueryIntent.MULTI_HOP] = (scores[QueryIntent.MULTI_HOP] ?? 0) + MULTI_ENTITY_HOP_BOOST;
   }
 
   return scores;
@@ -104,14 +147,14 @@ function applyQuestionBoosters(
   query: string,
   scores: Record<string, number>,
 ): void {
-  if (QUESTION_WHY.test(query)) scores[QueryIntent.CAUSAL] = (scores[QueryIntent.CAUSAL] ?? 0) + 0.5;
-  if (QUESTION_WHEN.test(query)) scores[QueryIntent.TEMPORAL] = (scores[QueryIntent.TEMPORAL] ?? 0) + 0.5;
+  if (QUESTION_WHY.test(query)) scores[QueryIntent.CAUSAL] = (scores[QueryIntent.CAUSAL] ?? 0) + QUESTION_WHY_CAUSAL_BOOST;
+  if (QUESTION_WHEN.test(query)) scores[QueryIntent.TEMPORAL] = (scores[QueryIntent.TEMPORAL] ?? 0) + QUESTION_WHEN_TEMPORAL_BOOST;
   if (QUESTION_WHAT.test(query)) {
-    scores[QueryIntent.ENTITY] = (scores[QueryIntent.ENTITY] ?? 0) + 0.3;
-    scores[QueryIntent.SEMANTIC] = (scores[QueryIntent.SEMANTIC] ?? 0) + 0.2;
+    scores[QueryIntent.ENTITY] = (scores[QueryIntent.ENTITY] ?? 0) + QUESTION_WHAT_ENTITY_BOOST;
+    scores[QueryIntent.SEMANTIC] = (scores[QueryIntent.SEMANTIC] ?? 0) + QUESTION_WHAT_SEMANTIC_BOOST;
   }
-  if (QUESTION_HOW.test(query)) scores[QueryIntent.CAUSAL] = (scores[QueryIntent.CAUSAL] ?? 0) + 0.3;
-  if (QUESTION_INSTRUCTION.test(query)) scores[QueryIntent.INSTRUCTION] = (scores[QueryIntent.INSTRUCTION] ?? 0) + 0.8;
+  if (QUESTION_HOW.test(query)) scores[QueryIntent.CAUSAL] = (scores[QueryIntent.CAUSAL] ?? 0) + QUESTION_HOW_CAUSAL_BOOST;
+  if (QUESTION_INSTRUCTION.test(query)) scores[QueryIntent.INSTRUCTION] = (scores[QueryIntent.INSTRUCTION] ?? 0) + QUESTION_INSTRUCTION_BOOST;
 }
 
 // ── Weight maps ────────────────────────────────────────────────────────────
@@ -245,7 +288,7 @@ export function classifyQueryIntent(query: string): QueryIntentResult {
   return {
     intent: primary,
     scores: Object.fromEntries(
-      Object.entries(scores).map(([k, v]) => [k, Math.round(v * 1000) / 1000]),
+      Object.entries(scores).map(([k, v]) => [k, Math.round(v * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR]),
     ),
     weights,
   };
@@ -266,13 +309,13 @@ export function computeRetrievalWeights(
     Object.assign(weights, overrides);
   }
   return Object.fromEntries(
-    Object.entries(weights).map(([k, v]) => [k, Math.round(v * 1000) / 1000]),
+    Object.entries(weights).map(([k, v]) => [k, Math.round(v * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR]),
   ) as SignalWeights;
 }
 
 // ── Per-signal WRRF weight expansion (port of retrieval_dispatch.py) ──
 
-// source: cortex@ed33435 mcp_server/core/retrieval_dispatch.py:139-159 — base
+// source: cortex@ed33435 mcp_server/core/retrieval_dispatch.py:86-91 — base
 //   weight constants. Multiplied by intent-derived modifiers then expanded
 //   across the 9 actual signals fused by the recall handler.
 const FUSION_BASE_VECTOR = 1.0;
@@ -286,16 +329,18 @@ const FUSION_BASE_HEAT = 0.3;
  * recall pipeline never fuses with the raw intent dictionary; it always
  * passes through this expansion so derived signals (hopfield/hdc/sr/bm25/
  * ngram) get sensible weights proportional to their parent (vector / fts /
- * heat). Without this expansion, plain RRF dominates and MRR drops by
- * ~21pp on LoCoMo because every signal contributes equally regardless of
- * its informativeness.
+ * heat). Without this expansion, plain RRF dominates and derived signals
+ * (hopfield/hdc/sr/bm25/ngram) get equal weight regardless of their
+ * informativeness.
+ * source: parity with mcp_server/core/retrieval_dispatch.py:145-164
+ *   (compute_signal_weights)
  *
  * precondition: intentWeights contains the keys vector/fts/heat/spreading
  *   (others are tolerated and ignored).
  * postcondition: returned object has weights for every signal the recall
  *   handler emits: vector, fts, heat, hopfield, hdc, sr, sa, bm25, ngram.
  *
- * source: cortex@ed33435 mcp_server/core/retrieval_dispatch.py:_base_weights:139-159
+ * source: cortex@ed33435 mcp_server/core/retrieval_dispatch.py:_base_weights:86-91
  */
 export function expandSignalWeights(
   intentWeights: SignalWeights,
@@ -303,18 +348,18 @@ export function expandSignalWeights(
   const v = FUSION_BASE_VECTOR * (intentWeights["vector"] ?? 1.0);
   const f = FUSION_BASE_FTS * (intentWeights["fts"] ?? 1.0);
   const h = FUSION_BASE_HEAT * (intentWeights["heat"] ?? 1.0);
-  // source: retrieval_dispatch.py:152 — sa = f * 0.5 * intent_weights['spreading']
-  const sa = f * 0.5 * (intentWeights["spreading"] ?? 1.0);
+  // source: retrieval_dispatch.py:157 — sa = f * 0.5 * intent_weights['spreading']
+  const sa = f * SIGNAL_SA_FTS_FACTOR * (intentWeights["spreading"] ?? 1.0);
   return {
     vector: v,
     fts: f,
     heat: h,
-    // source: retrieval_dispatch.py:_base_weights — derived signal multipliers
-    hopfield: v * 0.5,
-    hdc: v * 0.4,
-    sr: h * 0.6,
+    // source: retrieval_dispatch.py:_base_weights (lines 86-91) — derived signal multipliers
+    hopfield: v * SIGNAL_HOPFIELD_VECTOR_FACTOR,
+    hdc: v * SIGNAL_HDC_VECTOR_FACTOR,
+    sr: h * SIGNAL_SR_HEAT_FACTOR,
     sa,
-    bm25: f * 0.8,
-    ngram: f * 0.6,
+    bm25: f * SIGNAL_BM25_FTS_FACTOR,
+    ngram: f * SIGNAL_NGRAM_FTS_FACTOR,
   };
 }

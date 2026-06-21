@@ -62,6 +62,20 @@ const MIN_POST_SEPARATION_SIMILARITY = 0.3;
  */
 const SPARSITY_TARGET = 0.04;
 
+/** Degenerate vector guard: norm below this is treated as zero-length.
+ * Engineering epsilon for floating-point safety; no paper source.
+ * source: parity with mcp_server/core/separation_core.py:101
+ */
+// source: parity with mcp_server/core/separation_core.py:101
+const DEGENERATE_NORM_EPSILON = 1e-10;
+
+/** Default projection strength for Gram-Schmidt orthogonalization.
+ * 0 = no change, 1 = full orthogonalization; 0.5 is the neutral midpoint.
+ * Engineering heuristic; no paper source.
+ * source: parity with mcp_server/core/separation_core.py:132
+ */
+const DEFAULT_ORTHOGONALIZATION_STRENGTH = 0.5;
+
 // ── Interference Detection ────────────────────────────────────────────────
 
 /**
@@ -113,14 +127,14 @@ function projectAwayFromSingle(
   minSimilarity: number,
 ): number[] {
   const interfererNorm = norm(interferer);
-  if (interfererNorm < 1e-10) return result;
+  if (interfererNorm < DEGENERATE_NORM_EPSILON) return result;
 
   const projectionCoeff = dot(result, interferer) / (interfererNorm * interfererNorm);
   const projection = scale(interferer, projectionCoeff * strength);
   const candidate = subtract(result, projection);
 
   const candidateNorm = norm(candidate);
-  if (candidateNorm < 1e-10) return result;
+  if (candidateNorm < DEGENERATE_NORM_EPSILON) return result;
 
   const normalized = scale(candidate, 1.0 / candidateNorm);
   const simWithOriginal = cosineSimilarity(original, normalized);
@@ -134,7 +148,7 @@ function projectAwayFromSingle(
  */
 function normalizeResult(result: number[]): number[] {
   const resultNorm = norm(result);
-  if (resultNorm > 1e-10) return scale(result, 1.0 / resultNorm);
+  if (resultNorm > DEGENERATE_NORM_EPSILON) return scale(result, 1.0 / resultNorm);
   return result;
 }
 
@@ -157,7 +171,7 @@ function normalizeResult(result: number[]): number[] {
 export function orthogonalizeEmbedding(
   newEmbedding: number[],
   interferingEmbeddings: number[][],
-  strength = 0.5,
+  strength = DEFAULT_ORTHOGONALIZATION_STRENGTH,
   minSimilarity = MIN_POST_SEPARATION_SIMILARITY,
 ): [number[], number] {
   if (isMechanismDisabled(Mechanism.PATTERN_SEPARATION)) {
@@ -213,7 +227,7 @@ export function applySparsification(
   const result = embedding.map((v, i) => keepIndices.has(i) ? v : 0.0);
 
   const resultNorm = norm(result);
-  if (resultNorm > 1e-10) {
+  if (resultNorm > DEGENERATE_NORM_EPSILON) {
     return result.map((v) => v / resultNorm);
   }
   return result;

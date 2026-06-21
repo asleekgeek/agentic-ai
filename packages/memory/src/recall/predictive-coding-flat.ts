@@ -22,6 +22,55 @@ const URL_RE = /https?:\/\/\S+/g;
 const HEADING_RE = /^#{1,6}\s+\S/gm;
 const LIST_RE = /^[\s]*[-*+]\s+\S/gm;
 
+// ── Constants ─────────────────────────────────────────────────────────────
+
+// Default novelty when no embedding similarities are available.
+// source: parity with mcp_server/core/predictive_coding_flat.py:32
+const EMBEDDING_NOVELTY_DEFAULT = 0.5;
+
+// Default novelty when no entities are extracted.
+// source: parity with mcp_server/core/predictive_coding_flat.py:45
+const ENTITY_NOVELTY_DEFAULT = 0.5;
+
+// Default novelty when recency is unknown (null hours) — treat as likely novel.
+// source: parity with mcp_server/core/predictive_coding_flat.py:56
+const TEMPORAL_NOVELTY_NULL_DEFAULT = 0.8;
+
+// Exponential decay time constant for temporal novelty (hours).
+// source: parity with mcp_server/core/predictive_coding_flat.py:59
+const TEMPORAL_NOVELTY_TIME_CONSTANT_HOURS = 24.0;
+
+// Length bucket boundaries for structural feature extraction (character counts).
+// source: parity with mcp_server/core/predictive_coding_flat.py:68-76
+const LENGTH_BUCKET_TINY_MAX = 100;
+const LENGTH_BUCKET_SMALL_MAX = 500; // source: parity with mcp_server/core/predictive_coding_flat.py:70 — elif n < 500
+// source: parity with mcp_server/core/predictive_coding_flat.py:71
+const LENGTH_BUCKET_MEDIUM_MAX = 2000;
+const LENGTH_BUCKET_LARGE_MAX = 8000; // source: parity with mcp_server/core/predictive_coding_flat.py:74 — elif n < 8000
+
+// Ordinal bucket indices for content length classification (0–4).
+// source: parity with mcp_server/core/predictive_coding_flat.py:69-77
+const LENGTH_BUCKET_LARGE = 3;
+const LENGTH_BUCKET_XLARGE = 4;
+
+// Default novelty when no recent content is available for structural comparison.
+// source: parity with mcp_server/core/predictive_coding_flat.py:92
+const STRUCTURAL_NOVELTY_DEFAULT = 0.7;
+
+// 4-signal novelty weights; must sum to 1.0.
+// source: parity with mcp_server/core/predictive_coding_flat.py:115
+const NOVELTY_WEIGHT_EMBEDDING = 0.40;
+// source: parity with mcp_server/core/predictive_coding_flat.py:116
+const NOVELTY_WEIGHT_ENTITY = 0.25;
+// source: parity with mcp_server/core/predictive_coding_flat.py:117
+const NOVELTY_WEIGHT_TEMPORAL = 0.20;
+// source: parity with mcp_server/core/predictive_coding_flat.py:118
+const NOVELTY_WEIGHT_STRUCTURAL = 0.15;
+
+// Rounding scale factor for 4-decimal-place output in describeSignals.
+// source: parity with mcp_server/core/predictive_coding_flat.py:131-135 (round(x, 4))
+const SIGNAL_ROUND_SCALE = 1e4;
+
 // ── Embedding novelty ─────────────────────────────────────────────────────
 
 /**
@@ -33,7 +82,7 @@ const LIST_RE = /^[\s]*[-*+]\s+\S/gm;
  * source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:29-33
  */
 export function computeEmbeddingNovelty(similarities: number[]): number {
-  if (similarities.length === 0) return 0.5;
+  if (similarities.length === 0) return EMBEDDING_NOVELTY_DEFAULT;
   const maxSim = Math.max(...similarities);
   return Math.max(0.0, Math.min(1.0, 1.0 - maxSim));
 }
@@ -55,7 +104,7 @@ export function computeEntityNovelty(
   const names = Array.isArray(newEntityNames)
     ? newEntityNames
     : Array.from(newEntityNames);
-  if (names.length === 0) return 0.5;
+  if (names.length === 0) return ENTITY_NOVELTY_DEFAULT;
   const trulyNew = names.filter((e) => !knownEntityNames.has(e)).length;
   return trulyNew / names.length;
 }
@@ -74,9 +123,9 @@ export function computeEntityNovelty(
 export function computeTemporalNovelty(
   hoursSinceSimilar: number | null,
 ): number {
-  if (hoursSinceSimilar === null) return 0.8;
+  if (hoursSinceSimilar === null) return TEMPORAL_NOVELTY_NULL_DEFAULT;
   if (hoursSinceSimilar <= 0) return 0.0;
-  return Math.min(1.0, 1.0 - Math.exp(-hoursSinceSimilar / 24.0)); // source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:59 — time constant 24h
+  return Math.min(1.0, 1.0 - Math.exp(-hoursSinceSimilar / TEMPORAL_NOVELTY_TIME_CONSTANT_HOURS));
 }
 
 // ── Structural novelty ────────────────────────────────────────────────────
@@ -89,11 +138,11 @@ export function computeTemporalNovelty(
 function structuralFeatures(content: string): Record<string, number> {
   const n = Math.max(content.length, 1);
   let lengthBucket: number;
-  if (n < 100) lengthBucket = 0;
-  else if (n < 500) lengthBucket = 1;
-  else if (n < 2000) lengthBucket = 2;
-  else if (n < 8000) lengthBucket = 3;
-  else lengthBucket = 4;
+  if (n < LENGTH_BUCKET_TINY_MAX) lengthBucket = 0;
+  else if (n < LENGTH_BUCKET_SMALL_MAX) lengthBucket = 1;
+  else if (n < LENGTH_BUCKET_MEDIUM_MAX) lengthBucket = 2;
+  else if (n < LENGTH_BUCKET_LARGE_MAX) lengthBucket = LENGTH_BUCKET_LARGE;
+  else lengthBucket = LENGTH_BUCKET_XLARGE;
 
   return {
     code_blocks: (content.match(CODE_BLOCK_RE) ?? []).length,
@@ -117,7 +166,7 @@ export function computeStructuralNovelty(
   content: string,
   recentContents: string[],
 ): number {
-  if (recentContents.length === 0) return 0.7;
+  if (recentContents.length === 0) return STRUCTURAL_NOVELTY_DEFAULT;
   const candidate = structuralFeatures(content);
   const keys = Object.keys(candidate);
   let bestMatch = 0.0;
@@ -148,10 +197,10 @@ export function computeNoveltyScore(
   structuralNovelty: number,
 ): number {
   return (
-    0.40 * embeddingNovelty  // source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:115
-    + 0.25 * entityNovelty   // source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:116
-    + 0.20 * temporalNovelty // source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:117
-    + 0.15 * structuralNovelty // source: cortex@ed33435 mcp_server/core/predictive_coding_flat.py:118
+    NOVELTY_WEIGHT_EMBEDDING * embeddingNovelty
+    + NOVELTY_WEIGHT_ENTITY * entityNovelty
+    + NOVELTY_WEIGHT_TEMPORAL * temporalNovelty
+    + NOVELTY_WEIGHT_STRUCTURAL * structuralNovelty
   );
 }
 
@@ -170,7 +219,7 @@ export function describeSignals(
   structural: number,
   combined: number,
 ): Record<string, number> {
-  const r = (v: number) => Math.round(v * 1e4) / 1e4;
+  const r = (v: number) => Math.round(v * SIGNAL_ROUND_SCALE) / SIGNAL_ROUND_SCALE;
   return {
     embedding_novelty: r(embedding),
     entity_novelty: r(entity),

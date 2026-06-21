@@ -93,6 +93,22 @@ const DEFAULT_LIMIT = 50;
 // source: cortex@ed33435 mcp_server/handlers/memories_page.py:55
 const MAX_LIMIT = 200;
 
+// Base64url padding: every group of 4 characters; (4 - len%4) % 4 gives 0..3 pad chars.
+// source: parity with mcp_server/handlers/memories_page.py:58 (decodeCursor, base64url padding formula)
+const BASE64_ALIGN_MODULUS = 4;
+
+// Emotion bucket thresholds derived from emotional_valence ∈ [-1, 1].
+// source: parity with mcp_server/handlers/memories_page.py:94
+const EMOTION_HIGH_VALENCE_THRESHOLD = 0.55;
+// source: parity with mcp_server/handlers/memories_page.py:94
+const EMOTION_LOW_VALENCE_THRESHOLD = 0.25;
+// source: parity with mcp_server/handlers/memories_page.py:94
+const EMOTION_HIGH_NEGATIVE_THRESHOLD = -0.55;
+// source: parity with mcp_server/handlers/memories_page.py:94
+const EMOTION_LOW_NEGATIVE_THRESHOLD = -0.25;
+// source: parity with mcp_server/handlers/memories_page.py:94
+const IMPORTANCE_URGENCY_THRESHOLD = 0.75;
+
 // ── Cursor codec ──────────────────────────────────────────────────────────
 
 /**
@@ -102,7 +118,7 @@ const MAX_LIMIT = 200;
 export function decodeCursor(s: string | null | undefined): Record<string, unknown> | null {
   if (!s) return null;
   try {
-    const padded = s + "==".slice(0, (4 - (s.length % 4)) % 4);
+    const padded = s + "==".slice(0, (BASE64_ALIGN_MODULUS - (s.length % BASE64_ALIGN_MODULUS)) % BASE64_ALIGN_MODULUS);
     const raw = Buffer.from(padded, "base64url").toString("utf-8");
     return JSON.parse(raw) as Record<string, unknown>;
   } catch {
@@ -133,11 +149,11 @@ export function rowToNode(row: Record<string, unknown>): MemoryNode {
   const val = Number(row["emotional_valence"] ?? 0);
   let emotion: string | null = null;
   // source: cortex@ed33435 mcp_server/handlers/memories_page.py:94
-  if (val >= 0.55) emotion = "satisfaction";
-  else if (val >= 0.25) emotion = "discovery";
-  else if (val <= -0.55) emotion = "frustration";
-  else if (val <= -0.25) emotion = "confusion";
-  if (Number(row["importance"] ?? 0) >= 0.75) emotion = "urgency";
+  if (val >= EMOTION_HIGH_VALENCE_THRESHOLD) emotion = "satisfaction";
+  else if (val >= EMOTION_LOW_VALENCE_THRESHOLD) emotion = "discovery";
+  else if (val <= EMOTION_HIGH_NEGATIVE_THRESHOLD) emotion = "frustration";
+  else if (val <= EMOTION_LOW_NEGATIVE_THRESHOLD) emotion = "confusion";
+  if (Number(row["importance"] ?? 0) >= IMPORTANCE_URGENCY_THRESHOLD) emotion = "urgency";
 
   return {
     id: "memory:" + String(row["id"]),
@@ -214,13 +230,13 @@ export function buildQuery(opts: BuildQueryOptions): string {
     // source: cortex@ed33435 mcp_server/handlers/memories_page.py:168
     where.push(
       "((" +
-        "  $emotion = 'urgent' AND importance >= 0.75" +
+        `  $emotion = 'urgent' AND importance >= ${IMPORTANCE_URGENCY_THRESHOLD}` +
         ") OR (" +
-        "  $emotion = 'positive' AND emotional_valence >= 0.25 AND importance < 0.75" +
+        `  $emotion = 'positive' AND emotional_valence >= ${EMOTION_LOW_VALENCE_THRESHOLD} AND importance < ${IMPORTANCE_URGENCY_THRESHOLD}` +
         ") OR (" +
-        "  $emotion = 'negative' AND emotional_valence <= -0.25 AND importance < 0.75" +
+        `  $emotion = 'negative' AND emotional_valence <= ${EMOTION_LOW_NEGATIVE_THRESHOLD} AND importance < ${IMPORTANCE_URGENCY_THRESHOLD}` +
         ") OR (" +
-        "  $emotion = 'neutral' AND emotional_valence > -0.25 AND emotional_valence < 0.25 AND importance < 0.75" +
+        `  $emotion = 'neutral' AND emotional_valence > ${EMOTION_LOW_NEGATIVE_THRESHOLD} AND emotional_valence < ${EMOTION_LOW_VALENCE_THRESHOLD} AND importance < ${IMPORTANCE_URGENCY_THRESHOLD}` +
         "))",
     );
   }

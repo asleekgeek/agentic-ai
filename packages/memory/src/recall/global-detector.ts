@@ -14,6 +14,52 @@
  * Pure business logic -- no I/O.
  */
 
+// ── Signal weights ─────────────────────────────────────────────────────────────
+// Phrase weights used in GLOBAL_SIGNALS. Phrases (multi-word) score higher
+// than single keywords to reduce false positives.
+// source: parity with mcp_server/core/global_detector.py:24-130
+
+/** Strong multi-word phrase: highest confidence global signal. */
+const WEIGHT_STRONG_PHRASE = 2.5;
+/** High-confidence multi-word phrase indicating global scope. */
+const WEIGHT_HIGH_PHRASE = 2.0;
+/** Architectural/cross-project multi-word phrase. */
+const WEIGHT_MED_HIGH_PHRASE = 1.8;
+/** Common informative phrase. */
+const WEIGHT_MED_PHRASE = 1.5;
+/** Knowledge / race-condition / deadlock / memory-leak signal. */
+const WEIGHT_KNOWLEDGE_MED = 1.2;
+/** Single-word general signal. */
+const WEIGHT_LOW = 1.0;
+/** Weak single-word signal. */
+const WEIGHT_WEAK = 0.8;
+/** Very weak single-word signal (database, dns, backups). */
+const WEIGHT_VERY_WEAK = 0.6;
+
+// ── Infrastructure boost & tag boost ──────────────────────────────────────────
+// source: parity with mcp_server/core/global_detector.py:219-237
+
+/** Additive score boost when an IP address or hostname pattern is found. */
+const INFRA_PATTERN_BOOST = 1.0;
+/** Per-matching-tag additive score boost for explicit global tags. */
+const GLOBAL_TAG_BOOST = 1.5;
+
+// ── Anchor penalty multipliers ─────────────────────────────────────────────────
+// source: parity with mcp_server/core/global_detector.py:240-244
+
+/** Score multiplier when >= 3 project-specific anchors found. */
+const ANCHOR_PENALTY_HIGH = 0.4;
+/** Score multiplier when 1–2 project-specific anchors found. */
+const ANCHOR_PENALTY_LOW = 0.7;
+/** Anchor count at or above which the high penalty applies. */
+const ANCHOR_COUNT_HIGH_THRESHOLD = 3;
+
+// ── Rounding ───────────────────────────────────────────────────────────────────
+// source: parity with mcp_server/core/global_detector.py:254
+
+/** Multiplier / divisor for rounding score to 2 decimal places. */
+const SCORE_ROUND_FACTOR = 100; // source: parity with mcp_server/core/global_detector.py:254 — round(score, 2) → 10^2
+
 // ── Signal categories ─────────────────────────────────────────────────────────
 // Each category contributes to the global score. Phrases (multi-word)
 // score higher than single keywords to reduce false positives.
@@ -28,52 +74,53 @@ export type SignalCategory =
 
 export const GLOBAL_SIGNALS: Record<SignalCategory, Array<[string, number]>> = {
   architecture: [
-    ["clean architecture", 2.0], ["single responsibility", 2.0],
-    ["dependency injection", 2.0], ["dependency inversion", 2.0],
-    ["separation of concerns", 2.0], ["composition root", 1.8],
-    ["hexagonal architecture", 1.8], ["domain driven design", 1.5],
-    ["solid principles", 1.8], ["design pattern", 1.5],
-    ["anti-pattern", 1.5], ["coupling", 1.0], ["cohesion", 1.0],
-    ["abstraction", 0.8], ["interface segregation", 1.8],
-    ["open closed principle", 1.8], ["liskov substitution", 1.8],
+    ["clean architecture", WEIGHT_HIGH_PHRASE], ["single responsibility", WEIGHT_HIGH_PHRASE],
+    ["dependency injection", WEIGHT_HIGH_PHRASE], ["dependency inversion", WEIGHT_HIGH_PHRASE],
+    ["separation of concerns", WEIGHT_HIGH_PHRASE], ["composition root", WEIGHT_MED_HIGH_PHRASE],
+    ["hexagonal architecture", WEIGHT_MED_HIGH_PHRASE], ["domain driven design", WEIGHT_MED_PHRASE],
+    ["solid principles", WEIGHT_MED_HIGH_PHRASE], ["design pattern", WEIGHT_MED_PHRASE],
+    ["anti-pattern", WEIGHT_MED_PHRASE], ["coupling", WEIGHT_LOW], ["cohesion", WEIGHT_LOW],
+    ["abstraction", WEIGHT_WEAK], ["interface segregation", WEIGHT_MED_HIGH_PHRASE],
+    ["open closed principle", WEIGHT_MED_HIGH_PHRASE], ["liskov substitution", WEIGHT_MED_HIGH_PHRASE],
   ],
   convention: [
-    ["coding standard", 2.0], ["naming convention", 2.0],
-    ["code style", 1.5], ["best practice", 1.5],
-    ["always use", 1.5], ["never use", 1.5],
-    ["prefer", 0.8], ["convention", 1.0], ["rule of thumb", 1.5],
-    ["we always", 1.5], ["we never", 1.5], ["team agreement", 2.0],
-    ["standard approach", 1.5],
+    ["coding standard", WEIGHT_HIGH_PHRASE], ["naming convention", WEIGHT_HIGH_PHRASE],
+    ["code style", WEIGHT_MED_PHRASE], ["best practice", WEIGHT_MED_PHRASE],
+    ["always use", WEIGHT_MED_PHRASE], ["never use", WEIGHT_MED_PHRASE],
+    ["prefer", WEIGHT_WEAK], ["convention", WEIGHT_LOW], ["rule of thumb", WEIGHT_MED_PHRASE],
+    ["we always", WEIGHT_MED_PHRASE], ["we never", WEIGHT_MED_PHRASE], ["team agreement", WEIGHT_HIGH_PHRASE],
+    ["standard approach", WEIGHT_MED_PHRASE],
   ],
   infrastructure: [
-    ["server at", 1.8], ["database url", 2.0], ["connection string", 2.0],
-    ["production server", 2.0], ["staging server", 2.0], ["home network", 1.8],
-    ["docker compose", 1.5], ["ci/cd pipeline", 1.8], ["github actions", 1.5],
-    ["deployment", 1.0], ["kubernetes", 1.0], ["load balancer", 1.5],
-    ["reverse proxy", 1.5], ["dns", 0.8], ["vpn", 1.0],
-    ["ssl certificate", 1.5], ["backups", 0.8], ["backup", 0.8],
-    ["monitoring", 0.8], ["database", 0.6],
+    ["server at", WEIGHT_MED_HIGH_PHRASE], ["database url", WEIGHT_HIGH_PHRASE], ["connection string", WEIGHT_HIGH_PHRASE],
+    ["production server", WEIGHT_HIGH_PHRASE], ["staging server", WEIGHT_HIGH_PHRASE], ["home network", WEIGHT_MED_HIGH_PHRASE],
+    ["docker compose", WEIGHT_MED_PHRASE], ["ci/cd pipeline", WEIGHT_MED_HIGH_PHRASE], ["github actions", WEIGHT_MED_PHRASE],
+    ["deployment", WEIGHT_LOW], ["kubernetes", WEIGHT_LOW], ["load balancer", WEIGHT_MED_PHRASE],
+    ["reverse proxy", WEIGHT_MED_PHRASE], ["dns", WEIGHT_WEAK], ["vpn", WEIGHT_LOW],
+    ["ssl certificate", WEIGHT_MED_PHRASE], ["backups", WEIGHT_WEAK], ["backup", WEIGHT_WEAK],
+    ["monitoring", WEIGHT_WEAK], ["database", WEIGHT_VERY_WEAK],
   ],
   security: [
-    ["api key rotation", 2.0], ["secret rotation", 2.0], ["security policy", 2.0],
-    ["access control", 1.5], ["authentication", 1.0], ["authorization", 1.0],
-    ["jwt", 1.0], ["oauth", 1.0], ["encryption", 1.0], ["password policy", 2.0],
-    ["credentials", 1.0], ["credential", 1.0], ["vulnerability", 1.0],
-    ["owasp", 1.5], ["cors policy", 1.5], ["rate limiting", 1.5],
+    ["api key rotation", WEIGHT_HIGH_PHRASE], ["secret rotation", WEIGHT_HIGH_PHRASE], ["security policy", WEIGHT_HIGH_PHRASE],
+    ["access control", WEIGHT_MED_PHRASE], ["authentication", WEIGHT_LOW], ["authorization", WEIGHT_LOW],
+    ["jwt", WEIGHT_LOW], ["oauth", WEIGHT_LOW], ["encryption", WEIGHT_LOW], ["password policy", WEIGHT_HIGH_PHRASE],
+    ["credentials", WEIGHT_LOW], ["credential", WEIGHT_LOW], ["vulnerability", WEIGHT_LOW],
+    ["owasp", WEIGHT_MED_PHRASE], ["cors policy", WEIGHT_MED_PHRASE], ["rate limiting", WEIGHT_MED_PHRASE],
   ],
   cross_project: [
-    ["across all projects", 2.5], ["all projects", 2.0], ["cross-project", 2.5],
-    ["shared across", 2.0], ["every project", 2.0], ["universal", 1.5],
-    ["global rule", 2.5], ["global policy", 2.5], ["applies everywhere", 2.0],
-    ["company-wide", 2.0], ["team-wide", 2.0], ["organization", 1.0],
-    ["reusable", 1.0],
+    ["across all projects", WEIGHT_STRONG_PHRASE], ["all projects", WEIGHT_HIGH_PHRASE],
+    ["cross-project", WEIGHT_STRONG_PHRASE],
+    ["shared across", WEIGHT_HIGH_PHRASE], ["every project", WEIGHT_HIGH_PHRASE], ["universal", WEIGHT_MED_PHRASE],
+    ["global rule", WEIGHT_STRONG_PHRASE], ["global policy", WEIGHT_STRONG_PHRASE], ["applies everywhere", WEIGHT_HIGH_PHRASE],
+    ["company-wide", WEIGHT_HIGH_PHRASE], ["team-wide", WEIGHT_HIGH_PHRASE], ["organization", WEIGHT_LOW],
+    ["reusable", WEIGHT_LOW],
   ],
   knowledge: [
-    ["utc timestamp", 1.8], ["wal mode", 1.5], ["connection pool", 1.5],
-    ["idempotent", 1.5], ["eventual consistency", 1.5], ["cap theorem", 1.5],
-    ["acid", 1.0], ["race condition", 1.2], ["deadlock", 1.2],
-    ["memory leak", 1.2], ["cache invalidation", 1.5], ["index on", 1.2],
-    ["foreign key", 1.0], ["migration", 0.8], ["schema design", 1.5],
+    ["utc timestamp", WEIGHT_MED_HIGH_PHRASE], ["wal mode", WEIGHT_MED_PHRASE], ["connection pool", WEIGHT_MED_PHRASE],
+    ["idempotent", WEIGHT_MED_PHRASE], ["eventual consistency", WEIGHT_MED_PHRASE], ["cap theorem", WEIGHT_MED_PHRASE],
+    ["acid", WEIGHT_LOW], ["race condition", WEIGHT_KNOWLEDGE_MED], ["deadlock", WEIGHT_KNOWLEDGE_MED],
+    ["memory leak", WEIGHT_KNOWLEDGE_MED], ["cache invalidation", WEIGHT_MED_PHRASE], ["index on", WEIGHT_KNOWLEDGE_MED],
+    ["foreign key", WEIGHT_LOW], ["migration", WEIGHT_WEAK], ["schema design", WEIGHT_MED_PHRASE],
   ],
 };
 
@@ -156,22 +203,22 @@ export function detectGlobal(
 
   // Boost for infrastructure indicators
   if (IP_PATTERN_RE.test(content)) {
-    score += 1.0;
-    categoryScores.set("infrastructure", (categoryScores.get("infrastructure") ?? 0) + 1.0);
+    score += INFRA_PATTERN_BOOST;
+    categoryScores.set("infrastructure", (categoryScores.get("infrastructure") ?? 0) + INFRA_PATTERN_BOOST);
   }
   if (HOST_PATTERN_RE.test(content)) {
-    score += 1.0;
-    categoryScores.set("infrastructure", (categoryScores.get("infrastructure") ?? 0) + 1.0);
+    score += INFRA_PATTERN_BOOST;
+    categoryScores.set("infrastructure", (categoryScores.get("infrastructure") ?? 0) + INFRA_PATTERN_BOOST);
   }
 
   // Boost for explicit global tags
   const globalTagSet = new Set(["global", "shared", "infrastructure", "cross-project", "universal"]);
   const tagOverlap = (tags ?? []).filter((t) => globalTagSet.has(t.toLowerCase()));
   if (tagOverlap.length > 0) {
-    score += 1.5 * tagOverlap.length;
+    score += GLOBAL_TAG_BOOST * tagOverlap.length;
     categoryScores.set(
       "cross_project",
-      (categoryScores.get("cross_project") ?? 0) + 1.5 * tagOverlap.length,
+      (categoryScores.get("cross_project") ?? 0) + GLOBAL_TAG_BOOST * tagOverlap.length,
     );
   }
 
@@ -179,10 +226,10 @@ export function detectGlobal(
   PROJECT_ANCHORS_RE.lastIndex = 0;
   const anchorMatches = content.match(PROJECT_ANCHORS_RE);
   const anchorCount = anchorMatches ? anchorMatches.length : 0;
-  if (anchorCount >= 3) {
-    score *= 0.4;
+  if (anchorCount >= ANCHOR_COUNT_HIGH_THRESHOLD) {
+    score *= ANCHOR_PENALTY_HIGH;
   } else if (anchorCount >= 1) {
-    score *= 0.7;
+    score *= ANCHOR_PENALTY_LOW;
   }
 
   if (categoryScores.size === 0) return [false, 0.0, "not_global"];
@@ -199,5 +246,5 @@ export function detectGlobal(
   const isGlobal = score >= GLOBAL_THRESHOLD;
   const reason = isGlobal ? `global_${bestCat}` : "not_global";
 
-  return [isGlobal, Math.round(score * 100) / 100, reason];
+  return [isGlobal, Math.round(score * SCORE_ROUND_FACTOR) / SCORE_ROUND_FACTOR, reason];
 }

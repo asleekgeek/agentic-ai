@@ -25,12 +25,22 @@
  */
 
 // ── Defaults ──────────────────────────────────────────────────────────────
-// source: cortex@ed33435 mcp_server/core/platt_calibration.py:34-38
-// Source for limits: Platt 1999 §2.1, stable numerical limits
+// source: parity with mcp_server/core/platt_calibration.py:34-38 (conventional Newton-Raphson implementation defaults; Platt 1999 §2.1 describes the algorithm, not these specific thresholds)
 
 export const MIN_SAMPLES = 50;          // source: cortex@ed33435 mcp_server/core/platt_calibration.py:36
 export const MAX_ITERATIONS = 100;      // source: cortex@ed33435 mcp_server/core/platt_calibration.py:37
 export const CONVERGENCE_TOL = 1e-6;   // source: cortex@ed33435 mcp_server/core/platt_calibration.py:38
+
+// ── Numerical constants ────────────────────────────────────────────────────
+
+// Singularity guard on the 2×2 Hessian determinant: abs(det) below this
+// threshold means the Newton step is undefined — abort the iteration.
+// source: parity with mcp_server/core/platt_calibration.py:150
+const HESSIAN_SINGULAR_TOL = 1e-12;
+
+// Default return value for pairwiseDiscrimination when either score list is
+// empty — no pairs exist, so the tie probability (0.5) is the neutral answer.
+const DISCRIMINATION_DEFAULT = 0.5;
 
 // ── Types ─────────────────────────────────────────────────────────────────
 
@@ -146,7 +156,7 @@ export function fitPlatt(
 
     // Solve 2x2 Hessian
     const det = hAA * hBB - hAB * hAB;
-    if (Math.abs(det) < 1e-12) break; // Hessian singular
+    if (Math.abs(det) < HESSIAN_SINGULAR_TOL) break; // Hessian singular
     const inv = 1.0 / det;
     A -= inv * (hBB * gA - hAB * gB);
     B -= inv * (-hAB * gA + hAA * gB);
@@ -202,7 +212,7 @@ export function pairwiseDiscrimination(
 ): number {
   const calibratedUseful = calibrateScores(usefulScores, params);
   const calibratedNot = calibrateScores(notUsefulScores, params);
-  if (calibratedUseful.length === 0 || calibratedNot.length === 0) return 0.5;
+  if (calibratedUseful.length === 0 || calibratedNot.length === 0) return DISCRIMINATION_DEFAULT;
 
   let total = 0;
   let wins = 0;
@@ -212,5 +222,5 @@ export function pairwiseDiscrimination(
       if (u > notU) wins++;
     }
   }
-  return total > 0 ? wins / total : 0.5;
+  return total > 0 ? wins / total : DISCRIMINATION_DEFAULT;
 }

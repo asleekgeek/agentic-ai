@@ -57,13 +57,97 @@ const CONTEXT_DISCOUNT = 0.3;
  */
 const CRITICAL_INTERFERENCE = 0.85;
 
+// ── Resolution Hint Thresholds ───────────────────────────────────────────────
+
+/** Similarity above which two memories should be merged/updated rather than separated. Hand-tuned. */
+// source: parity with mcp_server/core/interference_detection.py:72
+const MERGE_SIMILARITY_THRESHOLD = 0.9;
+
+/** Heat below which an old memory can be safely overwritten. Hand-tuned. */
+// source: parity with mcp_server/core/interference_detection.py:91
+const ACCEPT_OVERWRITE_HEAT_THRESHOLD = 0.2;
+
+// ── PI Score — Stage Factors ─────────────────────────────────────────────────
+// Stage factors approximate interference resistance from consolidation.
+// All hand-tuned; see computePiScore docstring for rationale.
+
+/** Consolidated stage: strong prior representations compete more. */
+// source: parity with mcp_server/core/interference_detection.py:123
+const STAGE_FACTOR_CONSOLIDATED = 1.2;
+
+/** Early LTP stage: partially consolidated, moderate competition. */
+// source: parity with mcp_server/core/interference_detection.py:125
+const STAGE_FACTOR_EARLY_LTP = 0.8;
+
+/** Labile stage: weakly encoded, minimal proactive effect. */
+// source: parity with mcp_server/core/interference_detection.py:126
+const STAGE_FACTOR_LABILE = 0.5;
+
+/** Default stage factor for unrecognized consolidation stages. Hand-tuned. */
+// source: parity with mcp_server/core/interference_detection.py:127
+const STAGE_FACTOR_DEFAULT = 0.7;
+
+// ── PI Score — Mixture Weights ───────────────────────────────────────────────
+// Weights reflect Norman et al. 2007's emphasis on representational overlap
+// as the primary driver of competition. All hand-tuned.
+
+/** Weight for cosine similarity (representational overlap). */
+// source: parity with mcp_server/core/interference_detection.py:130
+const PI_WEIGHT_SIM = 0.4;
+
+/** Weight for entity overlap (semantic relatedness). */
+// source: parity with mcp_server/core/interference_detection.py:130
+const PI_WEIGHT_ENTITY = 0.25;
+
+/** Weight for heat factor (recent activation strength). */
+// source: parity with mcp_server/core/interference_detection.py:130
+const PI_WEIGHT_HEAT = 0.2;
+
+/** Weight for stage factor (connection strength). */
+// source: parity with mcp_server/core/interference_detection.py:130
+const PI_WEIGHT_STAGE = 0.15;
+
+// ── Rounding ─────────────────────────────────────────────────────────────────
+
+/** Multiplier used to round interference scores to 4 decimal places. */
+// source: JS idiom for round(x, 4) — Python uses round(value, 4) natively (mcp_server/core/interference_detection.py:158); 10000 = 10^4 is the JS multiply-divide equivalent, not a value ported from Python
+const ROUND_4DP = 10000;
+
+// ── Default Values ───────────────────────────────────────────────────────────
+
+/** Default heat value when a memory has no recorded heat. Hand-tuned. */
+// source: parity with mcp_server/core/interference_detection.py:190
+const DEFAULT_HEAT = 0.5;
+
+/** Default importance value when a memory has no recorded importance. Hand-tuned. */
+// source: parity with mcp_server/core/interference_detection.py:279
+const DEFAULT_IMPORTANCE = 0.5;
+
+/** Score filter multiplier: candidate PI scores below threshold * this are discarded. Hand-tuned. */
+// source: parity with mcp_server/core/interference_detection.py:192
+const PI_SCORE_FILTER_FACTOR = 0.7;
+
+/** Risk score below which retroactive interference risk is considered negligible. Hand-tuned. */
+// source: parity with mcp_server/core/interference_detection.py:288
+const RI_NEGLIGIBLE_RISK_THRESHOLD = 0.2;
+
+// ── Vulnerability Scaling Factors ────────────────────────────────────────────
+
+/** Heat scaling factor in vulnerability: (1 - heat * HEAT_VULNERABILITY_SCALE). Hand-tuned. */
+// source: parity with mcp_server/core/interference_detection.py:261
+const HEAT_VULNERABILITY_SCALE = 0.5;
+
+/** Importance scaling factor in vulnerability: (1 - importance * IMPORTANCE_VULNERABILITY_SCALE). Hand-tuned. */
+// source: parity with mcp_server/core/interference_detection.py:261
+const IMPORTANCE_VULNERABILITY_SCALE = 0.3;
+
 // ── Resolution Hints ─────────────────────────────────────────────────────────
 
 function suggestPiResolution(score: number, similarity: number, stage: string): string {
   // precondition: score in [0,1], stage is a known consolidation stage name
   // postcondition: returns one of the four resolution strategy strings
   if (score >= CRITICAL_INTERFERENCE) return "pattern_separation";
-  if (similarity > 0.9) return "merge_or_update";
+  if (similarity > MERGE_SIMILARITY_THRESHOLD) return "merge_or_update";
   if (stage === "consolidated") return "context_binding";
   return "normal_encoding";
 }
@@ -72,7 +156,7 @@ function suggestRiResolution(score: number, stage: string, heat: number): string
   // postcondition: returns one of the four resolution strategy strings
   if (score >= CRITICAL_INTERFERENCE) return "protect_old_memory";
   if (stage === "labile" || stage === "early_ltp") return "accelerate_consolidation";
-  if (heat < 0.2) return "accept_overwrite";
+  if (heat < ACCEPT_OVERWRITE_HEAT_THRESHOLD) return "accept_overwrite";
   return "orthogonalize_at_sleep";
 }
 
@@ -101,15 +185,15 @@ function computePiScore(
    * All stage factors are hand-tuned.
    */
   const stageFactors: Record<string, number> = {
-    consolidated: 1.2,
+    consolidated: STAGE_FACTOR_CONSOLIDATED,
     late_ltp: 1.0,
-    early_ltp: 0.8,
-    labile: 0.5,
+    early_ltp: STAGE_FACTOR_EARLY_LTP,
+    labile: STAGE_FACTOR_LABILE,
   };
-  const stageFactor = stageFactors[stage] ?? 0.7;
+  const stageFactor = stageFactors[stage] ?? STAGE_FACTOR_DEFAULT;
 
   return (
-    (sim * 0.4 + entityOverlap * 0.25 + heatFactor * 0.2 + stageFactor * 0.15) *
+    (sim * PI_WEIGHT_SIM + entityOverlap * PI_WEIGHT_ENTITY + heatFactor * PI_WEIGHT_HEAT + stageFactor * PI_WEIGHT_STAGE) *
     contextMatch
   );
 }
@@ -138,9 +222,9 @@ function buildPiResult(
 ): Record<string, unknown> {
   return {
     memory_id: mem["id"],
-    similarity: Math.round(sim * 10000) / 10000,
-    entity_overlap: Math.round(entityOverlap * 10000) / 10000,
-    interference_score: Math.round(score * 10000) / 10000,
+    similarity: Math.round(sim * ROUND_4DP) / ROUND_4DP,
+    entity_overlap: Math.round(entityOverlap * ROUND_4DP) / ROUND_4DP,
+    interference_score: Math.round(score * ROUND_4DP) / ROUND_4DP,
     interference_type: "proactive",
     resolution_hint: suggestPiResolution(score, sim, stage),
   };
@@ -170,11 +254,11 @@ function evaluatePiCandidate(
   const score = computePiScore(
     sim,
     entityOverlap,
-    (mem["heat"] as number | undefined) ?? 0.5,
+    (mem["heat"] as number | undefined) ?? DEFAULT_HEAT,
     stage,
     computePiContextMatch(mem),
   );
-  if (score < threshold * 0.7) return null;
+  if (score < threshold * PI_SCORE_FILTER_FACTOR) return null;
 
   return buildPiResult(mem, sim, entityOverlap, score, stage);
 }
@@ -237,7 +321,7 @@ function computeVulnerability(
    * (1 - importance_boost). All scaling factors are hand-tuned.
    */
   const resistance = computeInterferenceResistance(oldStage, sim);
-  return (1.0 - resistance) * (1.0 - oldHeat * 0.5) * (1.0 - oldImportance * 0.3);
+  return (1.0 - resistance) * (1.0 - oldHeat * HEAT_VULNERABILITY_SCALE) * (1.0 - oldImportance * IMPORTANCE_VULNERABILITY_SCALE);
 }
 
 function evaluateRiCandidate(
@@ -252,8 +336,8 @@ function evaluateRiCandidate(
   const sim = cosineSimilarity(newEmbedding, emb);
   if (sim < threshold) return null;
 
-  const oldHeat = (mem["heat"] as number | undefined) ?? 0.5;
-  const oldImportance = (mem["importance"] as number | undefined) ?? 0.5;
+  const oldHeat = (mem["heat"] as number | undefined) ?? DEFAULT_HEAT;
+  const oldImportance = (mem["importance"] as number | undefined) ?? DEFAULT_IMPORTANCE;
   const oldStage = (mem["consolidation_stage"] as string | undefined) ?? "labile";
 
   const vulnerability = computeVulnerability(oldStage, sim, oldHeat, oldImportance);
@@ -261,14 +345,14 @@ function evaluateRiCandidate(
   const riskScore = vulnerability * overwritePressure;
 
   // Hand-tuned threshold: below 0.2 risk is negligible.
-  if (riskScore <= 0.2) return null;
+  if (riskScore <= RI_NEGLIGIBLE_RISK_THRESHOLD) return null;
 
   return {
     memory_id: mem["id"],
-    similarity: Math.round(sim * 10000) / 10000,
-    vulnerability: Math.round(vulnerability * 10000) / 10000,
-    overwrite_pressure: Math.round(overwritePressure * 10000) / 10000,
-    risk_score: Math.round(riskScore * 10000) / 10000,
+    similarity: Math.round(sim * ROUND_4DP) / ROUND_4DP,
+    vulnerability: Math.round(vulnerability * ROUND_4DP) / ROUND_4DP,
+    overwrite_pressure: Math.round(overwritePressure * ROUND_4DP) / ROUND_4DP,
+    risk_score: Math.round(riskScore * ROUND_4DP) / ROUND_4DP,
     interference_type: "retroactive",
     resolution_hint: suggestRiResolution(riskScore, oldStage, oldHeat),
   };

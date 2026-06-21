@@ -17,6 +17,48 @@ const MONTH_NAMES: Record<string, number> = {
   july: 7, august: 8, september: 9, october: 10, november: 11, december: 12,
 };
 
+// ── Numeric constants ─────────────────────────────────────────────────────
+
+// Minimum word-part length for partial proximity matching.
+// source: parity with mcp_server/core/temporal.py:85
+const MIN_WORD_PART_LENGTH = 3;
+
+// Partial match score (hint parts found but not exact match).
+// source: parity with mcp_server/core/temporal.py:86
+const PARTIAL_PROXIMITY_SCORE = 0.5;
+
+// Minimum length of a string containing "T" to be treated as ISO with time.
+// source: parity with mcp_server/core/temporal.py:155
+const ISO_WITH_TIME_MIN_LENGTH = 19;
+
+// Default exponential-decay scale (days) for date distance scoring.
+// source: parity with mcp_server/core/temporal.py:173
+const DATE_DISTANCE_SCALE_DAYS = 14.0;
+
+// Milliseconds per day (86 400 s × 1 000 ms/s); TS equivalent of Python's 86400.0 s.
+// source: parity with mcp_server/core/temporal.py:190
+const MS_PER_DAY = 86400000;
+
+// Maximum recency boost amplitude.
+// source: parity with mcp_server/core/temporal.py:199
+const RECENCY_BOOST_MAX = 0.15;
+
+// Recency boost half-life in days.
+// source: parity with mcp_server/core/temporal.py:200
+const RECENCY_HALFLIFE_DAYS = 30.0;
+
+// Recency boost cutoff — no boost beyond this age in days.
+// source: parity with mcp_server/core/temporal.py:201
+const RECENCY_CUTOFF_DAYS = 90.0;
+
+// Radix for parseInt — always decimal (base 10) when parsing date components.
+// source: parity with mcp_server/core/temporal.py:109
+const DECIMAL_RADIX = 10;
+
+// Regex capture-group index for the third capture group in date patterns.
+// source: parity with mcp_server/core/temporal.py:109
+const CAPTURE_GROUP_3 = 3;
+
 // ── Regex constants ───────────────────────────────────────────────────────
 // source: cortex@ed33435 mcp_server/core/temporal.py:30-52
 
@@ -89,9 +131,9 @@ export function computeTemporalProximity(
     if (docLower.includes(hintLower)) {
       score = Math.max(score, 1.0);
     } else {
-      const parts = hintLower.split(/\s+/).filter((p) => p.length > 3);
+      const parts = hintLower.split(/\s+/).filter((p) => p.length > MIN_WORD_PART_LENGTH);
       if (parts.some((p) => docLower.includes(p))) {
-        score = Math.max(score, 0.5);
+        score = Math.max(score, PARTIAL_PROXIMITY_SCORE);
       }
     }
   }
@@ -115,7 +157,7 @@ function tryParseNamedDate(dateStr: string): Date | null {
   if (m) {
     const monthNum = MONTH_NAMES[(m[2] ?? "").toLowerCase()];
     if (monthNum) {
-      const d = new Date(parseInt(m[3] ?? "0", 10), monthNum - 1, parseInt(m[1] ?? "0", 10));
+      const d = new Date(parseInt(m[CAPTURE_GROUP_3] ?? "0", DECIMAL_RADIX), monthNum - 1, parseInt(m[1] ?? "0", DECIMAL_RADIX));
       if (!isNaN(d.getTime())) return d;
     }
   }
@@ -123,13 +165,13 @@ function tryParseNamedDate(dateStr: string): Date | null {
   if (m) {
     const monthNum = MONTH_NAMES[(m[1] ?? "").toLowerCase()];
     if (monthNum) {
-      const d = new Date(parseInt(m[3] ?? "0", 10), monthNum - 1, parseInt(m[2] ?? "0", 10));
+      const d = new Date(parseInt(m[CAPTURE_GROUP_3] ?? "0", DECIMAL_RADIX), monthNum - 1, parseInt(m[2] ?? "0", DECIMAL_RADIX));
       if (!isNaN(d.getTime())) return d;
     }
   }
   const em = dateStr.match(EMBEDDED_ISO_RE);
   if (em) {
-    const d = new Date(parseInt(em[1] ?? "0", 10), parseInt(em[2] ?? "0", 10) - 1, parseInt(em[3] ?? "0", 10));
+    const d = new Date(parseInt(em[1] ?? "0", DECIMAL_RADIX), parseInt(em[2] ?? "0", DECIMAL_RADIX) - 1, parseInt(em[CAPTURE_GROUP_3] ?? "0", DECIMAL_RADIX));
     if (!isNaN(d.getTime())) return d;
   }
   return null;
@@ -166,7 +208,7 @@ export function normalizeDateToIso(raw: string): string | null {
   if (!raw || !raw.trim()) return null;
   const s = raw.trim();
   // Already ISO with time — pass through
-  if (s.includes("T") && s.length >= 19) return s;
+  if (s.includes("T") && s.length >= ISO_WITH_TIME_MIN_LENGTH) return s;
   const dt = parseDate(s);
   if (dt) return dt.toISOString();
   return null;
@@ -187,7 +229,7 @@ export function normalizeDateToIso(raw: string): string | null {
 export function computeDateDistanceScore(
   docDateStr: string,
   targetDateHints: string[],
-  scaleDays = 14.0, // source: cortex@ed33435 mcp_server/core/temporal.py:174
+  scaleDays = DATE_DISTANCE_SCALE_DAYS,
 ): number {
   if (!docDateStr || targetDateHints.length === 0) return 0.0;
 
@@ -198,7 +240,7 @@ export function computeDateDistanceScore(
   for (const hint of targetDateHints) {
     const targetDt = parseDate(hint);
     if (targetDt) {
-      const deltaDays = Math.abs(docDt.getTime() - targetDt.getTime()) / 86400000;
+      const deltaDays = Math.abs(docDt.getTime() - targetDt.getTime()) / MS_PER_DAY;
       const score = Math.exp(-deltaDays / scaleDays);
       bestScore = Math.max(bestScore, score);
     }
@@ -221,9 +263,9 @@ export function computeDateDistanceScore(
  */
 export function computeRecencyBoost(
   createdAt: string | Date | null | undefined,
-  boostMax = 0.15,    // source: cortex@ed33435 mcp_server/core/temporal.py:199
-  halflifeDays = 30.0, // source: cortex@ed33435 mcp_server/core/temporal.py:200
-  cutoffDays = 90.0,   // source: cortex@ed33435 mcp_server/core/temporal.py:201
+  boostMax = RECENCY_BOOST_MAX,
+  halflifeDays = RECENCY_HALFLIFE_DAYS,
+  cutoffDays = RECENCY_CUTOFF_DAYS,
 ): number {
   if (!createdAt) return 0.0;
   const now = Date.now();
@@ -235,7 +277,7 @@ export function computeRecencyBoost(
     if (isNaN(d.getTime())) return 0.0;
     ts = d.getTime();
   }
-  const ageDays = (now - ts) / 86400000;
+  const ageDays = (now - ts) / MS_PER_DAY;
   if (ageDays < 0 || ageDays > cutoffDays) return 0.0;
   // source: cortex@ed33435 mcp_server/core/temporal.py:224
   // boost = boost_max * exp(-ln(2)/halflife * age)

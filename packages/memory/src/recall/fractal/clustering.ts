@@ -3,6 +3,20 @@
  * Port of: mcp_server/core/fractal_clustering.py
  * Pure business logic — no I/O.
  */
+
+// ── Configuration ─────────────────────────────────────────────────────────────
+
+// Bytes per float32 value in a binary embedding buffer.
+const FLOAT32_BYTES = 4;
+
+// Default similarity threshold for merging memory pairs in agglomerative clustering.
+// source: parity with mcp_server/core/fractal_clustering.py:67
+const AGGLOMERATIVE_CLUSTER_THRESHOLD = 0.6;
+
+// Default heat value used when a memory has no explicit heat field.
+// source: parity with mcp_server/core/fractal_clustering.py:152
+const DEFAULT_HEAT = 0.5;
+
 export class UnionFind {
   private parent: number[];
   private rank: number[];
@@ -20,7 +34,7 @@ export class UnionFind {
   }
 }
 type SimFn=(a:Uint8Array|null,b:Uint8Array|null)=>number;
-export function agglomerativeCluster(memories:readonly Record<string,unknown>[],similarityFn:SimFn,threshold=0.6):Array<Array<Record<string,unknown>>> {
+export function agglomerativeCluster(memories:readonly Record<string,unknown>[],similarityFn:SimFn,threshold=AGGLOMERATIVE_CLUSTER_THRESHOLD):Array<Array<Record<string,unknown>>> {
   const n=memories.length;
   if(n===0) return [];
   if(n===1) return [[...memories] as Array<Record<string,unknown>>];
@@ -32,21 +46,21 @@ export function agglomerativeCluster(memories:readonly Record<string,unknown>[],
 }
 export function computeCentroid(embeddings:ReadonlyArray<Uint8Array|null|undefined>,dim:number):Uint8Array|null {
   const valid:number[][]=[];
-  for(const emb of embeddings){if(!emb||emb.length<dim*4)continue;const view=new DataView(emb.buffer,emb.byteOffset,dim*4);const values:number[]=[];for(let d=0;d<dim;d++)values.push(view.getFloat32(d*4,true));valid.push(values);}
+  for(const emb of embeddings){if(!emb||emb.length<dim*FLOAT32_BYTES)continue;const view=new DataView(emb.buffer,emb.byteOffset,dim*FLOAT32_BYTES);const values:number[]=[];for(let d=0;d<dim;d++)values.push(view.getFloat32(d*FLOAT32_BYTES,true));valid.push(values);}
   if(valid.length===0) return null;
   const n=valid.length;
   const centroid=new Array<number>(dim).fill(0);
   for(const v of valid)for(let d=0;d<dim;d++)centroid[d]=(centroid[d]??0)+(v[d]??0)/n;
   let mag=0;for(const c of centroid)mag+=(c??0)*(c??0);mag=Math.sqrt(mag);
   if(mag>0)for(let d=0;d<dim;d++)centroid[d]=(centroid[d]??0)/mag;
-  const out=new Uint8Array(dim*4);const view=new DataView(out.buffer);for(let d=0;d<dim;d++)view.setFloat32(d*4,centroid[d]??0,true);
+  const out=new Uint8Array(dim*FLOAT32_BYTES);const view=new DataView(out.buffer);for(let d=0;d<dim;d++)view.setFloat32(d*FLOAT32_BYTES,centroid[d]??0,true);
   return out;
 }
 export interface L1Cluster {cluster_id:string;level:1;memory_ids:number[];centroid:Uint8Array|null;size:number;avg_heat:number;}
 export interface L2Cluster {cluster_id:string;level:2;directory:string;child_clusters:string[];total_memories:number;centroid:Uint8Array|null;}
 export function buildL1Clusters(l1Raw:ReadonlyArray<ReadonlyArray<Record<string,unknown>>>,embeddingDim:number):[L1Cluster[],Map<string,L1Cluster>] {
   const level1:L1Cluster[]=[],clusterMap=new Map<string,L1Cluster>();
-  for(let i=0;i<l1Raw.length;i++){const cluster=l1Raw[i]??[];const clusterId=`L1-${i}`;const centroid=computeCentroid(cluster.map(m=>m["embedding"] as Uint8Array|null|undefined),embeddingDim);const clusterData:L1Cluster={cluster_id:clusterId,level:1,memory_ids:cluster.map(m=>m["id"] as number|undefined).filter((id):id is number=>id!==undefined),centroid,size:cluster.length,avg_heat:cluster.length>0?cluster.reduce((s,m)=>s+((m["heat"] as number|undefined)??0.5),0)/cluster.length:0};level1.push(clusterData);clusterMap.set(clusterId,clusterData);}
+  for(let i=0;i<l1Raw.length;i++){const cluster=l1Raw[i]??[];const clusterId=`L1-${i}`;const centroid=computeCentroid(cluster.map(m=>m["embedding"] as Uint8Array|null|undefined),embeddingDim);const clusterData:L1Cluster={cluster_id:clusterId,level:1,memory_ids:cluster.map(m=>m["id"] as number|undefined).filter((id):id is number=>id!==undefined),centroid,size:cluster.length,avg_heat:cluster.length>0?cluster.reduce((s,m)=>s+((m["heat"] as number|undefined)??DEFAULT_HEAT),0)/cluster.length:0};level1.push(clusterData);clusterMap.set(clusterId,clusterData);}
   return [level1,clusterMap];
 }
 function findDominantDir(cd:L1Cluster,memories:readonly Record<string,unknown>[]):string {
