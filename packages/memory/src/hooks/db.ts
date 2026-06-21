@@ -69,6 +69,16 @@ function parseTags(val: unknown): string[] {
   return [];
 }
 
+// ── Query-shape constants ─────────────────────────────────────────────────
+// Pre-existing literals extracted to satisfy no-magic-numbers; values unchanged.
+const MAX_TEAM_DECISIONS = 3; // TS injection cap on team-decision rows
+const MAX_FTS_QUERY_CHARS = 200; // source: cortex@bc5af469 hooks/auto_recall.py:168 — query[:200]
+const MAX_FTS_KEYWORDS = 5; // source: cortex@bc5af469 hooks/agent_briefing.py:285 — keywords[:5]
+// Pre-existing $N offset in the bumpHeatBySymbols ILIKE clause (NOT modified here;
+// the value looks off-by-one vs the [boost, ...names] bind order — flagged for a
+// separate, verified investigation, out of scope for the B1#2 effective_heat fix).
+const ILIKE_PARAM_OFFSET = 3;
+
 // ── Exported DB operations ────────────────────────────────────────────────
 
 export interface DbResult<T> {
@@ -92,10 +102,14 @@ export async function fetchAnchors(
   if (!conn) return [];
   try {
     const { rows } = await conn.query(
-      `SELECT id, content, tags, domain, is_global
-       FROM memories
-       WHERE is_protected = TRUE
-       ORDER BY heat DESC
+      // `memories.heat` is not a stored column — use effective_heat(m, NOW())
+      // (lazy A3 decay) and exclude auto-captured noise even if is_protected.
+      // source: cortex@bc5af469 hooks/session_start.py:114-123 (contract §8b)
+      `SELECT m.id, m.content, m.tags, m.domain, m.is_global
+       FROM memories m
+       WHERE m.is_protected = TRUE
+         AND NOT (m.tags @> '["auto-captured"]'::jsonb)
+       ORDER BY effective_heat(m, NOW()) DESC
        LIMIT $1`,
       [limit],
     );
@@ -122,15 +136,19 @@ export async function fetchTeamDecisions(
   if (!conn) return [];
   try {
     const { rows } = await conn.query(
-      `SELECT id, content, domain, agent_context, heat
-       FROM memories
-       WHERE is_protected = TRUE
-         AND is_global = TRUE
-         AND agent_context != ''
-       ORDER BY heat DESC
+      // source: cortex@bc5af469 hooks/session_start.py:164-168 — effective_heat(m, NOW())
+      `SELECT m.id, m.content, m.domain, m.agent_context,
+              effective_heat(m, NOW()) AS heat
+       FROM memories m
+       WHERE m.is_protected = TRUE
+         AND m.is_global = TRUE
+         AND m.agent_context != ''
+       ORDER BY effective_heat(m, NOW()) DESC
        LIMIT 5`,
     );
-    return (rows as MemoryRow[]).filter((r) => !excludeIds.has(r.id)).slice(0, 3);
+    return (rows as MemoryRow[])
+      .filter((r) => !excludeIds.has(r.id))
+      .slice(0, MAX_TEAM_DECISIONS);
   } catch {
     return [];
   } finally {
@@ -226,16 +244,20 @@ export async function ftsRecall(
   if (!conn) return [];
   try {
     const { rows } = await conn.query(
-      `SELECT id, content, heat, domain, agent_context, is_protected,
-              ts_rank_cd(content_tsv, q) AS rank
-       FROM memories,
+      // source: cortex@bc5af469 hooks/auto_recall.py:156-166 — effective_heat(m, NOW())
+      // (lazy A3 decay) replaces the non-existent stored `heat` column.
+      `SELECT m.id, m.content,
+              effective_heat(m, NOW()) AS heat,
+              m.domain, m.agent_context, m.is_protected,
+              ts_rank_cd(m.content_tsv, q) AS rank
+       FROM memories m,
             plainto_tsquery('english', $1) q
-       WHERE content_tsv @@ q
-         AND heat >= $2
-         AND NOT is_benchmark
-       ORDER BY is_protected DESC, rank DESC, heat DESC
+       WHERE m.content_tsv @@ q
+         AND effective_heat(m, NOW()) >= $2
+         AND NOT m.is_benchmark
+       ORDER BY m.is_protected DESC, rank DESC, effective_heat(m, NOW()) DESC
        LIMIT $3`,
-      [query.slice(0, 200), minHeat, limit + 2],
+      [query.slice(0, MAX_FTS_QUERY_CHARS), minHeat, limit + 2],
     );
     return (rows as MemoryRow[]).slice(0, limit);
   } catch {
@@ -258,15 +280,18 @@ export async function fetchAgentMemories(
   if (!conn) return [];
   try {
     const { rows } = await conn.query(
-      `SELECT id, content, heat, agent_context
-       FROM memories
-       WHERE agent_context = $1
-         AND heat >= $2
-         AND NOT is_benchmark
-         AND content_tsv @@ plainto_tsquery('english', $3)
-       ORDER BY heat DESC
+      // source: cortex@bc5af469 hooks/agent_briefing.py:274-283 — effective_heat(m, NOW())
+      `SELECT m.id, m.content,
+              effective_heat(m, NOW()) AS heat,
+              m.agent_context
+       FROM memories m
+       WHERE m.agent_context = $1
+         AND effective_heat(m, NOW()) >= $2
+         AND NOT m.is_benchmark
+         AND m.content_tsv @@ plainto_tsquery('english', $3)
+       ORDER BY effective_heat(m, NOW()) DESC
        LIMIT $4`,
-      [agentName, minHeat, keywords.slice(0, 5).join(" "), limit],
+      [agentName, minHeat, keywords.slice(0, MAX_FTS_KEYWORDS).join(" "), limit],
     );
     return rows as MemoryRow[];
   } catch {
@@ -286,13 +311,16 @@ export async function fetchTeamDecisionsForAgent(
   if (!conn) return [];
   try {
     const { rows } = await conn.query(
-      `SELECT id, content, heat, agent_context
-       FROM memories
-       WHERE is_protected = TRUE
-         AND is_global = TRUE
-         AND agent_context != $1
-         AND NOT is_benchmark
-       ORDER BY heat DESC
+      // source: cortex@bc5af469 hooks/agent_briefing.py:304-313 — effective_heat(m, NOW())
+      `SELECT m.id, m.content,
+              effective_heat(m, NOW()) AS heat,
+              m.agent_context
+       FROM memories m
+       WHERE m.is_protected = TRUE
+         AND m.is_global = TRUE
+         AND m.agent_context != $1
+         AND NOT m.is_benchmark
+       ORDER BY effective_heat(m, NOW()) DESC
        LIMIT $2`,
       [excludeAgent, limit],
     );
@@ -352,7 +380,9 @@ export async function bumpHeatBySymbols(
   if (!conn) return 0;
   const names = symbolNames.slice(0, maxBumps);
   // Build parameterised ILIKE OR clause
-  const likeParams = names.map((_, i) => `content ILIKE $${i + 3}`).join(" OR ");
+  const likeParams = names
+    .map((_, i) => `content ILIKE $${i + ILIKE_PARAM_OFFSET}`)
+    .join(" OR ");
   const params: unknown[] = [boost, ...names.map((n) => `%${n}%`)];
   try {
     const { rows } = await conn.query(
