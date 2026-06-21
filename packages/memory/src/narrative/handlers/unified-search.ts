@@ -26,6 +26,7 @@ import {
   recallHandler,
   DEFAULT_RECALL_SETTINGS,
 } from "../../recall/recall-handler.js";
+import { boundPayload, listTarget } from "../../recall/response-budget.js";
 import type { EmbeddingEngine, MemoryStore } from "../../recall/port.js";
 import type { RecallResult } from "../../recall/types.js";
 import type { CodebasePort, SearchCodebaseInput } from "@agentic/core";
@@ -177,7 +178,9 @@ export async function unifiedSearchHandler(
     deps.embedder,
     DEFAULT_RECALL_SETTINGS,
   );
-  const memories = prepMemories(recallResp.results);
+  // Phase-0 rename: recall now exposes `memories` (was `results`).
+  // source: cortex@bc5af469 mcp_server/handlers/recall.py:468 + unified_search.py:97
+  const memories = prepMemories(recallResp.memories);
 
   // AP leg (optional). is_enabled() ≙ codebasePort present + graph_path given.
   // source: cortex@ed33435 unified_search.py:99-104
@@ -190,7 +193,7 @@ export async function unifiedSearchHandler(
   // Fuse (RRF, idKey="id", clip to top_n). source: unified_search.py:106-110
   const fused = fuse([["cortex", memories], ["ap", apHits]], k, "id", topN);
 
-  return {
+  const response: UnifiedSearchResponse = {
     status: apEnabled ? "ok" : "partial",
     query,
     sources,
@@ -198,4 +201,16 @@ export async function unifiedSearchHandler(
     results: fused,
     k,
   };
+
+  // Bounded I/O: two ListTargets on `results` — memory hits carry their text in
+  // `content` (truncated items keep the memory:<id> fusion id for full recall),
+  // AP symbol hits carry it in `snippet`; both weighted by score. counts.fused
+  // is recomputed after the budget may have dropped tail items.
+  // source: cortex@bc5af469 mcp_server/handlers/unified_search.py:127-135
+  boundPayload(response, [
+    listTarget("results", "content", "score"),
+    listTarget("results", "snippet", "score"),
+  ]);
+  response.counts.fused = response.results.length;
+  return response;
 }

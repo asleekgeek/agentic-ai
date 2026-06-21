@@ -44,6 +44,7 @@ import {
   fuseSignals,
 } from "./multi-signal-fusion.js";
 import { filterLowSignal, inlineRelatedNeighbors } from "./recall-helpers.js";
+import { boundPayload, listTarget } from "./response-budget.js";
 import type { EmbeddingEngine, MemoryStore } from "./port.js";
 import { classifyQueryIntent, computeRetrievalWeights } from "./query-intent.js";
 import { applyRules } from "./rules.js";
@@ -281,9 +282,9 @@ export async function recallHandler(
   settings: RecallSettings = DEFAULT_RECALL_SETTINGS,
 ): Promise<RecallResponse> {
   const empty: RecallResponse = {
-    results: [],
-    total: 0,
-    query_intent: QueryIntent.GENERAL,
+    memories: [],
+    count: 0,
+    intent: QueryIntent.GENERAL,
     dispatch_tier: "ts",
     signals: {},
     enhancements: undefined,
@@ -447,7 +448,7 @@ export async function recallHandler(
   const intentWeights = computeRetrievalWeights(intent, intentInfo.scores);
   const fused = fuseSignals(signals, settings.WRRF_K, intentWeights as Record<string, number>);
   if (fused.length === 0) {
-    return { ...empty, query_intent: intent };
+    return { ...empty, intent };
   }
 
   // 10. Resolve memory objects + build results
@@ -543,10 +544,10 @@ export async function recallHandler(
   // Biological basis: retrieval = hippocampal replay (McClelland 1995)
   await trackRecallReplay(ordered, store);
 
-  return {
-    results: ordered,
-    total: ordered.length,
-    query_intent: intent,
+  const response: RecallResponse = {
+    memories: ordered,
+    count: ordered.length,
+    intent,
     dispatch_tier: "ts",
     signals: {},
     enhancements: {
@@ -558,6 +559,15 @@ export async function recallHandler(
     },
     low_signal_dropped: lowSignalDropped,
   };
+
+  // Bounded I/O: keep the tool result under the host's token cap. Items whose
+  // content is cut keep their memory_id so the full body stays fetchable by id;
+  // count is recomputed after the budget may have dropped tail items.
+  // source: cortex@bc5af469 mcp_server/handlers/recall.py:468-484
+  //         (bound_payload(resp, [ListTarget("memories", weight_key="score")]))
+  boundPayload(response, [listTarget("memories", "content", "score")]);
+  response.count = response.memories.length;
+  return response;
 }
 
 // ── Unused queryEmbedding — exported for future reranker integration ───────

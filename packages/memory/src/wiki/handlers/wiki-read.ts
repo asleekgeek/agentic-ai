@@ -10,6 +10,7 @@
  */
 
 import { isRedirect, parseFrontmatter, resolveChain } from "../redirect.js";
+import { boundPayload, textTarget } from "../../recall/response-budget.js";
 
 export interface WikiReadArgs {
   readonly path: string;
@@ -31,6 +32,10 @@ export interface WikiReadResult {
   readonly root: string;
   readonly resolved_path: string;
   readonly redirect_hops: number;
+  // Present and true only when boundPayload cut `content` to fit the response
+  // budget; re-call with offset = previous offset + received content length.
+  // source: cortex wiki_read.py:92-106 (content_truncated injected by bound_payload)
+  readonly content_truncated?: boolean;
 }
 
 export type WikiReadResponse = WikiReadResult | { readonly error: string };
@@ -38,6 +43,18 @@ export type WikiReadResponse = WikiReadResult | { readonly error: string };
 export interface WikiReadDeps {
   readonly wikiRoot: string;
   readonly readPage: (root: string, relPath: string) => Promise<string | null>;
+}
+
+/**
+ * Bounded I/O: fit `content` to the host's tool-result budget. `content_length`
+ * (the full page size, set pre-slice) is preserved by boundPayload's setdefault
+ * so offset-paging works across truncated slices; `content_truncated: true` is
+ * added when the slice was cut.
+ * source: cortex wiki_read.py:92-106 (_bounded → bound_payload([TextTarget("content")]))
+ */
+function bounded(result: WikiReadResult): WikiReadResult {
+  boundPayload(result, [textTarget("content")]);
+  return result;
 }
 
 export async function handler(
@@ -59,7 +76,7 @@ export async function handler(
   if (content === null) return { error: `page not found: ${relPath}` };
 
   if (!followRedirects) {
-    return {
+    return bounded({
       path: relPath,
       content: offset > 0 ? content.slice(offset) : content,
       content_length: content.length,
@@ -67,7 +84,7 @@ export async function handler(
       root: deps.wikiRoot,
       resolved_path: relPath,
       redirect_hops: 0,
-    };
+    });
   }
 
   // Cache reads so each path is fetched at most once during chain
@@ -99,7 +116,7 @@ export async function handler(
     }
     const fm = parseFrontmatter(text);
     if (!isRedirect(fm)) {
-      return {
+      return bounded({
         path: relPath,
         content: offset > 0 ? text.slice(offset) : text,
         content_length: text.length,
@@ -107,7 +124,7 @@ export async function handler(
         root: deps.wikiRoot,
         resolved_path: current,
         redirect_hops: chain.length - 1,
-      };
+      });
     }
     const rawPath = fm.redirect_to;
     const nextPath = typeof rawPath === "string" ? rawPath.trim() : "";

@@ -2,9 +2,9 @@
   "_status": "TS-CAPTURED-NEEDS-PYTHON-VERIFICATION",
   "_captured_at": "2026-05-05T00:00:00.000Z",
   "output": {
-    "results": [],
-    "total": 0,
-    "query_intent": "general",
+    "memories": [],
+    "count": 0,
+    "intent": "general",
     "dispatch_tier": "ts",
     "signals": {},
     "low_signal_dropped": 0

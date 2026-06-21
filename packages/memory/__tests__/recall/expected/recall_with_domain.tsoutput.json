@@ -2,7 +2,7 @@
   "_status": "TS-CAPTURED-NEEDS-PYTHON-VERIFICATION",
   "_captured_at": "2026-05-05T00:00:00.000Z",
   "output": {
-    "results": [
+    "memories": [
       {
         "memory_id": 3,
         "content": "consolidation decay cycle: Ebbinghaus forgetting curve applied with 30-day half-life. Stage multipliers from Kandel 2001.",
@@ -69,8 +69,8 @@
         "recency_boost": 0.2988
       }
     ],
-    "total": 4,
-    "query_intent": "general",
+    "count": 4,
+    "intent": "general",
     "dispatch_tier": "ts",
     "signals": {},
     "enhancements": {

@@ -161,16 +161,18 @@ function captureExpected(name: string, output: unknown): void {
 // ── Shared assertions ──────────────────────────────────────────────────────
 
 function assertResponseShape(result: RecallResponse): void {
-  expect(result).toHaveProperty("results");
-  expect(result).toHaveProperty("total");
-  expect(result).toHaveProperty("query_intent");
+  // Phase-0 bounded-IO contract: memories/count/intent (was results/total/query_intent).
+  // source: cortex@bc5af469 mcp_server/handlers/recall.py:468-484
+  expect(result).toHaveProperty("memories");
+  expect(result).toHaveProperty("count");
+  expect(result).toHaveProperty("intent");
   expect(result).toHaveProperty("dispatch_tier");
-  expect(Array.isArray(result.results)).toBe(true);
-  expect(typeof result.total).toBe("number");
-  expect(typeof result.query_intent).toBe("string");
+  expect(Array.isArray(result.memories)).toBe(true);
+  expect(typeof result.count).toBe("number");
+  expect(typeof result.intent).toBe("string");
 }
 
-function assertResultShape(r: RecallResponse["results"][number]): void {
+function assertResultShape(r: RecallResponse["memories"][number]): void {
   expect(typeof r.memory_id).toBe("number");
   expect(typeof r.content).toBe("string");
   expect(typeof r.score).toBe("number");
@@ -185,15 +187,15 @@ function assertResultShape(r: RecallResponse["results"][number]): void {
 describe("recall parity — fixture: recall_no_query", () => {
   /**
    * Fixture: recall_no_query.json
-   * Scenario: null args → handler must return {results:[], total:0}, not throw.
+   * Scenario: null args → handler must return {memories:[], count:0}, not throw.
    * STATUS: TS-CAPTURED-NEEDS-PYTHON-VERIFICATION
    */
   it("returns empty response for null args", async () => {
     const store = new InMemoryStore();
     const result = await recallHandler(null, store);
     assertResponseShape(result);
-    expect(result.results).toHaveLength(0);
-    expect(result.total).toBe(0);
+    expect(result.memories).toHaveLength(0);
+    expect(result.count).toBe(0);
     captureExpected("recall_no_query", result);
   });
 
@@ -202,8 +204,8 @@ describe("recall parity — fixture: recall_no_query", () => {
     // @ts-expect-error — intentionally testing runtime guard
     const result = await recallHandler({ max_results: 5 }, store);
     assertResponseShape(result);
-    expect(result.results).toHaveLength(0);
-    expect(result.total).toBe(0);
+    expect(result.memories).toHaveLength(0);
+    expect(result.count).toBe(0);
   });
 });
 
@@ -211,7 +213,7 @@ describe("recall parity — fixture: recall_empty_corpus", () => {
   /**
    * Fixture: recall_empty_corpus.json
    * Scenario: obscure query against cold/empty store — must not crash,
-   *           must return {results:[], total:0, query_intent: <string>}.
+   *           must return {memories:[], count:0, intent: <string>}.
    * STATUS: TS-CAPTURED-NEEDS-PYTHON-VERIFICATION
    */
   it("returns empty results gracefully on cold store", async () => {
@@ -226,9 +228,9 @@ describe("recall parity — fixture: recall_empty_corpus", () => {
       new NullEmbeddingEngine(),
     );
     assertResponseShape(result);
-    expect(result.results).toHaveLength(0);
-    expect(result.total).toBe(0);
-    expect(result.query_intent).toBeTruthy();
+    expect(result.memories).toHaveLength(0);
+    expect(result.count).toBe(0);
+    expect(result.intent).toBeTruthy();
     captureExpected("recall_empty_corpus", result);
   });
 
@@ -274,27 +276,27 @@ describe("recall parity — fixture: recall_simple_query", () => {
   });
 
   it("total equals results.length", () => {
-    expect(result.total).toBe(result.results.length);
+    expect(result.count).toBe(result.memories.length);
   });
 
   it("each result has required fields", () => {
-    for (const r of result.results) {
+    for (const r of result.memories) {
       assertResultShape(r);
     }
   });
 
   it("results are bounded by default max_results=10", () => {
-    expect(result.results.length).toBeLessThanOrEqual(10);
+    expect(result.memories.length).toBeLessThanOrEqual(10);
   });
 
   it("classifies causal intent (why-question)", () => {
     // "why" boosts CAUSAL intent
-    expect(result.query_intent).toBe("causal");
+    expect(result.intent).toBe("causal");
   });
 
   it("top result contains pgvector content when store is seeded", () => {
     // The pgvector memory should rank in top results
-    const hasVectorMatch = result.results.some((r) =>
+    const hasVectorMatch = result.memories.some((r) =>
       r.content.toLowerCase().includes("pgvector"),
     );
     expect(hasVectorMatch).toBe(true);
@@ -305,7 +307,7 @@ describe("recall parity — fixture: recall_simple_query", () => {
   });
 
   it("replay tracking logged for returned memories", () => {
-    const returnedIds = new Set(result.results.map((r) => r.memory_id));
+    const returnedIds = new Set(result.memories.map((r) => r.memory_id));
     const loggedIds = new Set(store.accessLog.map((l) => l.id));
     for (const id of returnedIds) {
       expect(loggedIds.has(id)).toBe(true);
@@ -343,22 +345,22 @@ describe("recall parity — fixture: recall_with_domain", () => {
   });
 
   it("all results are in the cortex domain", () => {
-    for (const r of result.results) {
+    for (const r of result.memories) {
       expect(r.domain).toBe("cortex");
     }
   });
 
   it("cross-domain memories excluded (auth-service)", () => {
-    const hasAuthService = result.results.some((r) => r.domain === "auth-service");
+    const hasAuthService = result.memories.some((r) => r.domain === "auth-service");
     expect(hasAuthService).toBe(false);
   });
 
   it("max_results cap respected", () => {
-    expect(result.results.length).toBeLessThanOrEqual(5);
+    expect(result.memories.length).toBeLessThanOrEqual(5);
   });
 
   it("total equals results.length", () => {
-    expect(result.total).toBe(result.results.length);
+    expect(result.count).toBe(result.memories.length);
   });
 });
 
@@ -390,25 +392,25 @@ describe("recall parity — fixture: recall_multi_signal", () => {
   });
 
   it("max_results=3 cap respected", () => {
-    expect(result.results.length).toBeLessThanOrEqual(3);
+    expect(result.memories.length).toBeLessThanOrEqual(3);
   });
 
   it("min_heat=0.5 filter applied — no cold memories", () => {
-    for (const r of result.results) {
+    for (const r of result.memories) {
       // heat is effective heat after session-coherence; raw must have been >= 0.5
       expect(r.heat).toBeGreaterThanOrEqual(0);
     }
   });
 
   it("scores are finite numbers", () => {
-    for (const r of result.results) {
+    for (const r of result.memories) {
       expect(Number.isFinite(r.score)).toBe(true);
       expect(r.score).toBeGreaterThan(0);
     }
   });
 
   it("total equals results.length", () => {
-    expect(result.total).toBe(result.results.length);
+    expect(result.count).toBe(result.memories.length);
   });
 });
 
@@ -431,17 +433,17 @@ describe("recall parity — fixture: recall_unicode", () => {
       new NullEmbeddingEngine(),
     );
     assertResponseShape(result);
-    expect(result.results.length).toBeLessThanOrEqual(5);
+    expect(result.memories.length).toBeLessThanOrEqual(5);
     captureExpected("recall_unicode", result);
   });
 
-  it("query_intent field present on unicode path", async () => {
+  it("intent field present on unicode path", async () => {
     const store = new InMemoryStore();
     const result = await recallHandler(
       { query: "日本語テスト", max_results: 1 },
       store,
     );
-    expect(result.query_intent).toBeTruthy();
+    expect(result.intent).toBeTruthy();
   });
 });
 
@@ -519,8 +521,8 @@ describe("recall parity — fixture: recall_with_related", () => {
   });
 
   it("include_related=true: every result carries a 'related' field", () => {
-    expect(resultWith.results.length).toBeGreaterThan(0);
-    for (const r of resultWith.results) {
+    expect(resultWith.memories.length).toBeGreaterThan(0);
+    for (const r of resultWith.memories) {
       expect(r).toHaveProperty("related");
       expect(r.related).toHaveProperty("versions");
       expect(r.related).toHaveProperty("entities");
@@ -530,7 +532,7 @@ describe("recall parity — fixture: recall_with_related", () => {
   });
 
   it("include_related=true: memory id=1 has entity neighbors populated", () => {
-    const mem1 = resultWith.results.find((r) => r.memory_id === 1);
+    const mem1 = resultWith.memories.find((r) => r.memory_id === 1);
     if (!mem1) return; // memory 1 may not be in top-3; skip if absent
     expect(mem1.related!.entities.length).toBeGreaterThan(0);
     // At least one entity group should have neighbors
@@ -543,7 +545,7 @@ describe("recall parity — fixture: recall_with_related", () => {
   });
 
   it("include_related=true: gist is capped at 160 chars", () => {
-    for (const r of resultWith.results) {
+    for (const r of resultWith.memories) {
       for (const v of r.related!.versions) {
         expect(v.gist.length).toBeLessThanOrEqual(160);
       }
@@ -551,29 +553,29 @@ describe("recall parity — fixture: recall_with_related", () => {
   });
 
   it("include_related=false (default): results have NO 'related' field — byte-identical regression", () => {
-    for (const r of resultWithout.results) {
+    for (const r of resultWithout.memories) {
       // When include_related is omitted, the 'related' field must be absent
       expect(r).not.toHaveProperty("related");
     }
   });
 
   it("include_related=false: scores, total, query_intent unchanged", () => {
-    expect(resultWithout.total).toBe(resultWithout.results.length);
-    expect(resultWithout.query_intent).toBe(resultWith.query_intent);
+    expect(resultWithout.count).toBe(resultWithout.memories.length);
+    expect(resultWithout.intent).toBe(resultWith.intent);
     // Same result IDs in same order (same store, same query, same settings)
-    expect(resultWithout.results.map((r) => r.memory_id)).toEqual(
-      resultWith.results.map((r) => r.memory_id),
+    expect(resultWithout.memories.map((r) => r.memory_id)).toEqual(
+      resultWith.memories.map((r) => r.memory_id),
     );
   });
 
   it("include_related=true: entity max_entities cap respected (≤ 3 entity groups per result)", () => {
-    for (const r of resultWith.results) {
+    for (const r of resultWith.memories) {
       expect(r.related!.entities.length).toBeLessThanOrEqual(3);
     }
   });
 
   it("include_related=true: entity max_neighbors cap respected (≤ 5 neighbors per group)", () => {
-    for (const r of resultWith.results) {
+    for (const r of resultWith.memories) {
       for (const eg of r.related!.entities) {
         expect(eg.neighbors.length).toBeLessThanOrEqual(5);
       }
@@ -592,6 +594,8 @@ describe("recall_hierarchical — basic parity", () => {
       null,
       DEFAULT_RECALL_SETTINGS,
     );
+    // recall_hierarchical keeps its own {results,total,hierarchy} contract —
+    // the Phase-0 results→memories rename applies only to the flat recall handler.
     expect(result.results).toHaveLength(0);
     expect(result.total).toBe(0);
   });

@@ -2,7 +2,7 @@
   "_status": "TS-CAPTURED-NEEDS-PYTHON-VERIFICATION",
   "_captured_at": "2026-05-05T00:00:00.000Z",
   "output": {
-    "results": [
+    "memories": [
       {
         "memory_id": 1,
         "content": "We chose pgvector over Pinecone because of lower operational complexity, native PostgreSQL integration, and cost. pgvector supports HNSW indexes with m=16, ef_construction=64.",
@@ -36,8 +36,8 @@
         "recency_boost": 0.2988
       }
     ],
-    "total": 2,
-    "query_intent": "general",
+    "count": 2,
+    "intent": "general",
     "dispatch_tier": "ts",
     "signals": {},
     "enhancements": {

@@ -227,8 +227,10 @@ function flagCost(cell: Cell): number {
  * `needed` chars.
  *
  * Port of: response_budget.py _water_level.
+ * Exported for parity testing (mirrors the oracle's module-level _water_level,
+ * pinned directly in tests_py/core/test_response_budget.py).
  */
-function waterLevel(pairs: Array<[number, number]>, needed: number): number {
+export function waterLevel(pairs: Array<[number, number]>, needed: number): number {
   if (pairs.length === 0 || needed <= 0) {
     let maxRatio = 0.0;
     for (const [length, weight] of pairs) {
@@ -332,21 +334,27 @@ function dropTailItem(payload: Payload, targets: BudgetTarget[]): boolean {
  *
  * Port of: response_budget.py bound_payload.
  */
-export function boundPayload(
-  payload: Payload,
+export function boundPayload<T extends object>(
+  payload: T,
   targets: BudgetTarget[],
   budgetChars: number = MAX_RESPONSE_CHARS,
-): Payload {
+): T {
+  // Generic over the caller's concrete response type so handlers keep their
+  // typed objects (RecallResponse, MethodologyResponse, WikiReadResult, …)
+  // across the call. Internally the algorithm only ever reads/writes string
+  // keys, so a single localized cast to the string-keyed Payload view is sound;
+  // the object is mutated in place and the same reference is returned.
+  const view = payload as Payload;
   for (;;) {
-    const total = serializedLength(payload);
+    const total = serializedLength(view);
     if (total <= budgetChars) return payload;
-    const cells = collectCells(payload, targets);
+    const cells = collectCells(view, targets);
     const cuttable = cells.filter((c) => cellContentLength(c) > 0);
     if (cuttable.length > 0) {
       truncateCells(cuttable, total - budgetChars);
       continue;
     }
-    if (!dropTailItem(payload, targets)) return payload;
+    if (!dropTailItem(view, targets)) return payload;
   }
 }
 

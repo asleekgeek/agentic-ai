@@ -133,6 +133,12 @@ export const RecallResultSchema = z.object({
   // Present only when include_related=true (MEM-G4).
   // source: cortex@6fbf723d mcp_server/handlers/recall_helpers.py:inline_related_neighbors
   related: RelatedNeighborsSchema.optional(),
+  // Budget-extension fields: present and true only when boundPayload truncated
+  // this item's content to fit the host response cap. memory_id survives so the
+  // full body stays fetchable by id.
+  // source: cortex@bc5af469 mcp_server/handlers/recall.py:62-73 (outputSchema items)
+  truncated: z.boolean().optional(),
+  content_length: z.number().int().optional(),
 });
 
 export type RecallResult = z.infer<typeof RecallResultSchema>;
@@ -173,9 +179,13 @@ export type RecallEnhancements = z.infer<typeof RecallEnhancementsSchema>;
 // ── Recall response ────────────────────────────────────────────────────────
 
 export const RecallResponseSchema = z.object({
-  results: z.array(RecallResultSchema),
-  total: z.number().int(),
-  query_intent: QueryIntentSchema,
+  // Phase-0 bounded-IO rename (results→memories, total→count, query_intent→intent):
+  // the legacy aliases byte-duplicated every memory on the wire (50% pure
+  // duplication, 2026-06-09 audit). Consumers read the schema-aligned keys.
+  // source: cortex@bc5af469 mcp_server/handlers/recall.py:464-484 (Phase-0 commit 1810d291)
+  memories: z.array(RecallResultSchema),
+  count: z.number().int(),
+  intent: QueryIntentSchema,
   dispatch_tier: z.string(),
   signals: z.record(z.unknown()).default({}),
   enhancements: RecallEnhancementsSchema.optional(),
@@ -184,6 +194,9 @@ export const RecallResponseSchema = z.object({
   // dropped — useful for debugging "why didn't I get the result I expected".
   // source: cortex@f425157 mcp_server/handlers/recall.py — low_signal_dropped
   low_signal_dropped: z.number().int().default(0),
+  // Running count of items dropped from the tail when content truncation alone
+  // could not fit the response budget. source: cortex core/response_budget.py:267
+  truncation_dropped: z.number().int().optional(),
 });
 
 export type RecallResponse = z.infer<typeof RecallResponseSchema>;

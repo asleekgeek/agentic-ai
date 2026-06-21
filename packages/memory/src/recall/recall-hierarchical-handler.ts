@@ -258,7 +258,7 @@ export async function recallHierarchicalHandler(
       settings,
     );
     return {
-      results: flatResult.results.map((r) => ({
+      results: flatResult.memories.map((r) => ({
         memory_id: r.memory_id,
         score: r.score,
         matched_level: "L0",
@@ -269,7 +269,7 @@ export async function recallHierarchicalHandler(
         tags: r.tags,
         created_at: r.created_at,
       })),
-      total: flatResult.total,
+      total: flatResult.count,
       hierarchy: { stats: { fallback: "no_embedding_engine" } },
     };
   }
@@ -293,7 +293,7 @@ export async function recallHierarchicalHandler(
       settings,
     );
     return {
-      results: flatResult.results.map((r) => ({
+      results: flatResult.memories.map((r) => ({
         memory_id: r.memory_id,
         score: r.score,
         matched_level: "L0",
@@ -304,7 +304,7 @@ export async function recallHierarchicalHandler(
         tags: r.tags,
         created_at: r.created_at,
       })),
-      total: flatResult.total,
+      total: flatResult.count,
       hierarchy: { stats: { fallback: "too_few_embeddings" } },
     };
   }
