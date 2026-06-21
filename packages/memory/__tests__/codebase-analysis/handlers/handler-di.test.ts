@@ -111,15 +111,20 @@ describe("codebase-analyze handler — DI wiring", () => {
     const store = makeStoreMock();
     const deps: CodebaseAnalyzeDeps = { store };
 
-    // Use a real directory (tmpdir) so existsSync passes
+    // Use an isolated, EMPTY fixture dir so existsSync passes. Passing the real
+    // os.tmpdir() here makes the handler walk the entire system temp tree
+    // (~10^5 files), whose size/contents are non-deterministic — that walk is
+    // the root cause of this test's flakiness (variable, multi-second). An
+    // empty mkdtemp dir is deterministic and instant to walk.
+    const dir = mkdtempSync(join(tmpdir(), "test-dry-run-"));
     const result = await analyzeHandler(
-      { directory: tmpdir(), dry_run: true, max_files: 1 },
+      { directory: dir, dry_run: true, max_files: 1 },
       deps,
     );
 
     expect(result["analyzed"]).toBe(false);
     expect(result["dry_run"]).toBe(true);
-    expect(result["directory"]).toBe(tmpdir());
+    expect(result["directory"]).toBe(dir);
     expect(store.insertMemory).not.toHaveBeenCalled();
   });
 
@@ -153,9 +158,13 @@ describe("codebase-analyze handler — DI wiring", () => {
     const store = makeStoreMock();
     const deps: CodebaseAnalyzeDeps = { store };
 
-    // Should not throw even though initStore was never called
+    // Should not throw even though initStore was never called.
+    // Isolated empty dir (not the real os.tmpdir()) — this test omits max_files,
+    // so on the system temp tree it would walk up to DEFAULT_MAX_FILES candidates
+    // over ~10^5 non-deterministic files: the worst flakiness contributor.
+    const dir = mkdtempSync(join(tmpdir(), "test-no-init-"));
     const result = await analyzeHandler(
-      { directory: tmpdir(), dry_run: true },
+      { directory: dir, dry_run: true },
       deps,
     );
     expect(result["analyzed"]).toBe(false); // dry_run path
