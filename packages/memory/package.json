@@ -303,6 +303,18 @@
       "import": "./dist/recall/recall-pipeline-stages.js",
       "types": "./dist/recall/recall-pipeline-stages.d.ts"
     },
+    "./recall/context-assembly/assemble-context.js": {
+      "import": "./dist/recall/context-assembly/assemble-context.js",
+      "types": "./dist/recall/context-assembly/assemble-context.d.ts"
+    },
+    "./recall/context-assembly/stage-detector.js": {
+      "import": "./dist/recall/context-assembly/stage-detector.js",
+      "types": "./dist/recall/context-assembly/stage-detector.d.ts"
+    },
+    "./recall/context-assembly/stage-assembler.js": {
+      "import": "./dist/recall/context-assembly/stage-assembler.js",
+      "types": "./dist/recall/context-assembly/stage-assembler.d.ts"
+    },
     "./shared/telemetry.js": {
       "import": "./dist/shared/telemetry.js",
       "types": "./dist/shared/telemetry.d.ts"

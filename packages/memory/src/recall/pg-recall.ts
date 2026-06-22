@@ -299,7 +299,13 @@ export async function recall(
       limit: 2,
     });
     for (const t of typed) {
-      const mid = t["id"] as number | undefined ?? t.memory_id;
+      // source: cortex main mcp_server/core/pg_recall.py:352
+      //   `mid = t.get("id") or t.get("memory_id")`
+      // Python `or` falls back to memory_id when id is falsy (0 or absent).
+      // PG primary keys are always > 0, so id=0 cannot occur in practice, but
+      // faithful to the source: explicit falsy check, not `??`.
+      const _rawId = t["id"] as number | undefined;
+      const mid = (_rawId !== undefined && _rawId !== 0 ? _rawId : t.memory_id);
       if (mid !== undefined && !existingIds.has(mid)) {
         const entry: Candidate = {
           ...t,

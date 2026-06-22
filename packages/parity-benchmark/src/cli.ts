@@ -26,7 +26,7 @@ import {
 } from "./longmemeval-loader.js";
 import { runLongMemEvalPg } from "./pg-longmemeval-runner.js";
 import { findBeamDataset, loadBeam } from "./beam-loader.js";
-import { runBeamPg } from "./pg-beam-runner.js";
+import { runBeamPg, type AssemblerMode } from "./pg-beam-runner.js";
 import { scoreResults } from "./scoring.js";
 import { loadCortexBaseline } from "./baselines.js";
 import {
@@ -44,6 +44,14 @@ interface ParsedArgs {
   readonly variant: "s" | "oracle";
   /** BEAM split selector (default 100K) — cortex-beam-pg only. */
   readonly split: string;
+  /**
+   * BEAM retrieval mode (default "off" = flat WRRF) — cortex-beam-pg only.
+   * "temporal" runs 3-phase assembleContext() with TemporalStageDetector
+   * (day-bucket from created_at, gap_hours=24.0), targeting MRR 0.471.
+   * "oracle" runs with ExplicitStageDetector (plan_id, targeting MRR 0.429).
+   * source: Cortex docs/arxiv-context-assembly/main.tex Table 2
+   */
+  readonly assembler: AssemblerMode;
 }
 
 const DEFAULT_LOCOMO_BASELINE = "parity-oracle/cortex/baselines/locomo.json";
@@ -61,6 +69,7 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
   let noEmbeddings = false;
   let variant: "s" | "oracle" = "s";
   let split = DEFAULT_BEAM_SPLIT;
+  let assembler: AssemblerMode = "off";
   for (let i = 1; i < argv.length; i++) {
     const arg = argv[i];
     if (arg === "--limit" && i + 1 < argv.length) {
@@ -78,11 +87,14 @@ function parseArgs(argv: readonly string[]): ParsedArgs {
     } else if (arg === "--split" && i + 1 < argv.length) {
       const v = argv[++i];
       if (v) split = v;
+    } else if (arg === "--assembler" && i + 1 < argv.length) {
+      const v = argv[++i];
+      if (v === "temporal" || v === "oracle" || v === "off") assembler = v;
     } else if (arg === "--no-embeddings") {
       noEmbeddings = true;
     }
   }
-  return { command: cmd, limit, baseline, dataset, noEmbeddings, variant, split };
+  return { command: cmd, limit, baseline, dataset, noEmbeddings, variant, split, assembler };
 }
 
 async function runCortexLocomo(args: ParsedArgs): Promise<number> {
@@ -230,6 +242,12 @@ async function runCortexBeamPg(args: ParsedArgs): Promise<number> {
       : conversations.length;
   process.stderr.write(
     `Running TS Cortex (REAL PostgreSQL) on ${total} BEAM conversation(s)...\n` +
+      `Assembler: ${args.assembler} — ` +
+      (args.assembler === "temporal"
+        ? "3-phase TemporalStageDetector (day-bucket from created_at, gap_hours=24)\n"
+        : args.assembler === "oracle"
+          ? "3-phase ExplicitStageDetector (plan_id/agent_context)\n"
+          : "flat WRRF recall() (no assembler)\n") +
       "Metric: retrieval-proxy MRR (rank of first gold-matching memory) — NOT\n" +
       "the BEAM end-to-end LLM-as-judge score; within-system comparison only.\n",
   );
@@ -242,6 +260,7 @@ async function runCortexBeamPg(args: ParsedArgs): Promise<number> {
   const scores = await runBeamPg(conversations, {
     limit,
     useEmbeddings: !args.noEmbeddings,
+    assemblerMode: args.assembler,
     onProgress: (cur, n) => {
       const elapsed = ((Date.now() - start) / 1000).toFixed(1); // source: 1000 = ms→s conversion factor (SI)
       process.stderr.write(`  [${cur}/${n}] ${elapsed}s elapsed\n`);
@@ -279,13 +298,17 @@ function printUsage(): void {
       "                        NOTE: this is a retrieval proxy, NOT BEAM's end-to-end LLM-as-judge score.\n" +
       "\n" +
       "Options:\n" +
-      "  --limit N          Stop after N conversations/questions (default: all)\n" +
-      "  --variant s|oracle LongMemEval dataset variant (default: s) — longmemeval-pg only\n" +
+      "  --limit N                  Stop after N conversations/questions (default: all)\n" +
+      "  --variant s|oracle         LongMemEval dataset variant (default: s) — longmemeval-pg only\n" +
       // source: BEAM split identifier — 100K / 10M (Tavakoli et al., ICLR 2026)
-      "  --split SPLIT      BEAM split (default: 100K) — beam-pg only\n" +
-      "  --baseline PATH    Override baseline JSON path\n" +
-      "  --dataset PATH     Override dataset path (else CORTEX_LOCOMO_PATH / CORTEX_LONGMEMEVAL_PATH / CORTEX_BEAM_PATH or sibling repo)\n" +
-      "  --no-embeddings    FTS-only mode (no model download, faster, lower precision)\n",
+      "  --split SPLIT              BEAM split (default: 100K) — beam-pg only\n" +
+      "  --assembler temporal|oracle|off  BEAM retrieval mode (default: off = flat WRRF).\n" +
+      "                             temporal: 3-phase + TemporalStageDetector (day-bucket, gap=24h)\n" +
+      "                             oracle:   3-phase + ExplicitStageDetector (plan_id)\n" +
+      "                             off:      flat recall() WRRF baseline\n" +
+      "  --baseline PATH            Override baseline JSON path\n" +
+      "  --dataset PATH             Override dataset path (else CORTEX_LOCOMO_PATH / CORTEX_LONGMEMEVAL_PATH / CORTEX_BEAM_PATH or sibling repo)\n" +
+      "  --no-embeddings            FTS-only mode (no model download, faster, lower precision)\n",
   );
 }
 

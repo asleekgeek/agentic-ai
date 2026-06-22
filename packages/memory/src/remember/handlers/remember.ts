@@ -183,8 +183,16 @@ export function remember(
     const bestId = vecHits[0]?.[0];
     if (bestId !== undefined) {
       const bestMem = store.getMemory(bestId);
-      if (bestMem?.created_at) {
-        hoursSinceSimilar = parseHoursSince(bestMem.created_at);
+      if (bestMem) {
+        // source: cortex main mcp_server/core/write_gate.py:86-87
+        //   `ts = best_mem.get("ingested_at") or best_mem["created_at"]`
+        // Prefers ingested_at for backdated memories. ingested_at is a DB
+        // column but not in MemoryItem — cast to access it.
+        const ingested = (bestMem as unknown as Record<string, unknown>)["ingested_at"] as string | undefined;
+        const ts = (ingested !== undefined && ingested !== "") ? ingested : bestMem.created_at;
+        if (ts) {
+          hoursSinceSimilar = parseHoursSince(ts);
+        }
       }
     }
   }
@@ -405,8 +413,18 @@ export async function rememberAsync(
       } catch {
         bestMem = null;
       }
-      if (bestMem?.created_at) {
-        hoursSinceSimilar = parseHoursSince(bestMem.created_at);
+      if (bestMem) {
+        // source: cortex main mcp_server/core/write_gate.py:86-87
+        //   `ts = best_mem.get("ingested_at") or best_mem["created_at"]`
+        // Prefers ingested_at (elapsed-since-ingest, not elapsed-since-original-
+        // event) for backdated memories. Falls back to created_at for legacy rows
+        // that predate the ingested_at column.
+        // ingested_at is a DB column but not in MemoryItem — cast to access it.
+        const ingested = (bestMem as unknown as Record<string, unknown>)["ingested_at"] as string | undefined;
+        const ts = (ingested !== undefined && ingested !== "") ? ingested : bestMem.created_at;
+        if (ts) {
+          hoursSinceSimilar = parseHoursSince(ts);
+        }
       }
     }
   }

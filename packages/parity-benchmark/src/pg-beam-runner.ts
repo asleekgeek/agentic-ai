@@ -1,13 +1,17 @@
 /**
  * pg-beam-runner.ts — REAL-PostgreSQL BEAM benchmark runner (retrieval proxy).
  *
- * Runs the BEAM 100K dataset through the TS Cortex recall pipeline (recall()
- * from pg-recall.ts) backed by the REAL PgMemoryStore — so retrieval routes
- * through the actual recall_memories() PL/pgSQL function with PG-native signals
- * (pgvector cosine, pg_trgm GIN trigram, ts_rank_cd FTS). This is the
- * apples-to-apples test vs. the PG-captured published Cortex BEAM-100K number
- * (docs/arxiv-thermodynamic/main.pdf + docs/arxiv-context-assembly/main.tex —
- * retrieval-proxy MRR 0.591).
+ * Runs the BEAM 100K / 10M dataset through the TS Cortex recall pipeline
+ * (recall() from pg-recall.ts or assembleContext() from context-assembly/)
+ * backed by the REAL PgMemoryStore — so retrieval routes through the actual
+ * recall_memories() PL/pgSQL function with PG-native signals (pgvector cosine,
+ * pg_trgm GIN trigram, ts_rank_cd FTS). This is the apples-to-apples test vs.
+ * the PG-captured published Cortex BEAM number:
+ *   - flat WRRF-only:     retrieval-proxy MRR 0.353 (baseline, no assembler)
+ *   - oracle assembler:   retrieval-proxy MRR 0.429 (+21.5%)
+ *   - temporal assembler: retrieval-proxy MRR 0.471 (+33.4%) ← target
+ * source: Cortex docs/arxiv-context-assembly/main.tex Table 2 +
+ *   benchmarks/beam/variance/assembler_10m_temporal.txt
  *
  * IMPORTANT — what this measures: BEAM's PUBLISHED headline metric is an
  * end-to-end LLM-as-judge nugget score, which this runner does NOT compute.
@@ -16,19 +20,20 @@
  * within-system, same-harness comparison. This runner reproduces that proxy
  * EXACTLY as the Python BEAM runner computes it — no LLM judge.
  *
- * Mirrors pg-locomo-runner.ts (per-conversation isolation: db.clear() →
- * load_memories → evaluate all the conversation's questions). The structural
- * difference faithful to the Python oracle is the SCORING + AGGREGATION:
- *   - hit_rank = first retrieved memory whose content contains the answer
- *     substring OR an 80-char source-turn prefix (content match, not source id);
- *     abstention is special (hit_rank=1 when retrieval is empty or top score
- *     < 0.3, i.e. the system correctly found nothing confident).
- *   - per-conversation per-ability MRR/R@5/R@10, then mean over conversations
- *     per ability, then mean over abilities = the OVERALL (nested macro-average).
+ * ## Assembler mode (--assembler temporal|oracle|off)
+ *
+ * When assemblerMode is "temporal" or "oracle", assemblerCandidatesFor()
+ * (from beam-assembler-eval.ts) replaces the flat recall() per question with
+ * assembleContext(), which runs the 3-phase stage-aware retrieval. tokenBudget
+ * is undefined (no LLM reader) → pure rank-based selection.
+ * Assembler-specific code is in beam-assembler-eval.ts (coding-standards §4.1:
+ * this file is a composition root; assembler eval is a separate concern).
  *
  * source: cortex main benchmarks/beam/run_benchmark.py:126-274 (evaluate_retrieval)
  * source: cortex main benchmarks/beam/run_benchmark.py:336-432 (nested aggregation)
  * source: cortex main benchmarks/lib/bench_db.py:114-138 (recall options)
+ * source: cortex main benchmarks/beam/run_benchmark.py:53-123 (_get_stage_detector,
+ *   _current_stage_for_question)
  */
 
 import { spawnSync } from "node:child_process";
@@ -50,6 +55,11 @@ import {
 } from "./beam-loader.js";
 import type { BenchmarkScores, CategoryScores } from "./scoring.js";
 import { makePgPgStore } from "./pg-pgstore-adapter.js";
+import {
+  assemblerCandidatesFor,
+  emitTemporalDiagnostic,
+  type AssemblerMode,
+} from "./beam-assembler-eval.js";
 
 // source: cortex main bench_db.py:117 — top_k passed to recall.
 const TOP_K = 10;
@@ -159,7 +169,7 @@ async function seedConversation(
  *
  * source: cortex main run_benchmark.py:211-239.
  */
-function hitRankFor(
+export function hitRankFor(
   question: BeamQuestion,
   candidates: ReadonlyArray<{ content?: string; score: number }>,
 ): number | null {
@@ -204,6 +214,45 @@ async function evaluateConversation(
       wrrfK: WRRF_K,
       includeGlobals: false,
     });
+    const rank = hitRankFor(q, candidates);
+    const list = ranksByAbility.get(q.ability) ?? [];
+    list.push(rank);
+    ranksByAbility.set(q.ability, list);
+  }
+
+  const metrics = new Map<string, AbilityMetric>();
+  for (const [ability, ranks] of ranksByAbility) {
+    metrics.set(ability, aggregateAbility(ranks));
+  }
+  return metrics;
+}
+
+/**
+ * Recall for every question using the stage-aware assembler, bucketed by ability.
+ *
+ * Delegates current_stage computation and assembleContext() to beam-assembler-eval.ts.
+ * Scoring (hitRankFor, aggregateAbility) is reused unchanged from the flat path.
+ *
+ * source: cortex main run_benchmark.py:166-189 (CORTEX_USE_ASSEMBLER=1 branch)
+ */
+async function evaluateConversationWithAssembler(
+  pgStore: PgStore,
+  recallEmbedder: ReturnType<typeof toRecallEmbeddingEngine> | null,
+  conv: BeamConversation,
+  assemblerMode: AssemblerMode,
+  seenDayBuckets: Set<string>,
+): Promise<Map<string, AbilityMetric>> {
+  const ranksByAbility = new Map<string, Array<number | null>>();
+
+  for (const q of conv.questions) {
+    const candidates = await assemblerCandidatesFor(
+      q,
+      conv.memories,
+      pgStore,
+      recallEmbedder,
+      assemblerMode,
+      seenDayBuckets,
+    );
     const rank = hitRankFor(q, candidates);
     const list = ranksByAbility.get(q.ability) ?? [];
     list.push(rank);
@@ -314,6 +363,19 @@ export interface PgBeamRunOptions {
   readonly useEmbeddings?: boolean;
   /** PostgreSQL connection string for the fresh test DB. */
   readonly pgUrl?: string;
+  /**
+   * Assembler mode — selects the retrieval primitive per question:
+   *   "off"      — flat WRRF recall() (default, existing path)
+   *   "temporal" — 3-phase assembleContext() with TemporalStageDetector
+   *                (day-bucket from created_at, gap_hours=24)
+   *   "oracle"   — 3-phase assembleContext() with ExplicitStageDetector
+   *                (plan_id; matches BEAM oracle labels)
+   *
+   * source: Cortex benchmarks/beam/run_benchmark.py:53-71, 166-189
+   * source: Cortex docs/arxiv-context-assembly/main.tex Table 2
+   *   (temporal MRR 0.471, oracle MRR 0.429)
+   */
+  readonly assemblerMode?: AssemblerMode;
 }
 
 /**
@@ -336,6 +398,7 @@ export async function runBeamPg(
     limit !== null && limit > 0 ? conversations.slice(0, limit) : conversations;
   const useEmbeddings = options.useEmbeddings ?? true;
   const pgUrl = options.pgUrl ?? process.env["CORTEX_PG_URL"] ?? DEFAULT_PG_URL;
+  const assemblerMode: AssemblerMode = options.assemblerMode ?? "off";
 
   ensureDatabase(pgUrl);
 
@@ -347,6 +410,9 @@ export async function runBeamPg(
     // Warm the model so the heavy load is charged to setup, not conversation #1.
     await coreEmbedder.embed("warmup");
   }
+
+  // Track distinct day-buckets seen across all questions (smoke diagnostic).
+  const seenDayBuckets = new Set<string>();
 
   // ONE store for the whole run; schema (incl. CREATE EXTENSION vector / pg_trgm)
   // is applied lazily on first use — see pg-schema-tables.ts.
@@ -360,10 +426,26 @@ export async function runBeamPg(
       // Per-conversation isolation: clear the shared store before seeding.
       await resetStore(store);
       await seedConversation(store, conv, coreEmbedder);
-      const metrics = await evaluateConversation(pgStore, recallEmbedder, conv);
+
+      const metrics =
+        assemblerMode !== "off"
+          ? await evaluateConversationWithAssembler(
+              pgStore,
+              recallEmbedder,
+              conv,
+              assemblerMode,
+              seenDayBuckets,
+            )
+          : await evaluateConversation(pgStore, recallEmbedder, conv);
+
       perConversation.push(metrics);
       options.onProgress?.(i + 1, slice.length);
     }
+
+    if (assemblerMode === "temporal") {
+      emitTemporalDiagnostic(seenDayBuckets);
+    }
+
     return aggregateBeam(perConversation);
   } finally {
     await store.close();
@@ -391,3 +473,6 @@ export async function countMemoriesPg(pgUrl?: string): Promise<number> {
     await store.close();
   }
 }
+
+// Re-export AssemblerMode so cli.ts has one import point.
+export type { AssemblerMode };

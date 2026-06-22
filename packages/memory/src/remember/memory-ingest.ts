@@ -96,6 +96,14 @@ export interface IngestMemoryInput {
   agent_context?: string;
   is_global?: boolean;
   created_at?: string;
+  /**
+   * Benchmark fallback timestamp — used by EverMemBench which supplies
+   * `date` instead of `created_at`. Faithful to cortex main
+   * mcp_server/core/memory_ingest.py:126
+   *   `"created_at": memory.get("created_at") or memory.get("date")`
+   * Python `or` falls back to `date` when `created_at` is absent or falsy.
+   */
+  date?: string;
 }
 
 /**
@@ -211,7 +219,14 @@ export async function ingestMemory(
       domain,
       source: memory.source ?? "",
       tags,
-      created_at: memory.created_at,
+      // source: cortex main mcp_server/core/memory_ingest.py:126
+      //   `"created_at": memory.get("created_at") or memory.get("date")`
+      // Python `or` defaults falsy created_at (None, "") to the `date`
+      // field — used by EverMemBench which supplies `date` but not `created_at`.
+      // Explicit check: use created_at when truthy, else fall back to date.
+      created_at: (memory.created_at !== undefined && memory.created_at !== "")
+        ? memory.created_at
+        : memory.date,
       heat: memory.heat ?? 1.0,
       importance: Math.min((memory.importance ?? DEFAULT_IMPORTANCE) * importanceBoost, 1.0),
       store_type: memory.store_type ?? "episodic",

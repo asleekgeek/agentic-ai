@@ -322,7 +322,13 @@ export async function reconsolidationApply(
     // Heat: clamp to [0, 1], write through bumpHeatRaw
     if (hasBump && outcome.heat_delta !== 0.0) {
       try {
-        const curHeat = (c.heat as number | undefined) ?? 0.5;
+        // source: cortex main mcp_server/core/recall_pipeline.py:682
+        //   `float(c.get("heat", 0.5) or 0.5)` — Python `or` defaults 0.0 to 0.5.
+        //   A cold memory (heat=0.0) is treated as 0.5 before the reconsolidation
+        //   delta is applied; this prevents tiny deltas from going negative on a
+        //   zero-base. Faithful: use explicit falsy check, not `??`.
+        const _rawHeat = (c.heat as number | undefined);
+        const curHeat = (_rawHeat !== undefined && _rawHeat !== 0 ? _rawHeat : 0.5);
         const newHeat = Math.max(0.0, Math.min(1.0, Number(curHeat) + outcome.heat_delta));
         await store.bumpHeatRaw?.(c.memory_id, newHeat);
         (candidates[i] as Candidate).heat = newHeat;

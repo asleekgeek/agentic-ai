@@ -121,7 +121,7 @@ const FLOAT32_BYTES_PER_ELEMENT = Float32Array.BYTES_PER_ELEMENT;
 // INDEX pair; this lock serializes the apply.
 // source: cortex main mcp_server/infrastructure/pg_store.py _SCHEMA_LOCK_ID
 //   (sha256(b'cortex_schema_a3').hexdigest() mod 2**31)
-const SCHEMA_LOCK_ID = 1357020271; // eslint-disable-line @typescript-eslint/no-magic-numbers -- source: cortex main mcp_server/infrastructure/pg_store.py _SCHEMA_LOCK_ID
+const SCHEMA_LOCK_ID = 1357020271; // source: cortex main mcp_server/infrastructure/pg_store.py _SCHEMA_LOCK_ID
 
 function nowIso(): string {
   return new Date().toISOString();
@@ -231,7 +231,7 @@ export class PgMemoryStore implements MemoryStoreExt {
           try {
             await client.query(ddl);
           } catch (exc) {
-            // eslint-disable-next-line no-console -- mirrors oracle logger.warning
+            // eslint-disable-next-line no-console, @typescript-eslint/no-magic-numbers -- mirrors oracle logger.warning; 50-char DDL preview
             console.warn(`Schema statement failed: ${ddl.split("\n")[0]?.slice(0, 50)} — ${String(exc)}`);
           }
         }
@@ -330,6 +330,16 @@ export class PgMemoryStore implements MemoryStoreExt {
     data: MemoryInsertData,
   ): Promise<number> {
     const now = nowIso();
+    // Faithful to cortex main pg_store.py:486 `raw_created or now`: Python `or`
+    // treats an empty-string created_at as falsy, so blank time-anchors (e.g. BEAM
+    // turns before the first session anchor) default to now instead of reaching PG
+    // as "" (which errors: invalid input syntax for type timestamp with time zone).
+    const createdAt =
+      data.created_at !== undefined && data.created_at !== "" ? data.created_at : now;
+    const stageEnteredAt =
+      data.stage_entered_at !== undefined && data.stage_entered_at !== ""
+        ? data.stage_entered_at
+        : createdAt;
     const result = await client.query<{ id: number }>(
       `INSERT INTO memories (
         content, tags, source, domain, directory_context, created_at,
@@ -352,7 +362,7 @@ export class PgMemoryStore implements MemoryStoreExt {
         data.source ?? "",
         data.domain ?? "",
         data.directory_context ?? "",
-        data.created_at ?? now,
+        createdAt,
         now,
         clampHeat(data.heat ?? 1.0),
         now,
@@ -374,7 +384,7 @@ export class PgMemoryStore implements MemoryStoreExt {
         data.is_benchmark ?? false,
         data.agent_context ?? "",
         data.is_global ?? false,
-        data.stage_entered_at ?? data.created_at ?? now,
+        stageEnteredAt,
         data.arousal ?? 0.0,
         data.dominant_emotion ?? "neutral",
         // Supersession forward edge (MEM-G1): null unless curation supersedes.
