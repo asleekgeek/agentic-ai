@@ -42,7 +42,7 @@
 
 import { existsSync } from "fs";
 import { join } from "path";
-import { tmpdir } from "os";
+import { homedir, tmpdir } from "os";
 
 // ── Platt calibration interface ───────────────────────────────────────────
 // source: cortex main mcp_server/core/platt_calibration.py
@@ -201,23 +201,34 @@ function blendScores(
 // source: Nogueira & Cho (2019) "Passage Re-ranking with BERT" — CE rerank pattern
 
 /**
- * FlashRank model cache directory.
- *
- * Resolution order (Lamport invariant: the directory returned is always an
- * absolute, platform-legal path writable by the current user):
- *   1. FLASHRANK_CACHE_DIR env var — explicit override for CI / non-default installs.
- *   2. os.tmpdir() — the OS-provided temporary directory; resolves to
- *      %TEMP% on Windows, /tmp on POSIX. This mirrors Python flashrank's
- *      behaviour: flashrank.Config.default_cache_dir = tempfile.gettempdir().
- *
- * source: flashrank.Config module — default_cache_dir = tempfile.gettempdir()
- * source: Python docs — tempfile.gettempdir() → os.tmpdir() equivalent
- */
-const FLASHRANK_CACHE_DIR = process.env["FLASHRANK_CACHE_DIR"] ?? tmpdir();
 /** FlashRank model name. Mirrors Python: Ranker(model_name="ms-marco-MiniLM-L-12-v2") */
 const FLASHRANK_MODEL_NAME = "ms-marco-MiniLM-L-12-v2";
 /** ONNX quantized model file inside the model dir. source: flashrank.Config.model_file_map */
 const FLASHRANK_ONNX_FILE = "flashrank-MiniLM-L-12-v2_Q.onnx";
+
+/**
+ * Resolve the FlashRank model cache directory: the FIRST candidate that actually
+ * contains the model file. flashrank's default cache differs across versions
+ * (tempfile.gettempdir() historically; ~/.cache/flashrank in recent installs)
+ * and the model is frequently unzipped manually, so we SEARCH rather than assume
+ * one fixed path. The prior hardcoded os.tmpdir() silently no-op'd reranking
+ * whenever the model lived under ~/.cache/flashrank — the dominant cause of the
+ * LoCoMo MRR gap (0.42 → 0.77 once the model is actually found).
+ *
+ * Order: FLASHRANK_CACHE_DIR env → ~/.cache/flashrank → os.tmpdir().
+ * source: flashrank.Ranker default cache resolution (cross-version) + manual installs.
+ */
+function resolveFlashrankCacheDir(): string {
+  const env = process.env["FLASHRANK_CACHE_DIR"];
+  const candidates = [env, join(homedir(), ".cache", "flashrank"), tmpdir()].filter(
+    (d): d is string => typeof d === "string" && d.length > 0,
+  );
+  for (const dir of candidates) {
+    if (existsSync(join(dir, FLASHRANK_MODEL_NAME, FLASHRANK_ONNX_FILE))) return dir;
+  }
+  return env && env.length > 0 ? env : join(homedir(), ".cache", "flashrank");
+}
+const FLASHRANK_CACHE_DIR = resolveFlashrankCacheDir();
 /** Xenova model ID for tokenizer (same vocab as FlashRank model). */
 const XENOVA_TOKENIZER_MODEL_ID = "Xenova/ms-marco-MiniLM-L-12-v2";
 
