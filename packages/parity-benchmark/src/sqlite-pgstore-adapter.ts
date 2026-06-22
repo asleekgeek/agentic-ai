@@ -11,18 +11,21 @@
  * source: coding-standards §4.1 — file-size limit 500 LOC.
  * source: Fowler (2018), Refactoring §6.1 Extract Function — concern boundary.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:39-230
+ * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:39-230
  */
 
 import type { PgStore, PgRecallMemoriesParams } from "@agentic/memory/recall/pg-recall.js";
 import type { Candidate } from "@agentic/memory/recall/recall-pipeline-stages.js";
 import type { SqliteMemoryStore } from "@agentic/memory/remember/storage/sqlite-store.js";
+import { trigramSimilarity } from "@agentic/memory/remember/storage/trigram-similarity.js";
 
 // Default WRRF weights (general intent).
-// source: cortex@ed33435 mcp_server/core/pg_recall_weights.py — general intent defaults
+// source: cortex main mcp_server/core/pg_recall_weights.py — general intent defaults
 export const DEFAULT_WEIGHTS: Record<string, number> = {
   vector: 1.0,
   fts: 0.5,
+  // source: cortex main PG recall_memories p_w_ngram default
+  ngram: 0.3,
   heat: 0.3,
   recency: 0.0,
 };
@@ -62,14 +65,14 @@ function getRawDb(store: SqliteMemoryStore): RawDb {
  *   length <= params.max_results; returns [] when the store has no rows
  *   matching the domain/heat filters.
  *
- * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:39-86
+ * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:39-86
  */
 export function makePgStore(memoryStore: SqliteMemoryStore): PgStore {
   const db: RawDb = getRawDb(memoryStore);
 
   /**
    * Build the WHERE clause for heat-filtered domain/directory queries.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:152-166
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:152-166
    */
   function buildFilter(
     minHeat: number,
@@ -91,7 +94,7 @@ export function makePgStore(memoryStore: SqliteMemoryStore): PgStore {
 
   /**
    * Vector signal: top-pool RRF contribution from KNN search.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:63-85
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:63-85
    */
   function signalVector(
     scores: Map<number, number>,
@@ -115,7 +118,7 @@ export function makePgStore(memoryStore: SqliteMemoryStore): PgStore {
    * PARITY FIX (2026-05-06): pass raw query_text directly to FTS5 without
    * sanitization, matching Python's _signal_fts behavior exactly.
    *
-   * Python source: cortex@82b15b3 mcp_server/infrastructure/sqlite_store_search.py:87-106
+   * Python source: cortex main mcp_server/infrastructure/sqlite_store_search.py:87-106
    *   self._conn.execute("SELECT rowid, rank FROM memories_fts WHERE memories_fts MATCH ?
    *                        ORDER BY rank LIMIT ?", (query_text, pool)).fetchall()
    *   wrapped in try/except Exception: pass
@@ -128,7 +131,7 @@ export function makePgStore(memoryStore: SqliteMemoryStore): PgStore {
    * query into "word" OR "word" OR ... (disjunction), which is correct for
    * production but diverges from Python's bench behavior on LoCoMo data.
    *
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:87-106
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:87-106
    */
   function signalFts(
     scores: Map<number, number>,
@@ -156,8 +159,50 @@ export function makePgStore(memoryStore: SqliteMemoryStore): PgStore {
   }
 
   /**
+   * Trigram (ngram) lexical signal: pg_trgm-faithful Jaccard similarity of the
+   * query text against each candidate's content over the same candidate pool.
+   * For LoCoMo (where FTS is always 0 because questions contain FTS5-special
+   * chars) this is the only lexical match. Candidates above the similarity
+   * floor are ranked descending and contribute an RRF term, like FTS.
+   *
+   * source: PostgreSQL pg_trgm (show_trgm + similarity).
+   */
+  function signalNgram(
+    scores: Map<number, number>,
+    queryText: string,
+    weight: number,
+    k: number,
+    pool: number,
+    minHeat: number,
+    domain: string | null | undefined,
+    directory: string | null | undefined,
+  ): void {
+    if (!queryText || weight <= 0) return;
+    // source: cortex main PG recall_memories ngram similarity floor
+    const minSimilarity = 0.1;
+    // Match PG's ngram CTE: scan ALL heat/domain-filtered candidates (pg_trgm's
+    // GIN index has no SQLite equivalent), score every one by trigram similarity,
+    // keep sim > floor, then take the top `pool` BY SIMILARITY — not by heat.
+    // Ranking the heat-top pool by trigram (the prior bug) trigram-scored only
+    // the hottest rows, missing low-heat lexically-relevant gold and injecting
+    // noise. source: cortex main PG recall_memories ngram CTE (ORDER BY similarity DESC).
+    const { conds, params } = buildFilter(minHeat, domain, directory);
+    const rows = db
+      .prepare(`SELECT id, content FROM memories WHERE ${conds.join(" AND ")}`)
+      .all(...params) as Array<{ id: number; content: string }>;
+    const scored = rows
+      .map((r) => ({ id: r.id, sim: trigramSimilarity(r.content ?? "", queryText) }))
+      .filter((r) => r.sim > minSimilarity)
+      .sort((a, b) => b.sim - a.sim)
+      .slice(0, pool);
+    scored.forEach((r, rank) => {
+      scores.set(r.id, (scores.get(r.id) ?? 0) + weight / (k + rank + 1));
+    });
+  }
+
+  /**
    * Heat signal: hot memories by heat_base DESC.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:108-128
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:108-128
    */
   function signalHeat(
     scores: Map<number, number>,
@@ -183,7 +228,7 @@ export function makePgStore(memoryStore: SqliteMemoryStore): PgStore {
 
   /**
    * Recency signal: memories by created_at DESC.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:130-151
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:130-151
    */
   function signalRecency(
     scores: Map<number, number>,
@@ -209,7 +254,7 @@ export function makePgStore(memoryStore: SqliteMemoryStore): PgStore {
 
   /**
    * Agent-topic boost: small additive bonus for memories tagged to agentTopic.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:152-166
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:152-166
    */
   function applyAgentBoost(
     scores: Map<number, number>,
@@ -218,7 +263,7 @@ export function makePgStore(memoryStore: SqliteMemoryStore): PgStore {
     wrfK: number,
   ): void {
     if (!agentTopic || scores.size === 0) return;
-    const boost = 0.3 * (wVector / wrfK); // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:173
+    const boost = 0.3 * (wVector / wrfK); // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:173
     const ids = [...scores.keys()];
     const placeholders = ids.map(() => "?").join(",");
     const rows = db
@@ -233,7 +278,7 @@ export function makePgStore(memoryStore: SqliteMemoryStore): PgStore {
 
   /**
    * Fetch ranked results from the memories table for the top scoring ids.
-   * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:188-230
+   * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:188-230
    */
   function fetchRankedResults(
     scores: Map<number, number>,
@@ -287,7 +332,7 @@ export function makePgStore(memoryStore: SqliteMemoryStore): PgStore {
      *   length <= params.max_results; only rows satisfying min_heat and domain
      *   filters are returned.
      *
-     * source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:39-86
+     * source: cortex main mcp_server/infrastructure/sqlite_store_search.py:39-86
      */
     recallMemories(params: PgRecallMemoriesParams): Candidate[] {
       const {
@@ -304,13 +349,15 @@ export function makePgStore(memoryStore: SqliteMemoryStore): PgStore {
 
       const wVector = weights["vector"] ?? DEFAULT_WEIGHTS["vector"] ?? 1.0;
       const wFts = weights["fts"] ?? DEFAULT_WEIGHTS["fts"] ?? 0.5;
+      const wNgram = weights["ngram"] ?? DEFAULT_WEIGHTS["ngram"] ?? 0.3;
       const wHeat = weights["heat"] ?? DEFAULT_WEIGHTS["heat"] ?? 0.3;
       const wRecency = weights["recency"] ?? DEFAULT_WEIGHTS["recency"] ?? 0.0;
-      const pool = max_results * 10; // source: cortex@ed33435 mcp_server/infrastructure/sqlite_store_search.py:75
+      const pool = max_results * 10; // source: cortex main mcp_server/infrastructure/sqlite_store_search.py:75
       const scores: Map<number, number> = new Map();
 
       signalVector(scores, query_embedding, wVector, wrrf_k, pool);
       signalFts(scores, query_text, wFts, wrrf_k, pool);
+      signalNgram(scores, query_text, wNgram, wrrf_k, pool, min_heat, domain, directory);
       signalHeat(scores, wHeat, wrrf_k, pool, min_heat, domain, directory);
       signalRecency(scores, wRecency, wrrf_k, pool, min_heat, domain, directory);
       applyAgentBoost(scores, agent_topic, wVector, wrrf_k);

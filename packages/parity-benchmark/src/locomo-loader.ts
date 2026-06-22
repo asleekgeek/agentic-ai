@@ -5,14 +5,14 @@
  * conversations and 1,986 QA pairs. The same JSON file is read by both the
  * Python and TS runners; this loader mirrors data.py:9-90 byte-for-byte.
  *
- * source: cortex@1ef1376 benchmarks/locomo/data.py:9-90
+ * source: cortex main benchmarks/locomo/data.py:9-90
  * source: Maharana et al. (2024). "Evaluating Long-Term Conversational Memory
  *   of LLM Agents." ACL 2024.
  */
 
 import { readFileSync, existsSync } from "node:fs";
 
-// source: cortex@1ef1376 benchmarks/locomo/data.py:9-15
+// source: cortex main benchmarks/locomo/data.py:9-15
 export const CATEGORY_NAMES: Record<number, string> = {
   1: "single_hop",
   2: "multi_hop",
@@ -51,7 +51,7 @@ const EVIDENCE_REF_RE = /^D(\d+):(\d+)$/;
 /**
  * Parse "D1:3"-style evidence refs into [session_idx, turn_idx] pairs.
  *
- * source: cortex@1ef1376 benchmarks/locomo/data.py:23-30
+ * source: cortex main benchmarks/locomo/data.py:23-30
  */
 export function parseEvidenceRefs(
   evidence: readonly string[] | undefined,
@@ -76,7 +76,7 @@ const MAX_SESSION_INDEX = 100;
  * Each session emits one memory whose body is the [Date: …] header plus
  * "[speaker]: text" lines, joined by newlines — identical to Python's output.
  *
- * source: cortex@1ef1376 benchmarks/locomo/data.py:33-66
+ * source: cortex main benchmarks/locomo/data.py:33-66
  */
 export function extractSessions(
   conversation: Record<string, unknown>,

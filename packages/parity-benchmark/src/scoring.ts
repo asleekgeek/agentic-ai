@@ -6,7 +6,7 @@
  *
  * source: Robertson, S. (2008). "On the variance of the average precision."
  *   J. Doc. 64(1):5-19 — the canonical Recall@K + MRR definitions used in IR.
- * source: cortex@1ef1376 benchmarks/locomo/run_benchmark.py:print_results
+ * source: cortex main benchmarks/locomo/run_benchmark.py:print_results
  */
 
 /** A single per-question retrieval outcome. */
@@ -38,15 +38,20 @@ export interface BenchmarkScores {
   readonly by_category: Record<string, CategoryScores>;
 }
 
-// source: cortex@1ef1376 run_benchmark.py:115-117 — sum(1.0/r["hit_rank"]).
+// source: cortex main run_benchmark.py:115-117 — sum(1.0/r["hit_rank"]).
 function reciprocalRank(rank: number | null): number {
   return rank !== null && rank > 0 ? 1.0 / rank : 0.0;
 }
 
-// source: cortex@1ef1376 run_benchmark.py:116-117 — recall@K is hit_rank ≤ K.
+// source: cortex main run_benchmark.py:116-117 — recall@K is hit_rank ≤ K.
 function isHitWithinK(rank: number | null, k: number): boolean {
   return rank !== null && rank > 0 && rank <= k;
 }
+
+// Retrieval-recall cutoffs: the standard R@5 / R@10 ranks Cortex reports.
+// source: cortex main docs/arxiv-thermodynamic/main.pdf — LoCoMo recall_at_5 / recall_at_10
+const RECALL_AT_5 = 5;
+const RECALL_AT_10 = 10;
 
 function aggregateCategory(results: readonly QuestionResult[]): CategoryScores {
   const n = results.length;
@@ -58,8 +63,8 @@ function aggregateCategory(results: readonly QuestionResult[]): CategoryScores {
   let r10 = 0;
   for (const r of results) {
     rrSum += reciprocalRank(r.hit_rank);
-    if (isHitWithinK(r.hit_rank, 5)) r5++;
-    if (isHitWithinK(r.hit_rank, 10)) r10++;
+    if (isHitWithinK(r.hit_rank, RECALL_AT_5)) r5++;
+    if (isHitWithinK(r.hit_rank, RECALL_AT_10)) r10++;
   }
   return {
     mrr: rrSum / n,
@@ -75,7 +80,7 @@ function aggregateCategory(results: readonly QuestionResult[]): CategoryScores {
  * precondition: results is a finite array; each hit_rank is null or a positive integer.
  * postcondition: returned scores satisfy 0 ≤ value ≤ 1; questions counts are non-negative integers.
  *
- * source: cortex@1ef1376 run_benchmark.py:109-131 — same aggregation order.
+ * source: cortex main run_benchmark.py:109-131 — same aggregation order.
  */
 export function scoreResults(results: readonly QuestionResult[]): BenchmarkScores {
   const byCategory: Record<string, QuestionResult[]> = {};

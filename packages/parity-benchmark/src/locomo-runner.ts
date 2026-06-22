@@ -12,15 +12,15 @@
  *   - each QA's `evidence` parsed into target session indices
  *   - hit_rank = first rank whose memory's session_idx is in target set
  *
- * source: cortex@1ef1376 benchmarks/locomo/run_benchmark.py:43-90 (evaluate_conversation)
- * source: cortex@1ef1376 benchmarks/locomo/run_benchmark.py:191-225 (per-conversation flow)
+ * source: cortex main benchmarks/locomo/run_benchmark.py:43-90 (evaluate_conversation)
+ * source: cortex main benchmarks/locomo/run_benchmark.py:191-225 (per-conversation flow)
  *
  * Fix (2026-05-06): switched from recallHandler (production composition root
  * with prospective/co-activation/strategic-ordering enrichments) to recall()
  * from pg-recall.ts, which mirrors Python's core.pg_recall.recall() — the
  * pure retrieval pipeline.  Python bench calls BenchmarkDB.recall() which
  * delegates to core.pg_recall.recall(), NOT the handler layer.
- * source: cortex@1ef1376 benchmarks/lib/bench_db.py — BenchmarkDB.recall()
+ * source: cortex main benchmarks/lib/bench_db.py — BenchmarkDB.recall()
  *
  * Split (2026-05-06): adapter extracted to sqlite-pgstore-adapter.ts to
  * satisfy coding-standards §4.1 (500-line file limit).
@@ -46,14 +46,14 @@ import {
 import type { QuestionResult } from "./scoring.js";
 import { makePgStore } from "./sqlite-pgstore-adapter.js";
 
-// source: cortex@1ef1376 run_benchmark.py:73 — same top_k passed to recall.
+// source: cortex main run_benchmark.py:73 — same top_k passed to recall.
 const TOP_K = 10;
 
 // Cap conversations seeded per run when --limit is given.
 const DEFAULT_LIMIT: number | null = null;
 
 // WRRF constant from Cormack et al. (SIGIR 2009) — same default as pg-recall.ts
-// source: cortex@ed33435 mcp_server/core/pg_recall.py:203
+// source: cortex main mcp_server/core/pg_recall.py:203
 const WRRF_K = 60;
 
 interface SeededState {
@@ -70,7 +70,7 @@ async function seedConversation(
   const midToSidx = new Map<number, number>();
 
   // Build input for ingestMemoriesBatch — mirrors Python bench_db.py:101
-  // source: cortex@1ef1376 benchmarks/lib/bench_db.py:101
+  // source: cortex main benchmarks/lib/bench_db.py:101
   //   ids, source_map = ingest_memories_batch(memories, store, embeddings, domain="locomo",
   //                                           decompose=True, is_benchmark=True)
   // Each session is one input; ingestMemoriesBatch decomposes it into
@@ -79,7 +79,7 @@ async function seedConversation(
   // every chunk id to its originating session_idx.
   // IngestMemoryInput does not have a domain field — domain is passed
   // as an IngestOptions field and applied to all chunks in the batch.
-  // source: cortex@1ef1376 mcp_server/core/memory_ingest.py:23-32
+  // source: cortex main mcp_server/core/memory_ingest.py:23-32
   const inputs = sessions.map((s) => ({
     content: s.content,
     tags: ["locomo"] as string[],
@@ -94,7 +94,7 @@ async function seedConversation(
   });
 
   // Populate midToSidx from sourceMap (mirrors Python evaluate_conversation:53-58).
-  // source: cortex@1ef1376 benchmarks/locomo/run_benchmark.py:53-58
+  // source: cortex main benchmarks/locomo/run_benchmark.py:53-58
   for (const [mid, src] of sourceMap) {
     if (src.startsWith("session_")) {
       const idx = parseInt(src.slice("session_".length), 10);
@@ -116,7 +116,7 @@ async function evaluateQuestion(
   if (targetSessions.size === 0) return null;
   const category = CATEGORY_NAMES[qa.category ?? 0] ?? `unknown_${qa.category ?? 0}`;
 
-  // source: cortex@1ef1376 benchmarks/locomo/run_benchmark.py:73
+  // source: cortex main benchmarks/locomo/run_benchmark.py:73
   //   BenchmarkDB.recall(question, top_k=10, domain="locomo") delegates to
   //   core.pg_recall.recall() with rerank=TRUE. The Python baseline was captured
   //   WITH FlashRank reranking; reranker.ts now ports the cross-encoder, so the
@@ -127,7 +127,7 @@ async function evaluateQuestion(
   const candidates = await recall(qa.question, pgStore, recallEmbedder, {
     topK: TOP_K,
     domain: "locomo",
-    minHeat: 0.01, // source: cortex@ed33435 mcp_server/core/pg_recall.py:197
+    minHeat: 0.01, // source: cortex main mcp_server/core/pg_recall.py:197
     rerank: true, // FlashRank cross-encoder ported (reranker.ts); oracle pg_recall default
     wrrfK: WRRF_K,
     includeGlobals: false,

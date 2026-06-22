@@ -1,20 +1,18 @@
 {
-  "_doc": "Frozen Python Cortex LoCoMo benchmark baseline. The TS port must reproduce these scores within ±0.5 percentage points (per Cortex design doc §8 — A3 regression gate). Baseline captured from cortex@1ef1376 (A3 + underflow guards + LongMemEval pass) on 2026-04-17 against the production PostgreSQL + pgvector retrieval pipeline. See cortex/benchmarks/results/a3_locomo_post_refactor.md.",
+  "_doc": "Cortex LoCoMo benchmark baseline. The TS port must reproduce these scores within ±0.5 percentage points. CANONICAL SOURCE: the published Cortex numbers in docs/arxiv-thermodynamic/main.pdf (Table tab:benchmarks, Empirical Evidence) — LoCoMo MRR 0.8278, R@10 94.2%. Those are the only two LoCoMo metrics the paper publishes (retrieval recall + MRR, directly comparable to published retrieval baselines). recall_at_5 and by_category below are NOT in the paper; they are kept as a conservative secondary gate from the empirical cortex_bench capture (cortex@1ef1376, 2026-04-17). The published methodology (paper Empirical Evidence): clean PostgreSQL DB seeded only with the benchmark data, single process, the same recall_memories() PL/pgSQL code path as deployment — exactly what the cortex-locomo-pg runner exercises (NOT the SQLite custom-retriever path, which only approximates PG signal values).",
   "benchmark": "LoCoMo",
   "source": "Maharana et al., ACL 2024",
   "dataset": "locomo10.json (10 conversations, 1982 QA pairs, 5 categories)",
   "captured_from": {
-    "repo": "cortex",
-    "commit": "1ef1376",
-    "date": "2026-04-17",
-    "branch": "main",
-    "db": "cortex_bench (PostgreSQL 15 + pgvector)"
+    "canonical": "docs/arxiv-thermodynamic/main.pdf — Table tab:benchmarks (Cortex published LoCoMo: MRR 0.8278, R@10 94.2%)",
+    "secondary_capture": "cortex@1ef1376, 2026-04-17, cortex_bench (PostgreSQL 15 + pgvector) — supplies recall_at_5 + per-category not published in the paper",
+    "paper_best_other_systems_mrr": 0.794
   },
   "tolerance_pp": 0.5,
   "overall": {
-    "mrr": 0.791,
+    "mrr": 0.8278,
     "recall_at_5": 0.890,
-    "recall_at_10": 0.923,
+    "recall_at_10": 0.942,
     "questions": 1982
   },
   "by_category": {

@@ -11,12 +11,13 @@
  *   1 — at least one metric regressed beyond tolerance (FAIL)
  *   2 — runtime error (dataset missing, invalid args, etc.)
  *
- * source: cortex@1ef1376 benchmarks/locomo/run_benchmark.py:298-330 — flag parity.
+ * source: cortex main benchmarks/locomo/run_benchmark.py:298-330 — flag parity.
  */
 
 import { resolve } from "node:path";
 import { findLocomoDataset, loadLocomo } from "./locomo-loader.js";
 import { runLocomo } from "./locomo-runner.js";
+import { runLocomoPg } from "./pg-locomo-runner.js";
 import { scoreResults } from "./scoring.js";
 import { loadCortexBaseline } from "./baselines.js";
 import { buildParityReport, renderReport } from "./report.js";
@@ -91,12 +92,50 @@ async function runCortexLocomo(args: ParsedArgs): Promise<number> {
   return report.passed ? 0 : 1;
 }
 
+async function runCortexLocomoPg(args: ParsedArgs): Promise<number> {
+  const dsPath = args.dataset ?? findLocomoDataset();
+  if (!dsPath) {
+    process.stderr.write(
+      "ERROR: locomo10.json not found.\n" +
+        "  Set CORTEX_LOCOMO_PATH or pass --dataset <path>.\n" +
+        "  Default search: ../cortex/benchmarks/locomo/locomo10.json\n",
+    );
+    return 2;
+  }
+  process.stderr.write(`Loading dataset: ${dsPath}\n`);
+  const conversations = loadLocomo(dsPath);
+  const limit = args.limit;
+  const total = limit !== null && limit > 0 ? Math.min(limit, conversations.length) : conversations.length;
+  process.stderr.write(`Running TS Cortex (REAL PostgreSQL) on ${total} conversation(s)...\n`);
+  const start = Date.now();
+  if (args.noEmbeddings) {
+    process.stderr.write("Note: running in FTS-only mode (--no-embeddings). pgvector signal disabled.\n");
+  }
+  const results = await runLocomoPg(conversations, {
+    limit,
+    useEmbeddings: !args.noEmbeddings,
+    onProgress: (cur, n) => {
+      const elapsed = ((Date.now() - start) / 1000).toFixed(1); // source: 1000 = ms→s conversion factor (SI)
+      process.stderr.write(`  [${cur}/${n}] ${elapsed}s elapsed\n`);
+    },
+  });
+  const elapsedSec = (Date.now() - start) / 1000; // source: 1000 = ms→s conversion factor (SI)
+  process.stderr.write(`Scored ${results.length} questions in ${elapsedSec.toFixed(1)}s.\n\n`);
+  const scores = scoreResults(results);
+  const baseline = loadCortexBaseline(resolve(args.baseline));
+  const report = buildParityReport(scores, baseline);
+  process.stdout.write(`${renderReport(report)}\n`);
+  return report.passed ? 0 : 1;
+}
+
 function printUsage(): void {
   process.stderr.write(
     "Usage: parity-benchmark <command> [options]\n" +
       "\n" +
       "Commands:\n" +
-      "  cortex-locomo    Run LoCoMo against the TS Cortex; compare to Python baseline.\n" +
+      "  cortex-locomo     Run LoCoMo against the TS Cortex (SQLite); compare to baseline.\n" +
+      "  cortex-locomo-pg  Run LoCoMo against the TS Cortex (REAL PostgreSQL recall_memories());\n" +
+      "                    apples-to-apples vs. the PG-captured baseline. Uses CORTEX_PG_URL.\n" +
       "\n" +
       "Options:\n" +
       "  --limit N          Stop after N conversations (default: all 10)\n" +
@@ -110,6 +149,9 @@ async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
   if (args.command === "cortex-locomo") {
     process.exit(await runCortexLocomo(args));
+  }
+  if (args.command === "cortex-locomo-pg") {
+    process.exit(await runCortexLocomoPg(args));
   }
   printUsage();
   process.exit(args.command ? 2 : 0);
