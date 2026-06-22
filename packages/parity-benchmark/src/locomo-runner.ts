@@ -118,15 +118,17 @@ async function evaluateQuestion(
 
   // source: cortex@1ef1376 benchmarks/locomo/run_benchmark.py:73
   //   BenchmarkDB.recall(question, top_k=10, domain="locomo") delegates to
-  //   core.pg_recall.recall() — rerank=false because the TS port has no
-  //   FlashRank cross-encoder (Borges finding 2.2, documented as remaining gap).
+  //   core.pg_recall.recall() with rerank=TRUE. The Python baseline was captured
+  //   WITH FlashRank reranking; reranker.ts now ports the cross-encoder, so the
+  //   parity run must enable it (a prior run left this false on a now-stale
+  //   "not ported" note, which invalidated the comparison).
   //   min_heat=0.01 (pg-recall.ts default); includeGlobals=false so locomo
   //   sessions in "locomo" domain are not drowned by globals.
   const candidates = await recall(qa.question, pgStore, recallEmbedder, {
     topK: TOP_K,
     domain: "locomo",
     minHeat: 0.01, // source: cortex@ed33435 mcp_server/core/pg_recall.py:197
-    rerank: false, // FlashRank not ported yet — Borges finding 2.2
+    rerank: true, // FlashRank cross-encoder ported (reranker.ts); oracle pg_recall default
     wrrfK: WRRF_K,
     includeGlobals: false,
   });
