@@ -239,19 +239,114 @@ export function mergeMultihopResults(
   return Array.from(scores.entries()).sort(([, a], [, b]) => b - a);
 }
 
+// ── Entity and sub-query extraction ──────────────────────────────────────
+// Faithful port of cortex main mcp_server/core/query_decomposition.py:77-214
+
+/**
+ * Regex pattern for entity extraction — CamelCase, file paths, backtick-quoted.
+ * source: cortex main mcp_server/core/query_decomposition.py:77-83
+ */
+const _ENTITY_EXTRACT_RE =
+  /(?:[A-Z][a-z]+(?:[A-Z][a-z]+)+)|([\w./]+\.\w{1,4})\b|`([^`]+)`/g;
+
+/**
+ * Extract entity references from a query for entity-graph routing.
+ *
+ * Extracts CamelCase identifiers, extension-anchored file paths (e.g.
+ * config.py, foo/bar.ts), and backtick-quoted terms.
+ *
+ * source: cortex main mcp_server/core/query_decomposition.py:86-93
+ *   uses _ENTITY_EXTRACT_RE which matches:
+ *     group 1 — CamelCase
+ *     group 2 — file path ([\w./]+\.\w{1,4})
+ *     group 3 — backtick-quoted
+ */
+export function extractQueryEntities(query: string): string[] {
+  const entities: string[] = [];
+  const re = new RegExp(_ENTITY_EXTRACT_RE.source, "g");
+  let m: RegExpExecArray | null;
+  while ((m = re.exec(query)) !== null) {
+    const entity = m[0].startsWith("`") ? m[2] : (m[1] ?? m[0]);
+    if (entity && entity.length > 1) entities.push(entity);
+  }
+  return entities;
+}
+
+/**
+ * Generate sub-queries via regex entity/phrase extraction.
+ *
+ * Four strategies (faithful to cortex main):
+ *   1. Per-entity sub-queries (up to 4)
+ *   2. Named entity sub-queries (multi-word proper nouns via /\b[A-Z][a-z]+(?:\s+[A-Z][a-z]+)+\b/)
+ *   3. Quoted phrase sub-queries ("…" / '…')
+ *   4. Keyword fallback: first 3 keywords joined (only when no sub-queries yet)
+ * Capped at 6.
+ *
+ * source: cortex main mcp_server/core/query_decomposition.py:180-214
+ */
+function generateSubQueries(
+  query: string,
+  entities: string[],
+  keywords: string[],
+): string[] {
+  const subQueries: string[] = [];
+
+  // Per-entity sub-queries — source: cortex main query_decomposition.py:194-195
+  for (const entity of entities.slice(0, 4)) {
+    subQueries.push(entity);
+  }
+
+  // Named entity sub-queries (multi-word proper nouns)
+  // source: cortex main query_decomposition.py:197-201
+  const namedRe = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)\b/g;
+  let nm: RegExpExecArray | null;
+  while ((nm = namedRe.exec(query)) !== null) {
+    const name = nm[1];
+    if (name && !subQueries.includes(name)) subQueries.push(name);
+  }
+
+  // Quoted phrase sub-queries — source: cortex main query_decomposition.py:203-208
+  const quotedRe = /"([^"]+)"|'([^']+)'/g;
+  let qm: RegExpExecArray | null;
+  while ((qm = quotedRe.exec(query)) !== null) {
+    const phrase = qm[1] ?? qm[2];
+    if (phrase && !subQueries.includes(phrase)) subQueries.push(phrase);
+  }
+
+  // Keyword fallback: only when no sub-queries yet and enough keywords exist
+  // source: cortex main query_decomposition.py:210-212
+  if (subQueries.length === 0 && keywords.length >= 3) {
+    subQueries.push(keywords.slice(0, 3).join(" "));
+  }
+
+  return subQueries.slice(0, 6); // source: cortex main query_decomposition.py:214
+}
+
 /**
  * Execute multi-hop sub-queries and merge into fused results.
  * Port of: cortex main mcp_server/core/retrieval_dispatch.py:160-167
  *
  * precondition: hopFn returns ranked (id, score) pairs for a query string
- * postcondition: sub-queries limited to first 3 decomposed sub-queries
+ * postcondition: sub-queries limited to first 6 decomposed sub-queries
+ *   (source: cortex main mcp_server/core/query_decomposition.py:214)
  */
 function runMultihop(
   query: string,
   fused: Array<[number, number]>,
   hopFn: (q: string) => Array<[number, number]>,
 ): Array<[number, number]> {
-  const subQueries = decomposQuery(query).slice(0, 3); // source: cortex main mcp_server/core/retrieval_dispatch.py:162
+  const entities = extractQueryEntities(query);
+  // Stop-word filtered keywords — source: cortex main query_decomposition.py:165-166
+  const _STOP_WORDS = new Set([
+    "the","a","an","is","are","was","were","be","to","of","and","or","in","on",
+    "at","for","with","by","from","it","this","that","i","me","my","do","did",
+    "does","what","when","where","why","how","who","which","can","could","would",
+    "should","will","about","tell",
+  ]);
+  const keywords = query.toLowerCase().split(/\W+/).filter(
+    (w) => w.length > 2 && !_STOP_WORDS.has(w),
+  );
+  const subQueries = generateSubQueries(query, entities, keywords);
   for (const subQ of subQueries) {
     const hopResults = hopFn(subQ);
     if (hopResults.length > 0) {
@@ -259,18 +354,6 @@ function runMultihop(
     }
   }
   return fused;
-}
-
-/**
- * Simple query decomposition for multi-hop bridging.
- * Mirrors mcp_server/core/query_decomposition.decompose_query sub_queries extraction.
- */
-function decomposQuery(query: string): string[] {
-  // Split on common connectives that signal sub-queries
-  return query
-    .split(/\band\b|\bbut\b|\balso\b|\bthen\b/i)
-    .map((s) => s.trim())
-    .filter((s) => s.length > 0);
 }
 
 // ── Orchestrator ──────────────────────────────────────────────────────────

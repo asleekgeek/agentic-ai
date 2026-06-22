@@ -22,6 +22,10 @@
  */
 
 import { rrfBlend, type Candidate, type CandidateStore } from "./recall-pipeline-stages.js";
+import {
+  computeMismatch,
+  decideAction,
+} from "../consolidation/reconsolidation.js";
 
 // ── Ablation gate ─────────────────────────────────────────────────────────
 
@@ -163,75 +167,95 @@ interface ReconsolidationAction {
   update_last_accessed: boolean;
 }
 
+// ── Reconsolidation heat constants ───────────────────────────────────────
+// source: cortex main mcp_server/core/reconsolidation.py:261-265
+const _RECONS_HEAT_BUMP_UPDATE: number = 0.05;  // source: cortex main mcp_server/core/reconsolidation.py:261
+const _RECONS_HEAT_BUMP_NONE: number = 0.02;    // source: cortex main mcp_server/core/reconsolidation.py:262 — passive retrieval touch
+const _RECONS_HEAT_BUMP_ARCHIVE: number = -0.10; // source: cortex main mcp_server/core/reconsolidation.py:263
+const _RECONS_VALENCE_STEP: number = 0.10;      // source: cortex main mcp_server/core/reconsolidation.py:264
+const _RECONS_QUERY_VALENCE_FLOOR: number = 0.10; // source: cortex main mcp_server/core/reconsolidation.py:265
+
 /**
  * Compute the reconsolidation action for a single candidate.
- * Mirrors mcp_server/core/reconsolidation.compute_reconsolidation_action.
  *
- * The logic below is an engineering approximation of Nader et al. (2000):
- *   - Retrieved memories are labile; access should refresh them.
- *   - High-importance or high-surprise memories get a heat bump.
- *   - Valence shift follows Bower (1981) mood-congruent re-storage.
+ * Faithful port of cortex main mcp_server/core/reconsolidation.py:268-378
+ * (compute_reconsolidation_action). Composes computeMismatch + decideAction
+ * from consolidation/reconsolidation.ts and translates the abstract action
+ * into concrete heat / valence / timestamp deltas.
  *
- * Bounds — source: cortex main mcp_server/core/recall_pipeline.py:599-601
- *   heat_delta    in [-0.10, +0.05]
- *   valence_delta in [-0.10, +0.10]
+ * Precondition: c is a non-null Candidate; query is a string (may be empty).
+ * Postcondition: returns ReconsolidationAction whose action is one of
+ *   {"none", "update", "archive"}; heat_delta in [-0.10, +0.05];
+ *   valence_delta in [-0.10, +0.10].
+ *
+ * source: cortex main mcp_server/core/reconsolidation.py:268-378
  */
 function computeReconsolidationAction(
   c: Candidate,
   _query: string,
   qValence: number,
-  qTokens: Set<string>,
+  _qTokens: Set<string>,
 ): ReconsolidationAction {
-  // Default: no-op
-  let heatDelta = 0.0;
-  let valenceDelta = 0.0;
-  const updateLastAccessed = true; // source: Nader, Schafe & LeDoux (2000) Nature 406(6797) — retrieval renders memories labile
+  const updateLastAccessed = true; // source: Nader (2000) — retrieval renders memories labile
 
-  const importance = (c["importance"] as number | undefined) ?? 0.5;
-  const surprise = (c["surprise"] as number | undefined) ?? 0.0;
-  const currentHeat = (c.heat as number | undefined) ?? 0.5;
+  const mismatch = computeMismatch({
+    embeddingSimilarity: null, // embedding similarity not available at this stage
+    memoryDirectory: (c["directory"] as string | undefined) ?? "",
+    currentDirectory: "",
+    memoryLastAccessed: (c["last_accessed"] as string | undefined) ?? null,
+    memoryTags: new Set(
+      Array.isArray(c.tags) ? (c.tags as string[]) : (typeof c.tags === "string" ? [c.tags as string] : []),
+    ),
+    contextTokens: new Set<string>(),
+  });
 
-  // Heat bump for important/surprising memories
-  if (importance > 0.6 || surprise > 0.4) {
-    // source: cortex main mcp_server/core/recall_pipeline.py:679-683
-    heatDelta = Math.min(0.05, (importance - 0.5) * 0.1 + surprise * 0.05);
+  const decision = decideAction(
+    mismatch,
+    (c["stability"] as number | undefined) ?? 0.0,
+    (c["plasticity"] as number | undefined) ?? 1.0,
+    (c["is_protected"] as boolean | undefined) ?? false,
+    Math.abs((c.emotional_valence as number | undefined) ?? 0.0),
+    (c["age_days"] as number | undefined) ?? 0.0,
+  );
+
+  if (decision.action === "archive") {
+    return {
+      action: "archive",
+      heat_delta: _RECONS_HEAT_BUMP_ARCHIVE,
+      valence_delta: 0.0,
+      update_last_accessed: updateLastAccessed,
+    };
   }
 
-  // Heat decay for cold memories that were barely above threshold
-  if (currentHeat < 0.15) { // source: cortex main mcp_server/core/recall_pipeline.py:683 — cold memory heat decay
-    heatDelta = Math.max(-0.10, heatDelta - 0.02); // source: cortex main mcp_server/core/recall_pipeline.py:599 — heat_delta bound [-0.10, +0.05]
-  }
-
-  // Bower (1981) valence shift: query-congruent memories reinforced
-  if (Math.abs(qValence) > _EMOTIONAL_QUERY_VALENCE_FLOOR) {
-    const cv = (c.emotional_valence as number | undefined) ?? 0.0;
-    const dist = Math.abs(Number(cv) - qValence);
-    if (dist < 0.3) {
-      // Congruent — reinforce toward query valence
-      valenceDelta = Math.sign(qValence - Number(cv)) * 0.05; // source: cortex main mcp_server/core/recall_pipeline.py:601 — valence_delta bound [-0.10, +0.10]
-    }
-  }
-
-  // Token overlap boost for heat (co-activation proxy)
-  if (qTokens.size > 0) {
-    const contentTokens = new Set(
-      (c.content ?? "")
-        .toLowerCase()
-        .split(/\s+/)
-        .map((t) => t.replace(/[.,!?;:()[\]{}"'`]/g, ""))
-        .filter((t) => t.length > 2),
+  if (decision.action === "update") {
+    // Heat bump scaled by emotional_multiplier (Yonelinas & Ritchey 2015)
+    const heatDelta = Math.min(
+      _RECONS_HEAT_BUMP_UPDATE * 2.0,
+      _RECONS_HEAT_BUMP_UPDATE * decision.emotionalMultiplier,
     );
-    let overlap = 0;
-    for (const t of qTokens) {
-      if (contentTokens.has(t)) overlap++;
+    let valenceDelta = 0.0;
+    // Bower (1981): retrieval context's affective load shifts re-stored emotional tag.
+    // source: cortex main mcp_server/core/reconsolidation.py:351-356
+    if (Math.abs(qValence) >= _RECONS_QUERY_VALENCE_FLOOR) {
+      const sign = qValence > 0 ? 1.0 : -1.0;
+      valenceDelta = sign * _RECONS_VALENCE_STEP;
     }
-    if (overlap / Math.max(qTokens.size, 1) > 0.5) {
-      heatDelta = Math.min(0.05, heatDelta + 0.01); // source: cortex main mcp_server/core/recall_pipeline.py:599 — heat_delta bounded at +0.05
-    }
+    return {
+      action: "update",
+      heat_delta: heatDelta,
+      valence_delta: valenceDelta,
+      update_last_accessed: updateLastAccessed,
+    };
   }
 
-  const action = heatDelta !== 0.0 || valenceDelta !== 0.0 ? "update" : "none";
-  return { action, heat_delta: heatDelta, valence_delta: valenceDelta, update_last_accessed: updateLastAccessed };
+  // action === "none" — passive retrieval: still applies +0.02 heat touch.
+  // source: cortex main mcp_server/core/reconsolidation.py:366-378
+  return {
+    action: "none",
+    heat_delta: _RECONS_HEAT_BUMP_NONE,
+    valence_delta: 0.0,
+    update_last_accessed: updateLastAccessed,
+  };
 }
 
 /**

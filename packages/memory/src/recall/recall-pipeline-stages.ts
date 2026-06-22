@@ -330,9 +330,9 @@ export async function spreadingActivationExpand(
 
   const existingIds = new Set<number>(candidates.map((c) => c.memory_id));
 
-  // Pre-fetch SA-injected memories so groomedness can be computed once
-  // and reused for both the append order AND the RRF rank vector.
-  // source: cortex@HEAD~ mcp_server/core/recall_pipeline.py:spreading_activation_expand (2026-05-19)
+  // Pre-fetch SA-injected memories (new, not already in candidates) so we
+  // have the content/heat/tags needed when appending them to expanded.
+  // source: cortex main mcp_server/core/recall_pipeline.py:350-365
   const fetched = new Map<number, Record<string, unknown>>();
   for (const [mid] of sa) {
     if (existingIds.has(mid) || fetched.has(mid)) continue;
@@ -343,35 +343,10 @@ export async function spreadingActivationExpand(
     } catch { /* skip */ }
   }
 
-  // Re-rank SA results by activation × groomedness so wiki pages still
-  // in skeleton/stub state demote below well-formed neighbours BEFORE
-  // both the append order and the RRF rank assignment.
-  // Env gate ``CORTEX_DISABLE_GROOMEDNESS_GATE=1`` disables the gate.
-  // source: cortex@HEAD~ mcp_server/core/recall_pipeline.py:spreading_activation_expand (2026-05-19)
-  //   n=999 halo eval: recall@1 +1.4pp, MRR +0.9pp, subgraph_f1 +0.4pp
-  let orderedSa: Array<[number, number]> = sa;
-  if (process.env["CORTEX_DISABLE_GROOMEDNESS_GATE"] !== "1") {
-    const infoByMid = new Map<number, { content: string; tags: readonly string[] }>();
-    for (const c of candidates) {
-      const tags = Array.isArray(c.tags) ? c.tags : (typeof c.tags === "string" ? [c.tags] : []);
-      infoByMid.set(c.memory_id, { content: c.content ?? "", tags });
-    }
-    for (const [mid, mem] of fetched) {
-      const tagsRaw = mem["tags"];
-      const tags: readonly string[] = Array.isArray(tagsRaw)
-        ? (tagsRaw as string[])
-        : (typeof tagsRaw === "string" ? [tagsRaw] : []);
-      infoByMid.set(mid, { content: (mem["content"] as string | undefined) ?? "", tags });
-    }
-    // Lazy import — sibling module, type-safe.
-    const { groomednessMultiplier } = await import("./spreading-activation.js");
-    const weighted: Array<[number, number]> = sa.map(([mid, act]) => {
-      const info = infoByMid.get(mid) ?? { content: "", tags: [] };
-      return [mid, act * groomednessMultiplier(info.content, info.tags)];
-    });
-    weighted.sort((a, b) => b[1] - a[1]);
-    orderedSa = weighted;
-  }
+  // SA results are used in arrival order (by activation score from PG).
+  // The groomednessMultiplier reorder was TS-ahead-of-main (not on
+  // cortex main origin/main as of 2026-06-22) — removed to match main.
+  const orderedSa: Array<[number, number]> = sa;
 
   const expanded: Candidate[] = [...candidates];
   for (const [mid] of orderedSa) {
@@ -447,22 +422,33 @@ async function resolveQueryEntityIds(
 }
 
 /**
- * High-precision entity extraction: CamelCase, slash paths, backtick spans.
- * Mirrors mcp_server/core/query_decomposition.extract_query_entities.
+ * High-precision entity extraction: CamelCase, extension-anchored file paths,
+ * backtick spans.
+ *
+ * Faithful port of cortex main mcp_server/core/query_decomposition.py:77-93
+ * (_ENTITY_EXTRACT_RE and extract_query_entities).
+ *
+ * File-path regex is extension-anchored: `([\w./]+\.\w{1,4})\b` — matches
+ * dotted filenames like `config.py` and `foo/bar.ts` without requiring a
+ * leading slash. The prior slash-anchored form missed filenames without a
+ * directory separator (e.g. plain `config.py`).
+ *
+ * source: cortex main mcp_server/core/query_decomposition.py:77-83
  */
 function extractHighPrecisionTerms(query: string): string[] {
   const terms = new Set<string>();
-  // CamelCase
+  // CamelCase identifiers — source: cortex main query_decomposition.py:78
   for (const m of query.matchAll(/\b[A-Z][a-z]+(?:[A-Z][a-z]+)+\b/g)) {
     terms.add(m[0]);
   }
-  // Backtick code spans
+  // Extension-anchored file paths — source: cortex main query_decomposition.py:80-82
+  // matches: config.py, foo/bar.ts, src/core/memory_store.py (dotted names ± slashes)
+  for (const m of query.matchAll(/([\w./]+\.\w{1,4})\b/g)) {
+    if (m[1] && m[1].length > 1) terms.add(m[1]);
+  }
+  // Backtick code spans — source: cortex main query_decomposition.py:82-83
   for (const m of query.matchAll(/`([^`]+)`/g)) {
     if (m[1]) terms.add(m[1]);
-  }
-  // Slash paths
-  for (const m of query.matchAll(/\b[\w-]+(?:\/[\w-]+)+\b/g)) {
-    terms.add(m[0]);
   }
   return Array.from(terms);
 }
@@ -562,10 +548,21 @@ export async function dendriticModulate(
 
 // ── Utilities ─────────────────────────────────────────────────────────────
 
+/**
+ * Extract seed terms for spreading-activation: entity pass first, then words.
+ *
+ * Faithful port of cortex main mcp_server/core/recall_pipeline.py:318-320:
+ *   terms = list(set(extract_query_entities(query) + [w for w in query.split() if len(w) > 2]))
+ *
+ * Entity pass (CamelCase, file paths, backtick terms) seeds the activation
+ * graph with structural identifiers that a plain word split misses.
+ *
+ * source: cortex main mcp_server/core/recall_pipeline.py:318-320
+ */
 function extractQueryTerms(query: string): string[] {
-  return Array.from(
-    new Set(query.split(/\s+/).filter((w) => w.length > 2)),
-  );
+  const entities = extractHighPrecisionTerms(query);
+  const words = query.split(/\s+/).filter((w) => w.length > 2);
+  return Array.from(new Set([...entities, ...words]));
 }
 
 // Re-export constants for testing

@@ -43,6 +43,7 @@
 import { existsSync } from "fs";
 import { join } from "path";
 import { homedir, tmpdir } from "os";
+import { getParams as getCalibrationParams } from "./reranker-calibration.js";
 
 // ── Platt calibration interface ───────────────────────────────────────────
 // source: cortex main mcp_server/core/platt_calibration.py
@@ -405,7 +406,10 @@ export async function rerankResults(
     const ceScores = await scorePairs(ctx, query, passages);
     const ceMap = new Map<number, number>();
     ceScores.forEach((s, i) => ceMap.set(i, s));
-    return blendScores(candidates, ceMap, alpha, adaptive, applyPlatt, null);
+    // Wire calibration params when applyPlatt=true.
+    // source: cortex main mcp_server/core/reranker.py:181 — reranker_calibration.get_params()
+    const plattParams = applyPlatt ? getCalibrationParams() : null;
+    return blendScores(candidates, ceMap, alpha, adaptive, applyPlatt, plattParams);
   } catch {
     // Per-call failure (ONNX runtime error, OOM, etc.) — mirror Python's
     // try/except fallback to first-stage ranking.

@@ -3,16 +3,22 @@
  *
  * Composition root: wires MemoryStore port into retrieval logic.
  *
- * Pipeline:
- *   1. Classify query intent
- *   2. Fetch vector + FTS candidates from MemoryStore
- *   3. Fetch hot-memory pool for BM25 + heat + n-gram signals
- *   4. Fuse all signals via RRF
- *   5. Build typed results with recency boost + session coherence
- *   6. Inject prospective-memory triggers
+ * Pipeline (PG path — faithful to cortex main mcp_server/handlers/recall.py):
+ *   1. Call pg-recall.recall() — handles WRRF + HOPFIELD + HDC + SA +
+ *      DENDRITIC + EMOTIONAL + RECONSOLIDATION internally
+ *   2. Low-signal filter
+ *   3. Tag filter
+ *   4. Cap to max_results
+ *   5. Inject prospective-memory triggers
+ *   6. Apply co-activation Hebbian update
  *   7. Apply neuro-symbolic rules
- *   8. Apply strategic ordering (Lost-in-the-Middle mitigation)
- *   9. Track replay for consolidation cascade
+ *   8. Track replay for consolidation cascade
+ *   9. Apply strategic ordering (Lost-in-the-Middle mitigation)
+ *  10. Inline relation-walk when include_related=true
+ *
+ * Legacy path (store lacks recallMemories — used by SQLite test stores):
+ *   Uses fuseSignals (the prior multi-signal-fusion approach). Quarantined
+ *   to stores that do not implement PgStore.recallMemories.
  *
  * Port of: mcp_server/handlers/recall.py::handler
  *          mcp_server/core/pg_recall.py::recall (client-side path)
@@ -54,6 +60,8 @@ import { boundPayload, listTarget } from "./response-budget.js";
 import { rootAgentTopic } from "../infrastructure/memory-config.js";
 import type { EmbeddingEngine, MemoryStore } from "./port.js";
 import { classifyQueryIntent, computeRetrievalWeights } from "./query-intent.js";
+import { type PgStore } from "./pg-recall.js";
+import { pgHandlerPath } from "./pg-handler-path.js";
 import { applyRules } from "./rules.js";
 import type {
   MemoryItem,
@@ -405,6 +413,35 @@ export async function recallHandler(
   // source: cortex main mcp_server/handlers/recall.py:_handler_impl (tags_any / tags_all)
   const tagsAny: string[] = args.tags_any ?? [];
   const tagsAll: string[] = args.tags_all ?? [];
+
+  // ── PG path (faithful to cortex main) ────────────────────────────────────
+  //
+  // When the store implements PgStore.recallMemories, route through
+  // pg-recall.recall() which faithfully runs the server-side WRRF fusion
+  // (recall_memories PL/pgSQL) plus client-side HOPFIELD, HDC, SA,
+  // DENDRITIC, EMOTIONAL_RETRIEVAL, MOOD_CONGRUENT, RECONSOLIDATION, and
+  // FlashRank reranking.  The handler then applies the enrichment layer:
+  //   filter_low_signal → tag filter → cap → inject_triggered_memories →
+  //   _apply_co_activation → _apply_rules_and_order → _track_recall_replay
+  // Port of: cortex main mcp_server/handlers/recall.py:415-453
+  if (typeof (store as unknown as PgStore).recallMemories === "function") {
+    return pgHandlerPath(
+      args,
+      store as unknown as PgStore,
+      embeddings,
+      settings,
+      trackRecallReplay,
+      injectTriggeredMemories,
+      empty,
+      query,
+      max_results,
+      min_heat,
+      include_low_signal,
+      include_related,
+      tagsAny,
+      tagsAll,
+    );
+  }
 
   // 1. Intent classification
   const intentInfo = classifyQueryIntent(query);

@@ -54,18 +54,32 @@ const MS_PER_HOUR = 3_600_000;
 
 // ── Bypass detection ────────────────────────────────────────────────────────
 
-/** Heuristic: does the content look like an error report? */
+/**
+ * Heuristic: does the content look like an error report?
+ *
+ * Faithful port of cortex main mcp_server/core/thermodynamics.py:122-126
+ * (_ERROR_KW pattern). Prior TS version missed: bug|broken|timeout|denied|
+ * rejected|deprecated.
+ *
+ * source: cortex main mcp_server/core/thermodynamics.py:122-126
+ */
 function isErrorContent(content: string): boolean {
-  return (
-    /\b(error|exception|traceback|stacktrace|crash|fatal|fail(ed|ure)?)\b/i.test(
-      content,
-    )
+  return /\b(error|exception|traceback|failed|failure|bug|crash|broken|timeout|denied|rejected|deprecated)\b/i.test(
+    content,
   );
 }
 
-/** Heuristic: does the content look like a decision record? */
+/**
+ * Heuristic: does the content look like a decision record?
+ *
+ * Faithful port of cortex main mcp_server/core/thermodynamics.py:127-130
+ * (_DECISION_KW pattern). Prior TS version missed: switched|migrated|picked|
+ * opted.
+ *
+ * source: cortex main mcp_server/core/thermodynamics.py:127-130
+ */
 function isDecisionContent(content: string): boolean {
-  return /\b(decided|decision|choose|chose|selected|going with)\b/i.test(
+  return /\b(decided|chose|switched|migrated|selected|picked|opted)\b/i.test(
     content,
   );
 }
