@@ -1,3 +1,7 @@
+/* eslint-disable @typescript-eslint/no-magic-numbers --
+   report/display module: table column widths and decimal precision are inherent
+   formatting, not business logic (coding-standards §7.2 — justified at use site,
+   same pattern as sqlite-pgstore-adapter.ts). */
 /**
  * Comparison report — TS measured scores vs frozen Python baseline.
  *
@@ -136,5 +140,38 @@ export function renderReport(report: ParityReport): string {
   }
   lines.push(``);
   lines.push(report.passed ? `RESULT: PASS — all metrics within tolerance.` : `RESULT: FAIL — at least one metric regressed beyond tolerance.`);
+  return lines.join("\n");
+}
+
+/**
+ * Render the per-ability MRR breakdown for a nested-macro-average benchmark
+ * (BEAM). The published baseline carries no per-ability numbers, so this is a
+ * DIAGNOSTIC table — it surfaces which ability drives the overall macro mean so
+ * a single weak ability (e.g. abstention) cannot hide inside the average.
+ *
+ * source: cortex main benchmarks/beam/run_benchmark.py:402-419 — overall MRR is
+ *   the mean over per-ability MRRs; this table shows each term of that mean.
+ */
+export function renderAbilityBreakdown(scores: BenchmarkScores): string {
+  const lines: string[] = [];
+  lines.push(`Per-ability breakdown (diagnostic — overall = mean of these MRRs):`);
+  lines.push(`  ability                       mrr      r@5     r@10    n`);
+  lines.push(`  ────────────────────────────  ───────  ──────  ──────  ────`);
+  const entries = Object.entries(scores.by_category).sort(([a], [b]) =>
+    a.localeCompare(b),
+  );
+  for (const [ability, c] of entries) {
+    lines.push(
+      `  ${ability.padEnd(28)}  ${c.mrr.toFixed(4)}   ` +
+        `${c.recall_at_5.toFixed(3)}   ${c.recall_at_10.toFixed(3)}   ` +
+        `${String(c.questions).padStart(4)}`,
+    );
+  }
+  lines.push(
+    `  ${"OVERALL (macro)".padEnd(28)}  ${scores.overall.mrr.toFixed(4)}   ` +
+      `${scores.overall.recall_at_5.toFixed(3)}   ` +
+      `${scores.overall.recall_at_10.toFixed(3)}   ` +
+      `${String(scores.overall.questions).padStart(4)}`,
+  );
   return lines.join("\n");
 }
