@@ -91,6 +91,10 @@
       "import": "./dist/remember/storage/sqlite-store.js",
       "types": "./dist/remember/storage/sqlite-store.d.ts"
     },
+    "./remember/storage/trigram-similarity.js": {
+      "import": "./dist/remember/storage/trigram-similarity.js",
+      "types": "./dist/remember/storage/trigram-similarity.d.ts"
+    },
     "./remember/handlers/remember.js": {
       "import": "./dist/remember/handlers/remember.js",
       "types": "./dist/remember/handlers/remember.d.ts"

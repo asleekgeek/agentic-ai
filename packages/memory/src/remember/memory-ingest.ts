@@ -200,7 +200,12 @@ export async function ingestMemory(
       isGlobal = true; // TMS coordination: decisions propagate
     }
 
-    const mid = store.insertMemory({
+    // Async-when-available insert (ADR-0042): PgMemoryStore.insertMemory()
+    // calls _runSync() which throws — it exposes insertMemoryAsync instead.
+    // SqliteMemoryStore has only the sync insertMemory. Mirror the remember
+    // handler's branch so the same ingest path drives both backends.
+    // source: packages/memory/src/remember/handlers/remember.ts:554-557
+    const insertPayload = {
       content: chunkContent,
       embedding: emb ?? undefined,
       domain,
@@ -214,17 +219,27 @@ export async function ingestMemory(
       agent_context: agentCtx,
       is_global: isGlobal,
       is_benchmark: isBenchmark,
-    });
+    };
+    const storeAsync = store as unknown as {
+      insertMemoryAsync?: (data: typeof insertPayload) => Promise<number>;
+    };
+    const mid =
+      typeof storeAsync.insertMemoryAsync === "function"
+        ? await storeAsync.insertMemoryAsync(insertPayload)
+        : store.insertMemory(insertPayload);
 
-    // If the store exposes upsertEmbedding (SQLite path), call it explicitly.
+    // If the store exposes upsertEmbedding, call it explicitly.
     // insertMemory stores the embedding field in the row but SQLite's vec table
-    // requires a separate upsertEmbedding call.  The Python source stores
-    // embeddings inline in insert_memory (PG column) but for the SQLite adapter
-    // we must call upsertEmbedding after insert.
+    // requires a separate upsertEmbedding call.  On PG the embedding column is
+    // NOT written by insert_memory (the TS port), so upsertEmbedding is what
+    // persists the pgvector value used by the recall_memories() function.
+    // upsertEmbedding may be sync (SQLite) or async (PG) — await covers both.
     // source: cortex main mcp_server/core/memory_ingest.py:119 (embed stored inline)
     // source: packages/memory/src/remember/storage/sqlite-store.ts:insertMemory (no vec upsert)
     if (emb !== null && typeof (store as unknown as Record<string, unknown>)["upsertEmbedding"] === "function") {
-      (store as unknown as { upsertEmbedding(id: number, emb: Buffer): void }).upsertEmbedding(mid, emb);
+      await (store as unknown as {
+        upsertEmbedding(id: number, emb: Buffer): void | Promise<void>;
+      }).upsertEmbedding(mid, emb);
     }
 
     ids.push(mid);

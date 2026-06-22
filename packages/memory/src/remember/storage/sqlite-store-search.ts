@@ -12,6 +12,8 @@
 
 import type { Database as DatabaseType } from "better-sqlite3";
 
+import { rankByTrigramSimilarity } from "./trigram-similarity.js";
+
 /**
  * Deserialize a SQLite `tags` TEXT column into a list.
  *
@@ -36,6 +38,7 @@ export interface WrrfWeights {
   fts?: number;
   heat?: number;
   recency?: number;
+  ngram?: number;
 }
 
 export interface RecallResult {
@@ -91,11 +94,14 @@ export class SqliteSearchMixin {
     const wFts = w.fts ?? 0.5;
     const wHeat = w.heat ?? 0.3;
     const wRecency = w.recency ?? 0.0;
+    // source: cortex main PG recall_memories p_w_ngram default
+    const wNgram = w.ngram ?? 0.3;
     const pool = maxResults * 10;
     const scores: Map<number, number> = new Map();
 
     this._signalVector(scores, queryEmbedding, wVector, wrfK, pool);
     this._signalFts(scores, queryText, wFts, wrfK, pool);
+    this._signalNgram(scores, queryText, wNgram, wrfK, pool, minHeat, domain, directory);
     this._signalHeat(scores, wHeat, wrfK, pool, minHeat, domain, directory);
     this._signalRecency(scores, wRecency, wrfK, pool, minHeat, domain, directory);
     this._applyAgentBoost(scores, agentTopic, wVector, wrfK);
@@ -159,6 +165,41 @@ export class SqliteSearchMixin {
     } catch {
       // FTS query failed
     }
+  }
+
+  /**
+   * Trigram (ngram) lexical signal: pg_trgm-faithful Jaccard similarity of the
+   * query text against each candidate's content over the same candidate pool.
+   * Mirrors the PG recall lexical ngram signal (p_w_ngram) the FTS-only SQLite
+   * fusion lacked. Candidates with similarity above the threshold are ranked
+   * descending and contribute an RRF term, exactly like the FTS signal.
+   *
+   * source: PostgreSQL pg_trgm (show_trgm + similarity).
+   */
+  private _signalNgram(
+    scores: Map<number, number>,
+    queryText: string,
+    weight: number,
+    k: number,
+    pool: number,
+    minHeat: number,
+    domain: string | null,
+    directory: string | null,
+  ): void {
+    if (!queryText || weight <= 0) return;
+    // source: cortex main PG recall_memories ngram similarity floor
+    const minSimilarity = 0.1;
+    // Match PG's ngram CTE: scan ALL heat/domain-filtered candidates (pg_trgm's GIN
+    // index has no SQLite equivalent), score each by trigram similarity, keep sim >
+    // floor, take top `pool` BY SIMILARITY not heat (prior bug scored only hot rows).
+    // source: cortex main PG recall_memories ngram CTE (ORDER BY similarity DESC).
+    const { conds, params } = this._buildFilter(minHeat, domain, directory);
+    const rows = this._rawConn
+      .prepare(`SELECT id, content FROM memories WHERE ${conds.join(" AND ")}`)
+      .all(...params) as Array<{ id: number; content: string }>;
+    rankByTrigramSimilarity(rows, queryText, minSimilarity, pool).forEach((id, rank) => {
+      scores.set(id, (scores.get(id) ?? 0) + weight / (k + rank + 1));
+    });
   }
 
   /**
